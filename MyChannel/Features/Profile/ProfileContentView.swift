@@ -155,6 +155,7 @@ struct ProfileVideosView: View {
     @State private var advancedSortColumn: AdvancedSortColumn = .views
     @State private var advancedSortAscending: Bool = false
     @State private var metrixVideoId: String? = nil
+    @State private var showingFilterTray: Bool = true
     private let columns = [
         GridItem(.flexible(), spacing: 8),
         GridItem(.flexible(), spacing: 8)
@@ -166,7 +167,7 @@ struct ProfileVideosView: View {
     }
     
     var body: some View {
-        VStack(spacing: 16) {
+        LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
             if !pinnedVideos.isEmpty {
                 PremiumPinnedSection(videos: pinnedVideos, userId: user.id) { unpinnedId in
                     pinnedIds.removeAll { $0 == unpinnedId }
@@ -177,14 +178,100 @@ struct ProfileVideosView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
             }
-            
-            HStack(spacing: 10) {
+
+            Section {
+                HStack {
+                    Text("All videos")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+
+                if isManagementActive, let management = managementContext {
+                    let selectedCount = management.selectedIDs.wrappedValue.count
+                    let totalCount = filteredVideos.count
+                    VideoManagementToolbar(
+                        selectedCount: selectedCount,
+                        totalVisibleCount: totalCount,
+                        isAllSelected: totalCount > 0 && selectedCount >= totalCount,
+                        isDeleting: management.isDeleting,
+                        onSelectOrClearAll: {
+                            HapticManager.shared.impact(style: .medium)
+                            if totalCount > 0 && selectedCount >= totalCount {
+                                management.onSetSelections([])
+                            } else {
+                                management.onSetSelections(filteredVideoIDs)
+                            }
+                        },
+                        onDelete: {
+                            HapticManager.shared.notification(type: .warning)
+                            management.onAction(.delete)
+                        },
+                        onAction: { action in
+                            management.onAction(action)
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity
+                                .combined(with: .move(edge: .top))
+                                .combined(with: .scale(scale: 0.95, anchor: .top)),
+                            removal: .opacity.combined(with: .move(edge: .top))
+                        )
+                    )
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isManagementActive)
+                }
+
+                videosBody
+                    .id(layoutMode)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.9), value: layoutMode)
+
+                Color.clear.frame(height: 8)
+            } header: {
+                videoManagementHeader
+            }
+        }
+        .padding(.bottom, 12)
+        .task { pinnedIds = PinnedVideosStore.shared.getPinned(for: user.id) }
+        .onReceive(NotificationCenter.default.publisher(for: .userProfileUpdated)) { _ in
+            pinnedIds = PinnedVideosStore.shared.getPinned(for: user.id)
+        }
+    }
+
+    private var videoManagementHeader: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 12) {
                 Text("Videos")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
-                
+
                 Spacer()
-                
+
+                if isOwnProfile {
+                    Button {
+                        HapticManager.shared.impact(style: .medium)
+                        NotificationCenter.default.post(name: NSNotification.Name("ShowUpload"), object: nil)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("Add")
+                                .font(.system(size: 15, weight: .bold))
+                            Image(systemName: "plus")
+                                .font(.system(size: 14, weight: .bold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 11)
+                        .background(AppTheme.Colors.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 if let management = managementContext, isOwnProfile {
                     Button {
                         HapticManager.shared.impact(style: .light)
@@ -196,24 +283,17 @@ struct ProfileVideosView: View {
                             }
                         }
                     } label: {
-                        Text(management.isManaging.wrappedValue ? "Done" : "Manage")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(management.isManaging.wrappedValue ? AppTheme.Colors.primary : .white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(management.isManaging.wrappedValue ? Color.clear : AppTheme.Colors.primary)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(AppTheme.Colors.primary, lineWidth: management.isManaging.wrappedValue ? 1.5 : 0)
-                            )
+                        Image(systemName: management.isManaging.wrappedValue ? "checkmark.circle.fill" : "slider.horizontal.3")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(management.isManaging.wrappedValue ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
+                            .frame(width: 42, height: 42)
+                            .background(Color(.systemGray6))
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(management.isManaging.wrappedValue ? "Exit video management" : "Manage videos")
                 }
-                
+
                 HStack(spacing: 6) {
                     ForEach(VideoLayoutMode.allCases, id: \.self) { mode in
                         Button {
@@ -223,98 +303,59 @@ struct ProfileVideosView: View {
                             HapticManager.shared.impact(style: .light)
                         } label: {
                             Image(systemName: mode.icon)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(layoutMode == mode ? .white : AppTheme.Colors.textSecondary)
-                                .frame(width: 30, height: 30)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(layoutMode == mode ? .white : AppTheme.Colors.textPrimary)
+                                .frame(width: 42, height: 42)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(layoutMode == mode ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(layoutMode == mode ? AppTheme.Colors.primary : Color(.systemGray6))
                                 )
                         }
                         .buttonStyle(.plain)
                         .contentShape(Rectangle())
                     }
+
                     Menu {
-                        Button("Newest") { sortMode = .newest }
-                        Button("Popular") { sortMode = .popular }
-                        Button("Oldest") { sortMode = .oldest }
+                        ForEach(SortMode.allCases, id: \.self) { mode in
+                            Button(mode.title) {
+                                sortMode = mode
+                            }
+                        }
                     } label: {
-                        Image(systemName: "arrow.up.arrow.down")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 30, height: 30)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.Colors.primary))
+                        Image(systemName: sortMode.icon)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AppTheme.Colors.textPrimary)
+                            .frame(width: 42, height: 42)
+                            .background(Color(.systemGray6))
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
+                    .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 16)
-            
+
             VideoFilterBar(
                 searchText: $searchText,
                 visibilityFilter: $visibilityFilter,
-                typeFilter: $typeFilter
+                typeFilter: $typeFilter,
+                showingFilterTray: $showingFilterTray
             )
-            .padding(.horizontal, 16)
-            .padding(.bottom, 4)
-            
-            HStack {
-                Text("All videos")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 4)
-            
-            // 🔥 PREMIUM: Animated bulk action bar with spring transition
-            if isManagementActive, let management = managementContext {
-                let selectedCount = management.selectedIDs.wrappedValue.count
-                let totalCount = filteredVideos.count
-                VideoManagementToolbar(
-                    selectedCount: selectedCount,
-                    totalVisibleCount: totalCount,
-                    isAllSelected: totalCount > 0 && selectedCount >= totalCount,
-                    isDeleting: management.isDeleting,
-                    onSelectOrClearAll: {
-                        HapticManager.shared.impact(style: .medium)
-                        if totalCount > 0 && selectedCount >= totalCount {
-                            management.onSetSelections([])
-                        } else {
-                            management.onSetSelections(filteredVideoIDs)
-                        }
-                    },
-                    onDelete: {
-                        HapticManager.shared.notification(type: .warning)
-                        management.onAction(.delete)
-                    },
-                    onAction: { action in
-                        management.onAction(action)
-                    }
-                )
-                .padding(.horizontal, 16)
-                .transition(
-                    .asymmetric(
-                        insertion: .opacity
-                            .combined(with: .move(edge: .top))
-                            .combined(with: .scale(scale: 0.95, anchor: .top)),
-                        removal: .opacity.combined(with: .move(edge: .top))
-                    )
-                )
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isManagementActive)
-            }
-            
-            videosBody
-                .id(layoutMode) // force a rebuild when switching modes
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                .animation(.spring(response: 0.35, dampingFraction: 0.9), value: layoutMode)
-            
-            Color.clear.frame(height: 8)
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
         .padding(.bottom, 12)
-        .task { pinnedIds = PinnedVideosStore.shared.getPinned(for: user.id) }
-        .onReceive(NotificationCenter.default.publisher(for: .userProfileUpdated)) { _ in
-            pinnedIds = PinnedVideosStore.shared.getPinned(for: user.id)
-        }
+        .background(
+            AppTheme.Colors.background
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .stroke(AppTheme.Colors.divider.opacity(0.16), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.1), radius: 18, x: 0, y: 8)
+                        .padding(.horizontal, 16)
+                )
+        )
     }
     
     private var filteredVideos: [Video] {
@@ -549,6 +590,22 @@ private enum SortMode: String, CaseIterable {
     case newest
     case popular
     case oldest
+
+    var title: String {
+        switch self {
+        case .newest: return "Newest"
+        case .popular: return "Popular"
+        case .oldest: return "Oldest"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .newest: return "arrow.up.arrow.down"
+        case .popular: return "chart.bar"
+        case .oldest: return "clock.arrow.circlepath"
+        }
+    }
 }
 
 // MARK: - Profile Video Card
@@ -559,6 +616,9 @@ struct ProfileVideoCard: View {
     var isSelectedInManagement: Bool = false
     @EnvironmentObject private var appState: AppState
     @State private var showOptions = false
+    @State private var showShareSheet = false
+    @State private var showDeleteAlert = false
+    @State private var showVisibilityPicker = false
     @State private var isSubscribedLocal = false
     @State private var isWatchLaterLocal = false
     
@@ -632,13 +692,25 @@ struct ProfileVideoCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(video.title)
         .contextMenu {
-            if let ownerId, ownerId == video.creator.id {
-                if PinnedVideosStore.shared.isPinned(video.id, for: ownerId) {
-                    Button(role: .destructive) { PinnedVideosStore.shared.unpin(video.id, for: ownerId) } label: { Label("Unpin from top", systemImage: "pin.slash") }
-                } else {
-                    Button { PinnedVideosStore.shared.pin(video.id, for: ownerId) } label: { Label("Pin to top", systemImage: "pin") }
-                }
+            if !isInManagementMode {
+                profileVideoContextActions
             }
+        } preview: {
+            ProfileVideoContextPreviewCard(video: video)
+        }
+        .confirmationDialog("Change Visibility", isPresented: $showVisibilityPicker, titleVisibility: .visible) {
+            Button("Public") { updateVisibility(.public) }
+            Button("Unlisted") { updateVisibility(.unlisted) }
+            Button("Private") { updateVisibility(.private) }
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert("Delete this video?", isPresented: $showDeleteAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                Task { await deleteVideo() }
+            }
+        } message: {
+            Text("This action cannot be undone. The video will be permanently deleted.")
         }
         .sheet(isPresented: $showOptions) {
             VideoMoreOptionsSheet(
@@ -654,9 +726,69 @@ struct ProfileVideoCard: View {
                 appState.toggleSubscription(for: video.creator.id)
             }
         }
+        .sheet(isPresented: $showShareSheet) {
+            VideoShareSheet(items: [video.link])
+        }
         .drawingGroup() // ⚡ PERFORMANCE: Flatten view hierarchy for smoother scrolling
     }
-    
+
+    @ViewBuilder
+    private var profileVideoContextActions: some View {
+        Section("Content") {
+            Button {
+                NotificationCenter.default.post(name: Notification.Name("OpenVideoEditor"), object: video)
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+
+            Button {
+                NotificationCenter.default.post(name: Notification.Name("OpenVideoAnalytics"), object: video)
+            } label: {
+                Label("Analytics", systemImage: "chart.line.uptrend.xyaxis")
+            }
+
+            Button {
+                showVisibilityPicker = true
+            } label: {
+                Label("Visibility", systemImage: video.visibility.iconName)
+            }
+        }
+
+        Section("Organization") {
+            Button {
+                showShareSheet = true
+            } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+
+            if let ownerId, ownerId == video.creator.id {
+                if PinnedVideosStore.shared.isPinned(video.id, for: ownerId) {
+                    Button {
+                        PinnedVideosStore.shared.unpin(video.id, for: ownerId)
+                        NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+                    } label: {
+                        Label("Unpin from top", systemImage: "pin.slash")
+                    }
+                } else {
+                    Button {
+                        PinnedVideosStore.shared.pin(video.id, for: ownerId)
+                        NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+                    } label: {
+                        Label("Pin to top", systemImage: "pin")
+                    }
+                }
+            }
+        }
+
+        Section {
+            Button(role: .destructive) {
+                showDeleteAlert = true
+            } label: {
+                Label("Delete", systemImage: "trash.fill")
+            }
+        }
+    }
+
     @ViewBuilder
     private func thumbnailView() -> some View {
         MultiSourceAsyncImage(
@@ -675,6 +807,26 @@ struct ProfileVideoCard: View {
             .scaledToFit()
             .foregroundStyle(AppTheme.Colors.textSecondary)
             .padding(24)
+    }
+
+    private func updateVisibility(_ visibility: Video.VisibilityStatus) {
+        Task {
+            try? await VideoFirestoreService.shared.updateVideoVisibility(videoId: video.id, visibility: visibility)
+            NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+        }
+    }
+
+    private func deleteVideo() async {
+        try? await VideoFirestoreService.shared.deleteVideo(videoId: video.id)
+        try? await DatabaseService.shared.deleteVideo(id: video.id)
+        if let ownerId, ownerId == video.creator.id {
+            PinnedVideosStore.shared.unpin(video.id, for: ownerId)
+        }
+        ProfileCacheService.shared.removeVideoFromCache(video.id)
+        NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: NSNotification.Name("ShowToast"), object: "Video deleted successfully")
+        }
     }
 }
 
@@ -1498,64 +1650,61 @@ struct VideoFilterBar: View {
     @Binding var searchText: String
     @Binding var visibilityFilter: VideoVisibilityFilter
     @Binding var typeFilter: VideoTypeFilter
+    @Binding var showingFilterTray: Bool
     
     var body: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(AppTheme.Colors.textTertiary)
-                    .font(.system(size: 15, weight: .medium))
-                TextField("Search videos...", text: $searchText)
-                    .textInputAutocapitalization(.never)
-                    .disableAutocorrection(true)
-                    .font(.system(size: 15))
-                
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                        HapticManager.shared.impact(style: .light)
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(AppTheme.Colors.textTertiary)
+            HStack(spacing: 10) {
+                UIKitSearchBar(
+                    placeholder: "Search",
+                    text: $searchText,
+                    onSearch: { }
+                )
+                .frame(height: 42)
+
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+                        showingFilterTray.toggle()
                     }
+                } label: {
+                    Image(systemName: showingFilterTray ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(showingFilterTray ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
+                        .frame(width: 42, height: 42)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(AppTheme.Colors.surface)
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(AppTheme.Colors.divider.opacity(0.15), lineWidth: 1)
-                }
-            )
-            .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 2)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(VideoVisibilityFilter.allCases, id: \.self) { filter in
-                        ProfileFilterChip(
-                            title: filter.title,
-                            isSelected: visibilityFilter == filter,
-                            icon: filter.icon
-                        ) {
-                            visibilityFilter = filter
-                            HapticManager.shared.impact(style: .light)
+
+            if showingFilterTray {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(VideoVisibilityFilter.allCases, id: \.self) { filter in
+                            ProfileFilterChip(
+                                title: filter.title,
+                                isSelected: visibilityFilter == filter,
+                                icon: filter.icon
+                            ) {
+                                visibilityFilter = filter
+                                HapticManager.shared.impact(style: .light)
+                            }
                         }
-                    }
-                    
-                    ForEach(VideoTypeFilter.allCases, id: \.self) { filter in
-                        ProfileFilterChip(
-                            title: filter.title,
-                            isSelected: typeFilter == filter,
-                            icon: filter.icon
-                        ) {
-                            typeFilter = filter
-                            HapticManager.shared.impact(style: .light)
+                        
+                        ForEach(VideoTypeFilter.allCases, id: \.self) { filter in
+                            ProfileFilterChip(
+                                title: filter.title,
+                                isSelected: typeFilter == filter,
+                                icon: filter.icon
+                            ) {
+                                typeFilter = filter
+                                HapticManager.shared.impact(style: .light)
+                            }
                         }
                     }
                 }
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
     }
@@ -1680,6 +1829,9 @@ private struct FullWidthVideoCard: View {
     var onTapOverride: (() -> Void)? = nil
     @EnvironmentObject private var appState: AppState
     @State private var showOptions = false
+    @State private var showShareSheet = false
+    @State private var showDeleteAlert = false
+    @State private var showVisibilityPicker = false
     @State private var isSubscribedLocal = false
     @State private var isWatchLaterLocal = false
     
@@ -1759,12 +1911,56 @@ private struct FullWidthVideoCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(video.title)
         .contentShape(Rectangle())
+        .contextMenu {
+            if !isInManagementMode {
+                profileVideoContextActions
+            }
+        } preview: {
+            ProfileVideoContextPreviewCard(video: video)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if !isInManagementMode {
+                Button(role: .destructive) {
+                    showDeleteAlert = true
+                } label: {
+                    Label("Delete", systemImage: "trash.fill")
+                }
+
+                Button {
+                    showVisibilityPicker = true
+                } label: {
+                    Label("Visibility", systemImage: video.visibility.iconName)
+                }
+                .tint(.orange)
+
+                Button {
+                    NotificationCenter.default.post(name: Notification.Name("OpenVideoAnalytics"), object: video)
+                } label: {
+                    Label("Analytics", systemImage: "chart.line.uptrend.xyaxis")
+                }
+                .tint(.blue)
+            }
+        }
         .onTapGesture {
             if let onTapOverride {
                 onTapOverride()
             } else {
                 defaultTap()
             }
+        }
+        .confirmationDialog("Change Visibility", isPresented: $showVisibilityPicker, titleVisibility: .visible) {
+            Button("Public") { updateVisibility(.public) }
+            Button("Unlisted") { updateVisibility(.unlisted) }
+            Button("Private") { updateVisibility(.private) }
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert("Delete this video?", isPresented: $showDeleteAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                Task { await deleteVideo() }
+            }
+        } message: {
+            Text("This action cannot be undone. The video will be permanently deleted.")
         }
         .sheet(isPresented: $showOptions) {
             VideoMoreOptionsSheet(
@@ -1780,12 +1976,92 @@ private struct FullWidthVideoCard: View {
                 appState.toggleSubscription(for: video.creator.id)
             }
         }
+        .sheet(isPresented: $showShareSheet) {
+            VideoShareSheet(items: [video.link])
+        }
         .drawingGroup() // ⚡ PERFORMANCE: Flatten view hierarchy for smoother scrolling
     }
-    
+
+    @ViewBuilder
+    private var profileVideoContextActions: some View {
+        Section("Content") {
+            Button {
+                NotificationCenter.default.post(name: Notification.Name("OpenVideoEditor"), object: video)
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+
+            Button {
+                NotificationCenter.default.post(name: Notification.Name("OpenVideoAnalytics"), object: video)
+            } label: {
+                Label("Analytics", systemImage: "chart.line.uptrend.xyaxis")
+            }
+
+            Button {
+                showVisibilityPicker = true
+            } label: {
+                Label("Visibility", systemImage: video.visibility.iconName)
+            }
+        }
+
+        Section("Organization") {
+            Button {
+                showShareSheet = true
+            } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+
+            if let ownerId, ownerId == video.creator.id {
+                if PinnedVideosStore.shared.isPinned(video.id, for: ownerId) {
+                    Button {
+                        PinnedVideosStore.shared.unpin(video.id, for: ownerId)
+                        NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+                    } label: {
+                        Label("Unpin from top", systemImage: "pin.slash")
+                    }
+                } else {
+                    Button {
+                        PinnedVideosStore.shared.pin(video.id, for: ownerId)
+                        NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+                    } label: {
+                        Label("Pin to top", systemImage: "pin")
+                    }
+                }
+            }
+        }
+
+        Section {
+            Button(role: .destructive) {
+                showDeleteAlert = true
+            } label: {
+                Label("Delete", systemImage: "trash.fill")
+            }
+        }
+    }
+
     private func defaultTap() {
         HapticManager.shared.impact(style: .light)
         NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
+    }
+
+    private func updateVisibility(_ visibility: Video.VisibilityStatus) {
+        Task {
+            try? await VideoFirestoreService.shared.updateVideoVisibility(videoId: video.id, visibility: visibility)
+            NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+        }
+    }
+
+    private func deleteVideo() async {
+        try? await VideoFirestoreService.shared.deleteVideo(videoId: video.id)
+        try? await DatabaseService.shared.deleteVideo(id: video.id)
+        if let ownerId, ownerId == video.creator.id {
+            PinnedVideosStore.shared.unpin(video.id, for: ownerId)
+        }
+        ProfileCacheService.shared.removeVideoFromCache(video.id)
+        NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: NSNotification.Name("ShowToast"), object: "Video deleted successfully")
+        }
     }
 }
 
@@ -1807,6 +2083,364 @@ private struct FullWidthThumb: View {
             .scaledToFit()
             .foregroundStyle(AppTheme.Colors.textSecondary)
             .padding(28)
+    }
+}
+
+private struct ProfileVideoContextPreviewCard: View {
+    let video: Video
+    @State private var liveViewCount: Int = 0
+    @State private var liveViewers: Int = 0
+    @State private var performanceTier: PerformanceTier = .standard
+    @State private var engagementRate: Double = 0
+    @State private var rpm: Double = 0
+    @State private var estimatedRevenue: Double = 0
+    @State private var isMonetized: Bool = false
+    @State private var previousViewCount: Int = 0
+    @State private var viewVelocity: ViewVelocity = .stable
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ZStack(alignment: .bottomTrailing) {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(AppTheme.Colors.surface)
+                    .overlay(
+                        MultiSourceAsyncImage(
+                            urls: video.posterCandidates,
+                            content: { image in
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                            },
+                            placeholder: {
+                                ZStack {
+                                    AppTheme.Colors.surface
+                                    Image(systemName: "play.rectangle.fill")
+                                        .font(.system(size: 36, weight: .light))
+                                        .foregroundStyle(AppTheme.Colors.textTertiary)
+                                }
+                            }
+                        )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .overlay(
+                        liveMetricsOverlay,
+                        alignment: .topLeading
+                    )
+
+                Text(video.formattedDuration)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.black.opacity(0.8))
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .padding(10)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(video.title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .lineLimit(2)
+
+                HStack(spacing: 6) {
+                    Image(systemName: video.visibility.iconName)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+
+                    Text(video.visibility.displayName)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+
+                    Text("•")
+                        .foregroundStyle(AppTheme.Colors.textTertiary)
+
+                    Text(formatViewCount(liveViewCount))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+
+                    Text("•")
+                        .foregroundStyle(AppTheme.Colors.textTertiary)
+
+                    Text(video.uploadTimeAgo)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                }
+
+                if !video.description.isEmpty {
+                    Text(video.description)
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                        .lineLimit(3)
+                }
+            }
+        }
+        .padding(14)
+        .frame(width: 320)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(AppTheme.Colors.divider.opacity(0.16), lineWidth: 1)
+                )
+        )
+        .task {
+            await loadLiveMetrics()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("VideoViewCountUpdated"))) { notification in
+            if let userInfo = notification.userInfo,
+               let notificationVideoId = userInfo["videoId"] as? String,
+               notificationVideoId == video.id,
+               let count = userInfo["viewCount"] as? Int {
+                liveViewCount = count
+                updatePerformanceTier()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var liveMetricsOverlay: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if liveViewers > 0 {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                    Text("\(liveViewers) watching")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(.black.opacity(0.7))
+                .clipShape(Capsule())
+            }
+
+            HStack(spacing: 6) {
+                performanceTierBadge
+
+                if engagementRate > 0 {
+                    engagementBadge
+                }
+
+                if isMonetized {
+                    monetizationBadge
+                }
+
+                viewVelocityBadge
+            }
+        }
+        .padding(10)
+    }
+
+    @ViewBuilder
+    private var monetizationBadge: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "dollarsign.circle.fill")
+                .font(.system(size: 9, weight: .semibold))
+            if rpm > 0 {
+                Text("\(formatCurrency(rpm)) RPM")
+                    .font(.system(size: 9, weight: .semibold))
+            } else {
+                Text("Monetized")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+        }
+        .foregroundStyle(.green)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.green.opacity(0.15))
+        .clipShape(Capsule())
+    }
+
+    @ViewBuilder
+    private var viewVelocityBadge: some View {
+        HStack(spacing: 3) {
+            Image(systemName: viewVelocity.icon)
+                .font(.system(size: 9, weight: .semibold))
+            Text(viewVelocity.label)
+                .font(.system(size: 9, weight: .semibold))
+        }
+        .foregroundStyle(viewVelocity.color)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(viewVelocity.color.opacity(0.15))
+        .clipShape(Capsule())
+    }
+
+    @ViewBuilder
+    private var performanceTierBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: performanceTier.icon)
+                .font(.system(size: 10, weight: .semibold))
+            Text(performanceTier.label)
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundStyle(performanceTier.color)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(performanceTier.color.opacity(0.15))
+        .clipShape(Capsule())
+    }
+
+    @ViewBuilder
+    private var engagementBadge: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .font(.system(size: 9, weight: .semibold))
+            Text(String(format: "%.0f%%", engagementRate * 100))
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundStyle(.green)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.green.opacity(0.15))
+        .clipShape(Capsule())
+    }
+
+    private func loadLiveMetrics() async {
+        // Store previous count for velocity calculation
+        let previousCount = liveViewCount
+
+        // Fetch real-time view count
+        let viewCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
+        await MainActor.run {
+            liveViewCount = viewCount
+            updatePerformanceTier()
+            updateViewVelocity(previous: previousCount, current: viewCount)
+        }
+
+        // Fetch live viewers
+        let viewers = RealtimeViewTracker.shared.getLiveViewers(for: video.id)
+        await MainActor.run {
+            liveViewers = viewers
+        }
+
+        // Fetch engagement metrics
+        if let engagement = RealtimeViewTracker.shared.getEngagement(for: video.id) {
+            await MainActor.run {
+                engagementRate = engagement.completionRate
+            }
+        }
+
+        // Fetch analytics data (RPM, monetization status)
+        if let analytics = await StudioAnalyticsService.shared.fetchVideoAnalytics(videoId: video.id) {
+            await MainActor.run {
+                rpm = analytics.rpm
+                isMonetized = analytics.rpm > 0
+                // Estimate revenue: views / 1000 * RPM
+                estimatedRevenue = Double(analytics.views) / 1000.0 * analytics.rpm
+            }
+        }
+    }
+
+    private func updatePerformanceTier() {
+        performanceTier = PerformanceTier.forViewCount(liveViewCount)
+    }
+
+    private func updateViewVelocity(previous: Int, current: Int) {
+        let change = current - previous
+        let threshold = max(1, previous / 20) // 5% change threshold
+
+        if change > threshold {
+            viewVelocity = .accelerating
+        } else if change < -threshold {
+            viewVelocity = .decelerating
+        } else {
+            viewVelocity = .stable
+        }
+    }
+
+    private func formatViewCount(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM views", Double(count) / 1_000_000)
+        } else if count >= 1_000 {
+            return String(format: "%.1fK views", Double(count) / 1_000)
+        } else {
+            return "\(count) views"
+        }
+    }
+
+    private func formatCurrency(_ value: Double) -> String {
+        if value >= 1 {
+            return String(format: "$%.0f", value)
+        } else {
+            return String(format: "$%.2f", value)
+        }
+    }
+}
+
+enum ViewVelocity {
+    case accelerating, stable, decelerating
+
+    var label: String {
+        switch self {
+        case .accelerating: return "Trending Up"
+        case .stable: return "Stable"
+        case .decelerating: return "Slowing"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .accelerating: return "arrow.up.forward"
+        case .stable: return "minus"
+        case .decelerating: return "arrow.down.forward"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .accelerating: return .green
+        case .stable: return .gray
+        case .decelerating: return .orange
+        }
+    }
+}
+
+enum PerformanceTier: CaseIterable {
+    case viral, trending, performing, standard, new
+
+    var label: String {
+        switch self {
+        case .viral: return "Viral"
+        case .trending: return "Trending"
+        case .performing: return "Performing"
+        case .standard: return "Active"
+        case .new: return "New"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .viral: return "flame.fill"
+        case .trending: return "chart.line.uptrend.xyaxis"
+        case .performing: return "arrow.up.circle.fill"
+        case .standard: return "checkmark.circle.fill"
+        case .new: return "sparkles"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .viral: return .orange
+        case .trending: return .green
+        case .performing: return .blue
+        case .standard: return .gray
+        case .new: return .purple
+        }
+    }
+
+    static func forViewCount(_ count: Int) -> PerformanceTier {
+        switch count {
+        case 1_000_000...: return .viral
+        case 100_000..<1_000_000: return .trending
+        case 10_000..<100_000: return .performing
+        case 100..<10_000: return .standard
+        default: return .new
+        }
     }
 }
 

@@ -577,9 +577,31 @@ struct ProfileView: View {
         .navigationBarHidden(true)
         .sheet(isPresented: $showingEditProfile) {
             ProfileEditWrapper(user: $user)
+                .background(
+                    UIKitSheetConfigurator(
+                        configuration: UIKitSheetConfiguration(
+                            detents: [.large()],
+                            largestUndimmedDetentIdentifier: .large,
+                            prefersGrabberVisible: true,
+                            prefersScrollingExpandsWhenScrolledToEdge: false,
+                            preferredCornerRadius: 28
+                        )
+                    )
+                )
         }
         .sheet(isPresented: $showingSettings) {
             ProfileSettingsWrapper()
+                .background(
+                    UIKitSheetConfigurator(
+                        configuration: UIKitSheetConfiguration(
+                            detents: [.medium(), .large()],
+                            largestUndimmedDetentIdentifier: .large,
+                            prefersGrabberVisible: true,
+                            prefersScrollingExpandsWhenScrolledToEdge: false,
+                            preferredCornerRadius: 28
+                        )
+                    )
+                )
         }
         .fullScreenCover(isPresented: $showingDownloads) {
             NavigationStack {
@@ -603,6 +625,17 @@ struct ProfileView: View {
             ) {
                 loadProfileSafely()
             }
+            .background(
+                UIKitSheetConfigurator(
+                    configuration: UIKitSheetConfiguration(
+                        detents: [.large()],
+                        largestUndimmedDetentIdentifier: .large,
+                        prefersGrabberVisible: true,
+                        prefersScrollingExpandsWhenScrolledToEdge: false,
+                        preferredCornerRadius: 28
+                    )
+                )
+            )
         }
         .sheet(isPresented: $showingBulkVisibilitySheet) {
             ProfileBulkVisibilitySheet(
@@ -610,6 +643,17 @@ struct ProfileView: View {
             ) { visibility in
                 applyBulkVisibility(visibility)
             }
+            .background(
+                UIKitSheetConfigurator(
+                    configuration: UIKitSheetConfiguration(
+                        detents: [.medium(), .large()],
+                        largestUndimmedDetentIdentifier: .large,
+                        prefersGrabberVisible: true,
+                        prefersScrollingExpandsWhenScrolledToEdge: false,
+                        preferredCornerRadius: 28
+                    )
+                )
+            )
         }
         .sheet(isPresented: $showingBulkPlaylistSheet) {
             ProfileBulkPlaylistSheet(
@@ -619,6 +663,17 @@ struct ProfileView: View {
             ) { playlistIDs in
                 applyBulkPlaylists(playlistIDs)
             }
+            .background(
+                UIKitSheetConfigurator(
+                    configuration: UIKitSheetConfiguration(
+                        detents: [.medium(), .large()],
+                        largestUndimmedDetentIdentifier: .large,
+                        prefersGrabberVisible: true,
+                        prefersScrollingExpandsWhenScrolledToEdge: false,
+                        preferredCornerRadius: 28
+                    )
+                )
+            )
         }
     }
 
