@@ -145,6 +145,14 @@ struct CreateStoryView: View {
             }
         }
         .statusBarHidden()
+        .onAppear {
+            viewModel.restoreDraftIfAvailable()
+        }
+        .onDisappear {
+            if viewModel.canPost {
+                viewModel.saveDraft()
+            }
+        }
         .sheet(isPresented: $showingCamera) {
             ModernCameraView { capturedMedia in
                 viewModel.setMedia(capturedMedia)
@@ -199,6 +207,7 @@ struct CreateStoryView: View {
         let story = await viewModel.createStory()
         print("📸 [CreateStoryView] Story created: \(story.id), calling onStoryCreated callback...")
         await MainActor.run {
+            viewModel.clearDraft()
             onStoryCreated(story)
             NotificationCenter.default.post(name: .storiesDidChange, object: nil)
             print("📸 [CreateStoryView] Dismissing view...")
@@ -525,7 +534,7 @@ private struct PublishCompactBar: View {
             Button(action: { showAudienceDialog = true }) {
                 HStack(spacing: 6) {
                     Image(systemName: audience == .public ? "globe" : "person.2.fill")
-                    Text(audience.rawValue.capitalized)
+                    Text(audience.displayName)
                 }
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
@@ -533,8 +542,9 @@ private struct PublishCompactBar: View {
                 .background(.white.opacity(0.12), in: Capsule())
             }
             .confirmationDialog("Audience", isPresented: $showAudienceDialog, titleVisibility: .visible) {
-                Button("Public") { audience = .public }
-                Button("Friends") { audience = .friends }
+                ForEach(CreateStoryViewModel.Audience.allCases, id: \.self) { option in
+                    Button(option.displayName) { audience = option }
+                }
                 Button("Cancel", role: .cancel) {}
             }
         }

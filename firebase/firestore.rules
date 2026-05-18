@@ -1,299 +1,1091 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // ── Auth helpers ──────────────────────────────────────────────────────
+    
+    // ========================================
+    // 📺 NATIVE iOS PiP ENABLED (YOUTUBE PARITY)
+    // ========================================
+    // Native iOS Picture-in-Picture (PiP) is ENABLED for YouTube-level experience.
+    // - Chevron down button minimizes to native PiP (not closes video)
+    // - PiP button in controls starts native iOS PiP
+    // - Works when swiping out to home screen
+    // - Tap PiP window to expand back to fullscreen
+    // - BackgroundPlayService keeps audio playing just like YouTube Premium.
+    // Firestore rules store per-user background play settings/preferences.
+    
+    // ========================================
+    // 🔥 THERMONUCLEAR PERFORMANCE HELPERS
+    // ========================================
+    
+    // 🔥 PERFORMANCE: Cache user lookup by storing in function
+    function getUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    
+    function isAdmin() {
+      return request.auth != null && 
+             (request.auth.token.email == 'keontapeat@mychannel.live' ||
+              request.auth.token.email == 'keontapeat@gmail.com');
+    }
+    
     function isSignedIn() {
       return request.auth != null;
     }
-    function uid() {
-      return isSignedIn() ? request.auth.uid : null;
+    
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
     }
-    function hasRole(role) {
-      return isSignedIn() && (
-        request.auth.token.role == role ||
-        (request.auth.token.roles != null && role in request.auth.token.roles)
-      );
+    
+    // 🔥 PERFORMANCE: Check if user is creator without extra DB reads
+    function isCreator(creatorId) {
+      return request.auth != null && request.auth.uid == creatorId;
     }
-    function isAdmin() { return hasRole('admin'); }
-    function isOwner(ownerId) { return isSignedIn() && ownerId == uid(); }
-
-    // ── Security helpers ──────────────────────────────────────────────────
-
-    // Block suspended / permanently-banned accounts
-    function isNotBanned() {
-      return isSignedIn() &&
-        !exists(/databases/$(database)/documents/security_bans/$(request.auth.uid));
+    
+    // 🔥 PERFORMANCE: Validate data size to prevent slow queries
+    function isValidSize(data, maxFields) {
+      return data.size() <= maxFields;
     }
-
-    // Reject strings longer than maxLen to prevent oversized payloads
-    function strLen(val, maxLen) {
-      return val is string && val.size() <= maxLen;
+    
+    // ========================================
+    // 🖼️ IMAGE URL VALIDATION HELPERS
+    // ========================================
+    // Prevents broken thumbnails from Wikipedia/Wikimedia URLs
+    
+    // Check if URL is from a blocked source (Wikipedia, Wikimedia, SVG)
+    function isBlockedImageURL(url) {
+      return url == null || 
+             url.matches('.*wikipedia\\.org.*') ||
+             url.matches('.*wikimedia\\.org.*') ||
+             url.matches('.*\\.svg$') ||
+             url.matches('.*\\.svg\\?.*');
     }
-
-    // Validate that a string field does NOT contain obvious script-injection markers
-    function noScript(val) {
-      return val is string
-        && !val.matches('(?i).*<script.*')
-        && !val.matches('(?i).*javascript:.*')
-        && !val.matches('(?i).*onerror\\s*=.*')
-        && !val.matches('(?i).*onload\\s*=.*');
+    
+    // Check if URL is from approved image CDNs
+    function isApprovedImageURL(url) {
+      return url == null || // Allow null (will use placeholder)
+             url.matches('.*firebasestorage\\.googleapis\\.com.*') || // Firebase Storage (download URLs use ?token= not .jpg suffix)
+             url.matches('.*ytimg\\.com.*') ||           // YouTube thumbnails
+             url.matches('.*imgur\\.com.*') ||           // Imgur
+             url.matches('.*cloudinary\\.com.*') ||      // Cloudinary
+             url.matches('.*googleusercontent\\.com.*') || // Google CDN
+             url.matches('.*akamaized\\.net.*') ||       // Akamai
+             url.matches('.*cloudfront\\.net.*') ||      // AWS CloudFront
+             url.matches('.*pluto\\.tv.*') ||            // Pluto TV
+             url.matches('.*image\\.tmdb\\.org.*') ||    // TMDB
+             url.matches('.*\\.jpg') ||                  // .jpg in URL (covers query strings)
+             url.matches('.*\\.jpeg') ||                 // .jpeg
+             url.matches('.*\\.png') ||                  // .png
+             url.matches('.*\\.webp') ||                 // .webp
+             url.matches('.*\\.gif');                    // .gif
     }
-
-    // Combined safe text: bounded length + no XSS
-    function safeText(val, maxLen) {
-      return strLen(val, maxLen) && noScript(val);
+    
+    // Validate image URL - returns true if URL is valid or null
+    function isValidImageURL(url) {
+      return !isBlockedImageURL(url) && isApprovedImageURL(url);
     }
-
-    // Only allow known visibility values
-    function validVisibility(v) {
-      return v == 'public' || v == 'private' || v == 'unlisted';
-    }
-
-    // ── Users ─────────────────────────────────────────────────────────────
-    match /users/{userId} {
-      allow read: if true;
-      allow create: if isSignedIn() && isNotBanned() && userId == uid()
-        && safeText(request.resource.data.get('displayName', ''), 100)
-        && safeText(request.resource.data.get('bio', ''), 500);
-      allow update: if (isOwner(userId) || isAdmin()) && isNotBanned()
-        && safeText(request.resource.data.get('displayName', ''), 100)
-        && safeText(request.resource.data.get('bio', ''), 500)
-        // Prevent uid spoofing
-        && request.resource.data.uid == resource.data.uid;
-      allow delete: if (isOwner(userId) || isAdmin()) && isNotBanned();
-
-      match /subscriptions/{channelId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId) && isNotBanned()
-          && request.resource.data.ownerUid == uid();
-        allow delete: if isOwner(userId) || isAdmin();
-      }
-
-      match /subscribers/{fanUid} {
-        allow read: if true;
-        allow create: if isSignedIn() && isNotBanned() && fanUid == uid();
-        allow delete: if isSignedIn() && (fanUid == uid() || isAdmin());
-      }
-
-      match /search_history/{itemId} {
-        allow read: if isSignedIn() && uid() == userId;
-        allow create, update: if isSignedIn() && isNotBanned() && uid() == userId;
-        allow delete: if isSignedIn() && uid() == userId;
-      }
-    }
-
-    // ── Security bans (admin-write, no self-read) ─────────────────────────
-    match /security_bans/{banUid} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
-    }
-
-    // ── Security threat log (Cloud Functions write only) ──────────────────
-    match /security_events/{eventId} {
-      allow read: if isAdmin();
-      allow write: if false; // only Cloud Functions can write
-    }
-
-    // ── Channels ──────────────────────────────────────────────────────────
-    match /channels/{channelId} {
-      allow read: if resource.data.visibility == 'public' || isOwner(resource.data.ownerUid) || isAdmin();
-      allow create: if isSignedIn() && isNotBanned()
-        && request.resource.data.ownerUid == uid()
-        && safeText(request.resource.data.get('name', ''), 100)
-        && safeText(request.resource.data.get('description', ''), 2000)
-        && validVisibility(request.resource.data.get('visibility', 'public'));
-      allow update: if (isOwner(resource.data.ownerUid) || isAdmin()) && isNotBanned()
-        && safeText(request.resource.data.get('name', ''), 100)
-        && safeText(request.resource.data.get('description', ''), 2000);
-      allow delete: if (isOwner(resource.data.ownerUid) || isAdmin()) && isNotBanned();
-    }
-
-    // ── Videos ────────────────────────────────────────────────────────────
+    
+    // ========================================
+    // 📺 CORE VIDEO & CONTENT (OPTIMIZED)
+    // ========================================
+    
+    // Videos - 🔥 OPTIMIZED: Split read/write rules for better cache
+    // 🖼️ Validates thumbnailURL to prevent blocked image sources
     match /videos/{videoId} {
-      allow read: if resource.data.visibility == 'public' || isOwner(resource.data.ownerUid) || isAdmin();
-      allow create: if isSignedIn() && isNotBanned()
-        && request.resource.data.ownerUid == uid()
-        && safeText(request.resource.data.get('title', ''), 200)
-        && safeText(request.resource.data.get('description', ''), 5000)
-        && validVisibility(request.resource.data.get('visibility', 'public'));
-      allow update: if isNotBanned() && (
-        isAdmin() || (
-          isOwner(resource.data.ownerUid)
-          && request.resource.data.adSettings == resource.data.adSettings
-          && safeText(request.resource.data.get('title', ''), 200)
-          && safeText(request.resource.data.get('description', ''), 5000)
-        )
-      );
-      allow delete: if (isOwner(resource.data.ownerUid) || isAdmin()) && isNotBanned();
-
-      // Comments
-      match /comments/{commentId} {
-        function parentIsPublic() {
-          return get(/databases/$(database)/documents/videos/$(videoId)).data.visibility == 'public';
-        }
-        allow read: if parentIsPublic() || isAdmin()
-          || isOwner(get(/databases/$(database)/documents/videos/$(videoId)).data.ownerUid);
-        allow create: if isSignedIn() && isNotBanned() && parentIsPublic()
-          && request.resource.data.authorUid == uid()
-          && safeText(request.resource.data.get('text', ''), 2000);
-        allow update, delete: if isSignedIn() && isNotBanned() && (
-          request.resource.data.authorUid == uid() ||
-          resource.data.authorUid == uid() ||
-          isAdmin()
-        );
-      }
-
-      // Likes
-      match /likes/{likeUid} {
-        allow read: if true;
-        allow create: if isSignedIn() && isNotBanned() && likeUid == uid();
-        allow delete: if isSignedIn() && (likeUid == uid() || isAdmin());
-      }
-
-      // View shards (Cloud Functions only)
-      match /view_shards/{shardId} {
-        allow read: if false;
-        allow write: if false;
-      }
-    }
-
-    // ── Shorts ────────────────────────────────────────────────────────────
-    match /shorts/{shortId} {
-      allow read: if resource.data.visibility == 'public' || isOwner(resource.data.ownerUid) || isAdmin();
-      allow create: if isSignedIn() && isNotBanned()
-        && request.resource.data.ownerUid == uid()
-        && safeText(request.resource.data.get('title', ''), 200)
-        && validVisibility(request.resource.data.get('visibility', 'public'));
-      allow update, delete: if (isOwner(resource.data.ownerUid) || isAdmin()) && isNotBanned();
-    }
-
-    // ── Playlists ─────────────────────────────────────────────────────────
-    match /playlists/{playlistId} {
-      allow read: if resource.data.visibility == 'public' || isOwner(resource.data.userId) || isAdmin();
-      allow create: if isSignedIn() && isNotBanned()
-        && request.resource.data.userId == uid()
-        && safeText(request.resource.data.get('title', ''), 200)
-        && validVisibility(request.resource.data.get('visibility', 'public'));
-      allow update, delete: if (isOwner(resource.data.userId) || isAdmin()) && isNotBanned();
-
-      match /videos/{videoId} {
-        allow read: if get(/databases/$(database)/documents/playlists/$(playlistId)).data.visibility == 'public'
-          || isOwner(get(/databases/$(database)/documents/playlists/$(playlistId)).data.userId)
-          || isAdmin();
-        allow write: if (isOwner(get(/databases/$(database)/documents/playlists/$(playlistId)).data.userId) || isAdmin()) && isNotBanned();
-      }
-    }
-
-    // ── Reports ───────────────────────────────────────────────────────────
-    match /reports/{reportId} {
-      allow create: if isSignedIn() && isNotBanned()
-        && safeText(request.resource.data.get('reason', ''), 1000);
-      allow read, update, delete: if isAdmin();
-    }
-
-    // ── Content Reports (video/comment/user reporting) ──────────────────
-    match /content_reports/{reportId} {
-      allow create: if isSignedIn() && isNotBanned()
-        && request.resource.data.reporterId == uid()
-        && safeText(request.resource.data.get('reason', ''), 500);
-      allow read, update, delete: if isAdmin();
-    }
-
-    // ── Earnings ──────────────────────────────────────────────────────────
-    match /earnings/{channelId} {
-      allow read: if isAdmin() || (isSignedIn() && uid() == get(/databases/$(database)/documents/channels/$(channelId)).data.ownerUid);
-      allow write: if isAdmin();
-    }
-
-    // ── Growth configs (admin only) ───────────────────────────────────────
-    match /growth/{docPath=**} {
-      allow read, write: if isAdmin();
-    }
-
-    // ── Ads configs (admin only) ──────────────────────────────────────────
-    match /ads/{docPath=**} {
-      allow read, write: if isAdmin();
-    }
-
-    // ── Live Streams ──────────────────────────────────────────────────────
-    match /live_streams/{streamId} {
+      // Public read (cached by Firebase)
       allow read: if true;
-      allow create: if isSignedIn() && isNotBanned()
-        && request.resource.data.creatorId == uid()
-        && safeText(request.resource.data.get('title', ''), 200);
-      allow update: if isSignedIn() && isNotBanned() && (resource.data.creatorId == uid() || isAdmin());
-      allow delete: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
-
-      match /chat/{messageId} {
-        allow read: if true;
-        allow create: if isSignedIn() && isNotBanned()
-          && request.resource.data.userId == uid()
-          && safeText(request.resource.data.get('text', ''), 500);
-        allow delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
-      }
+      
+      // Create (auth check + image URL validation)
+      allow create: if isSignedIn() && 
+                       isValidSize(request.resource.data, 50) &&
+                       (!('thumbnailURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.thumbnailURL));
+      
+      // Update: owner/admin for full edits, OR any signed-in user for
+      // engagement-only counter increments (viewCount, likeCount, dislikeCount,
+      // shareCount, commentCount) to support view tracking.
+      allow update: if isSignedIn() && (
+                       (request.auth.uid == resource.data.creatorId || isAdmin()) &&
+                       (!('thumbnailURL' in request.resource.data) ||
+                        isValidImageURL(request.resource.data.thumbnailURL))
+                    ) || (
+                       isSignedIn() &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['viewCount','likeCount','dislikeCount','shareCount','commentCount','lastViewedAt','updatedAt'])
+                    );
+      
+      allow delete: if isSignedIn() && 
+                       (request.auth.uid == resource.data.creatorId || isAdmin());
     }
 
-    // ── Stories ───────────────────────────────────────────────────────────
+    match /videos/{videoId}/comments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       isValidSize(request.resource.data, 20);
+      allow update, delete: if isSignedIn() &&
+                              (request.auth.uid == resource.data.userId || isAdmin());
+    }
+
+    match /videos/{videoId}/comments/{commentId}/likes/{userId} {
+      allow read: if true;
+      allow create, delete: if isOwner(userId);
+      allow update: if false;
+    }
+
+    match /videos/{videoId}/likes/{userId} {
+      allow read: if true;
+      allow create, delete: if isOwner(userId);
+      allow update: if false;
+    }
+    
+    // Video analytics - 🔥 OPTIMIZED: Lightweight rule
+    match /video_analytics/{videoId}/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // 🔥 PERFORMANCE: Single wildcard for related collections
+    match /video_categorizations/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // Views tracking - 🔥 OPTIMIZED: No auth required for reads (faster)
+    match /views/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // 🔥 PERFORMANCE: Group all video-related sub-collections
+    match /chapters/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /cards/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /endScreens/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // Flicks - 🔥 OPTIMIZED: Inline creator check + image validation
+    match /flicks/{flickId} {
+      allow read: if true;
+      allow create: if isSignedIn() && 
+                       isValidSize(request.resource.data, 30) &&
+                       (!('thumbnailURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.thumbnailURL));
+      allow update: if (isCreator(resource.data.creatorId) || isAdmin()) &&
+                       (!('thumbnailURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.thumbnailURL));
+      allow delete: if isCreator(resource.data.creatorId) || isAdmin();
+    }
+    
+    // Shorts - 🔥 OPTIMIZED + image validation
+    match /shorts/{shortId} {
+      allow read: if true;
+      allow create: if isSignedIn() && 
+                       isValidSize(request.resource.data, 30) &&
+                       (!('thumbnailURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.thumbnailURL));
+      allow update: if (isCreator(resource.data.creatorId) || isAdmin()) &&
+                       (!('thumbnailURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.thumbnailURL));
+      allow delete: if isCreator(resource.data.creatorId) || isAdmin();
+    }
+
+    match /shorts/{shortId}/events/{eventId} {
+      allow read: if false;
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.type in ['view', 'like', 'unlike', 'comment', 'share'];
+      allow update, delete: if false;
+    }
+    
+    // Stories - open for signed-in users
     match /stories/{storyId} {
       allow read: if true;
-      allow create: if isSignedIn()
-        && request.resource.data.creatorId == request.auth.uid;
-      allow update: if isSignedIn()
-        && (resource.data.creatorId == request.auth.uid || isAdmin());
-      allow delete: if isSignedIn()
-        && (resource.data.creatorId == request.auth.uid || isAdmin());
+      allow create, update, delete: if isSignedIn();
     }
 
-    // ── Story collections index (one doc per creator, updated on story post) ─
+    match /stories/{storyId}/events/{eventId} {
+      allow read: if false;
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.type in ['view', 'like', 'unlike', 'comment', 'share'];
+      allow update, delete: if false;
+    }
+    
+    // Story collections index (one doc per creator)
     match /story-collections/{creatorId} {
       allow read: if true;
-      allow write: if isSignedIn() && request.auth.uid == creatorId;
+      allow write: if isSignedIn();
     }
-
-    // ── Watch Later (user-scoped) ──────────────────────────────────────────
-    match /watch_later/{userId}/items/{itemId} {
-      allow read: if isSignedIn() && uid() == userId;
-      allow create: if isSignedIn() && isNotBanned() && uid() == userId;
-      allow update: if isSignedIn() && isNotBanned() && uid() == userId;
-      allow delete: if isSignedIn() && (uid() == userId || isAdmin());
+    
+    // Story views tracking - 🔥 OPTIMIZED
+    match /story_views/{storyId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
-
-    // ── Community Posts ─────────────────────────────────────────────────────
-    match /community_posts/{postId} {
+    
+    // Story analytics (creator only) - 🔥 SECURE
+    match /story_analytics/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // Story reports (abuse) - 🔥 SECURE
+    match /story_reports/{reportId} {
+      allow read: if isSignedIn() && 
+                     (request.auth.uid == resource.data.reporterId || isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.reporterId == request.auth.uid;
+      allow update: if isAdmin();
+    }
+    
+    // Story highlights - 🔥 OPTIMIZED
+    match /story_highlights/{userId}/{highlightId} {
+      allow read: if true;  // Public
+      allow create, update, delete: if isOwner(userId);
+    }
+    
+    // Close friends lists - 🔥 PRIVATE
+    match /close_friends/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // Viewed stories tracking - 🔥 PRIVATE
+    match /users/{userId}/viewed_stories/{storyId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // 🔥 User private subcollections (downloads, search history, subscriptions, watch history)
+    match /users/{userId}/downloads/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/search_history/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/subscriptions/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/subscribers/{subscriberId} {
+      allow read: if isOwner(userId) || isOwner(subscriberId) || isAdmin();
+      allow create, delete: if isOwner(subscriberId);
+      allow update: if false;
+    }
+    match /users/{userId}/watch_history/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/watch-history/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/watch-progress/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/watch_progress/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/liked_videos/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/liked-videos/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/disliked-videos/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/playlists/{document=**} {
       allow read: if true;
-      allow create: if isSignedIn() && isNotBanned()
-        && request.resource.data.creatorId == uid()
-        && safeText(request.resource.data.get('content', ''), 5000);
-      allow update: if isSignedIn() && isNotBanned() && (resource.data.creatorId == uid() || isAdmin());
-      allow delete: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
-
-      match /likes/{likeUid} {
-        allow read: if true;
-        allow create: if isSignedIn() && isNotBanned() && likeUid == uid();
-        allow delete: if isSignedIn() && (likeUid == uid() || isAdmin());
-      }
-
-      match /votes/{voteUid} {
-        allow read: if true;
-        allow create, update: if isSignedIn() && isNotBanned() && voteUid == uid();
-        allow delete: if isSignedIn() && (voteUid == uid() || isAdmin());
-      }
+      allow write: if isOwner(userId);
+    }
+    
+    // ========================================
+    // 👤 USER DATA & PROFILES (OPTIMIZED)
+    // ========================================
+    
+    // User profiles - 🔥 OPTIMIZED: Single rule for both collections
+    // 🖼️ Validates profileImageURL and bannerURL
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+                       (!('profileImageURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.profileImageURL)) &&
+                       (!('bannerURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.bannerURL)) &&
+                       (!('bannerImageURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.bannerImageURL));
+      allow update: if (isOwner(userId) || isAdmin()) &&
+                       (!('profileImageURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.profileImageURL)) &&
+                       (!('bannerURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.bannerURL)) &&
+                       (!('bannerImageURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.bannerImageURL));
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+    
+    match /user_profiles/{userId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+                       (!('profileImageURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.profileImageURL)) &&
+                       (!('bannerURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.bannerURL));
+      allow update: if (isOwner(userId) || isAdmin()) &&
+                       (!('profileImageURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.profileImageURL)) &&
+                       (!('bannerURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.bannerURL));
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+    
+    // 🔥 PERFORMANCE: Group private user collections
+    match /userCollections/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /user_analytics/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // 🔥 OPTIMIZED: Watch history (combined rules)
+    match /history/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /watch-history/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /users/{userId}/watchLater/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /users/{userId}/watch-later/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /users/{userId}/comment-drafts/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /users/{userId}/blockedUsers/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /watchLater/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // Video resume positions - 🔥 OPTIMIZED
+    match /watchHistory/{videoId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // Notifications - 🔥 OPTIMIZED
+    match /notifications/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /notification_settings/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // Background play + PiP settings
+    match /background_play_settings/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // ========================================
+    // 🎮 GAMING & VS MATCHES (OPTIMIZED)
+    // ========================================
+    
+    // VS Matches - 🔥 OPTIMIZED: Inline participant check
+    match /versus_matches/{matchId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 40);
+      allow update: if isSignedIn() && 
+                       (request.auth.uid == resource.data.challengerId || 
+                        request.auth.uid == resource.data.opponentId ||
+                        isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    match /vs-matches/{matchId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+    
+    // 🔥 PERFORMANCE: Group VS Match private data
+    match /vs_match_compliance/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /vs_match_wallets/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /vs_match_transactions/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /vs_match_withdrawals/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // 🔥 OPTIMIZED: Gaming collections
+    match /match_submissions/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /match_verifications/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /gameProfiles/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+    
+    match /player_stats/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /tournaments/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /rounds/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /leaderboards/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 🏆 CHAMPIONSHIP & RANKINGS (OPTIMIZED)
+    // ========================================
+    
+    // 🔥 PERFORMANCE: Group all public-read, admin-write collections
+    match /championship_rankings/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /medals/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /champions/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /rankings/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /competitor_rankings/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /title_defenses/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /hall_of_fame/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // ========================================
+    // 🎖️ AWARDS & CEREMONIES (OPTIMIZED)
+    // ========================================
+    
+    match /ceremonies/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /ceremony-schedule/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /ceremony-hosts/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // 🔥 OPTIMIZED: Award voting
+    match /award-votes/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /award-vote-results/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /award-winners/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /votes/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 📺 LIVE STREAMING (OPTIMIZED)
+    // ========================================
+    
+    match /live/{streamId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 30);
+      allow update, delete: if isCreator(resource.data.streamerId) || isAdmin();
     }
 
-    // ── History (user-scoped) ───────────────────────────────────────────────
-    match /history/{userId}/items/{itemId} {
-      allow read: if isSignedIn() && uid() == userId;
-      allow create, update: if isSignedIn() && isNotBanned() && uid() == userId;
-      allow delete: if isSignedIn() && (uid() == userId || isAdmin());
+    match /live_streams/{streamId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 40);
+      allow update, delete: if isSignedIn() &&
+                              (request.auth.uid == resource.data.streamerId ||
+                               request.auth.uid == resource.data.creatorId ||
+                               request.auth.uid == resource.data.userId ||
+                               isAdmin());
     }
 
-    // ── Notifications (user-scoped, read-only to owner) ───────────────────
-    match /notifications/{userId}/items/{itemId} {
-      allow read: if isSignedIn() && uid() == userId;
-      allow write: if false; // Cloud Functions only
+    match /liveStreams/{streamId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 40);
+      allow update, delete: if isSignedIn() &&
+                              (request.auth.uid == resource.data.streamerId ||
+                               request.auth.uid == resource.data.creatorId ||
+                               request.auth.uid == resource.data.userId ||
+                               isAdmin());
+    }
+    
+    // ========================================
+    // 📺 LIVE TV CHANNELS (WITH IMAGE VALIDATION)
+    // ========================================
+    // Validates that channel logos use approved image sources
+    // NEVER allows Wikipedia/Wikimedia/SVG URLs
+    
+    match /live_tv_channels/{channelId} {
+      allow read: if true;
+      
+      // Create - validates logoURL is from approved source
+      allow create: if isAdmin() && 
+                       isValidSize(request.resource.data, 20) &&
+                       (!('logoURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.logoURL));
+      
+      // Update - validates logoURL if being changed
+      allow update: if isAdmin() && 
+                       (!('logoURL' in request.resource.data) || 
+                        isValidImageURL(request.resource.data.logoURL));
+      
+      allow delete: if isAdmin();
+    }
+    
+    // Channel health/status tracking
+    match /live_tv_health/{channelId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // 🔥 OPTIMIZED: Live chat (lightweight auth)
+    match /live-chat/{streamId}/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    match /live_collaborations/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /broadcast_licenses/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // ========================================
+    // 💬 SOCIAL & ENGAGEMENT (OPTIMIZED)
+    // ========================================
+    
+    // Comments - 🔥 OPTIMIZED
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 20);
+      allow update, delete: if isCreator(resource.data.userId) || isAdmin();
+    }
+    
+    // 🔥 PERFORMANCE: Lightweight engagement rules
+    match /likes/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /subscriptions/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    
+    match /community_posts/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // Playlists - 🔥 OPTIMIZED
+    match /playlists/{playlistId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 30);
+      allow update, delete: if isCreator(resource.data.creatorId) || isAdmin();
+    }
+    
+    match /messages/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    match /collaborations/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 💰 MONETIZATION & PAYMENTS (OPTIMIZED)
+    // ========================================
+    
+    // 🔥 PERFORMANCE: Group all private financial data
+    match /transactions/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /tips/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /creator_accounts/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /creator_earnings/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /creator_payouts/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /earnings/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /revenue_sharing/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    match /premium_stats/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /plus_benefits/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /referral_codes/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+    
+    match /referral_conversions/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 📊 ADVERTISING (OPTIMIZED)
+    // ========================================
+    
+    match /ad_analytics/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    match /ad_transactions/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /ad_user_profiles/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /advertiser_accounts/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /cost_budgets/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // ========================================
+    // ⭐ FEATURED CONTENT (OPTIMIZED)
+    // ========================================
+    
+    match /featured_videos/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /active_featured_videos/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /featured_video_requests/{document=**} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+    
+    // ========================================
+    // 🔍 SEARCH & DISCOVERY (OPTIMIZED)
+    // ========================================
+    
+    // 🔥 PERFORMANCE: Lightweight search rules
+    match /trending_searches/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /search_analytics/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /search_index/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /search_popularity/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /feeds/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 🎓 UNIVERSITY (OPTIMIZED)
+    // ========================================
+    
+    match /university_users/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /university_progress/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /university_certificates/{userId}/{document=**} {
+      allow read: if true;
+      allow write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /career_paths/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // ========================================
+    // 🚨 MODERATION & SAFETY (OPTIMIZED)
+    // ========================================
+    
+    match /reports/{reportId} {
+      allow read: if isSignedIn() && 
+                     (request.auth.uid == resource.data.reporterId || isAdmin());
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+    }
+
+    match /content_reports/{reportId} {
+      allow read: if isSignedIn() &&
+                    (request.auth.uid == resource.data.reporterId ||
+                     request.auth.uid == resource.data.reportedBy ||
+                     isAdmin());
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+    
+    // 🔥 PERFORMANCE: Group admin-only moderation collections
+    match /moderation_results/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /flagged_users/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /fraud_events/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /content_ratings/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /coppa_reports/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /age_verifications/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    match /region_policies/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // ========================================
+    // ⚖️ COPYRIGHT & LEGAL (OPTIMIZED)
+    // ========================================
+    
+    match /content_fingerprints/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /content_id_references/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /content_matches/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    match /content_usage_tracking/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    match /dmca_requests/{document=**} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+    }
+    
+    match /counter_notices/{document=**} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+    }
+    
+    match /content_disputes/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 📧 EMAIL & NOTIFICATIONS (OPTIMIZED)
+    // ========================================
+    
+    match /email_campaigns/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /email_segments/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /scheduled_emails/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    // ========================================
+    // 🎬 CONTENT CREATION TOOLS (OPTIMIZED)
+    // ========================================
+    
+    match /audioSwapProjects/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /multiLanguageMetadata/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /scheduled_premieres/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /approval_required/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    // ========================================
+    // 🏥 SYSTEM HEALTH & MONITORING (OPTIMIZED)
+    // ========================================
+    
+    // 🔥 PERFORMANCE: Public health checks (no auth = faster)
+    match /health_check/{document=**} {
+      allow read, write: if true;
+    }
+    
+    match /doctor_reports/{document=**} {
+      allow read, write: if true;
+    }
+    
+    match /dr_drill_results/{document=**} {
+      allow read, write: if true;
+    }
+    
+    match /emergency_stops/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /slos/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /analytics/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 💾 BACKUPS & RECOVERY (OPTIMIZED)
+    // ========================================
+    
+    match /backups/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /backup_configurations/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /backup_manifests/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /snapshots/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /rollback_events/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    // ========================================
+    // 🔧 SYSTEM CONFIGURATION (OPTIMIZED)
+    // ========================================
+    
+    match /service_configs/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /feature_flags/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /mobile-sync/{userId}/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // 🔥 PERFORMANCE: Public cache (no auth = faster reads)
+    match /sharedCache/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    match /items/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 👥 TEAMS & WORKSPACES (OPTIMIZED)
+    // ========================================
+    
+    match /team-workspaces/{workspaceId} {
+      allow read, write: if isSignedIn();
+    }
+    
+    match /workspace-invites/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 📈 PLATFORM MONITORING & METRICS
+    // ========================================
+    match /platformHealth/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /platformMetrics/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /activeSessions/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /videoViews/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /adClicks/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /payments/{document=**} {
+      allow read: if isSignedIn() && (resource == null || request.auth.uid == resource.data.userId || isAdmin());
+      allow write: if isSignedIn();
+    }
+    match /ml_events/{document=**} {
+      allow read: if isAdmin();
+      allow write: if isSignedIn();
+    }
+    
+    // ========================================
+    // 🎯 DEFAULT DENY (SECURITY)
+    // ========================================
+    
+    // Explicitly deny all other paths for security
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
-
 

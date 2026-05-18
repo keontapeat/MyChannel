@@ -92,16 +92,25 @@ class StoryViewTracker: ObservableObject {
         let db = Firestore.firestore()
         
         do {
-            // 1. Add to user's viewed stories
-            try await db.collection("users")
+            let viewedStoryRef = db.collection("users")
                 .document(userId)
                 .collection("viewed_stories")
                 .document(storyId)
-                .setData([
+
+            let existingView = try await viewedStoryRef.getDocument()
+            let hasAlreadyViewed = existingView.exists
+
+            // 1. Add to user's viewed stories
+            try await viewedStoryRef.setData([
                     "viewedAt": FieldValue.serverTimestamp(),
                     "storyId": storyId
                 ], merge: true)
             
+            guard !hasAlreadyViewed else {
+                print("ℹ️ [StoryViewTracker] View already counted for user \(userId) on story \(storyId)")
+                return
+            }
+
             // 2. Increment story view count (atomic operation)
             try await db.collection("story_views")
                 .document(storyId)

@@ -96,9 +96,9 @@ final class FeaturedStore: ObservableObject {
         // Clear local cache and load fresh from Firestore
         var loadedVideos: [StoredFeatured] = []
         
-        // Filter criteria for owner's videos
-        let ownerDisplayNames: Set<String> = ["shot by keonta"]
-        let ownerUsernames: Set<String> = ["sbkeonta_", "shotbykeonta", "keontapeat"]
+        // Filter criteria (owner identity no longer excluded; only explicit bad titles)
+        let ownerDisplayNames: Set<String> = []
+        let ownerUsernames: Set<String> = []
         let blockedTitleSubstrings = ["cooking with kya", "screen recording 2025"]
         
         for videoId in videoIds {
@@ -108,10 +108,8 @@ final class FeaturedStore: ObservableObject {
                     let titleLower = video.title.lowercased()
                     let hasBlockedTitle = blockedTitleSubstrings.contains { titleLower.contains($0) }
                     
-                    // Filter out owner's problematic videos
-                    let shouldExclude = ownerDisplayNames.contains(video.creator.displayName.lowercased()) ||
-                                      ownerUsernames.contains(video.creator.username.lowercased()) ||
-                                      hasBlockedTitle
+                    // Filter only by explicit bad-title list
+                    let shouldExclude = hasBlockedTitle
                     
                     if shouldExclude {
                         print("🚫 [FeaturedStore] Filtering out: '\(video.title)' by '\(video.creator.displayName)'")
@@ -124,13 +122,22 @@ final class FeaturedStore: ObservableObject {
             }
         }
         
-        // Update local store with Firestore data
-        featured = loadedVideos
-        persist()
+        // Merge: keep local entries that haven't been confirmed by Firestore yet
+        // (prevents wiping freshly added items when the server snapshot is stale or
+        //  Firestore reads are blocked by App Check/permissions).
+        let remoteIds = Set(loadedVideos.map { $0.id })
+        let unconfirmedLocals = featured.filter { !remoteIds.contains($0.id) }
+        if loadedVideos.isEmpty && !unconfirmedLocals.isEmpty {
+            // Don't overwrite local state with an empty remote snapshot.
+            print("✅ FeaturedStore remote returned 0 — preserving \(unconfirmedLocals.count) local entries")
+        } else {
+            featured = unconfirmedLocals + loadedVideos
+            persist()
+        }
         isLoading = false
         hasSyncedFromFirestore = true
-        
-        print("✅ FeaturedStore synced \(loadedVideos.count) videos from Firestore")
+
+        print("✅ FeaturedStore synced \(loadedVideos.count) videos from Firestore (local kept: \(unconfirmedLocals.count))")
         #endif
     }
     
@@ -191,11 +198,17 @@ final class FeaturedStore: ObservableObject {
         guard !isFeatured(video.id) else { return }
         featured.insert(StoredFeatured(from: video), at: 0)
         persist()
+        Task {
+            await persistFeaturedVideoToFirestore(video)
+        }
     }
 
     func remove(_ id: String) {
         featured.removeAll { $0.id == id }
         persist()
+        Task {
+            await removeFeaturedVideoFromFirestore(id)
+        }
     }
 
     func toggle(video: Video) {
@@ -207,6 +220,85 @@ final class FeaturedStore: ObservableObject {
     func move(fromOffsets: IndexSet, toOffset: Int) {
         featured.move(fromOffsets: fromOffsets, toOffset: toOffset)
         persist()
+        Task {
+            await updateFeaturedPrioritiesInFirestore()
+        }
+    }
+
+    private func persistFeaturedVideoToFirestore(_ video: Video) async {
+        #if canImport(FirebaseFirestore)
+        do {
+            let existing = try await db.collection("featured_videos")
+                .whereField("videoId", isEqualTo: video.id)
+                .getDocuments()
+            if !existing.documents.isEmpty {
+                return
+            }
+            let videoData: [String: Any] = [
+                "id": video.id,
+                "title": video.title,
+                "description": video.description,
+                "userId": video.creator.id,
+                "creatorId": video.creator.id,
+                "videoURL": video.videoURL,
+                "videoUrl": video.videoURL,
+                "thumbnailURL": video.thumbnailURL,
+                "thumbnailUrl": video.thumbnailURL,
+                "duration": video.duration,
+                "viewCount": video.viewCount,
+                "likeCount": video.likeCount,
+                "category": video.category.rawValue,
+                "tags": video.tags,
+                "isPublic": video.isPublic,
+                "visibility": "public",
+                "processingStatus": "completed",
+                "createdAt": FieldValue.serverTimestamp(),
+                "updatedAt": FieldValue.serverTimestamp()
+            ]
+            try await db.collection("videos").document(video.id).setData(videoData, merge: true)
+            try await db.collection("featured_videos").document(video.id).setData([
+                "videoId": video.id,
+                "priority": 0,
+                "addedAt": FieldValue.serverTimestamp(),
+                "addedBy": AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id ?? ""
+            ], merge: true)
+            await updateFeaturedPrioritiesInFirestore()
+        } catch {
+            print("❌ [FeaturedStore] Failed to persist featured video: \(error)")
+        }
+        #endif
+    }
+
+    private func removeFeaturedVideoFromFirestore(_ id: String) async {
+        #if canImport(FirebaseFirestore)
+        do {
+            let snapshot = try await db.collection("featured_videos")
+                .whereField("videoId", isEqualTo: id)
+                .getDocuments()
+            for doc in snapshot.documents {
+                try await doc.reference.delete()
+            }
+        } catch {
+            print("❌ [FeaturedStore] Failed to remove featured video: \(error)")
+        }
+        #endif
+    }
+
+    private func updateFeaturedPrioritiesInFirestore() async {
+        #if canImport(FirebaseFirestore)
+        for (index, item) in featured.enumerated() {
+            do {
+                let snapshot = try await db.collection("featured_videos")
+                    .whereField("videoId", isEqualTo: item.id)
+                    .getDocuments()
+                for doc in snapshot.documents {
+                    try await doc.reference.updateData(["priority": index])
+                }
+            } catch {
+                print("❌ [FeaturedStore] Failed to update priority for \(item.id): \(error)")
+            }
+        }
+        #endif
     }
 
     /// Canonical ID for the bundled Shot By Keonta intro video (used by Home and FeaturedManager).

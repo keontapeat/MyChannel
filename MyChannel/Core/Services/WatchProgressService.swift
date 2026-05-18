@@ -31,7 +31,13 @@ final class WatchProgressService: ObservableObject {
         let pct = duration > 0 ? min(1.0, position / duration) : 0
         let docId = "\(userId)_\(videoId)"
         let data: [String: Any] = ["userId": userId, "videoId": videoId, "position": position, "duration": duration, "pct": pct, "lastWatched": FieldValue.serverTimestamp()]
-        try await db.collection("watch_progress").document(docId).setData(data, merge: true)
+        do {
+            try await db.collection("watch_progress").document(docId).setData(data, merge: true)
+        } catch {
+            #if DEBUG
+            print("⚠️ [WatchProgress] saveProgress skipped: \(error.localizedDescription)")
+            #endif
+        }
         let wp = WatchProgress(id: docId, userId: userId, videoId: videoId, positionSec: position, durationSec: duration, completionPct: pct, lastWatchedAt: Date())
         progress[videoId] = wp
     }

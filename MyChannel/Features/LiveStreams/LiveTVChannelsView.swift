@@ -10,6 +10,14 @@ struct LiveTVChannelsView: View {
     @State private var selectedChannel: LiveTVChannel?
     @State private var heroIndex: Int = 0
     @State private var aiTrendingChannels: [LiveTVChannel] = []
+    @State private var selectedTopTab: TopTab = .home
+    @StateObject private var libraryStore = LiveTVLibraryStore.shared
+
+    enum TopTab: String, CaseIterable {
+        case library = "Library"
+        case home = "Home"
+        case live = "Live"
+    }
 
     enum ViewMode: String, CaseIterable {
         case grid = "grid"
@@ -24,7 +32,12 @@ struct LiveTVChannelsView: View {
     }
 
     private var allChannels: [LiveTVChannel] {
-        LiveTVChannel.sampleChannels
+        let managerChannels = LiveTVManager.shared.channels
+        return managerChannels.isEmpty ? LiveTVChannel.sampleChannels : managerChannels
+    }
+
+    private var savedChannels: [LiveTVChannel] {
+        allChannels.filter { libraryStore.savedChannelIds.contains($0.id) }
     }
 
     private var heroChannels: [LiveTVChannel] {
@@ -69,45 +82,29 @@ struct LiveTVChannelsView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 header
+                topTabs
                 searchBar
-                categoryChips
+                if selectedTopTab != .library {
+                    categoryChips
+                }
 
                 ScrollView {
                     VStack(spacing: 0) {
-                        // Hero banner - only when not searching/filtering
-                        if searchText.isEmpty && selectedCategory == nil {
+                        if selectedTopTab == .library {
+                            libraryContent
+                        } else if selectedTopTab == .live {
+                            liveGuideContent
+                        } else if searchText.isEmpty && selectedCategory == nil {
                             heroBanner
                                 .padding(.top, 16)
-                        }
 
-                        // Trending row - only when not searching/filtering
-                        if searchText.isEmpty && selectedCategory == nil && !aiTrendingChannels.isEmpty {
-                            trendingRow
-                        }
-
-                        // Main grid/list
-                        if viewMode == .grid {
-                            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
-                                                GridItem(.flexible(), spacing: 12)],
-                                      spacing: 12) {
-                                ForEach(filteredChannels) { channel in
-                                    TVGridCard(channel: channel, isTrending: aiTrendingChannels.prefix(10).contains(where: { $0.id == channel.id })) {
-                                        playChannel(channel)
-                                    }
-                                }
+                            if !aiTrendingChannels.isEmpty {
+                                trendingRow
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.top, 20)
+
+                            channelGridOrList
                         } else {
-                            LazyVStack(spacing: 10) {
-                                ForEach(filteredChannels) { channel in
-                                    TVListCard(channel: channel) {
-                                        playChannel(channel)
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.top, 16)
+                            channelGridOrList
                         }
                         Color.clear.frame(height: 32)
                     }
@@ -124,6 +121,7 @@ struct LiveTVChannelsView: View {
             aiTrendingChannels = aiChannels.isEmpty
                 ? Array(allChannels.sorted { $0.viewerCount > $1.viewerCount }.prefix(15))
                 : aiChannels
+            await LiveTVManager.shared.initialize()
         }
         .fullScreenCover(isPresented: $showingPlayer) {
             if let channel = selectedChannel {
@@ -310,6 +308,133 @@ struct LiveTVChannelsView: View {
             .padding(.horizontal, 20)
         }
         .padding(.top, 12)
+    }
+
+    private var topTabs: some View {
+        HStack(spacing: 0) {
+            ForEach(TopTab.allCases, id: \.self) { tab in
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        selectedTopTab = tab
+                        selectedCategory = nil
+                        searchText = ""
+                    }
+                    HapticManager.shared.impact(style: .light)
+                } label: {
+                    VStack(spacing: 8) {
+                        Text(tab.rawValue)
+                            .font(.system(size: 15, weight: selectedTopTab == tab ? .bold : .semibold))
+                            .foregroundColor(selectedTopTab == tab ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary)
+                        Capsule()
+                            .fill(selectedTopTab == tab ? AppTheme.Colors.textPrimary : Color.clear)
+                            .frame(height: 3)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 12)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private var channelGridOrList: some View {
+        Group {
+            if viewMode == .grid {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
+                                    GridItem(.flexible(), spacing: 12)],
+                          spacing: 12) {
+                    ForEach(filteredChannels) { channel in
+                        TVGridCard(
+                            channel: channel,
+                            isTrending: aiTrendingChannels.prefix(10).contains(where: { $0.id == channel.id })
+                        ) {
+                            playChannel(channel)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+            } else {
+                LazyVStack(spacing: 10) {
+                    ForEach(filteredChannels) { channel in
+                        TVListCard(
+                            channel: channel
+                        ) {
+                            playChannel(channel)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+            }
+        }
+    }
+
+    private var libraryContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            libraryHeader
+            if savedChannels.isEmpty {
+                emptyLibraryView
+            } else {
+                LazyVStack(spacing: 10) {
+                    ForEach(savedChannels) { channel in
+                        TVListCard(
+                            channel: channel
+                        ) {
+                            playChannel(channel)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 18)
+    }
+
+    private var libraryHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Your Live TV Library")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+            Text("Save channels and add them to your DVR-style lineup.")
+                .font(.system(size: 14))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var emptyLibraryView: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "tray")
+                .font(.system(size: 42, weight: .light))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+            Text("No saved channels yet")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+            Text("Tap the bookmark on any channel to build your library.")
+                .font(.system(size: 14))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
+    }
+
+    private var liveGuideContent: some View {
+        LazyVStack(spacing: 10, pinnedViews: []) {
+            ForEach(filteredChannels) { channel in
+                LiveTVGuideRow(
+                    channel: channel,
+                    isSaved: libraryStore.isSaved(channel),
+                    isDVRAdded: libraryStore.isDVRAdded(channel),
+                    onPlay: { playChannel(channel) },
+                    onSave: { libraryStore.toggleSaved(channel) },
+                    onDVR: { libraryStore.toggleDVR(channel) }
+                )
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
     }
 
     private func chip(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -679,6 +804,35 @@ private struct TVListCard: View {
 }
 
 // MARK: - Shared helpers
+
+// MARK: - Live TV Guide Row (lightweight placeholder)
+private struct LiveTVGuideRow: View {
+    let channel: LiveTVChannel
+    let isSaved: Bool
+    let isDVRAdded: Bool
+    let onPlay: () -> Void
+    let onSave: () -> Void
+    let onDVR: () -> Void
+
+    var body: some View {
+        TVListCard(channel: channel) {
+            onPlay()
+        }
+        .overlay(alignment: .topTrailing) {
+            HStack(spacing: 12) {
+                Button(action: onSave) {
+                    Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
+                        .foregroundColor(isSaved ? .yellow : AppTheme.Colors.textSecondary)
+                }
+                Button(action: onDVR) {
+                    Image(systemName: isDVRAdded ? "record.circle.fill" : "record.circle")
+                        .foregroundColor(isDVRAdded ? .red : AppTheme.Colors.textSecondary)
+                }
+            }
+            .padding(10)
+        }
+    }
+}
 private func LiveTVChannelsView_categoryColor(_ category: LiveTVChannel.ChannelCategory) -> Color {
     switch category {
     case .news: return .red

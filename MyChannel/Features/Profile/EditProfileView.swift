@@ -8,6 +8,7 @@
 import SwiftUI
 import PhotosUI
 import AVFoundation
+import UIKit
 
 // MARK: - Edit Profile View (Enhanced)
 struct EditProfileView: View {
@@ -25,7 +26,6 @@ struct EditProfileView: View {
     @State private var showOnlineStatus: Bool = false
     @State private var selectedProfileImage: PhotosPickerItem?
     @State private var selectedBannerImage: PhotosPickerItem?
-    @State private var selectedBannerVideo: PhotosPickerItem?
     @State private var selectedProfileUIImage: UIImage?
     @State private var selectedBannerUIImage: UIImage?
     @State private var isSaving = false
@@ -36,10 +36,12 @@ struct EditProfileView: View {
     @State private var showingDiscardAlert = false
     
     @State private var isVideoCover: Bool = false
-    @State private var showingVideoPicker = false
+    @State private var showingUIKitVideoPicker = false
     @State private var bannerVideoLocalURL: URL?
     @State private var bannerVideoMuted: Bool = true
     @State private var bannerContentMode: UserBannerContentMode = .fill
+    @State private var bannerVideoDurationText: String?
+    @State private var bannerVideoSizeText: String?
     
     @State private var showingDefaultBannerPicker = false
     @State private var selectedDefaultBannerImageURL: String? = nil
@@ -173,12 +175,12 @@ struct EditProfileView: View {
             matching: .images,
             photoLibrary: .shared()
         )
-        .photosPicker(
-            isPresented: $showingVideoPicker,
-            selection: $selectedBannerVideo,
-            matching: .videos,
-            photoLibrary: .shared()
-        )
+        .sheet(isPresented: $showingUIKitVideoPicker) {
+            UIKitBannerVideoPicker { url in
+                guard let url else { return }
+                Task { await processSelectedBannerVideoURL(url) }
+            }
+        }
         .alert("Discard Changes?", isPresented: $showingDiscardAlert) {
             Button("Discard", role: .destructive) {
                 dismiss()
@@ -194,10 +196,6 @@ struct EditProfileView: View {
         .onChange(of: selectedBannerImage) { item in
             guard let item else { return }
             Task { await processSelectedBannerImage(item) }
-        }
-        .onChange(of: selectedBannerVideo) { item in
-            guard let item else { return }
-            Task { await processSelectedBannerVideo(item) }
         }
         .onChange(of: selectedProfileUIImage) { _ in hasUnsavedChanges = true }
         .onChange(of: selectedBannerUIImage) { _ in hasUnsavedChanges = true }
@@ -248,10 +246,10 @@ struct EditProfileView: View {
                     // Video source buttons
                     HStack(spacing: 12) {
                         Button {
-                            showingVideoPicker = true
+                            showingUIKitVideoPicker = true
                             HapticManager.shared.impact(style: .light)
                         } label: {
-                            Label("Pick from Library", systemImage: "video.badge.plus")
+                            Label("Pick & Trim Video", systemImage: "video.badge.plus")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 12)
@@ -274,13 +272,28 @@ struct EditProfileView: View {
                         .buttonStyle(.plain)
                     }
 
+                    if let duration = bannerVideoDurationText, let size = bannerVideoSizeText {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.green)
+                            Text("\(duration) • \(size) • Auto-trims to 15s on save")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 10))
+                    }
+
                     ZStack {
                         if let urlStr = selectedDefaultBannerVideoURL, let url = URL(string: urlStr) {
-                            VideoBannerPreview(url: url)
+                            VideoBannerPreview(url: url, isMuted: bannerVideoMuted, contentMode: bannerContentMode)
                         } else if let local = bannerVideoLocalURL {
-                            VideoBannerPreview(url: local)
+                            VideoBannerPreview(url: local, isMuted: bannerVideoMuted, contentMode: bannerContentMode)
                         } else if let currentRemote = user.bannerVideoURL, let url = URL(string: currentRemote) {
-                            VideoBannerPreview(url: url)
+                            VideoBannerPreview(url: url, isMuted: bannerVideoMuted, contentMode: bannerContentMode)
                         } else {
                             Rectangle()
                                 .fill(
@@ -514,10 +527,11 @@ struct EditProfileView: View {
         hasUnsavedChanges = true
         if video {
             selectedDefaultBannerImageURL = nil
+            selectedBannerImage = nil
+            selectedBannerUIImage = nil
         } else {
             selectedDefaultBannerVideoURL = nil
             bannerVideoLocalURL = nil
-            selectedBannerVideo = nil
         }
         HapticManager.shared.impact(style: .light)
     }
@@ -742,6 +756,8 @@ struct EditProfileView: View {
         showWebsiteOnProfile = user.showWebsiteOnProfile ?? false
         showOnlineStatus = user.showOnlineStatus ?? false
         isVideoCover = user.bannerVideoURL != nil
+        bannerVideoMuted = user.bannerVideoMuted ?? true
+        bannerContentMode = user.bannerVideoContentMode ?? .fill
     }
     
     private func saveProfile() {
@@ -763,6 +779,11 @@ struct EditProfileView: View {
             var remoteBannerURL: String? = user.bannerVideoURL
 
             if isVideoCover {
+                await MainActor.run {
+                    selectedBannerImage = nil
+                    selectedBannerUIImage = nil
+                    selectedDefaultBannerImageURL = nil
+                }
                 if let defaultVideoURL = selectedDefaultBannerVideoURL {
                     remoteBannerURL = defaultVideoURL
                 } else if let localURL = bannerVideoLocalURL {
@@ -984,32 +1005,51 @@ struct EditProfileView: View {
     }
     
     // MARK: - Video processing
-    private func processSelectedBannerVideo(_ item: PhotosPickerItem) async {
+    private func processSelectedBannerVideoURL(_ url: URL) async {
         do {
-            if let data = try await item.loadTransferable(type: Data.self), !data.isEmpty {
-                let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                let fileURL = docs.appendingPathComponent("banner_\(user.id).mov")
-                try? FileManager.default.removeItem(at: fileURL)
-                try data.write(to: fileURL, options: .atomic)
-                await MainActor.run {
-                    bannerVideoLocalURL = fileURL
-                    isVideoCover = true
-                    hasUnsavedChanges = true
-                }
+            let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let fileURL = docs.appendingPathComponent("banner_\(user.id)_\(UUID().uuidString).mov")
+            try? FileManager.default.removeItem(at: fileURL)
+            if url.startAccessingSecurityScopedResource() {
+                defer { url.stopAccessingSecurityScopedResource() }
+                try FileManager.default.copyItem(at: url, to: fileURL)
+            } else {
+                try FileManager.default.copyItem(at: url, to: fileURL)
+            }
+            let details = await bannerVideoDetails(for: fileURL)
+            await MainActor.run {
+                bannerVideoLocalURL = fileURL
+                bannerVideoDurationText = details.duration
+                bannerVideoSizeText = details.size
+                selectedDefaultBannerVideoURL = nil
+                selectedDefaultBannerImageURL = nil
+                isVideoCover = true
+                hasUnsavedChanges = true
             }
         } catch {
-            print("Failed to load video: \(error)")
+            print("Failed to import UIKit banner video: \(error)")
         }
+    }
+
+    private func bannerVideoDetails(for url: URL) async -> (duration: String, size: String) {
+        let asset = AVAsset(url: url)
+        let seconds = (try? await asset.load(.duration).seconds) ?? 0
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let bytes = attributes?[.size] as? Int64 ?? 0
+        let durationText = seconds.isFinite ? String(format: "%.0fs", seconds) : "Video"
+        let sizeText = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        return (durationText, sizeText)
     }
 }
 
 // MARK: - Simple inline preview for banner video
-import AVFoundation
 private struct VideoBannerPreview: View {
     let url: URL
+    let isMuted: Bool
+    let contentMode: UserBannerContentMode
     @State private var player = AVPlayer()
     var body: some View {
-        FlicksPlayerLayerView(player: player, videoGravity: .resizeAspectFill)
+        FlicksPlayerLayerView(player: player, videoGravity: contentMode == .fill ? .resizeAspectFill : .resizeAspect)
             .onAppear {
                 let item = AVPlayerItem(url: url)
                 NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { _ in
@@ -1017,10 +1057,53 @@ private struct VideoBannerPreview: View {
                     player.play()
                 }
                 player.replaceCurrentItem(with: item)
-                player.isMuted = true
+                player.isMuted = isMuted
                 player.play()
             }
+            .onChange(of: isMuted) { muted in
+                player.isMuted = muted
+            }
             .onDisappear { player.pause() }
+    }
+}
+
+private struct UIKitBannerVideoPicker: UIViewControllerRepresentable {
+    let onPick: (URL?) -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .photoLibrary
+        picker.mediaTypes = ["public.movie"]
+        picker.videoQuality = .typeHigh
+        picker.allowsEditing = true
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+    
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: UIKitBannerVideoPicker
+        
+        init(parent: UIKitBannerVideoPicker) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            let url = info[.mediaURL] as? URL
+            parent.onPick(url)
+            parent.dismiss()
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.onPick(nil)
+            parent.dismiss()
+        }
     }
 }
 

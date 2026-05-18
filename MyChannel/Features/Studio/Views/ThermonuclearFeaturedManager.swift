@@ -35,6 +35,7 @@ struct ThermonuclearFeaturedManager: View {
     @State private var pendingUploadThumbnail: UIImage?
     @State private var pendingUploadDuration: TimeInterval = 0
     @StateObject private var cameraRollUploader = CameraRollFeaturedUploader()
+    @State private var showingFullSlotsDialog = false
     
     var body: some View {
         NavigationView {
@@ -117,6 +118,12 @@ struct ThermonuclearFeaturedManager: View {
                 if let error = manager.errorMessage {
                     Text(error)
                 }
+            }
+            .confirmationDialog("Featured slots are full", isPresented: $showingFullSlotsDialog, titleVisibility: .visible) {
+                Button("Remove a featured video first", role: .destructive) { }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("You already have 20 featured videos. Remove one before adding another.")
             }
         }
     }
@@ -246,12 +253,12 @@ struct ThermonuclearFeaturedManager: View {
     private var addButton: some View {
         Menu {
             Button {
-                showingVideoSelector = true
+                presentAddFromVideos()
             } label: {
                 Label("Add from my videos", systemImage: "play.rectangle")
             }
             Button {
-                showingCameraRollPicker = true
+                presentCameraRollPicker()
             } label: {
                 Label("Upload from Camera Roll", systemImage: "photo.on.rectangle.angled")
             }
@@ -270,7 +277,6 @@ struct ThermonuclearFeaturedManager: View {
                     .fill(Color(.systemGray5))
             )
         }
-        .disabled(!manager.canAddMore)
     }
     
     // MARK: - Empty State
@@ -294,7 +300,7 @@ struct ThermonuclearFeaturedManager: View {
             
             HStack(spacing: 12) {
                 Button {
-                    showingVideoSelector = true
+                    presentAddFromVideos()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "play.rectangle")
@@ -311,7 +317,7 @@ struct ThermonuclearFeaturedManager: View {
                     )
                 }
                 Button {
-                    showingCameraRollPicker = true
+                    presentCameraRollPicker()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "photo.on.rectangle.angled")
@@ -467,7 +473,14 @@ struct ThermonuclearFeaturedManager: View {
     
     private func addVideo(_ video: Video) async {
         await manager.addFeaturedVideo(video)
-        showingVideoSelector = false
+        if manager.errorMessage == nil {
+            showingVideoSelector = false
+            NotificationManager.shared.showSuccess("Added to featured")
+        }
+        await AnalyticsService.shared.trackEvent("featured_library_video_selected", parameters: [
+            "videoId": video.id,
+            "title": video.title
+        ])
     }
     
     // MARK: - Camera Roll Load
@@ -499,6 +512,32 @@ struct ThermonuclearFeaturedManager: View {
             }
         } catch {
             print("❌ [CameraRoll] Failed to load video: \(error)")
+        }
+    }
+    
+    private func presentAddFromVideos() {
+        guard manager.canAddMore else {
+            showingFullSlotsDialog = true
+            return
+        }
+        showingVideoSelector = true
+        Task {
+            await AnalyticsService.shared.trackEvent("featured_add_from_videos_opened", parameters: [
+                "currentCount": manager.featuredVideos.count
+            ])
+        }
+    }
+    
+    private func presentCameraRollPicker() {
+        guard manager.canAddMore else {
+            showingFullSlotsDialog = true
+            return
+        }
+        showingCameraRollPicker = true
+        Task {
+            await AnalyticsService.shared.trackEvent("featured_camera_roll_picker_opened", parameters: [
+                "currentCount": manager.featuredVideos.count
+            ])
         }
     }
 }
@@ -851,29 +890,68 @@ class FeaturedManager: ObservableObject {
     
     func addFeaturedVideo(_ video: Video) async {
         guard canAddMore else {
-            errorMessage = "Maximum 20 featured videos allowed"
+            errorMessage = "All featured slots are full. Remove a video before adding another."
+            await AnalyticsService.shared.trackEvent("featured_add_blocked_slots_full", parameters: [
+                "videoId": video.id,
+                "currentCount": featuredVideos.count
+            ])
             return
         }
         
         guard !isVideoFeatured(video) else {
             errorMessage = "Video is already featured"
+            await AnalyticsService.shared.trackEvent("featured_add_blocked_duplicate", parameters: [
+                "videoId": video.id
+            ])
             return
         }
         
         #if canImport(FirebaseFirestore)
         do {
             let db = Firestore.firestore()
-            let docRef = db.collection("featured_videos").document(UUID().uuidString)
-            
-            try await docRef.setData([
+
+            // Persist the video document itself so reload can resolve it.
+            // Without this, the featured_videos entry points to a non-existent
+            // /videos/{id} doc and disappears on next load.
+            let videoData: [String: Any] = [
+                "id": video.id,
+                "title": video.title,
+                "description": video.description,
+                "userId": video.creator.id,
+                "creatorId": video.creator.id,
+                "ownerUid": video.creator.id,
+                "videoURL": video.videoURL,
+                "videoUrl": video.videoURL,
+                "thumbnailURL": video.thumbnailURL,
+                "thumbnailUrl": video.thumbnailURL,
+                "duration": video.duration,
+                "viewCount": video.viewCount,
+                "likeCount": video.likeCount,
+                "category": video.category.rawValue,
+                "tags": video.tags,
+                "isPublic": video.isPublic,
+                "visibility": "public",
+                "processingStatus": "completed",
+                "createdAt": FieldValue.serverTimestamp(),
+                "updatedAt": FieldValue.serverTimestamp()
+            ]
+            try await db.collection("videos").document(video.id).setData(videoData, merge: true)
+
+            // Use video.id as the featured_videos doc id so adds are idempotent.
+            try await db.collection("featured_videos").document(video.id).setData([
                 "videoId": video.id,
                 "priority": featuredVideos.count,
                 "addedAt": FieldValue.serverTimestamp(),
                 "addedBy": AuthenticationManager.shared.currentUser?.id ?? ""
-            ])
-            
+            ], merge: true)
+
             // Add to local array
             featuredVideos.append(video)
+            FeaturedStore.shared.syncFromFirestore()
+            await AnalyticsService.shared.trackEvent("featured_video_added", parameters: [
+                "videoId": video.id,
+                "position": featuredVideos.count - 1
+            ])
             
             print("✅ Added featured video: \(video.title)")
         } catch {
@@ -907,6 +985,10 @@ class FeaturedManager: ObservableObject {
             
             // Update priorities
             await updatePriorities()
+            FeaturedStore.shared.syncFromFirestore()
+            await AnalyticsService.shared.trackEvent("featured_video_removed", parameters: [
+                "videoId": video.id
+            ])
             
             print("✅ Removed featured video: \(video.title)")
         } catch {
@@ -931,6 +1013,11 @@ class FeaturedManager: ObservableObject {
         
         // Update priorities in Firestore
         await updatePriorities()
+        FeaturedStore.shared.syncFromFirestore()
+        await AnalyticsService.shared.trackEvent("featured_videos_reordered", parameters: [
+            "from": from,
+            "to": to
+        ])
         
         print("✅ Reordered videos: \(from) → \(to)")
     }

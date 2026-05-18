@@ -4,9 +4,14 @@
 //
 //  Universal link + custom URL scheme routing.
 //  Parses deep links, resolves targets, tracks attribution.
+//  Branch SDK powers install attribution & deferred deep links.
 //
 
+#if canImport(BranchPlugin)
+import BranchPlugin
+#endif
 import Foundation
+import UIKit
 
 struct DeepLinkTarget: Codable, Identifiable {
     let id: String
@@ -71,4 +76,58 @@ final class DeepLinkService: ObservableObject {
     }
 
     func clearPending() { pendingLink = nil }
+
+    // MARK: - Branch SDK Integration
+
+    func configureBranch(launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
+        #if canImport(BranchPlugin)
+        Branch.getInstance().initSession(launchOptions: launchOptions) { [weak self] params, error in
+            guard let self, let params, error == nil else { return }
+            if let videoId = params["video_id"] as? String {
+                Task { @MainActor in
+                    self.pendingLink = DeepLinkTarget(id: UUID().uuidString, type: .video, targetId: videoId, params: [:], source: params["~channel"] as? String)
+                }
+            }
+            print("✅ [Branch] Session init. Params: \(params)")
+        }
+        #endif
+    }
+
+    func handleBranchURL(_ url: URL) -> Bool {
+        #if canImport(BranchPlugin)
+        Branch.getInstance().handleDeepLink(url)
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    func handleBranchActivity(_ activity: NSUserActivity) -> Bool {
+        #if canImport(BranchPlugin)
+        return Branch.getInstance().continue(activity)
+        #else
+        return false
+        #endif
+    }
+
+    func createVideoShareLink(videoId: String, title: String, thumbnailURL: String?) async -> URL? {
+        #if canImport(BranchPlugin)
+        let buo = BranchUniversalObject(canonicalIdentifier: "video/\(videoId)")
+        buo.title = title
+        buo.contentMetadata.customMetadata["video_id"] = videoId
+        if let thumb = thumbnailURL { buo.imageUrl = thumb }
+
+        let lp = BranchLinkProperties()
+        lp.channel = "mychannel_ios"
+        lp.feature = "sharing"
+
+        return await withCheckedContinuation { cont in
+            buo.getShortUrl(with: lp) { url, _ in
+                cont.resume(returning: url.flatMap { URL(string: $0) })
+            }
+        }
+        #else
+        return URL(string: "https://mychannel.live/watch/\(videoId)")
+        #endif
+    }
 }

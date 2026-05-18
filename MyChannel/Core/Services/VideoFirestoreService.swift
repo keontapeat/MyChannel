@@ -436,6 +436,14 @@ final class VideoFirestoreService: ObservableObject {
                     continue
                 }
                 
+                // Skip records that are not yet ready (processing or missing URL)
+                let processingStatus = (d["processingStatus"] as? String)?.lowercased() ?? "completed"
+                let rawVideoUrl = (d["videoUrl"] as? String) ?? ""
+                if rawVideoUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || processingStatus != "completed" {
+                    print("  ⏭️ Skipping not-ready video (processingStatus=\(processingStatus)) id=\(doc.documentID)")
+                    continue
+                }
+
                 // Get view count
                 var viewCount = 0
                 if let firestoreCount = d["viewCount"] as? Int {
@@ -475,7 +483,7 @@ final class VideoFirestoreService: ObservableObject {
                     title: d["title"] as? String ?? "",
                     description: d["description"] as? String ?? "",
                     thumbnailURL: d["thumbnailUrl"] as? String ?? "",
-                    videoURL: d["videoUrl"] as? String ?? "",
+                    videoURL: rawVideoUrl,
                     duration: (d["duration"] as? Double) ?? 0,
                     viewCount: viewCount,
                     likeCount: (d["likeCount"] as? Int) ?? 0,

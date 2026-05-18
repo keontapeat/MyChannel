@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 enum VideoBulkAction: CaseIterable {
     case edit
@@ -146,7 +147,7 @@ struct ProfileVideosView: View {
     var managementContext: VideoManagementContext? = nil
     var isLoadingVideos: Bool = false // ⚡ PERFORMANCE: Initial loading state for skeleton
     
-    @State private var layoutMode: VideoLayoutMode = .list1
+    @State private var layoutMode: VideoLayoutMode = VideoLayoutMode.savedPreference
     @State private var sortMode: SortMode = .newest
     @State private var pinnedIds: [String] = []
     @State private var searchText: String = ""
@@ -167,7 +168,7 @@ struct ProfileVideosView: View {
     }
     
     var body: some View {
-        LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
+        LazyVStack(spacing: 12, pinnedViews: [.sectionHeaders]) {
             if !pinnedVideos.isEmpty {
                 PremiumPinnedSection(videos: pinnedVideos, userId: user.id) { unpinnedId in
                     pinnedIds.removeAll { $0 == unpinnedId }
@@ -244,68 +245,77 @@ struct ProfileVideosView: View {
     }
 
     private var videoManagementHeader: some View {
-        VStack(spacing: 14) {
-            HStack(spacing: 12) {
-                Text("Videos")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(AppTheme.Colors.textPrimary)
-
-                Spacer()
-
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
                 if isOwnProfile {
                     Button {
                         HapticManager.shared.impact(style: .medium)
                         NotificationCenter.default.post(name: NSNotification.Name("ShowUpload"), object: nil)
                     } label: {
-                        HStack(spacing: 8) {
-                            Text("Add")
-                                .font(.system(size: 15, weight: .bold))
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 6) {
+                                Text("Add")
+                                    .font(.system(size: 14, weight: .bold))
+                                Image(systemName: "plus")
+                                    .font(.system(size: 13, weight: .bold))
+                            }
                             Image(systemName: "plus")
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.system(size: 15, weight: .bold))
                         }
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 11)
-                        .background(AppTheme.Colors.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .padding(.horizontal, 14)
+                        .frame(minWidth: 82)
+                        .frame(height: 38)
+                        .background(
+                            LinearGradient(
+                                colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.88)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .shadow(color: AppTheme.Colors.primary.opacity(0.24), radius: 10, x: 0, y: 5)
+                        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
 
-                if let management = managementContext, isOwnProfile {
-                    Button {
-                        HapticManager.shared.impact(style: .light)
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            if management.isManaging.wrappedValue {
-                                management.onExit()
-                            } else {
-                                management.isManaging.wrappedValue = true
-                            }
-                        }
-                    } label: {
-                        Image(systemName: management.isManaging.wrappedValue ? "checkmark.circle.fill" : "slider.horizontal.3")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(management.isManaging.wrappedValue ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
-                            .frame(width: 42, height: 42)
-                            .background(Color(.systemGray6))
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(management.isManaging.wrappedValue ? "Exit video management" : "Manage videos")
-                }
+                Spacer(minLength: 0)
 
                 HStack(spacing: 6) {
+                    if let management = managementContext, isOwnProfile {
+                        Button {
+                            HapticManager.shared.impact(style: .light)
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                if management.isManaging.wrappedValue {
+                                    management.onExit()
+                                } else {
+                                    management.isManaging.wrappedValue = true
+                                }
+                            }
+                        } label: {
+                            Image(systemName: management.isManaging.wrappedValue ? "checkmark.circle.fill" : "slider.horizontal.3")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(management.isManaging.wrappedValue ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
+                                .frame(width: 38, height: 38)
+                                .background(Color(.systemGray6))
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(management.isManaging.wrappedValue ? "Exit video management" : "Manage videos")
+                    }
+
                     ForEach(VideoLayoutMode.allCases, id: \.self) { mode in
                         Button {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
                                 layoutMode = mode
+                                mode.savePreference()
                             }
                             HapticManager.shared.impact(style: .light)
                         } label: {
                             Image(systemName: mode.icon)
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(layoutMode == mode ? .white : AppTheme.Colors.textPrimary)
-                                .frame(width: 42, height: 42)
+                                .frame(width: 38, height: 38)
                                 .background(
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                                         .fill(layoutMode == mode ? AppTheme.Colors.primary : Color(.systemGray6))
@@ -325,12 +335,21 @@ struct ProfileVideosView: View {
                         Image(systemName: sortMode.icon)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(AppTheme.Colors.textPrimary)
-                            .frame(width: 42, height: 42)
+                            .frame(width: 38, height: 38)
                             .background(Color(.systemGray6))
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
+                .padding(4)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(AppTheme.Colors.divider.opacity(0.18), lineWidth: 1)
+                        )
+                )
             }
 
             VideoFilterBar(
@@ -341,8 +360,8 @@ struct ProfileVideosView: View {
             )
         }
         .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
         .background(
             AppTheme.Colors.background
                 .overlay(
@@ -366,7 +385,29 @@ struct ProfileVideosView: View {
     
     private var pinnedVideos: [Video] {
         let set = Set(pinnedIds)
-        return filteredVideos.filter { set.contains($0.id) }
+        var pinned = filteredVideos.filter { set.contains($0.id) }
+
+        if isOwnerProfile,
+           let intro = ownerIntroVideo(),
+           !pinned.contains(where: { $0.id == intro.id }) {
+            pinned.insert(intro, at: 0)
+        }
+
+        return pinned
+    }
+
+    private var isOwnerProfile: Bool {
+        let ownerUIDs: Set<String> = ["7EAoUc1aKsNRqR4cYBIOYVGB3Mf2"]
+        let ownerEmails: Set<String> = ["keontapeat@gmail.com", "keontapeat@mychannel.live"]
+        if ownerUIDs.contains(user.id) { return true }
+        if ownerEmails.contains(user.email.lowercased()) { return true }
+        if user.username.lowercased() == "sbkeonta_" { return true }
+        if user.displayName.lowercased().contains("shot by keonta") { return true }
+        return false
+    }
+
+    private func ownerIntroVideo() -> Video? {
+        FeaturedStore.ownerIntroVideo()
     }
     
     private var sortedVideos: [Video] {
@@ -1411,6 +1452,20 @@ private enum VideoLayoutMode: String, CaseIterable {
     case list1
     case advanced
     
+    private static let preferenceKey = "profile.videos.layoutMode"
+    
+    static var savedPreference: VideoLayoutMode {
+        guard let rawValue = UserDefaults.standard.string(forKey: preferenceKey),
+              let mode = VideoLayoutMode(rawValue: rawValue) else {
+            return .list1
+        }
+        return mode
+    }
+    
+    func savePreference() {
+        UserDefaults.standard.set(rawValue, forKey: Self.preferenceKey)
+    }
+    
     var icon: String {
         switch self {
         case .grid2: return "square.grid.2x2"
@@ -1656,9 +1711,8 @@ struct VideoFilterBar: View {
         VStack(spacing: 12) {
             HStack(spacing: 10) {
                 UIKitSearchBar(
-                    placeholder: "Search",
                     text: $searchText,
-                    onSearch: { }
+                    placeholder: "Search"
                 )
                 .frame(height: 42)
 
@@ -1679,34 +1733,184 @@ struct VideoFilterBar: View {
             }
 
             if showingFilterTray {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(VideoVisibilityFilter.allCases, id: \.self) { filter in
-                            ProfileFilterChip(
-                                title: filter.title,
-                                isSelected: visibilityFilter == filter,
-                                icon: filter.icon
-                            ) {
-                                visibilityFilter = filter
-                                HapticManager.shared.impact(style: .light)
-                            }
-                        }
-                        
-                        ForEach(VideoTypeFilter.allCases, id: \.self) { filter in
-                            ProfileFilterChip(
-                                title: filter.title,
-                                isSelected: typeFilter == filter,
-                                icon: filter.icon
-                            ) {
-                                typeFilter = filter
-                                HapticManager.shared.impact(style: .light)
-                            }
-                        }
-                    }
-                }
+                UIKitProfileFilterRow(
+                    visibilityFilter: $visibilityFilter,
+                    typeFilter: $typeFilter
+                )
+                .frame(height: 36)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+    }
+}
+
+private struct UIKitProfileFilterRow: UIViewRepresentable {
+    @Binding var visibilityFilter: VideoVisibilityFilter
+    @Binding var typeFilter: VideoTypeFilter
+    
+    private var items: [ProfileFilterItem] {
+        VideoVisibilityFilter.allCases.map { .visibility($0) } + VideoTypeFilter.allCases.map { .type($0) }
+    }
+    
+    func makeUIView(context: Context) -> UICollectionView {
+        let layout = UICollectionViewFlowLayout()
+        layout.scrollDirection = .horizontal
+        layout.minimumInteritemSpacing = 8
+        layout.minimumLineSpacing = 8
+        layout.sectionInset = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
+        
+        let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        collectionView.backgroundColor = .clear
+        collectionView.showsHorizontalScrollIndicator = false
+        collectionView.alwaysBounceHorizontal = true
+        collectionView.dataSource = context.coordinator
+        collectionView.delegate = context.coordinator
+        collectionView.register(ProfileFilterCollectionCell.self, forCellWithReuseIdentifier: ProfileFilterCollectionCell.reuseIdentifier)
+        return collectionView
+    }
+    
+    func updateUIView(_ collectionView: UICollectionView, context: Context) {
+        context.coordinator.parent = self
+        collectionView.reloadData()
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+    
+    final class Coordinator: NSObject, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+        var parent: UIKitProfileFilterRow
+        
+        init(parent: UIKitProfileFilterRow) {
+            self.parent = parent
+        }
+        
+        func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+            parent.items.count
+        }
+        
+        func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+            guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ProfileFilterCollectionCell.reuseIdentifier, for: indexPath) as? ProfileFilterCollectionCell else {
+                return UICollectionViewCell()
+            }
+            let item = parent.items[indexPath.item]
+            cell.configure(
+                title: item.title,
+                iconName: item.icon,
+                isSelected: item.isSelected(visibility: parent.visibilityFilter, type: parent.typeFilter)
+            )
+            return cell
+        }
+        
+        func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+            let item = parent.items[indexPath.item]
+            switch item {
+            case .visibility(let filter):
+                parent.visibilityFilter = filter
+            case .type(let filter):
+                parent.typeFilter = filter
+            }
+            HapticManager.shared.impact(style: .light)
+            collectionView.reloadData()
+            collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: true)
+        }
+        
+        func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+            let item = parent.items[indexPath.item]
+            let font = UIFont.systemFont(ofSize: 13, weight: .semibold)
+            let textWidth = item.title.size(withAttributes: [.font: font]).width
+            let iconWidth: CGFloat = item.icon == nil ? 0 : 18
+            return CGSize(width: ceil(textWidth + iconWidth + 28), height: 34)
+        }
+    }
+}
+
+private enum ProfileFilterItem {
+    case visibility(VideoVisibilityFilter)
+    case type(VideoTypeFilter)
+    
+    var title: String {
+        switch self {
+        case .visibility(let filter): return filter.title
+        case .type(let filter): return filter.title
+        }
+    }
+    
+    var icon: String? {
+        switch self {
+        case .visibility(let filter): return filter.icon
+        case .type(let filter): return filter.icon
+        }
+    }
+    
+    func isSelected(visibility: VideoVisibilityFilter, type: VideoTypeFilter) -> Bool {
+        switch self {
+        case .visibility(let filter): return visibility == filter
+        case .type(let filter): return type == filter
+        }
+    }
+}
+
+private final class ProfileFilterCollectionCell: UICollectionViewCell {
+    static let reuseIdentifier = "ProfileFilterCollectionCell"
+    
+    private let iconView = UIImageView()
+    private let titleLabel = UILabel()
+    private let stackView = UIStackView()
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setup()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        iconView.image = nil
+        titleLabel.text = nil
+    }
+    
+    func configure(title: String, iconName: String?, isSelected: Bool) {
+        iconView.image = iconName.flatMap { UIImage(systemName: $0) }
+        iconView.isHidden = iconName == nil
+        titleLabel.text = title
+        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        let textColor = isSelected ? UIColor.white : UIColor(AppTheme.Colors.textPrimary)
+        iconView.tintColor = textColor
+        titleLabel.textColor = textColor
+        contentView.backgroundColor = isSelected ? UIColor(AppTheme.Colors.primary) : UIColor(AppTheme.Colors.surface)
+        contentView.layer.borderColor = UIColor(AppTheme.Colors.divider.opacity(isSelected ? 0 : 0.3)).cgColor
+        contentView.layer.borderWidth = 1
+        accessibilityLabel = title
+        accessibilityTraits = isSelected ? [.button, .selected] : [.button]
+    }
+    
+    private func setup() {
+        isAccessibilityElement = true
+        contentView.layer.cornerRadius = 17
+        contentView.layer.masksToBounds = true
+        
+        iconView.contentMode = .scaleAspectFit
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        iconView.heightAnchor.constraint(equalToConstant: 12).isActive = true
+        
+        stackView.axis = .horizontal
+        stackView.alignment = .center
+        stackView.spacing = 6
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        stackView.addArrangedSubview(iconView)
+        stackView.addArrangedSubview(titleLabel)
+        contentView.addSubview(stackView)
+        
+        NSLayoutConstraint.activate([
+            stackView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
+            stackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
+            stackView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
+        ])
     }
 }
 

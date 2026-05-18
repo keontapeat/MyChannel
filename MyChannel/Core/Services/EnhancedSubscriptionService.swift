@@ -307,13 +307,14 @@ class EnhancedSubscriptionService: ObservableObject {
             .document(channelId)
             .setData(subscriptionData)
         
-        // Update channel subscriber count
         try await db.collection("users")
             .document(channelId)
-            .updateData([
-                "subscriberCount": FieldValue.increment(Int64(1)),
-                "lastSubscriberAt": FieldValue.serverTimestamp()
-            ])
+            .collection("subscribers")
+            .document(userId)
+            .setData([
+                "subscribedAt": FieldValue.serverTimestamp(),
+                "source": "manual"
+            ], merge: true)
         
         // Track analytics
         let subscribeTime = Date().timeIntervalSince(startTime)
@@ -342,12 +343,11 @@ class EnhancedSubscriptionService: ObservableObject {
             .document(channelId)
             .delete()
         
-        // Update channel subscriber count
         try await db.collection("users")
             .document(channelId)
-            .updateData([
-                "subscriberCount": FieldValue.increment(Int64(-1))
-            ])
+            .collection("subscribers")
+            .document(userId)
+            .delete()
         
         // Track analytics
         EnhancedAnalyticsManager.shared.logEvent("channel_unsubscribed", parameters: [

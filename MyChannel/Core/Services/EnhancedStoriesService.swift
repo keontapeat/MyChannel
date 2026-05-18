@@ -762,13 +762,14 @@ struct EnhancedStory: Identifiable, Codable {
     func toAssetStory() -> AssetStory {
         let media: AssetMedia = mediaType == .video ? .video(mediaURL) : .image(mediaURL)
         
-        var assetStory = AssetStory(
+        return AssetStory(
+            id: id,
             media: media,
             username: creatorUsername,
-            authorImageName: creatorAvatarURL
+            authorImageName: creatorAvatarURL,
+            creatorId: creatorId,
+            originalStoryId: id
         )
-        assetStory.creatorId = creatorId
-        return assetStory
     }
 }
 

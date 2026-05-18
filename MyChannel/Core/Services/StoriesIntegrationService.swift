@@ -86,10 +86,10 @@ class StoriesIntegrationService: ObservableObject {
         }
         
         // Mark as viewed
-        viewedStories.insert(story.id.uuidString)
+        viewedStories.insert(story.id)
         
         // Update seen tracker for UI
-        StorySeenTracker.shared.markSeen(userId: AppState.shared.currentUser?.id ?? "anonymous", storyId: story.id.uuidString, creatorId: story.creatorId)
+        StorySeenTracker.shared.markSeen(userId: AppState.shared.currentUser?.id ?? "anonymous", storyId: story.id, creatorId: story.creatorId)
     }
     
     /// Handle story upload with enterprise backend
@@ -161,13 +161,14 @@ extension AssetStory {
             ? .video(enhancedStory.mediaURL) 
             : .image(enhancedStory.mediaURL)
         
-        var assetStory = AssetStory(
+        return AssetStory(
+            id: enhancedStory.id,
             media: media,
             username: enhancedStory.creatorUsername,
-            authorImageName: enhancedStory.creatorAvatarURL
+            authorImageName: enhancedStory.creatorAvatarURL,
+            creatorId: enhancedStory.creatorId,
+            originalStoryId: enhancedStory.id
         )
-        assetStory.creatorId = enhancedStory.creatorId
-        return assetStory
     }
 }
 

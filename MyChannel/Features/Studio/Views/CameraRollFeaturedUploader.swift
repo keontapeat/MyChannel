@@ -19,24 +19,36 @@ class CameraRollFeaturedUploader: ObservableObject {
     @Published var isUploading = false
     @Published var uploadProgress: Double = 0
     @Published var errorMessage: String?
+    @Published var statusText: String = ""
 
     func upload(videoURL: URL, title: String, description: String, thumbnail: UIImage?) async -> Video? {
         isUploading = true
         uploadProgress = 0
         errorMessage = nil
+        statusText = "Preparing upload..."
         defer { isUploading = false }
 
         #if canImport(FirebaseStorage) && canImport(FirebaseFirestore)
         do {
             let videoId = UUID().uuidString
-            let creatorId = AuthenticationManager.shared.currentUser?.id ?? ""
+            let creatorId = AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id ?? ""
+            guard !creatorId.isEmpty else {
+                errorMessage = "Sign in before uploading a featured video."
+                return nil
+            }
             let storage = Storage.storage()
 
-            // Upload video
-            let videoRef = storage.reference().child("videos/\(videoId)/video.mp4")
+            statusText = "Uploading video..."
+            let videoRef = storage.reference().child("videos/\(creatorId)/\(videoId)/video.mp4")
             let videoData = try Data(contentsOf: videoURL)
             let videoMeta = StorageMetadata()
             videoMeta.contentType = "video/mp4"
+            videoMeta.customMetadata = [
+                "userId": creatorId,
+                "ownerUid": creatorId,
+                "videoId": videoId,
+                "source": "featured_camera_roll"
+            ]
 
             _ = try await videoRef.putDataAsync(videoData, metadata: videoMeta) { [weak self] progress in
                 guard let self, let progress else { return }
@@ -49,9 +61,16 @@ class CameraRollFeaturedUploader: ObservableObject {
             // Upload thumbnail if available
             var thumbnailURLString = ""
             if let thumbnail, let jpegData = thumbnail.jpegData(compressionQuality: 0.8) {
-                let thumbRef = storage.reference().child("videos/\(videoId)/thumbnail.jpg")
+                statusText = "Uploading thumbnail..."
+                let thumbRef = storage.reference().child("thumbnails/\(creatorId)/\(videoId)/thumb.jpg")
                 let thumbMeta = StorageMetadata()
                 thumbMeta.contentType = "image/jpeg"
+                thumbMeta.customMetadata = [
+                    "userId": creatorId,
+                    "ownerUid": creatorId,
+                    "videoId": videoId,
+                    "source": "featured_camera_roll"
+                ]
                 _ = try await thumbRef.putDataAsync(jpegData, metadata: thumbMeta)
                 let thumbURL = try await thumbRef.downloadURL()
                 thumbnailURLString = thumbURL.absoluteString
@@ -59,29 +78,49 @@ class CameraRollFeaturedUploader: ObservableObject {
             }
 
             // Get video duration
+            statusText = "Reading video details..."
             let asset = AVAsset(url: videoURL)
             let duration = try await asset.load(.duration)
             let durationSecs = CMTimeGetSeconds(duration)
 
             // Save to Firestore
+            statusText = "Saving video..."
             let db = Firestore.firestore()
+            let currentUser = AuthenticationManager.shared.currentUser
             let videoDoc: [String: Any] = [
                 "id": videoId,
                 "title": title,
                 "description": description,
+                "userId": creatorId,
                 "videoURL": videoDownloadURL.absoluteString,
+                "videoUrl": videoDownloadURL.absoluteString,
                 "thumbnailURL": thumbnailURLString,
+                "thumbnailUrl": thumbnailURLString,
                 "duration": durationSecs,
                 "viewCount": 0,
                 "likeCount": 0,
+                "commentCount": 0,
                 "creatorId": creatorId,
+                "ownerUid": creatorId,
+                "creatorUsername": currentUser?.username ?? "unknown",
+                "creatorDisplayName": currentUser?.displayName ?? "Unknown",
+                "creatorName": currentUser?.displayName ?? "Unknown",
+                "creatorProfileImage": currentUser?.profileImageURL ?? "",
+                "creatorAvatarURL": currentUser?.profileImageURL ?? "",
+                "creatorVerified": currentUser?.isVerified ?? false,
                 "createdAt": FieldValue.serverTimestamp(),
+                "updatedAt": FieldValue.serverTimestamp(),
+                "publishedAt": FieldValue.serverTimestamp(),
                 "isPublic": true,
+                "visibility": "public",
+                "status": "published",
+                "processingStatus": "completed",
+                "category": VideoCategory.other.rawValue,
+                "tags": [],
                 "source": "camera_roll"
             ]
             try await db.collection("videos").document(videoId).setData(videoDoc)
 
-            let currentUser = AuthenticationManager.shared.currentUser
             let creator = currentUser ?? User(
                 id: creatorId,
                 username: "unknown",
@@ -100,9 +139,19 @@ class CameraRollFeaturedUploader: ObservableObject {
                 creator: creator,
                 category: .other
             )
+            statusText = "Uploaded & featured"
+            await AnalyticsService.shared.trackEvent("featured_camera_roll_upload_completed", parameters: [
+                "videoId": videoId,
+                "creatorId": creatorId,
+                "duration": durationSecs
+            ])
             return video
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = friendlyErrorMessage(error)
+            statusText = "Upload failed"
+            await AnalyticsService.shared.trackEvent("featured_camera_roll_upload_failed", parameters: [
+                "error": error.localizedDescription
+            ])
             print("❌ [CameraRollFeaturedUploader] Upload failed: \(error)")
             return nil
         }
@@ -110,6 +159,21 @@ class CameraRollFeaturedUploader: ObservableObject {
         errorMessage = "Firebase not available"
         return nil
         #endif
+    }
+    
+    private func friendlyErrorMessage(_ error: Error) -> String {
+        let message = error.localizedDescription
+        let lowercased = message.lowercased()
+        if lowercased.contains("permission") || lowercased.contains("unauthorized") {
+            return "Upload permission denied. Sign in again or check Firebase Storage rules."
+        }
+        if lowercased.contains("network") || lowercased.contains("offline") || lowercased.contains("timed out") {
+            return "Network issue while uploading. Check your connection and try again."
+        }
+        if lowercased.contains("quota") || lowercased.contains("exceeded") {
+            return "Upload limit reached. Try again later."
+        }
+        return message
     }
 }
 
@@ -199,7 +263,7 @@ struct CameraRollUploadSheet: View {
                             ProgressView(value: uploader.uploadProgress)
                                 .progressViewStyle(.linear)
                                 .tint(AppTheme.Colors.primary)
-                            Text("\(Int(uploader.uploadProgress * 100))% uploaded")
+                            Text("\(uploader.statusText) \(Int(uploader.uploadProgress * 100))%")
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.secondary)
                         }
@@ -218,12 +282,17 @@ struct CameraRollUploadSheet: View {
                     // Upload button
                     Button {
                         Task {
+                            await AnalyticsService.shared.trackEvent("featured_camera_roll_upload_started", parameters: [
+                                "duration": duration,
+                                "hasThumbnail": thumbnail != nil
+                            ])
                             if let video = await uploader.upload(
                                 videoURL: videoURL,
                                 title: title.isEmpty ? "Untitled Video" : title,
                                 description: description,
                                 thumbnail: thumbnail
                             ) {
+                                NotificationManager.shared.showSuccess("Uploaded & featured")
                                 onComplete(video)
                             }
                         }
@@ -258,6 +327,7 @@ struct CameraRollUploadSheet: View {
             }
             .navigationTitle("Upload Video")
             .navigationBarTitleDisplayMode(.inline)
+            .interactiveDismissDisabled(uploader.isUploading)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
@@ -270,6 +340,17 @@ struct CameraRollUploadSheet: View {
                 titleFocused = true
             }
         }
+        .background(
+            UIKitSheetConfigurator(
+                configuration: UIKitSheetConfiguration(
+                    detents: [.large()],
+                    largestUndimmedDetentIdentifier: .large,
+                    prefersGrabberVisible: true,
+                    prefersScrollingExpandsWhenScrolledToEdge: false,
+                    preferredCornerRadius: 28
+                )
+            )
+        )
     }
 
     private func formatDuration(_ seconds: TimeInterval) -> String {

@@ -662,6 +662,7 @@ struct LiveChannelThumbnailView: View {
     
     // Helper to check if a URL is likely to work for images
     private func isValidImageURL(_ urlString: String) -> Bool {
+        let urlString = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         // Skip Wikipedia URLs as they often block external requests
         if urlString.contains("wikipedia.org") || urlString.contains("wikimedia.org") {
             return false
@@ -693,7 +694,8 @@ struct LiveChannelThumbnailView: View {
                urlString.contains("image.tmdb.org") ||      // TMDB movie images
                urlString.contains("static.wikia.nocookie.net") || // Fandom wikis (not Wikipedia)
                urlString.contains("m.media-amazon.com") ||  // Amazon images
-               urlString.contains("images-na.ssl-images-amazon.com") // Amazon SSL images
+               urlString.contains("images-na.ssl-images-amazon.com") || // Amazon SSL images
+               urlString.contains("picsum.photos")          // Picsum seeded images used in debug
     }
     
     // 🔥 LIVE badge

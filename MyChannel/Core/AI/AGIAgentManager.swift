@@ -153,23 +153,56 @@ class AGIAgentManager: ObservableObject {
         }
     }
     
-    /// Call an agent with a query
+    /// Call an agent with a query — waterfall: Vertex AI → Gemini → GPT-4o
     func callAgent(_ agentId: String, query: String, context: [String: Any] = [:]) async throws -> String {
         guard let agent = agents.first(where: { $0.id == agentId }) else {
             throw AGIError.agentNotFound
         }
-        
         guard agent.isEnabled else {
             throw AGIError.agentDisabled
         }
-        
-        // If agent has Vertex AI ID, use it
-        if let vertexAIId = agent.vertexAIAgentId {
-            return try await callVertexAI(agentId: vertexAIId, query: query, context: context)
+
+        let start = Date()
+        AgentLogService.shared.agentStarted(agent.name, agentId: agentId)
+
+        do {
+            let result: String
+            if let vertexAIId = agent.vertexAIAgentId {
+                result = try await callVertexAI(agentId: vertexAIId, query: query, context: context)
+            } else {
+                result = try await callWithTemplate(agent: agent, query: query, context: context)
+            }
+            let ms = Int(Date().timeIntervalSince(start) * 1000)
+            AgentLogService.shared.agentCompleted(agent.name, agentId: agentId, latencyMs: ms, output: result)
+            logActivity(agentId: agentId, name: agent.name, output: result, success: true, latencyMs: ms)
+            return result
+        } catch {
+            // Fallback: try GPT-4o if Gemini/Vertex fails
+            AgentLogService.shared.agentFailed(agent.name, agentId: agentId, error: error.localizedDescription)
+            if OpenAIAgentService.shared.isAvailable {
+                let system = agent.promptTemplate.isEmpty ? "You are a helpful AI agent for MyChannel platform." : agent.promptTemplate
+                let result = try await OpenAIAgentService.shared.runAgentPrompt(
+                    agentName: agent.name,
+                    systemPrompt: system,
+                    userMessage: query
+                )
+                let ms = Int(Date().timeIntervalSince(start) * 1000)
+                logActivity(agentId: agentId, name: agent.name, output: result, success: true, latencyMs: ms)
+                return result
+            }
+            logActivity(agentId: agentId, name: agent.name, output: error.localizedDescription, success: false, latencyMs: 0)
+            throw error
         }
-        
-        // Otherwise use prompt template
-        return try await callWithTemplate(agent: agent, query: query, context: context)
+    }
+
+    private func logActivity(agentId: String, name: String, output: String, success: Bool, latencyMs: Int) {
+        let entry = AgentActivity(timestamp: Date(), agentId: agentId, agentName: name,
+                                  output: output, success: success, latencyMs: latencyMs)
+        activityLog.insert(entry, at: 0)
+        if activityLog.count > maxLogEntries { activityLog.removeLast() }
+        if success { totalRunsToday += 1 }
+        let successes = activityLog.filter { $0.success }.count
+        successRatePercent = activityLog.isEmpty ? 100 : Double(successes) / Double(activityLog.count) * 100
     }
     
     // MARK: - Real AI Calls

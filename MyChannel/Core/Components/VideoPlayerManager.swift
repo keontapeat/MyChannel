@@ -446,6 +446,21 @@ class VideoPlayerManager: ObservableObject {
                 case .failed:
                     let error = playerItem.error?.localizedDescription ?? "Unknown error"
                     print("❌ [VideoPlayerManager] Video failed to load: \(error)")
+                    // 🔁 Fallback: if current item is an HLS manifest, retry with original MP4 URL
+                    if let asset = playerItem.asset as? AVURLAsset,
+                       asset.url.absoluteString.contains(".m3u8"),
+                       let originalUrlString = self.currentVideo?.videoURL,
+                       let mp4URL = URL(string: originalUrlString) {
+                        print("🔁 [VideoPlayerManager] Falling back to MP4 after HLS failure")
+                        let fallbackAsset = AVURLAsset(url: mp4URL, options: [
+                            AVURLAssetPreferPreciseDurationAndTimingKey: true
+                        ])
+                        let fallbackItem = AVPlayerItem(asset: fallbackAsset)
+                        self.player?.replaceCurrentItem(with: fallbackItem)
+                        self.setupObservers(for: fallbackItem)
+                        self.isLoading = true
+                        return
+                    }
                     self.handleError("Failed to load video: \(error)")
                 case .unknown:
                     self.isLoading = true

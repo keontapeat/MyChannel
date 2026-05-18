@@ -181,38 +181,44 @@ final class ShortsFirestoreService: ObservableObject {
     /// Increment like count
     func incrementLikeCount(flickId: String) async throws {
         #if canImport(FirebaseFirestore)
-        try await db.collection("shorts").document(flickId).updateData([
-            "likeCount": FieldValue.increment(Int64(1))
-        ])
+        try await writeShortEvent(flickId: flickId, type: "like")
         #endif
     }
     
     /// Increment view count
     func incrementViewCount(flickId: String) async throws {
         #if canImport(FirebaseFirestore)
-        try await db.collection("shorts").document(flickId).updateData([
-            "viewCount": FieldValue.increment(Int64(1))
-        ])
+        try await writeShortEvent(flickId: flickId, type: "view")
         #endif
     }
     
     /// Increment comment count
     func incrementCommentCount(flickId: String) async throws {
         #if canImport(FirebaseFirestore)
-        try await db.collection("shorts").document(flickId).updateData([
-            "commentCount": FieldValue.increment(Int64(1))
-        ])
+        try await writeShortEvent(flickId: flickId, type: "comment")
         #endif
     }
     
     /// Increment share count
     func incrementShareCount(flickId: String) async throws {
         #if canImport(FirebaseFirestore)
-        try await db.collection("shorts").document(flickId).updateData([
-            "shareCount": FieldValue.increment(Int64(1))
-        ])
+        try await writeShortEvent(flickId: flickId, type: "share")
         #endif
     }
+
+    #if canImport(FirebaseFirestore)
+    private func writeShortEvent(flickId: String, type: String) async throws {
+        guard let userId = AuthenticationManager.shared.currentUser?.id else { return }
+        try await db.collection("shorts").document(flickId)
+            .collection("events").document()
+            .setData([
+                "type": type,
+                "userId": userId,
+                "createdAt": FieldValue.serverTimestamp(),
+                "deviceType": "iOS"
+            ])
+    }
+    #endif
     
     // MARK: - Delete Flick
     

@@ -7,12 +7,14 @@ import FirebaseFirestore
 final class HistoryService: ObservableObject {
     static let shared = HistoryService()
     private init() {}
+    @Published var isWatchHistoryPaused: Bool = false
 
     #if canImport(FirebaseFirestore)
     private var db: Firestore { Firestore.firestore() }
     #endif
 
     func addOrUpdateHistoryItem(_ item: WatchHistoryItem, userId: String) async {
+        guard !isWatchHistoryPaused else { return }
         #if canImport(FirebaseFirestore)
         do {
             let ref = db.collection("history").document(userId).collection("items").document(item.id)
@@ -35,6 +37,7 @@ final class HistoryService: ObservableObject {
     }
     
     func updateProgress(itemId: String, userId: String, progress: Double, position: TimeInterval) async {
+        guard !isWatchHistoryPaused else { return }
         #if canImport(FirebaseFirestore)
         do {
             let ref = db.collection("history").document(userId).collection("items").document(itemId)
@@ -124,6 +127,63 @@ final class HistoryService: ObservableObject {
             try await batch.commit()
         } catch {
             print("⚠️ Failed to clear history: \(error.localizedDescription)")
+        }
+        #endif
+    }
+    
+    func clearItems(userId: String, matching predicate: @escaping (WatchHistoryItem) -> Bool) async {
+        let items = await fetch(userId: userId, limit: 500)
+        #if canImport(FirebaseFirestore)
+        do {
+            let batch = db.batch()
+            for item in items where predicate(item) {
+                let ref = db.collection("history").document(userId).collection("items").document(item.id)
+                batch.deleteDocument(ref)
+            }
+            try await batch.commit()
+        } catch {
+            print("⚠️ Failed to clear filtered history: \(error.localizedDescription)")
+        }
+        #endif
+    }
+    
+    func saveNotInterested(_ item: WatchHistoryItem, userId: String) async {
+        #if canImport(FirebaseFirestore)
+        do {
+            try await db.collection("users").document(userId).collection("notInterested").document(item.contentId).setData([
+                "contentId": item.contentId,
+                "contentType": item.contentType.rawValue,
+                "creatorId": item.creatorId,
+                "title": item.title,
+                "createdAt": FieldValue.serverTimestamp()
+            ], merge: true)
+        } catch {
+            print("⚠️ Failed to save Not Interested preference: \(error.localizedDescription)")
+        }
+        #endif
+    }
+    
+    func loadPauseState(userId: String) async {
+        #if canImport(FirebaseFirestore)
+        do {
+            let snap = try await db.collection("history").document(userId).getDocument()
+            isWatchHistoryPaused = snap.data()?["isPaused"] as? Bool ?? false
+        } catch {
+            print("⚠️ Failed to load history pause state: \(error.localizedDescription)")
+        }
+        #endif
+    }
+    
+    func setPaused(_ paused: Bool, userId: String) async {
+        isWatchHistoryPaused = paused
+        #if canImport(FirebaseFirestore)
+        do {
+            try await db.collection("history").document(userId).setData([
+                "isPaused": paused,
+                "updatedAt": FieldValue.serverTimestamp()
+            ], merge: true)
+        } catch {
+            print("⚠️ Failed to update history pause state: \(error.localizedDescription)")
         }
         #endif
     }

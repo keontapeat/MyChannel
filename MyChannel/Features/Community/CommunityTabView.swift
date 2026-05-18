@@ -41,6 +41,9 @@ struct CommunityTabView: View {
                                 onShare: { sharePost(post) },
                                 onDelete: { deletePost(post) }
                             )
+                            .onAppear {
+                                addPostToHistory(post)
+                            }
                         }
                     }
                 }
@@ -190,6 +193,14 @@ struct CommunityTabView: View {
     private func showComments(_ post: CommunityPost) {
         // TODO: Navigate to comments view
         print("Show comments for post: \(post.id)")
+    }
+    
+    private func addPostToHistory(_ post: CommunityPost) {
+        guard let userId = AppState.shared.currentUser?.id else { return }
+        Task {
+            let item = WatchHistoryItem.fromCommunityPost(post, creator: creator)
+            await HistoryService.shared.addOrUpdateHistoryItem(item, userId: userId)
+        }
     }
 }
 

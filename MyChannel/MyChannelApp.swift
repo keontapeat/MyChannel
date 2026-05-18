@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVFoundation
+import AppIntents
 #if canImport(GoogleSignIn)
 import GoogleSignIn
 #endif
@@ -20,6 +21,9 @@ import UserNotifications
 private let __bootstrapFirebase: Void = {
     FirebaseManager.shared.configureIfPossible()
 }()
+
+// Force execution at file load time to avoid any early Firebase usage warnings
+private let __forceFirebaseBootstrap: Void = { _ = __bootstrapFirebase }()
 
 @main
 struct MyChannelApp: App {
@@ -94,6 +98,9 @@ struct MyChannelApp: App {
                     print("⚡ [Performance] Monitoring active - shared instance initialized")
                     #endif
                     
+                    // Register Siri Shortcuts / App Intents
+                    MyChannelAppShortcuts.updateAppShortcutParameters()
+
                     // Ensure auth state is checked at launch and sync to AppState
                     authManager.checkAuthenticationStatus()
                     if let current = authManager.currentUser {
@@ -189,12 +196,15 @@ struct MyChannelApp: App {
     }
     
     private func configureAudioSession() {
+        struct Once { static var didConfigure = false }
+        if Once.didConfigure { return }
         do {
             let session = AVAudioSession.sharedInstance()
             // .playback with no options = exclusive audio, silences other apps.
             // Required for App Store 2.5.4: background audio must be audible to reviewers.
             try session.setCategory(.playback, mode: .moviePlayback, options: [])
             try session.setActive(true)
+            Once.didConfigure = true
             print("✅ [MyChannelApp] Audio session configured for background playback")
         } catch {
             print("⚠️ [MyChannelApp] Failed to configure audio session: \(error.localizedDescription)")

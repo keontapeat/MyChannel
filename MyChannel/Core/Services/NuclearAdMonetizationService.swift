@@ -129,8 +129,12 @@ final class NuclearAdMonetizationService: ObservableObject {
             setupAt: Date()
         )
         
-        // 🔥 SAVE TO FIREBASE
+        // 🔥 SAVE TO FIREBASE (skip in DEBUG to avoid permission errors during local dev)
+        #if DEBUG
+        print("⚠️ [NUCLEAR] Skipping Firestore monetization writes in DEBUG")
+        #else
         try await saveMonetizationConfig(config)
+        #endif
         
         // 🔥 REGISTER VIDEO WITH AD NETWORKS
         await registerWithAdNetworks(video: video, config: config)
@@ -438,6 +442,10 @@ final class NuclearAdMonetizationService: ObservableObject {
         network: String
     ) async {
         #if canImport(FirebaseFirestore)
+        #if DEBUG
+        // Avoid permission noise during dev
+        return
+        #endif
         do {
             let transactionId = UUID().uuidString
             let now = Date()

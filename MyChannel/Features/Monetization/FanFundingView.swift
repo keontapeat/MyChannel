@@ -662,8 +662,7 @@ struct FormField: View {
             if isMultiline {
                 UIKitMultilineTextView(
                     text: $text,
-                    placeholder: placeholder,
-                    height: 100
+                    placeholder: placeholder
                 )
                     .padding(12)
                     .background(AppTheme.Colors.surface)

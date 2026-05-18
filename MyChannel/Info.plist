@@ -2,224 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- ================================================================ -->
-	<!-- 🔥🔥🔥 ABSOLUTE NUCLEAR INFO.PLIST - EVERYTHING ENABLED 🔥🔥🔥 -->
-	<!-- ================================================================ -->
-	<!-- MyChannel - THE ULTIMATE PLATFORM -->
-	<!-- WE GOING RICH ASF 💰💰💰 -->
-	<!-- ================================================================ -->
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- � APP TRACKING TRANSPARENCY -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>NSUserTrackingUsageDescription</key>
-	<string>MyChannel uses this identifier to deliver personalized ads and measure ad performance. You can change this permission anytime in Settings.</string>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- �📸 CAMERA & MEDIA CAPTURE -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>NSCameraUsageDescription</key>
-	<string>MyChannel needs camera access to record videos, take photos for thumbnails, enable AR face filters, scan QR codes, and power live streaming.</string>
-	
-	<key>NSMicrophoneUsageDescription</key>
-	<string>MyChannel needs microphone access to record audio for your videos, enable voice search, capture live streams, and power real-time voice effects.</string>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 🖼️ PHOTO LIBRARY -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>MyChannel needs photo library access to upload videos, images, and select thumbnails from your device.</string>
-	
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>MyChannel needs permission to save videos, thumbnails, and downloaded content to your photo library.</string>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 🎤 SPEECH & VOICE -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>MyChannel uses speech recognition to generate automatic captions, enable voice search, and power real-time transcription.</string>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 📍 LOCATION - ALL MODES -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>MyChannel uses your location to show relevant local content, geo-tag your videos, and discover nearby creators and events.</string>
-	
-	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
-	<dict>
-		<key>NearbyContent</key>
-		<string>MyChannel needs your precise location to show content from creators near you.</string>
-		<key>GeoTagging</key>
-		<string>MyChannel needs your precise location to tag your video with the exact filming location.</string>
-	</dict>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- � LOCAL NETWORK (Chromecast, AirPlay, Network monitoring) -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>MyChannel uses local network access to discover and connect to Chromecast, AirPlay devices, smart TVs, gaming consoles, and other streaming devices in your home.</string>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!--  MOTION & FITNESS -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>NSMotionUsageDescription</key>
-	<string>MyChannel uses motion data to provide immersive viewing experiences, track workout progress during fitness videos, enable AR features, and detect device orientation for video recording.</string>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 🎮 GAME CONTROLLER -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>GCSupportedGameControllers</key>
-	<array>
-		<dict>
-			<key>ProfileName</key>
-			<string>ExtendedGamepad</string>
-		</dict>
-		<dict>
-			<key>ProfileName</key>
-			<string>MicroGamepad</string>
-		</dict>
-	</array>
-	
-	<key>GCSupportsControllerUserInteraction</key>
-	<true/>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 🔗 URL SCHEMES -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>CFBundleURLTypes</key>
-	<array>
-		<!-- Google Sign-In -->
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLName</key>
-			<string>Google Sign-In</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>com.googleusercontent.apps.124515086975-mu4mm52mrsp5k7n760g1q57llasrte5t</string>
-			</array>
-		</dict>
-		<!-- Custom URL Scheme for deep linking -->
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLName</key>
-			<string>MyChannel Deep Link</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>mychannel</string>
-				<string>mychannel-app</string>
-				<string>mc</string>
-			</array>
-		</dict>
-	</array>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 🔑 API KEYS (Environment Variables) -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
 	<key>AI_API_KEY</key>
 	<string>$(AI_API_KEY)</string>
 	<key>ANTHROPIC_API_KEY</key>
 	<string>$(ANTHROPIC_API_KEY)</string>
-	<key>CHANNELBOOST_BASE_URL</key>
-	<string>$(CHANNELBOOST_BASE_URL)</string>
-	<key>CHANNELBOOST_TOKEN</key>
-	<string>$(CHANNELBOOST_TOKEN)</string>
-	<key>GIDClientID</key>
-	<string>124515086975-mu4mm52mrsp5k7n760g1q57llasrte5t.apps.googleusercontent.com</string>
-	<key>GOOGLE_CLOUD_API_KEY</key>
-	<string>$(GOOGLE_CLOUD_API_KEY)</string>
-	<key>GOOGLE_CLOUD_PROJECT_ID</key>
-	<string>$(GOOGLE_CLOUD_PROJECT_ID)</string>
-	<key>OPENAI_API_KEY</key>
-	<string>$(OPENAI_API_KEY)</string>
-	<key>TMDB_API_KEY</key>
-	<string>$(TMDB_API_KEY)</string>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 📺 AD NETWORK IDENTIFIERS (SKAdNetwork) - EVERY MAJOR NETWORK -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>SKAdNetworkItems</key>
-	<array>
-		<dict><key>SKAdNetworkIdentifier</key><string>cstr6suwn9.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>4fzdc2evr5.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>4pfyvq9l8r.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>2fnua5tdw4.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>ydx93a7ass.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>5a6flpkh64.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>p78axxw29g.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>v72qych5uu.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>c6k4g5qg8m.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>s39g8k73mm.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>3qy4746246.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>3sh42y64q3.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>f38h382jlk.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>hs6bdukanm.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>prcb7njmu6.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>v4nxqhlyqp.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>wzmmz9fp6w.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>yclnxrl5pm.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>t38b2kh725.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>7ug5zh24hu.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>9rd848q2bz.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>n6fk4nfna4.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>kbd757ywx3.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>9t245vhmpl.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>v9wttpbfk9.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>n38lu8286q.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>4dzt52r2t5.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>bvpn9ufa9b.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>ludvb6z3bs.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>su67r6k2v3.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>gta9lk7p23.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>424m5254lk.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>22mmun2rn5.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>238telecom.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>e5fvkxwrpn.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>uw77j35x4d.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>ggvn48r87g.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>7rz58n8ntl.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>7953jerfzd.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>9nlqeag3gk.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>m8dbw4sv7c.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>cg4yq2srnc.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>ppxm28t8ap.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>ecpz2srf59.skadnetwork</string></dict>
-		<dict><key>SKAdNetworkIdentifier</key><string>pu4na253f3.skadnetwork</string></dict>
-	</array>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- ⚡ BACKGROUND MODES (App Store Guideline 2.5.4) -->
-	<!-- Do NOT add "external-accessory" - app does not use MFi hardware. -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>UIBackgroundModes</key>
-	<array>
-		<!-- Audio - Required for Picture-in-Picture and background playback -->
-		<string>audio</string>
-		<!-- Background fetch - Sync subscriptions, preload content -->
-		<string>fetch</string>
-		<!-- Remote notifications - Push notifications -->
-		<string>remote-notification</string>
-		<!-- Background processing - Video uploads, transcoding -->
-		<string>processing</string>
-	</array>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 📋 BACKGROUND TASK IDENTIFIERS -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.keontapeat.MyChannelApp.refresh</string>
@@ -236,11 +22,6 @@
 		<string>com.keontapeat.MyChannelApp.icloud-sync</string>
 		<string>com.keontapeat.MyChannelApp.ml-training</string>
 	</array>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 📄 DOCUMENT TYPES (Import Everything) -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -307,11 +88,477 @@
 			</array>
 		</dict>
 	</array>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 📦 EXPORTED TYPE IDENTIFIERS -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>Google Sign-In</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.124515086975-mu4mm52mrsp5k7n760g1q57llasrte5t</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>MyChannel Deep Link</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>mychannel</string>
+				<string>mychannel-app</string>
+				<string>mc</string>
+			</array>
+		</dict>
+	</array>
+	<key>CHANNELBOOST_BASE_URL</key>
+	<string>$(CHANNELBOOST_BASE_URL)</string>
+	<key>CHANNELBOOST_TOKEN</key>
+	<string>$(CHANNELBOOST_TOKEN)</string>
+	<key>CoreSpotlightContinuation</key>
+	<true/>
+	<key>GCSupportedGameControllers</key>
+	<array>
+		<dict>
+			<key>ProfileName</key>
+			<string>ExtendedGamepad</string>
+		</dict>
+		<dict>
+			<key>ProfileName</key>
+			<string>MicroGamepad</string>
+		</dict>
+	</array>
+	<key>GCSupportsControllerUserInteraction</key>
+	<true/>
+	<key>GIDClientID</key>
+	<string>124515086975-mu4mm52mrsp5k7n760g1q57llasrte5t.apps.googleusercontent.com</string>
+	<key>GOOGLE_CLOUD_API_KEY</key>
+	<string>$(GOOGLE_CLOUD_API_KEY)</string>
+	<key>GOOGLE_CLOUD_PROJECT_ID</key>
+	<string>$(GOOGLE_CLOUD_PROJECT_ID)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>instagram</string>
+		<string>instagram-stories</string>
+		<string>twitter</string>
+		<string>twitterauth</string>
+		<string>x</string>
+		<string>fb</string>
+		<string>fbapi</string>
+		<string>fbauth2</string>
+		<string>fbshareextension</string>
+		<string>tiktok</string>
+		<string>snssdk1128</string>
+		<string>snapchat</string>
+		<string>whatsapp</string>
+		<string>telegram</string>
+		<string>tg</string>
+		<string>linkedin</string>
+		<string>pinterest</string>
+		<string>reddit</string>
+		<string>discord</string>
+		<string>threads</string>
+		<string>mastodon</string>
+		<string>tumblr</string>
+		<string>wechat</string>
+		<string>weixin</string>
+		<string>line</string>
+		<string>kakaotalk</string>
+		<string>viber</string>
+		<string>signal</string>
+		<string>mailto</string>
+		<string>tel</string>
+		<string>telprompt</string>
+		<string>sms</string>
+		<string>facetime</string>
+		<string>facetime-audio</string>
+		<string>imessage</string>
+		<string>youtube</string>
+		<string>vnd.youtube</string>
+		<string>vimeo</string>
+		<string>twitch</string>
+		<string>dailymotion</string>
+		<string>googlecast</string>
+		<string>plex</string>
+		<string>vlc</string>
+		<string>infuse</string>
+		<string>applepay</string>
+		<string>googledrive</string>
+		<string>dropbox</string>
+		<string>onedrive</string>
+		<string>box</string>
+		<string>icloud-drive</string>
+		<string>spotify</string>
+		<string>music</string>
+		<string>soundcloud</string>
+		<string>pandora</string>
+		<string>tidal</string>
+		<string>deezer</string>
+		<string>amazonmusic</string>
+		<string>notion</string>
+		<string>bear</string>
+		<string>evernote</string>
+		<string>todoist</string>
+		<string>strava</string>
+		<string>nike</string>
+		<string>fitbit</string>
+		<string>myfitnesspal</string>
+		<string>steam</string>
+		<string>epicgames</string>
+		<string>xbox</string>
+		<string>playstation</string>
+		<string>maps</string>
+		<string>comgooglemaps</string>
+		<string>waze</string>
+	</array>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsArbitraryLoadsForMedia</key>
+		<true/>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>cloudflare.com</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+			<key>firebaseio.com</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+			<key>googleapis.com</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.2</string>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+			<key>mychannel.live</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.3</string>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_googlecast._tcp</string>
+		<string>_airplay._tcp</string>
+		<string>_raop._tcp</string>
+		<string>_companion-link._tcp</string>
+		<string>_daap._tcp</string>
+		<string>_dacp._tcp</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>MyChannel needs camera access to record videos, take photos for thumbnails, enable AR face filters, scan QR codes, and power live streaming.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>MyChannel uses local network access to discover and connect to Chromecast, AirPlay devices, smart TVs, gaming consoles, and other streaming devices in your home.</string>
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>GeoTagging</key>
+		<string>MyChannel needs your precise location to tag your video with the exact filming location.</string>
+		<key>NearbyContent</key>
+		<string>MyChannel needs your precise location to show content from creators near you.</string>
+	</dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>MyChannel uses your location to show relevant local content, geo-tag your videos, and discover nearby creators and events.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>MyChannel needs microphone access to record audio for your videos, enable voice search, capture live streams, and power real-time voice effects.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>MyChannel uses motion data to provide immersive viewing experiences, track workout progress during fitness videos, enable AR features, and detect device orientation for video recording.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>MyChannel needs permission to save videos, thumbnails, and downloaded content to your photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MyChannel needs photo library access to upload videos, images, and select thumbnails from your device.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>MyChannel uses speech recognition to generate automatic captions, enable voice search, and power real-time transcription.</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>NSUserActivityTypeBrowsingWeb</string>
+		<string>com.keontapeat.MyChannelApp.watchVideo</string>
+		<string>com.keontapeat.MyChannelApp.searchVideos</string>
+		<string>com.keontapeat.MyChannelApp.viewChannel</string>
+		<string>com.keontapeat.MyChannelApp.uploadVideo</string>
+		<string>com.keontapeat.MyChannelApp.viewProfile</string>
+		<string>com.keontapeat.MyChannelApp.viewTrending</string>
+		<string>com.keontapeat.MyChannelApp.viewHistory</string>
+		<string>com.keontapeat.MyChannelApp.viewPlaylists</string>
+	</array>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>MyChannel uses this identifier to deliver personalized ads and measure ad performance. You can change this permission anytime in Settings.</string>
+	<key>OPENAI_API_KEY</key>
+	<string>$(OPENAI_API_KEY)</string>
+	<key>POSTHOG_API_KEY</key>
+	<string>phc_sogytyMJLUH3Vy94mafhB6pixNJMxeZzF8SiypXT3gC4</string>
+	<key>REVENUECAT_API_KEY</key>
+	<string>appl_oDyjugehBINBMCmkoyBmGweeRjR</string>
+	<key>SENTRY_DSN</key>
+	<string>https://fe0d58ea8923e3fb0b8d021ce249dad4@o4511406561820672.ingest.us.sentry.io/4511406690402304</string>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>4fzdc2evr5.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>4pfyvq9l8r.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>2fnua5tdw4.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>ydx93a7ass.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>5a6flpkh64.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>p78axxw29g.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>v72qych5uu.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>c6k4g5qg8m.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>s39g8k73mm.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>3qy4746246.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>3sh42y64q3.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>f38h382jlk.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>hs6bdukanm.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>prcb7njmu6.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>v4nxqhlyqp.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>wzmmz9fp6w.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>yclnxrl5pm.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>t38b2kh725.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>7ug5zh24hu.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>9rd848q2bz.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>n6fk4nfna4.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>kbd757ywx3.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>9t245vhmpl.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>v9wttpbfk9.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>n38lu8286q.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>4dzt52r2t5.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>bvpn9ufa9b.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>ludvb6z3bs.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>su67r6k2v3.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>gta9lk7p23.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>424m5254lk.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>22mmun2rn5.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>238telecom.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>e5fvkxwrpn.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>uw77j35x4d.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>ggvn48r87g.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>7rz58n8ntl.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>7953jerfzd.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>9nlqeag3gk.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>m8dbw4sv7c.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cg4yq2srnc.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>ppxm28t8ap.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>ecpz2srf59.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>pu4na253f3.skadnetwork</string>
+		</dict>
+	</array>
+	<key>STRIPE_PUBLISHABLE_KEY</key>
+	<string>pk_live_51TApPYHilgNtyr6YiHza3Crcrissb4jE1JpYOOCf2ocynLnIh7RrG6FTUyCbh5naa933dFWaML5buXFMDcjNTZx5008IsLLSYU</string>
+	<key>TMDB_API_KEY</key>
+	<string>$(TMDB_API_KEY)</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+		<key>UISceneConfigurations</key>
+		<dict/>
+	</dict>
+	<key>UIApplicationSupportsExternalDisplays</key>
+	<true/>
+	<key>UIApplicationSupportsMultipleScenes</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>fetch</string>
+		<string>remote-notification</string>
+		<string>processing</string>
+	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UIRequiresFullScreen</key>
+	<false/>
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleDefault</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
@@ -353,267 +600,5 @@
 			</dict>
 		</dict>
 	</array>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 🔍 QUERIED URL SCHEMES (Can Open ALL These Apps) -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>LSApplicationQueriesSchemes</key>
-	<array>
-		<!-- Social Media -->
-		<string>instagram</string>
-		<string>instagram-stories</string>
-		<string>twitter</string>
-		<string>twitterauth</string>
-		<string>x</string>
-		<string>fb</string>
-		<string>fbapi</string>
-		<string>fbauth2</string>
-		<string>fbshareextension</string>
-		<string>tiktok</string>
-		<string>snssdk1128</string>
-		<string>snapchat</string>
-		<string>whatsapp</string>
-		<string>telegram</string>
-		<string>tg</string>
-		<string>linkedin</string>
-		<string>pinterest</string>
-		<string>reddit</string>
-		<string>discord</string>
-		<string>threads</string>
-		<string>mastodon</string>
-		<string>tumblr</string>
-		<string>wechat</string>
-		<string>weixin</string>
-		<string>line</string>
-		<string>kakaotalk</string>
-		<string>viber</string>
-		<string>signal</string>
-		<!-- Communication -->
-		<string>mailto</string>
-		<string>tel</string>
-		<string>telprompt</string>
-		<string>sms</string>
-		<string>facetime</string>
-		<string>facetime-audio</string>
-		<string>imessage</string>
-		<!-- Video Platforms (Competitors) -->
-		<string>youtube</string>
-		<string>vnd.youtube</string>
-		<string>vimeo</string>
-		<string>twitch</string>
-		<string>dailymotion</string>
-		<!-- Streaming Devices -->
-		<string>googlecast</string>
-		<string>plex</string>
-		<string>vlc</string>
-		<string>infuse</string>
-		<!-- Payment: Only Apple Pay kept; external payment schemes removed per Guideline 3.1.1 -->
-		<string>applepay</string>
-		<!-- Cloud Storage -->
-		<string>googledrive</string>
-		<string>dropbox</string>
-		<string>onedrive</string>
-		<string>box</string>
-		<string>icloud-drive</string>
-		<!-- Music -->
-		<string>spotify</string>
-		<string>music</string>
-		<string>soundcloud</string>
-		<string>pandora</string>
-		<string>tidal</string>
-		<string>deezer</string>
-		<string>amazonmusic</string>
-		<!-- Productivity -->
-		<string>notion</string>
-		<string>bear</string>
-		<string>evernote</string>
-		<string>todoist</string>
-		<!-- Fitness -->
-		<string>strava</string>
-		<string>nike</string>
-		<string>fitbit</string>
-		<string>myfitnesspal</string>
-		<!-- Gaming -->
-		<string>steam</string>
-		<string>epicgames</string>
-		<string>xbox</string>
-		<string>playstation</string>
-		<!-- Maps -->
-		<string>maps</string>
-		<string>comgooglemaps</string>
-		<string>waze</string>
-	</array>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 🔒 APP TRANSPORT SECURITY -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<false/>
-		<key>NSAllowsArbitraryLoadsForMedia</key>
-		<true/>
-		<key>NSAllowsArbitraryLoadsInWebContent</key>
-		<true/>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-		<key>NSExceptionDomains</key>
-		<dict>
-			<key>mychannel.live</key>
-			<dict>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<false/>
-				<key>NSExceptionRequiresForwardSecrecy</key>
-				<true/>
-				<key>NSExceptionMinimumTLSVersion</key>
-				<string>TLSv1.3</string>
-			</dict>
-			<key>firebaseio.com</key>
-			<dict>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<false/>
-				<key>NSExceptionRequiresForwardSecrecy</key>
-				<true/>
-				<key>NSExceptionMinimumTLSVersion</key>
-				<string>TLSv1.2</string>
-			</dict>
-			<key>googleapis.com</key>
-			<dict>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<false/>
-				<key>NSExceptionRequiresForwardSecrecy</key>
-				<true/>
-				<key>NSExceptionMinimumTLSVersion</key>
-				<string>TLSv1.2</string>
-			</dict>
-			<key>cloudflare.com</key>
-			<dict>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<false/>
-				<key>NSExceptionRequiresForwardSecrecy</key>
-				<true/>
-				<key>NSExceptionMinimumTLSVersion</key>
-				<string>TLSv1.2</string>
-			</dict>
-		</dict>
-	</dict>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 📡 BONJOUR SERVICES (Local Network Discovery) -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_googlecast._tcp</string>
-		<string>_airplay._tcp</string>
-		<string>_raop._tcp</string>
-		<string>_companion-link._tcp</string>
-		<string>_daap._tcp</string>
-		<string>_dacp._tcp</string>
-	</array>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 📱 SUPPORTED INTERFACE ORIENTATIONS -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- ⚙️ APP CONFIGURATION -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-	
-	<key>UIRequiresFullScreen</key>
-	<false/>
-	
-	<key>UIStatusBarStyle</key>
-	<string>UIStatusBarStyleDefault</string>
-	
-	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<true/>
-	
-	<key>UIApplicationSupportsMultipleScenes</key>
-	<true/>
-	
-	<key>UIFileSharingEnabled</key>
-	<true/>
-	
-	<key>LSSupportsOpeningDocumentsInPlace</key>
-	<true/>
-	
-	<!-- Supports external displays -->
-	<key>UIApplicationSupportsExternalDisplays</key>
-	<true/>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 📲 HARDWARE REQUIREMENTS -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>arm64</string>
-	</array>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 🎤 SIRI INTENTS & USER ACTIVITIES - ALL OF THEM -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>NSUserActivityTypes</key>
-	<array>
-		<string>NSUserActivityTypeBrowsingWeb</string>
-		<string>com.keontapeat.MyChannelApp.watchVideo</string>
-		<string>com.keontapeat.MyChannelApp.searchVideos</string>
-		<string>com.keontapeat.MyChannelApp.viewChannel</string>
-		<string>com.keontapeat.MyChannelApp.uploadVideo</string>
-		<string>com.keontapeat.MyChannelApp.viewProfile</string>
-		<string>com.keontapeat.MyChannelApp.viewTrending</string>
-		<string>com.keontapeat.MyChannelApp.viewHistory</string>
-		<string>com.keontapeat.MyChannelApp.viewPlaylists</string>
-	</array>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 🎬 CARPLAY SCENE -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>UIApplicationSceneManifest</key>
-	<dict>
-		<key>UIApplicationSupportsMultipleScenes</key>
-		<true/>
-		<key>UISceneConfigurations</key>
-		<dict/>
-	</dict>
-	
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	<!-- 🔥 SPOTLIGHT INDEXING -->
-	<!-- ═══════════════════════════════════════════════════════════════ -->
-	
-	<key>CoreSpotlightContinuation</key>
-	<true/>
-	
 </dict>
 </plist>

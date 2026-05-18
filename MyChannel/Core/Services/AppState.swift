@@ -91,6 +91,9 @@ class AppState: ObservableObject {
                     Task { [weak self] in
                         do {
                             await self?.hydrateCloudCollectionsIfNeeded()
+                            if let userId = self?.currentUser?.id {
+                                await HistoryService.shared.loadPauseState(userId: userId)
+                            }
                         } catch {
                             print("⚠️ [AppState] Non-fatal: hydration failed: \(error.localizedDescription)")
                         }
@@ -101,6 +104,24 @@ class AppState: ObservableObject {
                     do { SearchHistoryService.shared.startListening(userId: user.id) } catch { print("⚠️ [AppState] Non-fatal: SearchHistoryService listen failed") }
                     // Start ML agent notification bridge for this user
                     do { MLAgentNotificationBridge.shared.start(userId: user.id) } catch { print("⚠️ [AppState] Non-fatal: MLAgentNotificationBridge start failed") }
+                    // Index subscribed content into iOS Spotlight Search
+                    Task {
+                        let videos = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 50)
+                        let spotlightVideos = videos.map { v in
+                            SpotlightVideo(id: v.id, title: v.title,
+                                           description: v.description ?? "",
+                                           thumbnailURL: URL(string: v.thumbnailURL ?? ""),
+                                           creatorName: v.creator.displayName,
+                                           tags: v.tags ?? [],
+                                           durationSeconds: Double(v.duration ?? 0))
+                        }
+                        SpotlightIndexingService.shared.indexVideos(spotlightVideos)
+                    }
+                    // Observability: identify user in Sentry + PostHog
+                    SentryObservabilityService.shared.identifyUser(uid: user.id, email: user.email)
+                    Task { await PostHogAnalyticsService.shared.identify(uid: user.id, properties: ["display_name": user.displayName, "is_creator": user.isCreator]) }
+                    // Monetization: refresh RevenueCat entitlements after login
+                    Task { await RevenueCatService.shared.refreshEntitlements() }
                 }
             }
             .store(in: &cancellables)
@@ -115,6 +136,10 @@ class AppState: ObservableObject {
                 SearchHistoryService.shared.stopListening()
                 // Stop ML agent notification bridge on logout
                 MLAgentNotificationBridge.shared.stop()
+                // Clear observability identities on logout
+                SentryObservabilityService.shared.clearUser()
+                PostHogAnalyticsService.shared.reset()
+                RevenueCatService.shared.logOut()
             }
             .store(in: &cancellables)
         
@@ -218,6 +243,7 @@ class AppState: ObservableObject {
     }
     
     func addToHistory(video: Video, progress: Double = 0.0, position: TimeInterval = 0.0) {
+        guard !HistoryService.shared.isWatchHistoryPaused else { return }
         let item = WatchHistoryItem.fromVideo(video, progress: progress, position: position)
         
         if let existingIndex = watchHistory.firstIndex(where: { $0.contentId == video.id }) {
@@ -238,6 +264,7 @@ class AppState: ObservableObject {
     }
     
     func addStoryToHistory(story: Story, creator: User) {
+        guard !HistoryService.shared.isWatchHistoryPaused else { return }
         let item = WatchHistoryItem.fromStory(story, creator: creator)
         
         if let existingIndex = watchHistory.firstIndex(where: { $0.contentId == story.id }) {
@@ -258,6 +285,7 @@ class AppState: ObservableObject {
     }
     
     func addLiveTVToHistory(channel: LiveTVChannel, duration: TimeInterval = 0.0) {
+        guard !HistoryService.shared.isWatchHistoryPaused else { return }
         let item = WatchHistoryItem.fromLiveTV(channel, duration: duration)
         
         if let existingIndex = watchHistory.firstIndex(where: { $0.contentId == channel.id }) {
@@ -278,6 +306,7 @@ class AppState: ObservableObject {
     }
     
     func updateHistoryProgress(contentId: String, progress: Double, position: TimeInterval) {
+        guard !HistoryService.shared.isWatchHistoryPaused else { return }
         if let index = watchHistory.firstIndex(where: { $0.contentId == contentId }) {
             var item = watchHistory[index]
             item.watchProgress = progress

@@ -227,6 +227,15 @@ class AdvancedAnalyticsService: ObservableObject {
     }
     
     private func updateRealtimeMetrics(creatorId: String) async {
+        // In DEBUG builds, avoid hitting staging/prod analytics if no API key is configured
+        #if DEBUG
+        if AppConfig.API.googleCloudAPIKey == nil {
+            if AppConfig.Features.enableNetworkLogging {
+                print("⚠️ [Analytics] Skipping realtime API call (no API key configured in DEBUG)")
+            }
+            return
+        }
+        #endif
         do {
             let metrics = try await networkService.get(
                 endpoint: .custom("/analytics/realtime/\(creatorId)"),

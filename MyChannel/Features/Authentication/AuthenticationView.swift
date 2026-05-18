@@ -388,28 +388,16 @@ struct SignInView: View {
                     
                     // Social sign in
                     VStack(spacing: 12) {
-                        SignInWithAppleButton(.continue) { request in
-                            let pair = FirebaseAppleAuthService.shared.generateNoncePair()
-                            appleSignInRawNonce = pair.raw
-                            appleSignInHashedNonce = pair.hashed
-                            request.requestedScopes = [.fullName, .email]
-                            request.nonce = pair.hashed
-                        } onCompletion: { result in
-                            switch result {
-                            case .success(let auth):
-                                guard let credential = auth.credential as? ASAuthorizationAppleIDCredential else { return }
-                                let rawNonce = appleSignInRawNonce
-                                Task { await AuthenticationManager.shared.signInWithAppleCredential(credential, rawNonce: rawNonce) }
-                            case .failure(let error):
-                                let nsErr = error as NSError
-                                if nsErr.domain == ASAuthorizationError.errorDomain && nsErr.code == ASAuthorizationError.canceled.rawValue { return }
-                                errorMessage = error.localizedDescription
-                                showingError = true
+                        SocialSignInButton(
+                            title: "Continue with Apple",
+                            icon: "applelogo",
+                            backgroundColor: .black,
+                            textColor: .white
+                        ) {
+                            Task {
+                                await AuthenticationManager.shared.signInWithApple()
                             }
                         }
-                        .signInWithAppleButtonStyle(.black)
-                        .frame(height: 50)
-                        .cornerRadius(AppTheme.CornerRadius.lg)
                         
                         SocialSignInButton(
                             title: "Continue with Google",

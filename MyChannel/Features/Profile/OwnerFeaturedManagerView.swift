@@ -9,6 +9,7 @@ struct OwnerFeaturedManagerView: View {
     @State private var showingPicker = false
     @State private var pickedItemURL: URL?
     @State private var showingAdminView = false
+    @StateObject private var cameraRollUploader = CameraRollFeaturedUploader()
 
     var body: some View {
         List {
@@ -98,7 +99,17 @@ struct OwnerFeaturedManagerView: View {
         }
         .sheet(isPresented: $showingPicker) {
             DocumentPicker(types: ["public.movie"]) { url in
-                if let url { try? store.addLocalVideo(copiedFrom: url, title: "Owner Upload") }
+                guard let url else { return }
+                Task {
+                    if let video = await cameraRollUploader.upload(
+                        videoURL: url,
+                        title: "Owner Upload",
+                        description: "Added from camera roll",
+                        thumbnail: nil
+                    ) {
+                        store.add(video)
+                    }
+                }
             }
         }
         .fullScreenCover(isPresented: $showingAdminView) {

@@ -1,0 +1,71 @@
+default_platform(:ios)
+
+platform :ios do
+
+  # ─── Beta: build + upload to TestFlight ───────────────────────────────────
+  desc "Build and upload a new beta to TestFlight"
+  lane :beta do
+    increment_build_number(xcodeproj: "MyChannel.xcodeproj")
+    build_app(
+      scheme: "MyChannel",
+      export_method: "app-store",
+      clean: true
+    )
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      changelog: changelog_from_git_commits(
+        between: ["HEAD~5", "HEAD"],
+        pretty: "- %s"
+      )
+    )
+    notify_slack("✅ MyChannel beta #{lane_context[SharedValues::BUILD_NUMBER]} uploaded to TestFlight")
+  end
+
+  # ─── Release: submit to App Store ─────────────────────────────────────────
+  desc "Deploy a new release to the App Store"
+  lane :release do
+    capture_screenshots
+    build_app(
+      scheme: "MyChannel",
+      export_method: "app-store",
+      clean: true
+    )
+    upload_to_app_store(
+      force: true,
+      submit_for_review: true,
+      automatic_release: false,
+      submission_information: {
+        add_id_info_uses_idfa: false,
+      }
+    )
+  end
+
+  # ─── Tests ────────────────────────────────────────────────────────────────
+  desc "Run all tests"
+  lane :tests do
+    run_tests(
+      scheme: "MyChannel",
+      devices: ["iPad Air 11-inch (M4)"]
+    )
+  end
+
+  # ─── Screenshots ──────────────────────────────────────────────────────────
+  desc "Capture App Store screenshots"
+  lane :screenshots do
+    capture_screenshots(scheme: "MyChannelUITests")
+    frame_screenshots(white: true)
+  end
+
+  # ─── Helpers ──────────────────────────────────────────────────────────────
+  def notify_slack(message)
+    slack(
+      message: message,
+      slack_url: ENV["SLACK_WEBHOOK_URL"] || ""
+    ) if ENV["SLACK_WEBHOOK_URL"]
+  end
+
+  error do |lane, exception|
+    puts "❌ Lane #{lane} failed: #{exception.message}"
+  end
+
+end

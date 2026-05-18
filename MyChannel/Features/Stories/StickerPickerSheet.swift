@@ -15,6 +15,7 @@ struct StickerPickerSheet: View {
     
     enum StickerTab: CaseIterable {
         case emoji
+        case gif
         case location
         case mention
         case hashtag
@@ -24,6 +25,7 @@ struct StickerPickerSheet: View {
         var title: String {
             switch self {
             case .emoji: return "Emoji"
+            case .gif: return "GIF"
             case .location: return "Location"
             case .mention: return "Mention"
             case .hashtag: return "Hashtag"
@@ -35,6 +37,7 @@ struct StickerPickerSheet: View {
         var icon: String {
             switch self {
             case .emoji: return "face.smiling.fill"
+            case .gif: return "sparkles.tv"
             case .location: return "location.fill"
             case .mention: return "at"
             case .hashtag: return "number"
@@ -81,6 +84,16 @@ struct StickerPickerSheet: View {
                                 let sticker = CreateStoryViewModel.StickerItem(
                                     type: .emoji,
                                     data: emoji
+                                )
+                                onStickerSelected(sticker)
+                                dismiss()
+                            })
+
+                        case .gif:
+                            GIFStickerView(onGIFSelected: { gif in
+                                let sticker = CreateStoryViewModel.StickerItem(
+                                    type: .emoji,
+                                    data: gif
                                 )
                                 onStickerSelected(sticker)
                                 dismiss()
@@ -147,6 +160,40 @@ struct StickerPickerSheet: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - GIF Sticker View
+struct GIFStickerView: View {
+    let onGIFSelected: (String) -> Void
+
+    @State private var searchText = ""
+    @State private var suggestions = ["🔥", "✨", "😂", "💯", "😍", "🎉", "❤️", "🚀"]
+
+    var body: some View {
+        VStack(spacing: 16) {
+            TextField("Search GIFs...", text: $searchText)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .onChange(of: searchText) { value in
+                    Task {
+                        suggestions = await StoryCreatorAssistService.shared.gifSuggestions(query: value)
+                    }
+                }
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
+                ForEach(suggestions, id: \.self) { gif in
+                    Button(action: { onGIFSelected(gif) }) {
+                        Text(gif)
+                            .font(.system(size: 34))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 72)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(14)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -220,8 +267,7 @@ struct MentionStickerView: View {
     let onMentionSelected: (String) -> Void
     
     @State private var searchText = ""
-    
-    private let sampleUsers = [
+    @State private var suggestions = [
         "john_doe", "jane_smith", "alex_wilson", "sarah_johnson",
         "mike_brown", "emma_davis", "chris_taylor", "lisa_anderson"
     ]
@@ -230,8 +276,16 @@ struct MentionStickerView: View {
         VStack(spacing: 16) {
             TextField("Search users...", text: $searchText)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
+                .onChange(of: searchText) { value in
+                    Task {
+                        let results = await StoryCreatorAssistService.shared.mentionSuggestions(query: value, userId: AppState.shared.currentUser?.id)
+                        if !results.isEmpty {
+                            suggestions = results
+                        }
+                    }
+                }
             
-            ForEach(sampleUsers, id: \.self) { username in
+            ForEach(suggestions.filter { searchText.isEmpty ? true : $0.localizedCaseInsensitiveContains(searchText) }, id: \.self) { username in
                 Button(action: { onMentionSelected(username) }) {
                     HStack {
                         Circle()
@@ -261,6 +315,7 @@ struct MentionStickerView: View {
 // MARK: - Hashtag Sticker View
 struct HashtagStickerView: View {
     let onHashtagSelected: (String) -> Void
+    @State private var searchText = ""
     
     private let trendingHashtags = [
         "trending", "viral", "fyp", "love", "instagood", "photooftheday",
@@ -269,7 +324,10 @@ struct HashtagStickerView: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            ForEach(trendingHashtags, id: \.self) { hashtag in
+            TextField("Search hashtags...", text: $searchText)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+
+            ForEach(trendingHashtags.filter { searchText.isEmpty ? true : $0.localizedCaseInsensitiveContains(searchText) }, id: \.self) { hashtag in
                 Button(action: { onHashtagSelected(hashtag) }) {
                     HStack {
                         Image(systemName: "number")

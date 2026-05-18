@@ -213,10 +213,13 @@ class GlobalVideoPlayerManager: ObservableObject {
     }
     
     private func configureAudioSession() {
+        struct Once { static var didConfigure = false }
+        if Once.didConfigure { return }
         do {
             let audioSession = AVAudioSession.sharedInstance()
             try audioSession.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            Once.didConfigure = true
             print("✅ [GlobalVideoPlayerManager] Audio session configured")
         } catch {
             print("⚠️ [GlobalVideoPlayerManager] Failed to configure audio session: \(error)")
@@ -624,6 +627,19 @@ class GlobalVideoPlayerManager: ObservableObject {
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
+    }
+    
+    func addToQueue(_ video: Video) {
+        if videoQueue.contains(where: { $0.id == video.id }) {
+            return
+        }
+        if videoQueue.isEmpty, let currentVideo {
+            videoQueue = [currentVideo, video]
+            queueIndex = 0
+        } else {
+            videoQueue.append(video)
+        }
+        preloadNextVideo()
     }
     
     // 🔥 YOUTUBE PARITY: Navigate to next video in queue

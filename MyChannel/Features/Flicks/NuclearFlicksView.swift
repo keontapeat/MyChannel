@@ -115,13 +115,10 @@ struct NuclearFlicksView: View {
         .onReceive(NotificationCenter.default.publisher(for: .flickVideoUnavailable)) { notification in
             // Auto-skip unavailable videos
             if let flickId = notification.userInfo?["flickId"] as? String,
-               currentIndex < viewModel.flicks.count,
-               viewModel.flicks[currentIndex].id == flickId {
-                // Remove the broken flick from the list so user never sees it again
-                viewModel.flicks.remove(at: currentIndex)
-                // If we removed the last item, go back one; otherwise currentIndex now points to next
-                if currentIndex >= viewModel.flicks.count && currentIndex > 0 {
-                    currentIndex = viewModel.flicks.count - 1
+               currentIndex < viewModel.flicks.count {
+                viewModel.removeUnavailableFlick(id: flickId)
+                if currentIndex >= viewModel.flicks.count {
+                    currentIndex = max(0, viewModel.flicks.count - 1)
                 }
                 print("⏭️ [NuclearFlicks] Auto-skipped unavailable flick: \(flickId)")
             }
@@ -174,6 +171,21 @@ struct NuclearFlicksView: View {
                 // Top mute button (glassmorphism)
                 topControls
                 
+                UIKitFlicksProgressRail(
+                    count: viewModel.flicks.count,
+                    currentIndex: $currentIndex,
+                    reduceMotion: reduceMotion,
+                    onSelect: { index in
+                        currentIndex = index
+                        impactLight.impactOccurred()
+                    }
+                )
+                .frame(width: 24)
+                .padding(.trailing, 4)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                .allowsHitTesting(showUI)
+                .opacity(showUI ? 1 : 0)
+                
                 // Loading more indicator
                 if viewModel.isLoadingMore {
                     VStack {
@@ -220,11 +232,15 @@ struct NuclearFlicksView: View {
             }
             
             // 🔥 Tap layer UNDER the overlay so buttons receive taps first (like, comment, share, etc.)
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture(count: 2) {
+            UIKitFlicksGestureLayer(
+                onSingleTap: {},
+                onDoubleTap: {
                     handleDoubleTap(flick: flick)
+                },
+                onLongPressBegan: {
+                    impactMedium.impactOccurred()
                 }
+            )
             
             // UI Overlay on top so all buttons are clickable; tap-to-hide is inside overlay on video area only
             if showUI {
@@ -894,6 +910,176 @@ struct NuclearVideoPlayerView: View {
     }
 }
 
+private struct UIKitFlicksGestureLayer: UIViewRepresentable {
+    let onSingleTap: () -> Void
+    let onDoubleTap: () -> Void
+    let onLongPressBegan: () -> Void
+    
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.isMultipleTouchEnabled = false
+        
+        let singleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.singleTap))
+        singleTap.numberOfTapsRequired = 1
+        
+        let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.doubleTap))
+        doubleTap.numberOfTapsRequired = 2
+        
+        let longPress = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.longPress(_:)))
+        longPress.minimumPressDuration = 0.35
+        
+        singleTap.require(toFail: doubleTap)
+        view.addGestureRecognizer(singleTap)
+        view.addGestureRecognizer(doubleTap)
+        view.addGestureRecognizer(longPress)
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.parent = self
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+    
+    final class Coordinator: NSObject {
+        var parent: UIKitFlicksGestureLayer
+        
+        init(parent: UIKitFlicksGestureLayer) {
+            self.parent = parent
+        }
+        
+        @objc func singleTap() {
+            parent.onSingleTap()
+        }
+        
+        @objc func doubleTap() {
+            parent.onDoubleTap()
+        }
+        
+        @objc func longPress(_ recognizer: UILongPressGestureRecognizer) {
+            guard recognizer.state == .began else { return }
+            parent.onLongPressBegan()
+        }
+    }
+}
+
+private struct UIKitFlicksProgressRail: UIViewRepresentable {
+    let count: Int
+    @Binding var currentIndex: Int
+    let reduceMotion: Bool
+    let onSelect: (Int) -> Void
+    
+    func makeUIView(context: Context) -> FlicksProgressRailView {
+        let view = FlicksProgressRailView()
+        view.onSelect = { index in
+            onSelect(index)
+        }
+        return view
+    }
+    
+    func updateUIView(_ uiView: FlicksProgressRailView, context: Context) {
+        uiView.configure(count: count, currentIndex: currentIndex, reduceMotion: reduceMotion)
+        uiView.onSelect = { index in
+            onSelect(index)
+        }
+    }
+}
+
+private final class FlicksProgressRailView: UIView {
+    var onSelect: ((Int) -> Void)?
+    
+    private var count: Int = 0
+    private var currentIndex: Int = 0
+    private var reduceMotion: Bool = false
+    private var segmentLayers: [CALayer] = []
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isOpaque = false
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
+        addGestureRecognizer(tap)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    func configure(count: Int, currentIndex: Int, reduceMotion: Bool) {
+        self.count = count
+        self.currentIndex = min(max(currentIndex, 0), max(count - 1, 0))
+        self.reduceMotion = reduceMotion
+        rebuildLayersIfNeeded()
+        setNeedsLayout()
+    }
+    
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard count > 0 else { return }
+        let maxVisible = min(count, 18)
+        let spacing: CGFloat = 6
+        let segmentHeight: CGFloat = 10
+        let selectedHeight: CGFloat = 22
+        let totalHeight = CGFloat(maxVisible - 1) * (segmentHeight + spacing) + selectedHeight
+        var y = (bounds.height - totalHeight) / 2
+        let start = visibleStart(maxVisible: maxVisible)
+        for visibleIndex in 0..<maxVisible {
+            let index = start + visibleIndex
+            let selected = index == currentIndex
+            let height = selected ? selectedHeight : segmentHeight
+            let width: CGFloat = selected ? 4 : 3
+            let layer = segmentLayers[visibleIndex]
+            let frame = CGRect(x: bounds.midX - width / 2, y: y, width: width, height: height)
+            if reduceMotion {
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                layer.frame = frame
+                layer.backgroundColor = UIColor.white.withAlphaComponent(selected ? 1 : 0.35).cgColor
+                CATransaction.commit()
+            } else {
+                layer.frame = frame
+                layer.backgroundColor = UIColor.white.withAlphaComponent(selected ? 1 : 0.35).cgColor
+            }
+            layer.cornerRadius = width / 2
+            y += height + spacing
+        }
+    }
+    
+    private func rebuildLayersIfNeeded() {
+        let targetCount = min(count, 18)
+        guard segmentLayers.count != targetCount else { return }
+        segmentLayers.forEach { $0.removeFromSuperlayer() }
+        segmentLayers = (0..<targetCount).map { _ in
+            let layer = CALayer()
+            layer.shadowColor = UIColor.white.cgColor
+            layer.shadowOpacity = 0.25
+            layer.shadowRadius = 4
+            self.layer.addSublayer(layer)
+            return layer
+        }
+    }
+    
+    private func visibleStart(maxVisible: Int) -> Int {
+        guard count > maxVisible else { return 0 }
+        let half = maxVisible / 2
+        return min(max(currentIndex - half, 0), count - maxVisible)
+    }
+    
+    @objc private func handleTap(_ recognizer: UITapGestureRecognizer) {
+        guard count > 0 else { return }
+        let maxVisible = min(count, 18)
+        let start = visibleStart(maxVisible: maxVisible)
+        let location = recognizer.location(in: self)
+        let segmentHeight = bounds.height / CGFloat(maxVisible)
+        let visibleIndex = min(max(Int(location.y / max(segmentHeight, 1)), 0), maxVisible - 1)
+        let index = min(start + visibleIndex, count - 1)
+        onSelect?(index)
+    }
+}
+
 // MARK: - Nuclear Flicks ViewModel
 @MainActor
 class NuclearFlicksViewModel: ObservableObject {
@@ -950,19 +1136,24 @@ class NuclearFlicksViewModel: ObservableObject {
             
             let snapshot = try await query.getDocuments()
             
+            var mainVideoBackfill = await loadPublicVideoFlicks(limit: 60)
+            
             if !snapshot.documents.isEmpty {
                 lastDocument = snapshot.documents.last
                 var parsed = snapshot.documents.compactMap { doc in
                     parseFlickFromDocument(doc)
                 }
-                // If very few Firestore flicks, supplement with demo content so feed isn't empty/broken
-                if parsed.count < 3 {
-                    let demoBackfill = makeDemoFlicks().prefix(max(0, 10 - parsed.count))
-                    parsed.append(contentsOf: demoBackfill)
-                    print("📺 [NuclearFlicks] Supplemented \(parsed.count) flicks with demo content")
+                parsed = mergePlayableFlicks(primary: parsed, fallback: mainVideoBackfill, minimumCount: 20)
+                if parsed.count < 10 {
+                    let demoBackfill = makeDemoFlicks()
+                    parsed = mergePlayableFlicks(primary: parsed, fallback: demoBackfill, minimumCount: 20)
+                    print("📺 [NuclearFlicks] Supplemented Flicks with playable catalog content")
                 }
                 flicks = parsed
-                print("✅ [NuclearFlicks] Loaded \(flicks.count) Flicks from Firestore")
+                print("✅ [NuclearFlicks] Loaded \(flicks.count) playable Flicks")
+            } else if !mainVideoBackfill.isEmpty {
+                flicks = mergePlayableFlicks(primary: mainVideoBackfill, fallback: makeDemoFlicks(), minimumCount: 20)
+                print("✅ [NuclearFlicks] Loaded \(flicks.count) playable videos from public videos")
             } else {
                 // Silently fallback to demo data (no error - this is expected when starting)
                 flicks = makeDemoFlicks()
@@ -1032,7 +1223,10 @@ class NuclearFlicksViewModel: ObservableObject {
                 let newFlicks = snapshot.documents.compactMap { doc in
                     parseFlickFromDocument(doc)
                 }
-                flicks.append(contentsOf: newFlicks)
+                flicks = mergePlayableFlicks(primary: flicks, fallback: newFlicks, minimumCount: flicks.count + newFlicks.count)
+            } else {
+                let publicVideos = await loadPublicVideoFlicks(limit: 20)
+                flicks = mergePlayableFlicks(primary: flicks, fallback: publicVideos, minimumCount: flicks.count + min(publicVideos.count, 10))
             }
         } catch {
             print("🚨 [NuclearFlicks] Error loading more: \(error)")
@@ -1083,6 +1277,17 @@ class NuclearFlicksViewModel: ObservableObject {
         // TODO: Show more options sheet
     }
     
+    func removeUnavailableFlick(id: String) {
+        let baseId = id.components(separatedBy: "_loop_").first ?? id
+        flicks.removeAll { flick in
+            flick.id == id || flick.id == baseId || flick.id.hasPrefix("\(baseId)_loop_")
+        }
+        if flicks.count < 8 {
+            let backfill = mergePlayableFlicks(primary: flicks, fallback: makeDemoFlicks(), minimumCount: 20)
+            flicks = backfill
+        }
+    }
+    
     func navigateToCreator(_ creator: FlickCreator) {
         // Convert FlickCreator to User and navigate to profile
         let user = User(
@@ -1115,6 +1320,7 @@ class NuclearFlicksViewModel: ObservableObject {
     private func preloadVideo(at index: Int) async {
         guard index < flicks.count else { return }
         let flick = flicks[index]
+        guard isPlayableFlick(flick) else { return }
         
         if flick.contentSource != Video.ContentSource.youtube {
             await MainActor.run {
@@ -1194,10 +1400,7 @@ class NuclearFlicksViewModel: ObservableObject {
         let data = doc.data() ?? [:]
         
         guard let title = data["title"] as? String,
-              let videoURL = data["videoUrl"] as? String ?? data["videoURL"] as? String,
-              !videoURL.isEmpty,
-              let parsedURL = URL(string: videoURL),
-              parsedURL.scheme == "https" || parsedURL.scheme == "http" else {
+              let videoURL = data["videoUrl"] as? String ?? data["videoURL"] as? String ?? data["downloadURL"] as? String ?? data["downloadUrl"] as? String else {
             return nil
         }
         
@@ -1217,7 +1420,7 @@ class NuclearFlicksViewModel: ObservableObject {
             musicTrack = FlickMusicTrack(title: musicTitle, artist: musicArtist, albumArt: albumArt)
         }
         
-        return NuclearFlick(
+        let flick = NuclearFlick(
             id: doc.documentID,
             videoURL: videoURL,
             thumbnailURL: data["thumbnailUrl"] as? String ?? data["thumbnailURL"] as? String ?? "",
@@ -1232,21 +1435,19 @@ class NuclearFlicksViewModel: ObservableObject {
             creator: creator,
             tags: data["tags"] as? [String] ?? [],
             musicTrack: musicTrack,
-            contentSource: Video.ContentSource.userUploaded,
+            contentSource: (data["contentSource"] as? String).flatMap { Video.ContentSource(rawValue: $0) } ?? Video.ContentSource.userUploaded,
             externalID: data["externalID"] as? String
         )
+        
+        guard isPlayableFlick(flick) else { return nil }
+        return flick
     }
     
     private func makeDemoFlicks() -> [NuclearFlick] {
         let freeVideos = SeedCatalogService.shared.freeCatalogVideos
         let seedVideos = SeedCatalogService.shared.seedVideos
         let combined = (freeVideos + seedVideos)
-            .filter { video in
-                let url = video.videoURL
-                guard !url.isEmpty, let parsed = URL(string: url),
-                      parsed.scheme == "https" || parsed.scheme == "http" else { return false }
-                return true
-            }
+            .filter { isPlayableVideo($0) && isKnownReliableURLString($0.videoURL) }
             .shuffled()
         if !combined.isEmpty {
             return combined.prefix(60).map { video in
@@ -1292,10 +1493,7 @@ class NuclearFlicksViewModel: ObservableObject {
             let videos = try await VideoFirestoreService.shared.fetchMultipleVideos(videoIds: videoIds)
             guard !videos.isEmpty else { return [] }
             // Filter out videos with empty/invalid URLs (e.g. deleted videos)
-            let validVideos = videos.filter { video in
-                let url = video.videoURL
-                return !url.isEmpty && URL(string: url) != nil
-            }
+            let validVideos = videos.filter { isPlayableVideo($0) }
             let flickMap = Dictionary(validVideos.map { ($0.id, videoToFlick($0)) }, uniquingKeysWith: { _, last in last })
             return videoIds.compactMap { flickMap[$0] }
         } catch {
@@ -1323,6 +1521,88 @@ class NuclearFlicksViewModel: ObservableObject {
             print("⚠️ [NuclearFlicks] Failed to append recommendations: \(error)")
             return false
         }
+    }
+    
+    private func loadPublicVideoFlicks(limit: Int) async -> [NuclearFlick] {
+        let videos = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: limit)
+        return videos
+            .filter { isPlayableVideo($0) }
+            .map { videoToFlick($0) }
+    }
+    
+    private func mergePlayableFlicks(primary: [NuclearFlick], fallback: [NuclearFlick], minimumCount: Int) -> [NuclearFlick] {
+        var seen = Set<String>()
+        var merged: [NuclearFlick] = []
+        
+        for flick in primary + fallback {
+            guard isPlayableFlick(flick), !seen.contains(flick.id) else { continue }
+            seen.insert(flick.id)
+            merged.append(flick)
+        }
+        
+        if merged.count < minimumCount {
+            let reusableFallback = fallback.filter { isPlayableFlick($0) }
+            while merged.count < minimumCount, !reusableFallback.isEmpty {
+                for original in reusableFallback {
+                    guard merged.count < minimumCount else { break }
+                    let copy = NuclearFlick(
+                        id: "\(original.id)_loop_\(merged.count)",
+                        videoURL: original.videoURL,
+                        thumbnailURL: original.thumbnailURL,
+                        title: original.title,
+                        description: original.description,
+                        duration: original.duration,
+                        viewCount: original.viewCount,
+                        likeCount: original.likeCount,
+                        commentCount: original.commentCount,
+                        shareCount: original.shareCount,
+                        createdAt: original.createdAt,
+                        creator: original.creator,
+                        tags: original.tags,
+                        musicTrack: original.musicTrack,
+                        contentSource: original.contentSource,
+                        externalID: original.externalID
+                    )
+                    merged.append(copy)
+                }
+            }
+        }
+        
+        return merged
+    }
+    
+    private func isPlayableVideo(_ video: Video) -> Bool {
+        if video.contentSource == .youtube {
+            return !(video.externalID ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        if video.isLiveStream { return false }
+        if video.duration <= 0 { return false }
+        return isPlayableURLString(video.videoURL)
+    }
+    
+    private func isPlayableFlick(_ flick: NuclearFlick) -> Bool {
+        if flick.contentSource == .youtube {
+            return !(flick.externalID ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        if flick.duration <= 0 { return false }
+        return isPlayableURLString(flick.videoURL)
+    }
+    
+    private func isPlayableURLString(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let url = URL(string: trimmed), let scheme = url.scheme?.lowercased() else { return false }
+        return scheme == "https" || scheme == "http" || scheme == "file"
+    }
+    
+    private func isKnownReliableURLString(_ value: String) -> Bool {
+        let lowercased = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard isPlayableURLString(lowercased) else { return false }
+        return lowercased.contains("firebasestorage.googleapis.com")
+            || lowercased.contains("storage.googleapis.com")
+            || lowercased.contains("commondatastorage.googleapis.com")
+            || lowercased.hasSuffix(".mp4")
+            || lowercased.hasSuffix(".m3u8")
+            || lowercased.hasPrefix("file://")
     }
 
     private func videoToFlick(_ video: Video) -> NuclearFlick {

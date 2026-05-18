@@ -52,6 +52,10 @@ class LazyServiceManager: ObservableObject {
     
     private func registerAllServices() {
         // CRITICAL: Must load at launch (<500ms)
+        register("Security", priority: .critical) {
+            AppSecurityService.shared.configure()
+        }
+
         register("Firebase", priority: .critical) {
             FirebaseManager.shared.configureIfPossible()
         }
@@ -69,9 +73,37 @@ class LazyServiceManager: ObservableObject {
             // Video service initialization
         }
         
-        // MEDIUM: Load within 2 seconds
+        // MEDIUM: Load within 2 seconds — Observability & Monetization
+        register("Sentry", priority: .medium) {
+            let dsn = AppSecrets.sentryDSN
+            guard !dsn.isEmpty else { return }
+            SentryObservabilityService.shared.configure(dsn: dsn)
+        }
+
+        register("PostHog", priority: .medium) {
+            let key = AppSecrets.postHogAPIKey
+            guard !key.isEmpty else { return }
+            await PostHogAnalyticsService.shared.configure(apiKey: key)
+        }
+
+        register("RevenueCat", priority: .medium) {
+            let key = AppSecrets.revenueCatAPIKey
+            guard !key.isEmpty else { return }
+            await RevenueCatService.shared.configure(apiKey: key)
+        }
+
+        register("Stripe", priority: .medium) {
+            let key = AppSecrets.stripePublishableKey
+            guard !key.isEmpty else { return }
+            await StripeCreatorPayoutService.shared.configure(publishableKey: key)
+        }
+
+        register("RealmOffline", priority: .medium) {
+            await RealmOfflineService.shared.refreshCounts()
+        }
+
         register("Analytics", priority: .medium) {
-            // Analytics initialization
+            // Firebase Analytics auto-starts with FirebaseApp.configure()
         }
         
         register("UserSeeder", priority: .medium) {
@@ -85,9 +117,53 @@ class LazyServiceManager: ObservableObject {
             ImagePrefetcher.shared.prewarmCritical(urls: criticalURLs)
         }
         
+        register("OfflineZip", priority: .medium) {
+            _ = OfflineZipService.shared.offlineSizeBytes
+        }
+
         // LOW: Load on-demand
         register("LiveTVPreload", priority: .low) {
             await LiveTVService.shared.preloadFireChannels(count: 12)
+        }
+
+        register("OpenAIAgent", priority: .medium) {
+            _ = OpenAIAgentService.shared
+        }
+
+        register("AgentLog", priority: .medium) {
+            _ = AgentLogService.shared
+        }
+
+        register("AlamofireAdmin", priority: .medium) {
+            _ = AlamofireAdminNetworkService.shared
+        }
+
+        register("PerspectiveModeration", priority: .low) {
+            _ = PerspectiveModerationService.shared
+        }
+
+        register("CommandCenterReport", priority: .low) {
+            _ = CommandCenterReportService.shared
+        }
+
+        register("CreatorAnalytics", priority: .low) {
+            _ = CreatorAnalyticsChartService.shared
+        }
+
+        register("LiveChatWebSocket", priority: .low) {
+            _ = LiveChatWebSocketService.shared
+        }
+
+        register("SharePlay", priority: .low) {
+            SharePlayWatchService.shared.configureGroupSessions()
+        }
+
+        register("AutoCaption", priority: .low) {
+            _ = AutoCaptionService.shared
+        }
+
+        register("LiveActivity", priority: .low) {
+            _ = LiveActivityService.shared
         }
         
         register("PerformanceOptimizer", priority: .low) {

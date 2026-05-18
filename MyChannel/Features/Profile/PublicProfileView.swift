@@ -16,6 +16,7 @@ struct PublicProfileView: View {
     @State private var userVideos: [Video] = []
     @State private var watchHistory: [Video] = []
     @State private var scrollOffset: CGFloat = 0
+    @State private var selectedHighlight: StoryHighlight?
 
     init(user: User, prefetchedVideos: [Video] = []) {
         self.user = user
@@ -42,6 +43,10 @@ struct PublicProfileView: View {
                     showingEditProfile: $showingEditProfile,
                     showingSettings: $showingSettings
                 )
+
+                StoryHighlightsTray(creatorId: editableUser.id) { highlight in
+                    selectedHighlight = highlight
+                }
                 
                 // Profile Tabs - Scrollable
                 ProfileTabNavigation(
@@ -94,6 +99,9 @@ struct PublicProfileView: View {
                 SafeProfileSettingsView()
                     .environmentObject(appState)
             }
+        }
+        .sheet(item: $selectedHighlight) { highlight in
+            StoryHighlightViewer(highlight: highlight)
         }
         .onAppear { Task { await load() } }
     }

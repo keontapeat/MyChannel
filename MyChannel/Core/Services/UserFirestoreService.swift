@@ -47,6 +47,9 @@ final class UserFirestoreService: ObservableObject {
         if let bannerImageURL = user.bannerImageURL {
             userData["bannerImageURL"] = bannerImageURL
             userData["bannerImageUrl"] = bannerImageURL
+        } else {
+            userData["bannerImageURL"] = NSNull()
+            userData["bannerImageUrl"] = NSNull()
         }
         if let bio = user.bio {
             userData["bio"] = bio

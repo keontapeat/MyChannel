@@ -1,5 +1,8 @@
 import SwiftUI
 import Combine
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 // MARK: - Preview-safe onReceive helper
 struct ConditionalOnReceiveModifier<P: Publisher>: ViewModifier where P.Failure == Never {
@@ -22,7 +25,7 @@ enum FeaturedItem: Identifiable, Equatable {
     var id: String {
         switch self {
         case .video(let v): return "video-\(v.id)"
-        case .friend(let s): return "friend-\(s.id.uuidString)"
+        case .friend(let s): return "friend-\(s.id)"
         }
     }
 
@@ -96,7 +99,7 @@ struct HomeView: View {
     @State private var allAssetStories: [AssetStory] = []  // All stories (for pager)
     @Namespace private var storiesNS
 
-    private var activeStoriesHeroId: UUID? {
+    private var activeStoriesHeroId: String? {
         if case let .stories(story) = route { return story.id }
         return nil
     }
@@ -273,6 +276,17 @@ struct HomeView: View {
         .sheet(isPresented: $showingFeaturedManager) {
             ThermonuclearFeaturedManager()
                 .environmentObject(appState)
+                .background(
+                    UIKitSheetConfigurator(
+                        configuration: UIKitSheetConfiguration(
+                            detents: [.large()],
+                            largestUndimmedDetentIdentifier: .large,
+                            prefersGrabberVisible: true,
+                            prefersScrollingExpandsWhenScrolledToEdge: false,
+                            preferredCornerRadius: 28
+                        )
+                    )
+                )
         }
         // Auto-scroll removed: hero section only changes on manual swipe
         .onReceive(NotificationCenter.default.publisher(for: .storiesDidChange)) { _ in
@@ -318,8 +332,10 @@ struct HomeView: View {
                 // Instagram-style: group ALL stories by user, open at tapped user, auto-advance to next
                 let groups = UserStoryGroup.group(from: allAssetStories)
                 let sortedGroups = UserStoryGroup.sorted(groups)
-                let tappedKey = story.username.lowercased()
-                let startIdx = sortedGroups.firstIndex(where: { $0.id == tappedKey }) ?? 0
+                let tappedStoryId = story.stableStoryId
+                let startIdx = sortedGroups.firstIndex(where: { group in
+                    group.stories.contains { $0.stableStoryId == tappedStoryId }
+                }) ?? 0
                 AssetStoriesPagerView(
                     userGroups: sortedGroups,
                     initialUserIndex: startIdx
@@ -424,7 +440,8 @@ struct HomeView: View {
         let intro = FeaturedStore.ownerIntroVideo() ?? shotByKeontaIntro()
         
         var content: [Video] = [intro]
-        content.append(contentsOf: Array(ownerFeatured.filter { $0.id != intro.id }.prefix(2)))
+        // Show up to 10 featured videos (besides intro) so new pins appear immediately
+        content.append(contentsOf: Array(ownerFeatured.filter { $0.id != intro.id }.prefix(10)))
         
         featuredContent = content
         heroVideoIndex = 0
@@ -518,7 +535,10 @@ struct HomeView: View {
         
         Task { @MainActor in
             print("📖 [HomeView] loadUserStories started for user: \(currentUser.username) (id: \(currentUser.id))")
+            try? await StorySeenTracker.shared.fetchSeen(userId: currentUser.id)
+            try? await StorySeenTracker.shared.clearExpired()
             var collected: [AssetStory] = []
+            let blockedUserIds = await loadBlockedUserIds(for: currentUser.id)
 
             // 1. Load current user's own stories
             if let mine = try? await DatabaseService.shared.fetchStoriesByCreator(creatorId: currentUser.id), !mine.isEmpty {
@@ -538,6 +558,7 @@ struct HomeView: View {
                 print("📖 [HomeView] Fetching stories from \(followed.count) followed creators")
                 if let stories = try? await DatabaseService.shared.fetchActiveStoriesForCreators(followed), !stories.isEmpty {
                     for s in stories {
+                        guard shouldIncludeStory(s, currentUserId: currentUser.id, blockedUserIds: blockedUserIds) else { continue }
                         let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
                         let user = try? await UserFirestoreService.shared.fetchUser(id: s.creatorId)
                         let name = user?.username ?? s.creatorId
@@ -555,6 +576,7 @@ struct HomeView: View {
                 if let allStories = try? await DatabaseService.shared.fetchAllActiveStories(limit: 24), !allStories.isEmpty {
                     print("📖 [HomeView] Got \(allStories.count) stories from fetchAllActiveStories")
                     for s in allStories {
+                        guard shouldIncludeStory(s, currentUserId: currentUser.id, blockedUserIds: blockedUserIds) else { continue }
                         let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
                         let user = try? await UserFirestoreService.shared.fetchUser(id: s.creatorId)
                         let name = user?.username ?? s.creatorId
@@ -563,6 +585,7 @@ struct HomeView: View {
                 }
             }
 
+            collected = orderedStoriesForTray(collected, currentUserId: currentUser.id)
             // Store ALL stories (multiple per user) for the pager
             self.allAssetStories = collected
             // Store one-per-user for the bubble row (most recent first per user)
@@ -576,10 +599,66 @@ struct HomeView: View {
         var seen = Set<String>()
         var out: [AssetStory] = []
         for s in input {
-            let key = s.username.lowercased()
+            let key = s.creatorId.isEmpty ? s.username.lowercased() : s.creatorId
             if seen.insert(key).inserted { out.append(s) }
         }
         return out
+    }
+
+    private func orderedStoriesForTray(_ stories: [AssetStory], currentUserId: String) -> [AssetStory] {
+        let deduped = dedupeStories(stories)
+        let seen = StorySeenTracker.shared.seenStoryIds
+        return deduped.sorted { lhs, rhs in
+            let lhsOwn = lhs.creatorId == currentUserId
+            let rhsOwn = rhs.creatorId == currentUserId
+            if lhsOwn != rhsOwn { return lhsOwn }
+
+            let lhsSeen = seen.contains(lhs.stableStoryId)
+            let rhsSeen = seen.contains(rhs.stableStoryId)
+            if lhsSeen != rhsSeen { return !lhsSeen }
+
+            return lhs.username.localizedCaseInsensitiveCompare(rhs.username) == .orderedAscending
+        }
+    }
+
+    private func dedupeStories(_ stories: [AssetStory]) -> [AssetStory] {
+        var seenIds = Set<String>()
+        return stories.filter { story in
+            seenIds.insert(story.stableStoryId).inserted
+        }
+    }
+
+    private func shouldIncludeStory(_ story: Story, currentUserId: String, blockedUserIds: Set<String>) -> Bool {
+        guard !story.isExpired else { return false }
+        guard !blockedUserIds.contains(story.creatorId) else { return false }
+
+        let audience = (story.audience ?? "public").lowercased()
+        if story.creatorId == currentUserId { return true }
+
+        switch audience {
+        case "public", "friends":
+            return true
+        case "close", "closefriends", "close_friends":
+            return appState.subscriptions.contains(story.creatorId)
+        default:
+            return audience.isEmpty || audience == "public"
+        }
+    }
+
+    private func loadBlockedUserIds(for userId: String) async -> Set<String> {
+        #if canImport(FirebaseFirestore)
+        do {
+            let snapshot = try await Firestore.firestore()
+                .collection("users")
+                .document(userId)
+                .collection("blockedUsers")
+                .getDocuments()
+            return Set(snapshot.documents.map { $0.documentID })
+        } catch {
+            print("⚠️ [HomeView] Failed to load blocked users for stories: \(error.localizedDescription)")
+        }
+        #endif
+        return []
     }
     
 

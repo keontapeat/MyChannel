@@ -39,6 +39,7 @@ struct MainTabView: View {
     @State private var presentGoogleAccount: Bool = false
     @State private var presentSignInSheet: Bool = false
     @State private var presentFullHistory: Bool = false
+    @State private var presentHistoryManagement: Bool = false
     @State private var historyVideoToOpen: Video? = nil
     @State private var showAuthGate: Bool = false
     
@@ -134,6 +135,11 @@ struct MainTabView: View {
                 presentFullHistory = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenHistoryManagement"))) { _ in
+            if appState.requireAuthentication(hint: "Sign in to manage your watch history.") {
+                presentHistoryManagement = true
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenVideoEditor"))) { note in
             if let video = note.object as? Video {
                 // Reuse UploadView in edit mode by preloading the video URL and jumping to the details step
@@ -178,6 +184,10 @@ struct MainTabView: View {
         .sheet(isPresented: $presentSignInSheet) { SignInSheetView() }
         .fullScreenCover(isPresented: $presentFullHistory) {
             WatchHistoryView()
+        }
+        .sheet(isPresented: $presentHistoryManagement) {
+            HistoryManagementView()
+                .environmentObject(appState)
         }
         .sheet(isPresented: $presentGlobalNowPlaying) {
             NowPlayingSheet()

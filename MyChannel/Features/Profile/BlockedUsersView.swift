@@ -169,9 +169,8 @@ struct BlockedUsersView: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 UIKitSearchBar(
-                    placeholder: "Search blocked users...",
                     text: $searchText,
-                    onSearch: { /* Search is already debounced via onChange */ }
+                    placeholder: "Search blocked users..."
                 )
                 .frame(height: 36)
                 

@@ -677,7 +677,7 @@ struct AppConfig {
         
         // 🔥 YOUTUBE PARITY: Core infrastructure features
         static let enableElasticsearch = true                    // Full-text search index
-        static let enableHLSManifests = true                     // HLS adaptive streaming
+        static let enableHLSManifests = false                    // HLS adaptive streaming
         static let enableDASHManifests = false                   // MPEG-DASH streaming
         static let enableAV1Encoding = false                    // AV1 codec (expensive, enable per-region)
         static let enableVP9Encoding = false                    // VP9 codec

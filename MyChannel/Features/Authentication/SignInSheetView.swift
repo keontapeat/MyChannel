@@ -73,28 +73,29 @@ struct SignInSheetView: View {
                     .buttonStyle(.plain)
                     .disabled(isLoadingGoogle)
 
-                    // Apple — iPad-safe: pass raw nonce directly, no shared mutable state
-                    SignInWithAppleButton(.signIn) { request in
-                        let pair = FirebaseAppleAuthService.shared.generateNoncePair()
-                        appleSignInRawNonce = pair.raw
-                        appleSignInHashedNonce = pair.hashed
-                        request.requestedScopes = [.fullName, .email]
-                        request.nonce = pair.hashed
-                    } onCompletion: { result in
-                        switch result {
-                        case .success(let auth):
-                            guard let credential = auth.credential as? ASAuthorizationAppleIDCredential else { return }
-                            let rawNonce = appleSignInRawNonce
-                            Task { await AuthenticationManager.shared.signInWithAppleCredential(credential, rawNonce: rawNonce) }
-                        case .failure(let error):
-                            let nsErr = error as NSError
-                            if nsErr.domain == ASAuthorizationError.errorDomain && nsErr.code == ASAuthorizationError.canceled.rawValue { return }
-                            errorMessage = error.localizedDescription
+                    // Apple — Custom Button calling AuthenticationManager directly.
+                    // This fixes the Guideline 2.1(a) issue where the native SignInWithAppleButton
+                    // exhibits "no response" on iPad OS when placed inside a SwiftUI sheet.
+                    Button(action: {
+                        Task { await appleTap() }
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "applelogo")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                            Text("Sign in with Apple")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity, alignment: .center)
                         }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.black)
+                        )
                     }
-                    .signInWithAppleButtonStyle(.black)
-                    .frame(height: 50)
-                    .cornerRadius(12)
+                    .buttonStyle(.plain)
                     .disabled(isLoadingGoogle)
 
                     // Divider
@@ -166,6 +167,10 @@ struct SignInSheetView: View {
     }
 
     // MARK: - Actions
+    private func appleTap() async {
+        await AuthenticationManager.shared.signInWithApple()
+    }
+
     private func googleTap() async {
         isLoadingGoogle = true
         defer { isLoadingGoogle = false }

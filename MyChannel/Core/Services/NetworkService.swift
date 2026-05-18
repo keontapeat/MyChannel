@@ -18,10 +18,15 @@ class NetworkService: ObservableObject {
     @Published var isLoading: Bool = false
     
     private let session: URLSession
-    private let spkiPins: [String] = [
-        // Base64-encoded SHA256 SPKI hash for api.mychannel.app
-        "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="
-    ]
+    private let spkiPins: [String] = {
+        // Provide real SPKI pins only for production; keep empty in DEBUG to avoid mismatches
+        #if DEBUG
+        return []
+        #else
+        // TODO: Replace with real base64 SHA-256 SPKI pins for api.mychannel.app when cert is final
+        return []
+        #endif
+    }()
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
     private var cancellables = Set<AnyCancellable>()
@@ -33,7 +38,11 @@ class NetworkService: ObservableObject {
         configuration.timeoutIntervalForResource = AppConfig.API.timeout * 2
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         
-        self.session = URLSession(configuration: configuration, delegate: SSLPinningDelegate(pins: spkiPins, allowInDebug: AppConfig.isDebug), delegateQueue: nil)
+        if AppConfig.Security.enableSSLPinning, !spkiPins.isEmpty {
+            self.session = URLSession(configuration: configuration, delegate: SSLPinningDelegate(pins: spkiPins, allowInDebug: AppConfig.isDebug), delegateQueue: nil)
+        } else {
+            self.session = URLSession(configuration: configuration)
+        }
         
         self.decoder = JSONDecoder()
         self.decoder.dateDecodingStrategy = .iso8601
@@ -58,6 +67,12 @@ class NetworkService: ObservableObject {
     }
     
     private func checkConnectivity() {
+        #if DEBUG
+        // Avoid spamming staging with failing TLS if cert is not valid in dev
+        if AppConfig.environment == .staging {
+            return
+        }
+        #endif
         guard let url = URL(string: AppConfig.API.baseURL + "/health") else { return }
         
         var request = URLRequest(url: url)

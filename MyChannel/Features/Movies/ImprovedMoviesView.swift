@@ -187,9 +187,8 @@ struct ImprovedMoviesView: View {
     private var searchBar: some View {
         HStack(spacing: 12) {
             UIKitSearchBar(
-                placeholder: "Search movies, actors, directors...",
                 text: $searchText,
-                onSearch: { performSearch() }
+                placeholder: "Search movies, actors, directors..."
             )
             .frame(height: 36)
             

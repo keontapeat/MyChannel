@@ -1,0 +1,4 @@
+app_identifier("live.mychannel.app")
+apple_id("keontapeat@mychannel.live")
+team_id("REPLACE_WITH_TEAM_ID")
+itc_team_id("REPLACE_WITH_ITC_TEAM_ID")

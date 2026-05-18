@@ -18,6 +18,9 @@ struct CommunityPostsView: View {
                         Task { await postService.votePoll(postId: postId, userId: uid, optionIndex: optionIndex) }
                     }
                 }
+                .onAppear {
+                    addPostToHistory(post)
+                }
             }
         }
         .listStyle(.plain)
@@ -40,6 +43,15 @@ struct CommunityPostsView: View {
             if let creator = appState.currentUser {
                 CreateCommunityPostView(creator: creator)
             }
+        }
+    }
+    
+    private func addPostToHistory(_ post: CommunityPost) {
+        guard let userId = appState.currentUser?.id else { return }
+        let creator = appState.currentUser ?? User(id: creatorId, username: "creator", displayName: "Creator", email: "")
+        Task {
+            let item = WatchHistoryItem.fromCommunityPost(post, creator: creator)
+            await HistoryService.shared.addOrUpdateHistoryItem(item, userId: userId)
         }
     }
 }

@@ -107,7 +107,32 @@ class CreateStoryViewModel: ObservableObject {
         case text
     }
 
-    enum Audience: String, CaseIterable { case `public`, friends }
+    enum Audience: String, CaseIterable {
+        case `public`
+        case friends
+        case closeFriends = "close_friends"
+        case followers = "followers"
+        case hiddenFrom = "hidden_from"
+
+        var displayName: String {
+            switch self {
+            case .public: return "Public"
+            case .friends: return "Friends"
+            case .closeFriends: return "Close Friends"
+            case .followers: return "Followers"
+            case .hiddenFrom: return "Hide From Some"
+            }
+        }
+    }
+
+    struct TextOverlayCodable: Codable {
+        let text: String
+        let x: Double
+        let y: Double
+        let scale: Double
+        let rotation: Double
+        let colorHex: String
+    }
     
     // MARK: - Flash Mode
     enum FlashMode {
@@ -120,6 +145,63 @@ class CreateStoryViewModel: ObservableObject {
             case .off: return "bolt.slash.fill"
             case .on: return "bolt.fill"
             case .auto: return "bolt.badge.automatic.fill"
+            }
+        }
+    }
+
+    private func createStoryPolls() -> [StoryPoll] {
+        stickers.compactMap { stickerItem -> StoryPoll? in
+            guard stickerItem.type == .poll,
+                  let rawPoll = stickerItem.data as? String,
+                  !rawPoll.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return nil
+            }
+
+            let options = [
+                StoryPoll.PollOption(text: "Yes"),
+                StoryPoll.PollOption(text: "No")
+            ]
+            return StoryPoll(
+                question: rawPoll,
+                options: options,
+                x: stickerItem.position.x,
+                y: stickerItem.position.y
+            )
+        }
+    }
+
+    private func createStoryLinks() -> [StoryLink] {
+        stickers.compactMap { stickerItem -> StoryLink? in
+            guard stickerItem.type == .mention || stickerItem.type == .hashtag || stickerItem.type == .location else {
+                return nil
+            }
+            let rawValue = String(describing: stickerItem.data)
+            guard !rawValue.isEmpty else { return nil }
+
+            switch stickerItem.type {
+            case .mention:
+                return StoryLink(
+                    url: "https://mychannel.app/@\(rawValue)",
+                    title: "@\(rawValue)",
+                    x: stickerItem.position.x,
+                    y: stickerItem.position.y
+                )
+            case .hashtag:
+                return StoryLink(
+                    url: "https://mychannel.app/hashtag/\(rawValue)",
+                    title: "#\(rawValue)",
+                    x: stickerItem.position.x,
+                    y: stickerItem.position.y
+                )
+            case .location:
+                return StoryLink(
+                    url: "https://maps.apple.com/?q=\(rawValue.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? rawValue)",
+                    title: rawValue,
+                    x: stickerItem.position.x,
+                    y: stickerItem.position.y
+                )
+            default:
+                return nil
             }
         }
     }
@@ -186,7 +268,7 @@ class CreateStoryViewModel: ObservableObject {
         var rotation: Double = 0.0
         let data: Any
         
-        enum StickerType {
+        enum StickerType: String {
             case emoji
             case location
             case mention
@@ -195,6 +277,15 @@ class CreateStoryViewModel: ObservableObject {
             case time
             case weather
         }
+    }
+
+    struct StickerItemCodable: Codable {
+        let type: String
+        let x: Double
+        let y: Double
+        let scale: Double
+        let rotation: Double
+        let value: String
     }
     
     // MARK: - Music Item
@@ -219,6 +310,92 @@ class CreateStoryViewModel: ObservableObject {
             storyType = .video
         }
         haptic.impactOccurred()
+    }
+
+    func saveDraft() {
+        #if canImport(FirebaseAuth)
+        guard let creatorId = Auth.auth().currentUser?.uid ?? AuthenticationManager.shared.currentUser?.id else { return }
+        #else
+        guard let creatorId = AuthenticationManager.shared.currentUser?.id else { return }
+        #endif
+
+        let draft = StoryDraft(
+            creatorId: creatorId,
+            caption: caption,
+            audience: audience.rawValue,
+            stickers: stickers.map { sticker in
+                StickerItemCodable(
+                    type: sticker.type.rawValue,
+                    x: sticker.position.x,
+                    y: sticker.position.y,
+                    scale: sticker.scale,
+                    rotation: sticker.rotation,
+                    value: String(describing: sticker.data)
+                )
+            },
+            textOverlay: textOverlay.map {
+                TextOverlayCodable(
+                    text: $0.text,
+                    x: $0.position.x,
+                    y: $0.position.y,
+                    scale: $0.scale,
+                    rotation: $0.rotation,
+                    colorHex: colorToHex($0.color)
+                )
+            },
+            backgroundColors: backgroundGradient.map { colorToHex($0) },
+            mediaURL: selectedMedia?.url.absoluteString,
+            mediaType: selectedMedia.map { $0.type == .image ? "image" : "video" }
+        )
+        StoryDraftService.shared.saveDraft(draft, creatorId: creatorId)
+    }
+
+    func restoreDraftIfAvailable() {
+        #if canImport(FirebaseAuth)
+        guard let creatorId = Auth.auth().currentUser?.uid ?? AuthenticationManager.shared.currentUser?.id else { return }
+        #else
+        guard let creatorId = AuthenticationManager.shared.currentUser?.id else { return }
+        #endif
+
+        guard let draft = StoryDraftService.shared.loadDraft(creatorId: creatorId) else { return }
+
+        caption = draft.caption
+        audience = Audience(rawValue: draft.audience) ?? .public
+        stickers = draft.stickers.compactMap { item in
+            guard let type = StickerItem.StickerType(rawValue: item.type) else { return nil }
+            return StickerItem(
+                type: type,
+                position: CGPoint(x: item.x, y: item.y),
+                scale: item.scale,
+                rotation: item.rotation,
+                data: item.value
+            )
+        }
+        textOverlay = draft.textOverlay.map {
+            TextOverlay(
+                text: $0.text,
+                position: CGPoint(x: $0.x, y: $0.y),
+                scale: $0.scale,
+                rotation: $0.rotation,
+                color: Color(hexString: $0.colorHex) ?? .white
+            )
+        }
+        if !draft.backgroundColors.isEmpty {
+            backgroundGradient = draft.backgroundColors.compactMap { Color(hexString: $0) }
+        }
+        if let mediaURL = draft.mediaURL, let url = URL(string: mediaURL), let mediaType = draft.mediaType {
+            selectedMedia = MediaItem(url: url, type: mediaType == "image" ? .image : .video, duration: nil)
+            storyType = mediaType == "image" ? .photo : .video
+        }
+    }
+
+    func clearDraft() {
+        #if canImport(FirebaseAuth)
+        guard let creatorId = Auth.auth().currentUser?.uid ?? AuthenticationManager.shared.currentUser?.id else { return }
+        #else
+        guard let creatorId = AuthenticationManager.shared.currentUser?.id else { return }
+        #endif
+        StoryDraftService.shared.clearDraft(creatorId: creatorId)
     }
     
     func addTextOverlay(_ textStyle: TextOverlay) {
@@ -365,6 +542,8 @@ class CreateStoryViewModel: ObservableObject {
         let storyContent = createStoryContent()
         let storyStickers = createStoryStickers()
         let storyMusic = createStoryMusic()
+        let storyPolls = createStoryPolls()
+        let storyLinks = createStoryLinks()
         // Use Firebase Auth UID directly to match Firestore security rules
         #if canImport(FirebaseAuth)
         let creatorId = Auth.auth().currentUser?.uid ?? AuthenticationManager.shared.currentUser?.id ?? "user1"
@@ -395,6 +574,8 @@ class CreateStoryViewModel: ObservableObject {
                     textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
                     music: storyMusic,
                     stickers: storyStickers,
+                    polls: storyPolls,
+                    links: storyLinks,
                     audience: audience.rawValue
                 )
                 print("📸 [Story Upload] Saving story to Firestore...")
@@ -417,6 +598,8 @@ class CreateStoryViewModel: ObservableObject {
                     textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
                     music: storyMusic,
                     stickers: storyStickers,
+                    polls: storyPolls,
+                    links: storyLinks,
                     audience: audience.rawValue
                 )
                 return failedStory
@@ -435,6 +618,8 @@ class CreateStoryViewModel: ObservableObject {
                 textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
                 music: storyMusic,
                 stickers: storyStickers,
+                polls: storyPolls,
+                links: storyLinks,
                 audience: audience.rawValue
             )
             if let c = created {
@@ -461,6 +646,8 @@ class CreateStoryViewModel: ObservableObject {
             textColor: textOverlay != nil ? colorToHex(textOverlay!.color) : nil,
             music: storyMusic,
             stickers: storyStickers,
+            polls: storyPolls,
+            links: storyLinks,
             audience: audience.rawValue
         )
         print("📸 [Story Upload] Returning story: \(finalStory.id)")

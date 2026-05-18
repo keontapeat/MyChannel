@@ -20,11 +20,12 @@ struct WatchHistoryItem: Identifiable, Codable, Hashable {
     var watchProgress: Double
     var lastPosition: TimeInterval
     
-    enum ContentType: String, Codable {
+    enum ContentType: String, Codable, CaseIterable {
         case video
         case flick
         case story
         case liveTV
+        case post
         
         var displayName: String {
             switch self {
@@ -32,6 +33,7 @@ struct WatchHistoryItem: Identifiable, Codable, Hashable {
             case .flick: return "Short"
             case .story: return "Story"
             case .liveTV: return "Live TV"
+            case .post: return "Post"
             }
         }
         
@@ -41,6 +43,7 @@ struct WatchHistoryItem: Identifiable, Codable, Hashable {
             case .flick: return "rectangle.portrait.fill"
             case .story: return "circle.fill"
             case .liveTV: return "dot.radiowaves.left.and.right"
+            case .post: return "text.bubble.fill"
             }
         }
     }
@@ -90,6 +93,10 @@ struct WatchHistoryItem: Identifiable, Codable, Hashable {
     
     var isCompleted: Bool {
         watchProgress >= 0.9
+    }
+    
+    var canResume: Bool {
+        (contentType == .video || contentType == .flick) && watchProgress > 0.05 && watchProgress < 0.9
     }
     
     func hash(into hasher: inout Hasher) {
@@ -176,6 +183,22 @@ struct WatchHistoryItem: Identifiable, Codable, Hashable {
             duration: duration,
             watchedAt: watchedAt,
             watchProgress: 0.0,
+            lastPosition: 0.0
+        )
+    }
+    
+    static func fromCommunityPost(_ post: CommunityPost, creator: User, watchedAt: Date = Date()) -> WatchHistoryItem {
+        let title = post.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return WatchHistoryItem(
+            contentType: .post,
+            contentId: post.id,
+            title: title.isEmpty ? "\(creator.displayName)'s Post" : String(title.prefix(120)),
+            thumbnailURL: post.imageURLs.first ?? creator.profileImageURL ?? "",
+            creatorName: creator.displayName,
+            creatorId: creator.id,
+            duration: 0,
+            watchedAt: watchedAt,
+            watchProgress: 1.0,
             lastPosition: 0.0
         )
     }

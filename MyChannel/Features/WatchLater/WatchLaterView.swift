@@ -146,9 +146,8 @@ struct WatchLaterView: View {
             // Search Bar
             HStack {
                 UIKitSearchBar(
-                    placeholder: "Search watch later...",
                     text: $searchText,
-                    onSearch: { /* Search is already debounced via onChange */ }
+                    placeholder: "Search watch later..."
                 )
                 .frame(height: 36)
                 

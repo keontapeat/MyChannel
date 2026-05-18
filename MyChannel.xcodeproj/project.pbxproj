@@ -20,8 +20,74 @@
 		0541DE762E470D3F001B3F9E /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 0541DE752E470D3F001B3F9E /* FirebaseStorage */; };
 		054581AC2E59637D00F067AA /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 054581AB2E59637D00F067AA /* GoogleSignIn */; };
 		054581AE2E59637D00F067AA /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 054581AD2E59637D00F067AA /* GoogleSignInSwift */; };
+		05AF7A652FB978A9006D2031 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		05AF7A682FB97907006D2031 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A672FB97907006D2031 /* Nuke */; };
+		05AF7A6A2FB97907006D2031 /* NukeExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A692FB97907006D2031 /* NukeExtensions */; };
+		05AF7A6C2FB97907006D2031 /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A6B2FB97907006D2031 /* NukeUI */; };
+		05AF7A6E2FB97908006D2031 /* NukeVideo in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A6D2FB97907006D2031 /* NukeVideo */; };
+		05AF7A712FB97A43006D2031 /* Hero in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A702FB97A43006D2031 /* Hero */; };
+		05AF7A742FB97BD6006D2031 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A732FB97BD6006D2031 /* Lottie */; };
+		05AF7A762FB97BD6006D2031 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		05AF7A792FB97BF9006D2031 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		05AF7A7C2FB97C2C006D2031 /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A7B2FB97C2C006D2031 /* SocketIO */; };
+		05AF7A7F2FB986C4006D2031 /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A7E2FB986C4006D2031 /* Hub */; };
+		05AF7A812FB986C4006D2031 /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A802FB986C4006D2031 /* Tokenizers */; };
+		05AF7A832FB986C4006D2031 /* Transformers in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A822FB986C4006D2031 /* Transformers */; };
+		05AF7A862FB98760006D2031 /* Cache in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A852FB98760006D2031 /* Cache */; };
+		05AF7A8F2FB98AEF006D2031 /* TUSKit in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A8E2FB98AEF006D2031 /* TUSKit */; };
+		05AF7A922FB98B1D006D2031 /* GSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A912FB98B1D006D2031 /* GSPlayer */; };
 		05E845A52F9B05AF007F7218 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 05E845A42F9B05AF007F7218 /* FirebaseAppCheck */; };
+		15D4FA1AB8525BEDC303178A /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 1D45B6F95725FBCFB630D724 /* Algorithms */; };
+		1C5B861EC89248BA8D7470FF /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = E5BE666A0BCB4CA5E87B7666 /* Alamofire */; };
+		210AD8E695E2F0E42D8E505A /* IOSSecuritySuite in Frameworks */ = {isa = PBXBuildFile; productRef = D5D0CD39996115F7A7D8A495 /* IOSSecuritySuite */; };
+		240CC39B5093C105C838E855 /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 12F17EB4FE2DED84D709CC50 /* RealmSwift */; };
+		2623A70D6C5B39B2AF566F04 /* ConfettiSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 4169AB0A9E33890E9F1EA9C1 /* ConfettiSwiftUI */; };
+		27D59FC7967572BDEA331230 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = 71106B566EA016B89EBD8451 /* PostHog */; };
+		315408449D135998753DFFB3 /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = 59B5E8E1147CE8F04511254C /* Down */; };
+		381AD48C7DB612878DB75796 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		3ED26F604DBFD1521C7D13B8 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		41D9841A2023BB03468C46E9 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		436EC755C120E8B4D8DCEF94 /* CryptoSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D8FB5314192BCA2E52B0E6C6 /* CryptoSwift */; };
+		4739903F9E5D3A2A57787480 /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = 12A19D87E0D30B2AE9E90563 /* Starscream */; };
+		47C882EFC55557E288C902B4 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = A0973FB3C8970C4F7BF41205 /* Logging */; };
+		47DA6C0B3BEA64A0931ED835 /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 44A4FEFAC64BEF05E4C1933F /* Collections */; };
+		54E00F785B50768172BEC403 /* SwiftyBeaver in Frameworks */ = {isa = PBXBuildFile; productRef = 82492D397A4B956084C607B2 /* SwiftyBeaver */; };
+		57A42010762A0C6F8AA1E01F /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = C815E7446626DA03227418C7 /* Sentry */; };
+		646F4E50EEF16144907C3664 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = DC51A64C0631455E28CFAB74 /* ZIPFoundation */; };
+		6ACF824EF11DFADF7FAE32AB /* StripeApplePay in Frameworks */ = {isa = PBXBuildFile; productRef = 1A04FE423CF6BBB0D44BA465 /* StripeApplePay */; };
+		79E1DD85508BF0EAA7D716F5 /* SkeletonView in Frameworks */ = {isa = PBXBuildFile; productRef = B7908F18FF9533C2D9F13DD5 /* SkeletonView */; };
+		8643958663CD09CF3F0384CC /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = 46B28C45B6BC58FBAD5B4C67 /* SwiftProtobuf */; };
+		9377F6DCD9BE671CDB23BE06 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		95CD0A7EB52B6C8098E371B5 /* OpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 742D41F31D900887EBA83C85 /* OpenAI */; };
+		9B07CB02BA2E614327873FC6 /* SwiftUIIntrospect in Frameworks */ = {isa = PBXBuildFile; productRef = 1138BD2B9AE8417CB089490B /* SwiftUIIntrospect */; };
+		9B0B7A87B9C269DEF94ADAAE /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = D203EE5EDD7DB9A07F96D3B2 /* RevenueCat */; };
+		9C9024285D28CFCCC71EF01D /* DGCharts in Frameworks */ = {isa = PBXBuildFile; productRef = 04C142D5A727AF1BD0852309 /* DGCharts */; };
+		AF9CD66B8313001B528C44C5 /* HaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = 15CF5B74EE600C3258BA3517 /* HaishinKit */; };
+		B26334F888019C70F5039C78 /* AsyncAlgorithms in Frameworks */ = {isa = PBXBuildFile; productRef = AFD72B644DA6FF9DDB6EB5FB /* AsyncAlgorithms */; };
+		B7C52A4B567934ABA7894DA9 /* RealmSwift in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 12F17EB4FE2DED84D709CC50 /* RealmSwift */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C3D382E35A237C913E0A310F /* AlertToast in Frameworks */ = {isa = PBXBuildFile; productRef = B6150DDE322042B1D9B84306 /* AlertToast */; };
+		C9CB1950967DA9379BFED236 /* MessageKit in Frameworks */ = {isa = PBXBuildFile; productRef = 481A251AE841C4A937BC879D /* MessageKit */; };
+		D051D9AB9705EADB133DB6E3 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = A0F8FB98ACEF99B34F55C7A3 /* SwiftSoup */; };
+		E64B595CC85E845F9108F677 /* StripePayments in Frameworks */ = {isa = PBXBuildFile; productRef = 26335CC42FFBE77B65A8B8A0 /* StripePayments */; };
+		F835C05BC455334578E5B742 /* GoogleInteractiveMediaAds in Frameworks */ = {isa = PBXBuildFile; productRef = 74BD607AFEDF03E98FD09927 /* GoogleInteractiveMediaAds */; };
+		FA672CD3A8124FDF35725C70 /* TrustKit in Frameworks */ = {isa = PBXBuildFile; productRef = 50D4A5CC9C57C7663B41670B /* TrustKit */; };
+		FADE48C84CD671EEEFB09A98 /* KeychainSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 9FDE08448B66311716EC91A3 /* KeychainSwift */; };
+		FFB828D61434955446953656 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		082C3990DF0A24659F2A727B /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				B7C52A4B567934ABA7894DA9 /* RealmSwift in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		055B9AC42E1F0BB6004E6282 /* MyChannel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyChannel.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -58,19 +124,70 @@
 			buildActionMask = 2147483647;
 			files = (
 				0541DE722E470D3F001B3F9E /* FirebaseMessaging in Frameworks */,
+				05AF7A922FB98B1D006D2031 /* GSPlayer in Frameworks */,
+				05AF7A862FB98760006D2031 /* Cache in Frameworks */,
+				05AF7A652FB978A9006D2031 /* (null) in Frameworks */,
 				0541DE642E470D3F001B3F9E /* FirebaseAnalytics in Frameworks */,
 				0541DE742E470D3F001B3F9E /* FirebasePerformance in Frameworks */,
 				0541DE6A2E470D3F001B3F9E /* FirebaseCore in Frameworks */,
 				05E845A52F9B05AF007F7218 /* FirebaseAppCheck in Frameworks */,
 				0541DE662E470D3F001B3F9E /* FirebaseAnalyticsCore in Frameworks */,
+				05AF7A682FB97907006D2031 /* Nuke in Frameworks */,
+				05AF7A742FB97BD6006D2031 /* Lottie in Frameworks */,
+				05AF7A6E2FB97908006D2031 /* NukeVideo in Frameworks */,
+				05AF7A8F2FB98AEF006D2031 /* TUSKit in Frameworks */,
+				05AF7A6A2FB97907006D2031 /* NukeExtensions in Frameworks */,
 				054581AE2E59637D00F067AA /* GoogleSignInSwift in Frameworks */,
+				05AF7A792FB97BF9006D2031 /* (null) in Frameworks */,
 				054581AC2E59637D00F067AA /* GoogleSignIn in Frameworks */,
 				0541DE6C2E470D3F001B3F9E /* FirebaseCrashlytics in Frameworks */,
 				0541DE622E470D3F001B3F9E /* FirebaseAI in Frameworks */,
+				05AF7A812FB986C4006D2031 /* Tokenizers in Frameworks */,
+				05AF7A7F2FB986C4006D2031 /* Hub in Frameworks */,
 				0541DE702E470D3F001B3F9E /* FirebaseFirestore in Frameworks */,
+				05AF7A7C2FB97C2C006D2031 /* SocketIO in Frameworks */,
 				0541DE762E470D3F001B3F9E /* FirebaseStorage in Frameworks */,
+				05AF7A762FB97BD6006D2031 /* (null) in Frameworks */,
+				05AF7A6C2FB97907006D2031 /* NukeUI in Frameworks */,
 				0541DE6E2E470D3F001B3F9E /* FirebaseDatabase in Frameworks */,
+				05AF7A832FB986C4006D2031 /* Transformers in Frameworks */,
+				05AF7A712FB97A43006D2031 /* Hero in Frameworks */,
 				0541DE682E470D3F001B3F9E /* FirebaseAuth in Frameworks */,
+				C9CB1950967DA9379BFED236 /* MessageKit in Frameworks */,
+				F835C05BC455334578E5B742 /* GoogleInteractiveMediaAds in Frameworks */,
+				79E1DD85508BF0EAA7D716F5 /* SkeletonView in Frameworks */,
+				9377F6DCD9BE671CDB23BE06 /* (null) in Frameworks */,
+				240CC39B5093C105C838E855 /* RealmSwift in Frameworks */,
+				27D59FC7967572BDEA331230 /* PostHog in Frameworks */,
+				2623A70D6C5B39B2AF566F04 /* ConfettiSwiftUI in Frameworks */,
+				57A42010762A0C6F8AA1E01F /* Sentry in Frameworks */,
+				AF9CD66B8313001B528C44C5 /* HaishinKit in Frameworks */,
+				9B0B7A87B9C269DEF94ADAAE /* RevenueCat in Frameworks */,
+				E64B595CC85E845F9108F677 /* StripePayments in Frameworks */,
+				6ACF824EF11DFADF7FAE32AB /* StripeApplePay in Frameworks */,
+				15D4FA1AB8525BEDC303178A /* Algorithms in Frameworks */,
+				47DA6C0B3BEA64A0931ED835 /* Collections in Frameworks */,
+				B26334F888019C70F5039C78 /* AsyncAlgorithms in Frameworks */,
+				FFB828D61434955446953656 /* (null) in Frameworks */,
+				C3D382E35A237C913E0A310F /* AlertToast in Frameworks */,
+				381AD48C7DB612878DB75796 /* (null) in Frameworks */,
+				3ED26F604DBFD1521C7D13B8 /* (null) in Frameworks */,
+				41D9841A2023BB03468C46E9 /* (null) in Frameworks */,
+				9B07CB02BA2E614327873FC6 /* SwiftUIIntrospect in Frameworks */,
+				FADE48C84CD671EEEFB09A98 /* KeychainSwift in Frameworks */,
+				9C9024285D28CFCCC71EF01D /* DGCharts in Frameworks */,
+				8643958663CD09CF3F0384CC /* SwiftProtobuf in Frameworks */,
+				646F4E50EEF16144907C3664 /* ZIPFoundation in Frameworks */,
+				D051D9AB9705EADB133DB6E3 /* SwiftSoup in Frameworks */,
+				315408449D135998753DFFB3 /* Down in Frameworks */,
+				436EC755C120E8B4D8DCEF94 /* CryptoSwift in Frameworks */,
+				4739903F9E5D3A2A57787480 /* Starscream in Frameworks */,
+				210AD8E695E2F0E42D8E505A /* IOSSecuritySuite in Frameworks */,
+				FA672CD3A8124FDF35725C70 /* TrustKit in Frameworks */,
+				95CD0A7EB52B6C8098E371B5 /* OpenAI in Frameworks */,
+				1C5B861EC89248BA8D7470FF /* Alamofire in Frameworks */,
+				47C882EFC55557E288C902B4 /* Logging in Frameworks */,
+				54E00F785B50768172BEC403 /* SwiftyBeaver in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +229,7 @@
 				055B9AC12E1F0BB6004E6282 /* Frameworks */,
 				055B9AC22E1F0BB6004E6282 /* Resources */,
 				05C0FFEE2E700000000000 /* [Firebase] Crashlytics */,
+				082C3990DF0A24659F2A727B /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -136,6 +254,49 @@
 				054581AB2E59637D00F067AA /* GoogleSignIn */,
 				054581AD2E59637D00F067AA /* GoogleSignInSwift */,
 				05E845A42F9B05AF007F7218 /* FirebaseAppCheck */,
+				05AF7A672FB97907006D2031 /* Nuke */,
+				05AF7A692FB97907006D2031 /* NukeExtensions */,
+				05AF7A6B2FB97907006D2031 /* NukeUI */,
+				05AF7A6D2FB97907006D2031 /* NukeVideo */,
+				05AF7A702FB97A43006D2031 /* Hero */,
+				05AF7A732FB97BD6006D2031 /* Lottie */,
+				05AF7A7B2FB97C2C006D2031 /* SocketIO */,
+				05AF7A7E2FB986C4006D2031 /* Hub */,
+				05AF7A802FB986C4006D2031 /* Tokenizers */,
+				05AF7A822FB986C4006D2031 /* Transformers */,
+				05AF7A852FB98760006D2031 /* Cache */,
+				05AF7A8E2FB98AEF006D2031 /* TUSKit */,
+				05AF7A912FB98B1D006D2031 /* GSPlayer */,
+				481A251AE841C4A937BC879D /* MessageKit */,
+				74BD607AFEDF03E98FD09927 /* GoogleInteractiveMediaAds */,
+				B7908F18FF9533C2D9F13DD5 /* SkeletonView */,
+				12F17EB4FE2DED84D709CC50 /* RealmSwift */,
+				71106B566EA016B89EBD8451 /* PostHog */,
+				4169AB0A9E33890E9F1EA9C1 /* ConfettiSwiftUI */,
+				C815E7446626DA03227418C7 /* Sentry */,
+				15CF5B74EE600C3258BA3517 /* HaishinKit */,
+				D203EE5EDD7DB9A07F96D3B2 /* RevenueCat */,
+				26335CC42FFBE77B65A8B8A0 /* StripePayments */,
+				1A04FE423CF6BBB0D44BA465 /* StripeApplePay */,
+				1D45B6F95725FBCFB630D724 /* Algorithms */,
+				44A4FEFAC64BEF05E4C1933F /* Collections */,
+				AFD72B644DA6FF9DDB6EB5FB /* AsyncAlgorithms */,
+				B6150DDE322042B1D9B84306 /* AlertToast */,
+				1138BD2B9AE8417CB089490B /* SwiftUIIntrospect */,
+				9FDE08448B66311716EC91A3 /* KeychainSwift */,
+				04C142D5A727AF1BD0852309 /* DGCharts */,
+				46B28C45B6BC58FBAD5B4C67 /* SwiftProtobuf */,
+				DC51A64C0631455E28CFAB74 /* ZIPFoundation */,
+				A0F8FB98ACEF99B34F55C7A3 /* SwiftSoup */,
+				59B5E8E1147CE8F04511254C /* Down */,
+				D8FB5314192BCA2E52B0E6C6 /* CryptoSwift */,
+				12A19D87E0D30B2AE9E90563 /* Starscream */,
+				D5D0CD39996115F7A7D8A495 /* IOSSecuritySuite */,
+				50D4A5CC9C57C7663B41670B /* TrustKit */,
+				742D41F31D900887EBA83C85 /* OpenAI */,
+				E5BE666A0BCB4CA5E87B7666 /* Alamofire */,
+				A0973FB3C8970C4F7BF41205 /* Logging */,
+				82492D397A4B956084C607B2 /* SwiftyBeaver */,
 			);
 			productName = MyChannel;
 			productReference = 055B9AC42E1F0BB6004E6282 /* MyChannel.app */;
@@ -168,6 +329,45 @@
 			packageReferences = (
 				0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				054581AA2E59637D00F067AA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				05AF7A662FB97907006D2031 /* XCRemoteSwiftPackageReference "Nuke" */,
+				05AF7A6F2FB97A43006D2031 /* XCRemoteSwiftPackageReference "Hero" */,
+				05AF7A722FB97BD6006D2031 /* XCRemoteSwiftPackageReference "lottie-ios" */,
+				05AF7A7A2FB97C2C006D2031 /* XCRemoteSwiftPackageReference "socket" */,
+				05AF7A7D2FB986C4006D2031 /* XCRemoteSwiftPackageReference "swift-transformers" */,
+				05AF7A842FB98760006D2031 /* XCRemoteSwiftPackageReference "Cache" */,
+				05AF7A8D2FB98AEF006D2031 /* XCRemoteSwiftPackageReference "TUSKit" */,
+				05AF7A902FB98B1D006D2031 /* XCRemoteSwiftPackageReference "GSPlayer" */,
+				05AF7A962FB98D8D006D2031 /* XCRemoteSwiftPackageReference "MessageKit" */,
+				05AF7A982FB98EDD006D2031 /* XCRemoteSwiftPackageReference "swift-package-manager-google-interactive-media-ads-ios" */,
+				05AF7A992FB98F1E006D2031 /* XCRemoteSwiftPackageReference "SkeletonView" */,
+				05AF7A9A2FB98F57006D2031 /* XCRemoteSwiftPackageReference "realm-swift" */,
+				05AF7A9B2FB98F85006D2031 /* XCRemoteSwiftPackageReference "posthog-ios" */,
+				05AF7A9C2FB98FEB006D2031 /* XCRemoteSwiftPackageReference "ConfettiSwiftUI" */,
+				05AF7A9E2FB992D7006D2031 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+				9BB9E9D4FE6942104A84470A /* XCRemoteSwiftPackageReference "HaishinKit" */,
+				76E7C8F74E61AFA70AE80D72 /* XCRemoteSwiftPackageReference "purchases-ios" */,
+				23A6E9F54EF0496A218CF886 /* XCRemoteSwiftPackageReference "stripe-ios" */,
+				936076757C5737B2FD07F036 /* XCRemoteSwiftPackageReference "swift-algorithms" */,
+				C98AFE52A32A2C2A32FACA5C /* XCRemoteSwiftPackageReference "swift-collections" */,
+				550C5AD993F74AA6DB658097 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */,
+				CFD265A4413FBF650CE05B9B /* XCRemoteSwiftPackageReference "AlertToast" */,
+				9785A4BD3472252DC8D83D2C /* XCRemoteSwiftPackageReference "PermissionsKit" */,
+				6D31D76BBE4C1A56A1287E86 /* XCRemoteSwiftPackageReference "ios-branch-sdk-spm" */,
+				31E175B75F0CFBFD95A1A387 /* XCRemoteSwiftPackageReference "SwiftUI-Introspect" */,
+				C3C0711B5BB388141DBA2BF3 /* XCRemoteSwiftPackageReference "keychain-swift" */,
+				F47BFE8BE8E0D9DFABB73483 /* XCRemoteSwiftPackageReference "Charts" */,
+				F18CDC0825E51E479D713ECC /* XCRemoteSwiftPackageReference "swift-protobuf" */,
+				D41E26332301BDE9CE542318 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+				71905FEADF61753A2F16F15D /* XCRemoteSwiftPackageReference "SwiftSoup" */,
+				14792F9B7B5A87DF5BA2F4AC /* XCRemoteSwiftPackageReference "Down" */,
+				CBBA4D38753EBA43B3D30959 /* XCRemoteSwiftPackageReference "CryptoSwift" */,
+				71FE87773B4C5594B8A2D043 /* XCRemoteSwiftPackageReference "Starscream" */,
+				41529460C1935ED841BEDBD5 /* XCRemoteSwiftPackageReference "IOSSecuritySuite" */,
+				5AADD5855EFB96312620905B /* XCRemoteSwiftPackageReference "TrustKit" */,
+				C445688FB2941338F281AB67 /* XCRemoteSwiftPackageReference "OpenAI" */,
+				354C3298FA84E35E5FD63E17 /* XCRemoteSwiftPackageReference "Alamofire" */,
+				4DC17C440744AC683108DB4D /* XCRemoteSwiftPackageReference "swift-log" */,
+				C749A76E2BFAE8C97B104AC7 /* XCRemoteSwiftPackageReference "SwiftyBeaver" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 055B9AC52E1F0BB6004E6282 /* Products */;
@@ -371,6 +571,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = MyChannel;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSCameraUsageDescription = "MyChannel needs camera access to record videos for your channel and create amazing content";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "MyChannel uses Face ID to securely access your account";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "MyChannel uses your location to suggest nearby events and content (optional)";
@@ -416,6 +617,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = MyChannel;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSCameraUsageDescription = "MyChannel needs camera access to record videos for your channel and create amazing content";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "MyChannel uses Face ID to securely access your account";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "MyChannel uses your location to suggest nearby events and content (optional)";
@@ -483,9 +685,326 @@
 				minimumVersion = 9.0.0;
 			};
 		};
+		05AF7A662FB97907006D2031 /* XCRemoteSwiftPackageReference "Nuke" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kean/Nuke";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 13.0.6;
+			};
+		};
+		05AF7A6F2FB97A43006D2031 /* XCRemoteSwiftPackageReference "Hero" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/HeroTransitions/Hero";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.6.4;
+			};
+		};
+		05AF7A722FB97BD6006D2031 /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.6.0;
+			};
+		};
+		05AF7A7A2FB97C2C006D2031 /* XCRemoteSwiftPackageReference "socket" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/socketio/socket.io-client-swift";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
+		05AF7A7D2FB986C4006D2031 /* XCRemoteSwiftPackageReference "swift-transformers" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-transformers";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.3.3;
+			};
+		};
+		05AF7A842FB98760006D2031 /* XCRemoteSwiftPackageReference "Cache" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/hyperoslo/Cache";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.4.0;
+			};
+		};
+		05AF7A8D2FB98AEF006D2031 /* XCRemoteSwiftPackageReference "TUSKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tus/TUSKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.7.1;
+			};
+		};
+		05AF7A902FB98B1D006D2031 /* XCRemoteSwiftPackageReference "GSPlayer" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/wxxsw/GSPlayer";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.2.30;
+			};
+		};
+		05AF7A962FB98D8D006D2031 /* XCRemoteSwiftPackageReference "MessageKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/MessageKit/MessageKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.0;
+			};
+		};
+		05AF7A982FB98EDD006D2031 /* XCRemoteSwiftPackageReference "swift-package-manager-google-interactive-media-ads-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-interactive-media-ads-ios";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		05AF7A992FB98F1E006D2031 /* XCRemoteSwiftPackageReference "SkeletonView" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Juanpe/SkeletonView";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.31.0;
+			};
+		};
+		05AF7A9A2FB98F57006D2031 /* XCRemoteSwiftPackageReference "realm-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/realm/realm-swift";
+			requirement = {
+				branch = community;
+				kind = branch;
+			};
+		};
+		05AF7A9B2FB98F85006D2031 /* XCRemoteSwiftPackageReference "posthog-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/PostHog/posthog-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.58.3;
+			};
+		};
+		05AF7A9C2FB98FEB006D2031 /* XCRemoteSwiftPackageReference "ConfettiSwiftUI" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/simibac/ConfettiSwiftUI";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.0.0;
+			};
+		};
+		05AF7A9E2FB992D7006D2031 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.13.0;
+			};
+		};
+		14792F9B7B5A87DF5BA2F4AC /* XCRemoteSwiftPackageReference "Down" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/johnxnguyen/Down";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.11.0;
+			};
+		};
+		23A6E9F54EF0496A218CF886 /* XCRemoteSwiftPackageReference "stripe-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stripe/stripe-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 23.0.0;
+			};
+		};
+		31E175B75F0CFBFD95A1A387 /* XCRemoteSwiftPackageReference "SwiftUI-Introspect" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/siteline/SwiftUI-Introspect";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.3.0;
+			};
+		};
+		354C3298FA84E35E5FD63E17 /* XCRemoteSwiftPackageReference "Alamofire" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Alamofire/Alamofire";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.9.1;
+			};
+		};
+		41529460C1935ED841BEDBD5 /* XCRemoteSwiftPackageReference "IOSSecuritySuite" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/securing/IOSSecuritySuite";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.9.0;
+			};
+		};
+		4DC17C440744AC683108DB4D /* XCRemoteSwiftPackageReference "swift-log" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-log";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.5.4;
+			};
+		};
+		550C5AD993F74AA6DB658097 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-async-algorithms";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+		5AADD5855EFB96312620905B /* XCRemoteSwiftPackageReference "TrustKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/datatheorem/TrustKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.0.0;
+			};
+		};
+		6D31D76BBE4C1A56A1287E86 /* XCRemoteSwiftPackageReference "ios-branch-sdk-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/BranchMetrics/ios-branch-sdk-spm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.0.0;
+			};
+		};
+		71905FEADF61753A2F16F15D /* XCRemoteSwiftPackageReference "SwiftSoup" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/scinfu/SwiftSoup";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
+		71FE87773B4C5594B8A2D043 /* XCRemoteSwiftPackageReference "Starscream" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/daltoniam/Starscream";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.0.4;
+			};
+		};
+		76E7C8F74E61AFA70AE80D72 /* XCRemoteSwiftPackageReference "purchases-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.0;
+			};
+		};
+		936076757C5737B2FD07F036 /* XCRemoteSwiftPackageReference "swift-algorithms" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-algorithms";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.0;
+			};
+		};
+		9785A4BD3472252DC8D83D2C /* XCRemoteSwiftPackageReference "PermissionsKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparrowcode/PermissionsKit";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		9BB9E9D4FE6942104A84470A /* XCRemoteSwiftPackageReference "HaishinKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/shogo4405/HaishinKit.swift";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 1.9.0;
+			};
+		};
+		C3C0711B5BB388141DBA2BF3 /* XCRemoteSwiftPackageReference "keychain-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/evgenyneu/keychain-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 20.0.0;
+			};
+		};
+		C445688FB2941338F281AB67 /* XCRemoteSwiftPackageReference "OpenAI" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/MacPaw/OpenAI";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.2.9;
+			};
+		};
+		C749A76E2BFAE8C97B104AC7 /* XCRemoteSwiftPackageReference "SwiftyBeaver" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SwiftyBeaver/SwiftyBeaver";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.1.1;
+			};
+		};
+		C98AFE52A32A2C2A32FACA5C /* XCRemoteSwiftPackageReference "swift-collections" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-collections";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.1.4;
+			};
+		};
+		CBBA4D38753EBA43B3D30959 /* XCRemoteSwiftPackageReference "CryptoSwift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/krzyzanowskim/CryptoSwift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.8.0;
+			};
+		};
+		CFD265A4413FBF650CE05B9B /* XCRemoteSwiftPackageReference "AlertToast" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/elai950/AlertToast";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.3.9;
+			};
+		};
+		D41E26332301BDE9CE542318 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.19;
+			};
+		};
+		F18CDC0825E51E479D713ECC /* XCRemoteSwiftPackageReference "swift-protobuf" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-protobuf";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.25.0;
+			};
+		};
+		F47BFE8BE8E0D9DFABB73483 /* XCRemoteSwiftPackageReference "Charts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/danielgindi/Charts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		04C142D5A727AF1BD0852309 /* DGCharts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F47BFE8BE8E0D9DFABB73483 /* XCRemoteSwiftPackageReference "Charts" */;
+			productName = DGCharts;
+		};
 		0541DE612E470D3F001B3F9E /* FirebaseAI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
@@ -551,10 +1070,220 @@
 			package = 054581AA2E59637D00F067AA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
 			productName = GoogleSignInSwift;
 		};
+		05AF7A672FB97907006D2031 /* Nuke */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A662FB97907006D2031 /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = Nuke;
+		};
+		05AF7A692FB97907006D2031 /* NukeExtensions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A662FB97907006D2031 /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = NukeExtensions;
+		};
+		05AF7A6B2FB97907006D2031 /* NukeUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A662FB97907006D2031 /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = NukeUI;
+		};
+		05AF7A6D2FB97907006D2031 /* NukeVideo */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A662FB97907006D2031 /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = NukeVideo;
+		};
+		05AF7A702FB97A43006D2031 /* Hero */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A6F2FB97A43006D2031 /* XCRemoteSwiftPackageReference "Hero" */;
+			productName = Hero;
+		};
+		05AF7A732FB97BD6006D2031 /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A722FB97BD6006D2031 /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
+		};
+		05AF7A7B2FB97C2C006D2031 /* SocketIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A7A2FB97C2C006D2031 /* XCRemoteSwiftPackageReference "socket" */;
+			productName = SocketIO;
+		};
+		05AF7A7E2FB986C4006D2031 /* Hub */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A7D2FB986C4006D2031 /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Hub;
+		};
+		05AF7A802FB986C4006D2031 /* Tokenizers */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A7D2FB986C4006D2031 /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Tokenizers;
+		};
+		05AF7A822FB986C4006D2031 /* Transformers */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A7D2FB986C4006D2031 /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Transformers;
+		};
+		05AF7A852FB98760006D2031 /* Cache */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A842FB98760006D2031 /* XCRemoteSwiftPackageReference "Cache" */;
+			productName = Cache;
+		};
+		05AF7A8E2FB98AEF006D2031 /* TUSKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A8D2FB98AEF006D2031 /* XCRemoteSwiftPackageReference "TUSKit" */;
+			productName = TUSKit;
+		};
+		05AF7A912FB98B1D006D2031 /* GSPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A902FB98B1D006D2031 /* XCRemoteSwiftPackageReference "GSPlayer" */;
+			productName = GSPlayer;
+		};
 		05E845A42F9B05AF007F7218 /* FirebaseAppCheck */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAppCheck;
+		};
+		1138BD2B9AE8417CB089490B /* SwiftUIIntrospect */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 31E175B75F0CFBFD95A1A387 /* XCRemoteSwiftPackageReference "SwiftUI-Introspect" */;
+			productName = SwiftUIIntrospect;
+		};
+		12A19D87E0D30B2AE9E90563 /* Starscream */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 71FE87773B4C5594B8A2D043 /* XCRemoteSwiftPackageReference "Starscream" */;
+			productName = Starscream;
+		};
+		12F17EB4FE2DED84D709CC50 /* RealmSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A9A2FB98F57006D2031 /* XCRemoteSwiftPackageReference "realm-swift" */;
+			productName = RealmSwift;
+		};
+		15CF5B74EE600C3258BA3517 /* HaishinKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9BB9E9D4FE6942104A84470A /* XCRemoteSwiftPackageReference "HaishinKit" */;
+			productName = HaishinKit;
+		};
+		1A04FE423CF6BBB0D44BA465 /* StripeApplePay */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 23A6E9F54EF0496A218CF886 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = StripeApplePay;
+		};
+		1D45B6F95725FBCFB630D724 /* Algorithms */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 936076757C5737B2FD07F036 /* XCRemoteSwiftPackageReference "swift-algorithms" */;
+			productName = Algorithms;
+		};
+		26335CC42FFBE77B65A8B8A0 /* StripePayments */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 23A6E9F54EF0496A218CF886 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = StripePayments;
+		};
+		4169AB0A9E33890E9F1EA9C1 /* ConfettiSwiftUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A9C2FB98FEB006D2031 /* XCRemoteSwiftPackageReference "ConfettiSwiftUI" */;
+			productName = ConfettiSwiftUI;
+		};
+		44A4FEFAC64BEF05E4C1933F /* Collections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C98AFE52A32A2C2A32FACA5C /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = Collections;
+		};
+		46B28C45B6BC58FBAD5B4C67 /* SwiftProtobuf */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F18CDC0825E51E479D713ECC /* XCRemoteSwiftPackageReference "swift-protobuf" */;
+			productName = SwiftProtobuf;
+		};
+		481A251AE841C4A937BC879D /* MessageKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A962FB98D8D006D2031 /* XCRemoteSwiftPackageReference "MessageKit" */;
+			productName = MessageKit;
+		};
+		50D4A5CC9C57C7663B41670B /* TrustKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5AADD5855EFB96312620905B /* XCRemoteSwiftPackageReference "TrustKit" */;
+			productName = TrustKit;
+		};
+		59B5E8E1147CE8F04511254C /* Down */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 14792F9B7B5A87DF5BA2F4AC /* XCRemoteSwiftPackageReference "Down" */;
+			productName = Down;
+		};
+		71106B566EA016B89EBD8451 /* PostHog */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A9B2FB98F85006D2031 /* XCRemoteSwiftPackageReference "posthog-ios" */;
+			productName = PostHog;
+		};
+		742D41F31D900887EBA83C85 /* OpenAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C445688FB2941338F281AB67 /* XCRemoteSwiftPackageReference "OpenAI" */;
+			productName = OpenAI;
+		};
+		74BD607AFEDF03E98FD09927 /* GoogleInteractiveMediaAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A982FB98EDD006D2031 /* XCRemoteSwiftPackageReference "swift-package-manager-google-interactive-media-ads-ios" */;
+			productName = GoogleInteractiveMediaAds;
+		};
+		82492D397A4B956084C607B2 /* SwiftyBeaver */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C749A76E2BFAE8C97B104AC7 /* XCRemoteSwiftPackageReference "SwiftyBeaver" */;
+			productName = SwiftyBeaver;
+		};
+		9FDE08448B66311716EC91A3 /* KeychainSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C3C0711B5BB388141DBA2BF3 /* XCRemoteSwiftPackageReference "keychain-swift" */;
+			productName = KeychainSwift;
+		};
+		A0973FB3C8970C4F7BF41205 /* Logging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4DC17C440744AC683108DB4D /* XCRemoteSwiftPackageReference "swift-log" */;
+			productName = Logging;
+		};
+		A0F8FB98ACEF99B34F55C7A3 /* SwiftSoup */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 71905FEADF61753A2F16F15D /* XCRemoteSwiftPackageReference "SwiftSoup" */;
+			productName = SwiftSoup;
+		};
+		AFD72B644DA6FF9DDB6EB5FB /* AsyncAlgorithms */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 550C5AD993F74AA6DB658097 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */;
+			productName = AsyncAlgorithms;
+		};
+		B6150DDE322042B1D9B84306 /* AlertToast */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CFD265A4413FBF650CE05B9B /* XCRemoteSwiftPackageReference "AlertToast" */;
+			productName = AlertToast;
+		};
+		B7908F18FF9533C2D9F13DD5 /* SkeletonView */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A992FB98F1E006D2031 /* XCRemoteSwiftPackageReference "SkeletonView" */;
+			productName = SkeletonView;
+		};
+		C815E7446626DA03227418C7 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 05AF7A9E2FB992D7006D2031 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
+		};
+		D203EE5EDD7DB9A07F96D3B2 /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 76E7C8F74E61AFA70AE80D72 /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = RevenueCat;
+		};
+		D5D0CD39996115F7A7D8A495 /* IOSSecuritySuite */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 41529460C1935ED841BEDBD5 /* XCRemoteSwiftPackageReference "IOSSecuritySuite" */;
+			productName = IOSSecuritySuite;
+		};
+		D8FB5314192BCA2E52B0E6C6 /* CryptoSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CBBA4D38753EBA43B3D30959 /* XCRemoteSwiftPackageReference "CryptoSwift" */;
+			productName = CryptoSwift;
+		};
+		DC51A64C0631455E28CFAB74 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D41E26332301BDE9CE542318 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+		E5BE666A0BCB4CA5E87B7666 /* Alamofire */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 354C3298FA84E35E5FD63E17 /* XCRemoteSwiftPackageReference "Alamofire" */;
+			productName = Alamofire;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

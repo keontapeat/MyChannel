@@ -181,6 +181,40 @@ struct AppSecrets {
         return (ProcessInfo.processInfo.environment["YOUTUBE_API_KEY"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
+    // MARK: - Observability & Monetization Keys
+
+    static var sentryDSN: String {
+        let env = ProcessInfo.processInfo.environment["SENTRY_DSN"] ?? ""
+        if !env.isEmpty { return env }
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "SENTRY_DSN") as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        return ""
+    }
+
+    static var postHogAPIKey: String {
+        let env = ProcessInfo.processInfo.environment["POSTHOG_API_KEY"] ?? ""
+        if !env.isEmpty { return env }
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "POSTHOG_API_KEY") as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        return ""
+    }
+
+    static var revenueCatAPIKey: String {
+        let env = ProcessInfo.processInfo.environment["REVENUECAT_API_KEY"] ?? ""
+        if !env.isEmpty { return env }
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "REVENUECAT_API_KEY") as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        return ""
+    }
+
+    static var openAIAPIKey: String {
+        let env = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
+        if !env.isEmpty { return env }
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "OPENAI_API_KEY") as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        return ""
+    }
+
     static var pineconeAPIKey: String? {
         let plist = (Bundle.main.object(forInfoDictionaryKey: "PINECONE_API_KEY") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)

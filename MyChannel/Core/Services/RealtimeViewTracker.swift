@@ -173,39 +173,6 @@ class RealtimeViewTracker: ObservableObject {
             // 🔥 FIX: Always track views, even for own videos
             // No filtering - all views count, including self-views
             
-            let videoRef = db.collection("videos").document(videoId)
-            
-            // 🔥 FIX: Check if document exists and ensure viewCount field exists
-            let videoDoc = try await videoRef.getDocument()
-            if !videoDoc.exists {
-                print("⚠️⚠️⚠️ [ViewTracker] Video document doesn't exist: \(videoId) - CREATING NOW")
-                // Create the document with initial viewCount
-                try await videoRef.setData([
-                    "viewCount": 1,
-                    "createdAt": FieldValue.serverTimestamp()
-                ], merge: true)
-                print("✅✅✅ [ViewTracker] Created video document with viewCount: 1")
-            } else {
-                // Document exists - check if viewCount field exists
-                let data = videoDoc.data()
-                if data?["viewCount"] == nil {
-                    print("⚠️⚠️⚠️ [ViewTracker] viewCount field missing, initializing to 1")
-                    // Field doesn't exist, set it to 1
-                    try await videoRef.setData([
-                        "viewCount": 1
-                    ], merge: true)
-                    print("✅✅✅ [ViewTracker] Initialized viewCount field to 1")
-                } else {
-                    // Field exists, use increment
-                    let currentCount = data?["viewCount"] as? Int ?? 0
-                    print("📊 [ViewTracker] Current count: \(currentCount), incrementing...")
-                    try await videoRef.updateData([
-                        "viewCount": FieldValue.increment(Int64(1))
-                    ])
-                    print("✅✅✅ [ViewTracker] Incremented viewCount from \(currentCount) to \(currentCount + 1)")
-                }
-            }
-            
             // Log view event with timestamp
             let viewRef = db.collection("video_analytics")
                 .document(videoId)
@@ -221,13 +188,14 @@ class RealtimeViewTracker: ObservableObject {
                 "timestamp": FieldValue.serverTimestamp(),
                 "deviceType": "iOS",
                 "sessionId": UUID().uuidString,
-                "isSelfView": isSelfView
+                "isSelfView": isSelfView,
+                "watchDuration": 0
             ])
             
             // 🔥 FIX: Fetch ACTUAL count from Firestore after incrementing (not just local cache)
             // This ensures we have the real persisted count
             print("📡 [ViewTracker] Fetching updated view count from Firestore...")
-            let updatedDoc = try await videoRef.getDocument()
+            let updatedDoc = try await db.collection("videos").document(videoId).getDocument()
             if let data = updatedDoc.data(),
                let actualCount = data["viewCount"] as? Int {
                 viewCountsByVideo[videoId] = actualCount
@@ -290,13 +258,18 @@ class RealtimeViewTracker: ObservableObject {
     private func updateWatchTime(videoId: String, duration: TimeInterval) async {
         #if canImport(FirebaseFirestore)
         do {
-            let videoRef = db.collection("videos").document(videoId)
-            
-            // Update total watch time and average watch time
-            try await videoRef.updateData([
-                "totalWatchTime": FieldValue.increment(Int64(duration)),
-                "lastWatched": FieldValue.serverTimestamp()
-            ])
+            try await db.collection("video_analytics")
+                .document(videoId)
+                .collection("views")
+                .document()
+                .setData([
+                    "userId": AuthenticationManager.shared.currentUser?.id ?? "anonymous",
+                    "timestamp": FieldValue.serverTimestamp(),
+                    "deviceType": "iOS",
+                    "sessionId": UUID().uuidString,
+                    "watchDuration": Int(duration),
+                    "eventType": "watch_time"
+                ])
             
             print("✅ [ViewTracker] Updated watch time: \(videoId) +\(String(format: "%.0f", duration))s")
             

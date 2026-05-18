@@ -2,12 +2,21 @@ import SwiftUI
 import AVKit
 
 struct AssetStory: Identifiable, Equatable {
-    let id = UUID()
+    let id: String
     let media: AssetMedia
     let username: String
     let authorImageName: String
     var creatorId: String = ""
     var originalStoryId: String? = nil
+
+    init(id: String = UUID().uuidString, media: AssetMedia, username: String, authorImageName: String, creatorId: String = "", originalStoryId: String? = nil) {
+        self.id = originalStoryId ?? id
+        self.media = media
+        self.username = username
+        self.authorImageName = authorImageName
+        self.creatorId = creatorId
+        self.originalStoryId = originalStoryId
+    }
 }
 
 // MARK: - Instagram-style story grouping by user
@@ -20,7 +29,7 @@ struct UserStoryGroup: Identifiable {
     @MainActor
     var isSeen: Bool {
         let seen = StorySeenTracker.shared.seenStoryIds
-        return !stories.isEmpty && stories.allSatisfy { seen.contains($0.id.uuidString) }
+        return !stories.isEmpty && stories.allSatisfy { seen.contains($0.stableStoryId) }
     }
     
     static func group(from stories: [AssetStory]) -> [UserStoryGroup] {
@@ -70,14 +79,14 @@ extension AssetStory {
     }
 }
 
-// Matches with HomeView.heroOverlay: id "storyHero-<uuid>"
+// Matches with HomeView.heroOverlay: id "storyHero-<id>"
 struct HeroMatch: ViewModifier {
     let ns: Namespace.ID?
-    let id: UUID
+    let id: String
 
     func body(content: Content) -> some View {
         if let ns {
-            content.matchedGeometryEffect(id: "storyHero-\(id.uuidString)", in: ns)
+            content.matchedGeometryEffect(id: "storyHero-\(id)", in: ns)
         } else {
             content
         }
@@ -90,9 +99,9 @@ struct AssetBouncyStoryBubble: View {
     let isSeen: Bool
     let onTap: (AssetStory) -> Void
     let ns: Namespace.ID?
-    let activeHeroId: UUID?
+    let activeHeroId: String?
 
-    init(story: AssetStory, isSeen: Bool = false, onTap: @escaping (AssetStory) -> Void, ns: Namespace.ID? = nil, activeHeroId: UUID? = nil) {
+    init(story: AssetStory, isSeen: Bool = false, onTap: @escaping (AssetStory) -> Void, ns: Namespace.ID? = nil, activeHeroId: String? = nil) {
         self.story = story
         self.isSeen = isSeen
         self.onTap = onTap
@@ -202,7 +211,7 @@ struct AssetBouncyStoriesRow: View {
     let onStoryTap: (AssetStory) -> Void
     let onAddStory: () -> Void
     let ns: Namespace.ID?
-    let activeHeroId: UUID?
+    let activeHeroId: String?
     @ObservedObject private var seenTracker = StorySeenTracker.shared
 
     init(
@@ -210,7 +219,7 @@ struct AssetBouncyStoriesRow: View {
         onStoryTap: @escaping (AssetStory) -> Void,
         onAddStory: @escaping () -> Void,
         ns: Namespace.ID? = nil,
-        activeHeroId: UUID? = nil
+        activeHeroId: String? = nil
     ) {
         self.stories = stories
         self.onStoryTap = onStoryTap
@@ -225,6 +234,24 @@ struct AssetBouncyStoriesRow: View {
         return UserStoryGroup.sorted(groups)
     }
 
+    private var currentUserId: String? {
+        AppState.shared.currentUser?.id
+    }
+
+    private var currentUserGroup: UserStoryGroup? {
+        guard let currentUserId else { return nil }
+        return userGroups.first(where: { group in
+            group.stories.contains(where: { $0.creatorId == currentUserId })
+        })
+    }
+
+    private var nonCurrentUserGroups: [UserStoryGroup] {
+        guard let currentUserId else { return userGroups }
+        return userGroups.filter { group in
+            !group.stories.contains(where: { $0.creatorId == currentUserId })
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Rectangle()
@@ -234,10 +261,10 @@ struct AssetBouncyStoriesRow: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    addStoryButton
+                    leadingStoryButton
                         .padding(.leading, 20)
 
-                    ForEach(userGroups) { group in
+                    ForEach(nonCurrentUserGroups) { group in
                         // Show the first story as the representative bubble for this user
                         if let representative = group.stories.first {
                             AssetBouncyStoryBubble(
@@ -262,6 +289,48 @@ struct AssetBouncyStoriesRow: View {
         }
         .background(AppTheme.Colors.background)
         .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var leadingStoryButton: some View {
+        if let currentUserGroup, let representative = currentUserGroup.stories.first {
+            Button(action: {
+                HapticManager.shared.impact(style: .medium)
+                onStoryTap(representative)
+            }) {
+                VStack(spacing: 8) {
+                    ZStack(alignment: .bottomTrailing) {
+                        AssetBouncyStoryBubble(
+                            story: representative,
+                            isSeen: currentUserGroup.isSeen,
+                            onTap: onStoryTap,
+                            ns: ns,
+                            activeHeroId: activeHeroId
+                        )
+
+                        Circle()
+                            .fill(AppTheme.Colors.primary)
+                            .frame(width: 26, height: 26)
+                            .overlay(
+                                Image(systemName: "plus")
+                                    .font(.system(size: 13, weight: .black))
+                                    .foregroundColor(.white)
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white, lineWidth: 2)
+                            )
+                            .offset(x: 4, y: 0)
+                    }
+                }
+                .frame(width: 88, height: 124)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Your story")
+        } else {
+            addStoryButton
+        }
     }
 
     private var addStoryButton: some View {
@@ -317,9 +386,13 @@ struct AssetBouncyStoriesRow: View {
     
     // 🔥 Get current user's profile picture
     private func getUserProfileImageURL() -> String {
-        // Fetch from AppState when available
-        // For now, return empty string and ProfileAvatarView will show initials
-        ""
+        AppState.shared.currentUser?.profileImageURL ?? ""
+    }
+}
+
+extension AssetStory {
+    var stableStoryId: String {
+        originalStoryId ?? id
     }
 }
 

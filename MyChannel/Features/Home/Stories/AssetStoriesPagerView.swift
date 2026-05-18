@@ -1,5 +1,21 @@
 import SwiftUI
 import AVKit
+import AVFoundation
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
+
+struct StoryProfilePresentation: Identifiable {
+    let id: String
+    let user: User
+}
+
+struct StoryInsightsSnapshot {
+    let views: Int
+    let likes: Int
+    let replies: Int
+    let shares: Int
+}
 
 // MARK: - Instagram-Style Stories Pager
 // Groups stories by user. Progress bars = one per story within current user.
@@ -30,6 +46,22 @@ struct AssetStoriesPagerView: View {
     @State private var showStoryOptions: Bool = false
     @State private var showDeleteConfirm: Bool = false
     @State private var isDeletingStory: Bool = false
+    @State private var showingReplyComposer: Bool = false
+    @State private var replyText: String = ""
+    @State private var showingReportSheet: Bool = false
+    @State private var showingShareSheet: Bool = false
+    @State private var presentedProfile: StoryProfilePresentation?
+    @State private var isSubmittingReply: Bool = false
+    @State private var isLikingStory: Bool = false
+    @State private var currentPlayer: AVPlayer?
+    @State private var currentVideoDuration: TimeInterval?
+    @State private var playerEndObserver: NSObjectProtocol?
+    @State private var showingInsightsSheet: Bool = false
+    @State private var storyInsights = StoryInsightsSnapshot(views: 0, likes: 0, replies: 0, shares: 0)
+    @State private var showingArchiveSheet: Bool = false
+    @State private var showingHighlightPrompt: Bool = false
+    @State private var highlightTitle: String = "Favorites"
+    @State private var archivedStories: [Story] = []
 
     @EnvironmentObject private var appState: AppState
 
@@ -48,6 +80,79 @@ struct AssetStoriesPagerView: View {
         self.onDismiss = onDismiss
         _userIndex = State(initialValue: 0)
         _storyIndex = State(initialValue: min(max(0, initialIndex), max(stories.count - 1, 0)))
+    }
+
+    private func configurePlaybackForCurrentStory() {
+        tearDownPlayer()
+        currentVideoDuration = nil
+
+        guard let story = currentStory else { return }
+
+        switch story.media {
+        case .image:
+            break
+        case .video(let resource):
+            guard let url = resolvedMediaURL(from: resource) else { return }
+            let playerItem = AVPlayerItem(url: url)
+            let player = AVPlayer(playerItem: playerItem)
+            player.actionAtItemEnd = .pause
+            currentPlayer = player
+
+            Task {
+                let duration = await loadVideoDuration(from: playerItem)
+                await MainActor.run {
+                    if currentStory?.stableStoryId == story.stableStoryId {
+                        currentVideoDuration = duration
+                        resetProgress()
+                        if !isPaused {
+                            currentPlayer?.play()
+                        }
+                    }
+                }
+            }
+
+            playerEndObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: playerItem,
+                queue: .main
+            ) { _ in
+                nextStory()
+            }
+
+            if !isPaused {
+                player.play()
+            }
+        }
+    }
+
+    private func tearDownPlayer() {
+        if let observer = playerEndObserver {
+            NotificationCenter.default.removeObserver(observer)
+            playerEndObserver = nil
+        }
+        currentPlayer?.pause()
+        currentPlayer = nil
+    }
+
+    private func resolvedMediaURL(from resource: String) -> URL? {
+        if let remoteURL = URL(string: resource), let scheme = remoteURL.scheme, scheme == "https" || scheme == "http" {
+            return remoteURL
+        }
+        return Bundle.main.url(forResource: resource, withExtension: nil)
+    }
+
+    private func loadVideoDuration(from item: AVPlayerItem) async -> TimeInterval {
+        let asset = item.asset
+        do {
+            let duration = try await asset.load(.duration)
+            let seconds = CMTimeGetSeconds(duration)
+            if seconds.isFinite, seconds > 0 {
+                return seconds
+            }
+        } catch {
+            print("⚠️ [AssetStoriesPagerView] Failed to load video duration: \(error.localizedDescription)")
+        }
+        return videoDuration
     }
 
     // Instagram-style init (grouped by user)
@@ -149,7 +254,9 @@ struct AssetStoriesPagerView: View {
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) {
-                        likeBurst()
+                        Task {
+                            await toggleLike()
+                        }
                     }
 
                 // Pause indicator
@@ -203,9 +310,19 @@ struct AssetStoriesPagerView: View {
                 if !pressing { resume() }
             }
             .onAppear {
+                markCurrentStorySeen()
+                Task {
+                    if let userId = appState.currentUser?.id {
+                        await StoryActionService.shared.loadLikeState(userId: userId)
+                    }
+                }
+                configurePlaybackForCurrentStory()
                 startTimer()
             }
-            .onDisappear { stopTimer() }
+            .onDisappear {
+                stopTimer()
+                tearDownPlayer()
+            }
         }
         .statusBarHidden()
         .ignoresSafeArea()
@@ -225,6 +342,128 @@ struct AssetStoriesPagerView: View {
             case .inactive, .background: pause()
             @unknown default: pause()
             }
+        }
+        .onChange(of: userIndex) { _ in
+            configurePlaybackForCurrentStory()
+        }
+        .onChange(of: storyIndex) { _ in
+            configurePlaybackForCurrentStory()
+        }
+        .sheet(isPresented: $showingShareSheet) {
+            if let story = currentStory {
+                NativeShareSheet(
+                    items: [storyShareText(for: story)],
+                    onComplete: { completed in
+                        Task {
+                            await trackShareCompletion(completed: completed)
+                        }
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: $showingReportSheet) {
+            if let story = currentStory {
+                ReportStoryView(story: storyModel(from: story)) {
+                    showingReportSheet = false
+                    resume()
+                }
+            }
+        }
+        .sheet(isPresented: $showingInsightsSheet, onDismiss: {
+            resume()
+        }) {
+            StoryInsightsSheet(insights: storyInsights)
+                .presentationDetents([.height(280)])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingArchiveSheet, onDismiss: {
+            resume()
+        }) {
+            StoryArchiveView(stories: archivedStories) { story in
+                highlightTitle = "Favorites"
+                Task {
+                    await StoryHighlightsService.shared.addStoryToHighlight(story: story, title: highlightTitle)
+                }
+            }
+        }
+        .sheet(isPresented: $showingReplyComposer) {
+            VStack(spacing: 16) {
+                Capsule()
+                    .fill(Color.secondary.opacity(0.35))
+                    .frame(width: 42, height: 5)
+                    .padding(.top, 10)
+
+                HStack {
+                    storyAvatar(for: currentGroup)
+                        .frame(width: 34, height: 34)
+                        .clipShape(Circle())
+
+                    Text("Reply to \(currentGroup?.username ?? "story")")
+                        .font(.headline)
+
+                    Spacer()
+                }
+
+                TextField("Send message", text: $replyText, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...4)
+
+                Button {
+                    Task {
+                        await sendReply()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        if isSubmittingReply {
+                            ProgressView()
+                                .tint(.white)
+                        }
+
+                        Text("Send")
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmittingReply ? Color.gray.opacity(0.35) : AppTheme.Colors.primary)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+                .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmittingReply)
+
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .presentationDetents([.height(240)])
+            .presentationDragIndicator(.hidden)
+            .onDisappear {
+                if showingReplyComposer == false {
+                    resume()
+                }
+            }
+        }
+        .sheet(item: $presentedProfile) { presentation in
+            NavigationStack {
+                PublicProfileView(user: presentation.user)
+                    .environmentObject(AuthenticationManager.shared)
+                    .environmentObject(appState)
+            }
+        }
+        .alert("Add to Highlight", isPresented: $showingHighlightPrompt) {
+            TextField("Highlight title", text: $highlightTitle)
+            Button("Save") {
+                Task {
+                    if let story = currentStory {
+                        await StoryHighlightsService.shared.addStoryToHighlight(story: storyModel(from: story), title: highlightTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Favorites" : highlightTitle)
+                        HapticManager.shared.notification(type: .success)
+                        resume()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                resume()
+            }
+        } message: {
+            Text("Save this story to one of your profile highlights.")
         }
     }
 
@@ -282,11 +521,8 @@ struct AssetStoriesPagerView: View {
                 }
             }
         case .video(let resource):
-            if let remoteURL = URL(string: resource), remoteURL.scheme == "https" || remoteURL.scheme == "http" {
-                RawPlayerLayerView(player: AVPlayer(url: remoteURL), videoGravity: .resizeAspectFill)
-                    .transition(.opacity)
-            } else if let url = Bundle.main.url(forResource: resource, withExtension: nil) {
-                RawPlayerLayerView(player: AVPlayer(url: url), videoGravity: .resizeAspectFill)
+            if let currentPlayer {
+                RawPlayerLayerView(player: currentPlayer, videoGravity: .resizeAspectFill)
                     .transition(.opacity)
             } else {
                 ZStack {
@@ -331,13 +567,39 @@ struct AssetStoriesPagerView: View {
                     .frame(width: 34, height: 34)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                    .onTapGesture {
+                        Task {
+                            await openCurrentProfile()
+                        }
+                    }
                 Text(currentGroup?.username ?? "")
                     .foregroundStyle(.white)
                     .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
+                    .onTapGesture {
+                        Task {
+                            await openCurrentProfile()
+                        }
+                    }
             }
             Spacer()
             HStack(spacing: 10) {
+                if currentStory?.creatorId == appState.currentUser?.id {
+                    Button {
+                        pause()
+                        Task {
+                            await loadCurrentStoryInsights()
+                            showingInsightsSheet = true
+                        }
+                    } label: {
+                        Image(systemName: "chart.bar.xaxis")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(10)
+                            .background(Color.black.opacity(0.35), in: Circle())
+                    }
+                }
+
                 Button {
                     HapticManager.shared.selection()
                     pause()
@@ -352,6 +614,16 @@ struct AssetStoriesPagerView: View {
                 .confirmationDialog("", isPresented: $showStoryOptions, titleVisibility: .hidden) {
                     let isOwner = currentStory?.creatorId == appState.currentUser?.id
                     if isOwner {
+                        Button("Add to Highlight") {
+                            highlightTitle = currentGroup?.username ?? "Favorites"
+                            showingHighlightPrompt = true
+                        }
+                        Button("View Archive") {
+                            Task {
+                                await loadArchivedStories()
+                                showingArchiveSheet = true
+                            }
+                        }
                         Button("Delete Story", role: .destructive) {
                             showDeleteConfirm = true
                         }
@@ -363,7 +635,7 @@ struct AssetStoriesPagerView: View {
                         saveCurrentStoryToPhotos()
                     }
                     Button("Report", role: .destructive) {
-                        resume()
+                        showingReportSheet = true
                     }
                     Button("Cancel", role: .cancel) {
                         resume()
@@ -395,11 +667,18 @@ struct AssetStoriesPagerView: View {
             .padding(.vertical, 10)
             .padding(.horizontal, 14)
             .background(Color.white.opacity(0.12), in: Capsule())
+            .contentShape(Capsule())
+            .onTapGesture {
+                pause()
+                showingReplyComposer = true
+            }
 
             Button {
-                likeBurst()
+                Task {
+                    await toggleLike()
+                }
             } label: {
-                Image(systemName: "heart\(showHeart ? ".fill" : "")")
+                Image(systemName: showHeart ? "heart.fill" : "heart")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(showHeart ? .red : .white)
                     .padding(10)
@@ -408,6 +687,8 @@ struct AssetStoriesPagerView: View {
 
             Button {
                 HapticManager.shared.selection()
+                pause()
+                showingShareSheet = true
             } label: {
                 Image(systemName: "paperplane.fill")
                     .rotationEffect(.degrees(45))
@@ -453,7 +734,7 @@ struct AssetStoriesPagerView: View {
         guard let story = currentStory else { return imageDuration }
         switch story.media {
         case .image: return imageDuration
-        case .video: return videoDuration
+        case .video: return currentVideoDuration ?? videoDuration
         }
     }
 
@@ -478,6 +759,7 @@ struct AssetStoriesPagerView: View {
     }
 
     private func pause() {
+        currentPlayer?.pause()
         if reduceMotion {
             isPaused = true
         } else {
@@ -486,6 +768,9 @@ struct AssetStoriesPagerView: View {
     }
 
     private func resume() {
+        if case .video? = currentStory?.media {
+            currentPlayer?.play()
+        }
         if reduceMotion {
             isPaused = false
         } else {
@@ -500,6 +785,7 @@ struct AssetStoriesPagerView: View {
         let count = storiesInCurrentGroup
         if storyIndex < count - 1 {
             // Next story within same user
+            markCurrentStorySeen()
             transitionDirection = 1
             if reduceMotion {
                 storyIndex += 1
@@ -508,6 +794,7 @@ struct AssetStoriesPagerView: View {
             }
             HapticManager.shared.selection()
             resetProgress()
+            markCurrentStorySeen()
         } else {
             // Last story of this user → mark as seen, advance to next user
             markCurrentUserSeen()
@@ -526,6 +813,7 @@ struct AssetStoriesPagerView: View {
             }
             HapticManager.shared.selection()
             resetProgress()
+            markCurrentStorySeen()
         } else {
             previousUser()
         }
@@ -547,6 +835,7 @@ struct AssetStoriesPagerView: View {
             }
             HapticManager.shared.impact(style: .light)
             resetProgress()
+            markCurrentStorySeen()
         } else {
             // Last user → dismiss (Instagram behavior)
             onDismiss()
@@ -568,6 +857,7 @@ struct AssetStoriesPagerView: View {
             }
             HapticManager.shared.impact(style: .light)
             resetProgress()
+            markCurrentStorySeen()
         } else {
             onDismiss()
         }
@@ -578,8 +868,14 @@ struct AssetStoriesPagerView: View {
         guard let group = currentGroup else { return }
         let userId = AppState.shared.currentUser?.id ?? "anonymous"
         for story in group.stories {
-            StorySeenTracker.shared.markSeen(userId: userId, storyId: story.id.uuidString, creatorId: group.username)
+            StorySeenTracker.shared.markSeen(userId: userId, storyId: story.stableStoryId, creatorId: story.creatorId.isEmpty ? group.username : story.creatorId)
         }
+    }
+
+    private func markCurrentStorySeen() {
+        guard let story = currentStory else { return }
+        let userId = AppState.shared.currentUser?.id ?? "anonymous"
+        StorySeenTracker.shared.markSeen(userId: userId, storyId: story.stableStoryId, creatorId: story.creatorId)
     }
 
     private func fillWidth(for barIndex: Int, totalWidth: CGFloat) -> CGFloat {
@@ -604,6 +900,138 @@ struct AssetStoriesPagerView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 showHeart = false
                 heartScale = 0.6
+            }
+        }
+    }
+
+    private func toggleLike() async {
+        guard let story = currentStory,
+              let userId = appState.currentUser?.id,
+              !isLikingStory else { return }
+        isLikingStory = true
+        let didLike = await StoryActionService.shared.toggleLike(storyId: story.stableStoryId, creatorId: story.creatorId, userId: userId)
+        await MainActor.run {
+            if didLike {
+                likeBurst()
+            } else {
+                showHeart = false
+                heartScale = 0.6
+                HapticManager.shared.selection()
+            }
+            isLikingStory = false
+        }
+    }
+
+    private func sendReply() async {
+        guard let story = currentStory,
+              let userId = appState.currentUser?.id else { return }
+        let pendingReply = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !pendingReply.isEmpty else { return }
+
+        isSubmittingReply = true
+        do {
+            try await StoryActionService.shared.sendReply(storyId: story.stableStoryId, creatorId: story.creatorId, userId: userId, text: pendingReply)
+            await MainActor.run {
+                HapticManager.shared.notification(type: .success)
+                replyText = ""
+                showingReplyComposer = false
+                isSubmittingReply = false
+                resume()
+            }
+        } catch {
+            await MainActor.run {
+                print("🚨 [AssetStoriesPagerView] Failed to send reply: \(error.localizedDescription)")
+                isSubmittingReply = false
+            }
+        }
+    }
+
+    private func trackShareCompletion(completed: Bool) async {
+        guard let story = currentStory,
+              let userId = appState.currentUser?.id else {
+            await MainActor.run { resume() }
+            return
+        }
+        await StoryActionService.shared.trackShare(storyId: story.stableStoryId, creatorId: story.creatorId, userId: userId, completed: completed)
+        await MainActor.run {
+            resume()
+        }
+    }
+
+    private func openCurrentProfile() async {
+        guard let story = currentStory else { return }
+        pause()
+        if let user = try? await UserFirestoreService.shared.fetchUser(id: story.creatorId) {
+            await MainActor.run {
+                presentedProfile = StoryProfilePresentation(id: user.id, user: user)
+            }
+        } else {
+            await MainActor.run {
+                resume()
+            }
+        }
+    }
+
+    private func storyShareText(for story: AssetStory) -> String {
+        let username = currentGroup?.username ?? story.username
+        return "Check out @\(username)'s story on MyChannel! https://mychannel.app/stories/\(story.stableStoryId)"
+    }
+
+    private func storyModel(from story: AssetStory) -> Story {
+        Story(
+            id: story.stableStoryId,
+            creatorId: story.creatorId,
+            mediaURL: story.media.primaryURL,
+            mediaType: story.media.storyMediaType,
+            duration: durationForCurrent(),
+            createdAt: Date(),
+            expiresAt: Date().addingTimeInterval(86400)
+        )
+    }
+
+    private func loadCurrentStoryInsights() async {
+        guard let story = currentStory else { return }
+
+        #if canImport(FirebaseFirestore)
+        do {
+            let db = Firestore.firestore()
+            let storyDoc = try await db.collection("stories").document(story.stableStoryId).getDocument()
+            let data = storyDoc.data() ?? [:]
+            let likes = data["likeCount"] as? Int ?? 0
+            let replies = data["replyCount"] as? Int ?? data["commentCount"] as? Int ?? 0
+            let shares = data["shareCount"] as? Int ?? 0
+            let views = data["viewCount"] as? Int ?? StoryViewTracker.shared.viewerCount
+
+            await MainActor.run {
+                storyInsights = StoryInsightsSnapshot(views: views, likes: likes, replies: replies, shares: shares)
+            }
+        } catch {
+            await MainActor.run {
+                storyInsights = StoryInsightsSnapshot(
+                    views: StoryViewTracker.shared.viewerCount,
+                    likes: 0,
+                    replies: 0,
+                    shares: 0
+                )
+            }
+        }
+        #else
+        await MainActor.run {
+            storyInsights = StoryInsightsSnapshot(
+                views: StoryViewTracker.shared.viewerCount,
+                likes: 0,
+                replies: 0,
+                shares: 0
+            )
+        }
+        #endif
+    }
+
+    private func loadArchivedStories() async {
+        guard let creatorId = appState.currentUser?.id else { return }
+        if let stories = try? await DatabaseService.shared.fetchStoriesByCreator(creatorId: creatorId, includeExpired: true) {
+            await MainActor.run {
+                archivedStories = stories.filter { $0.isExpired }
             }
         }
     }
@@ -685,6 +1113,73 @@ struct AssetStoriesPagerView: View {
                 await MainActor.run { resume() }
             }
         }
+    }
+}
+
+private extension AssetMedia {
+    var primaryURL: String {
+        switch self {
+        case .image(let value):
+            return value
+        case .video(let value):
+            return value
+        }
+    }
+
+    var storyMediaType: Story.MediaType {
+        switch self {
+        case .image:
+            return .image
+        case .video:
+            return .video
+        }
+    }
+}
+
+private struct StoryInsightsSheet: View {
+    let insights: StoryInsightsSnapshot
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Capsule()
+                .fill(Color.secondary.opacity(0.35))
+                .frame(width: 42, height: 5)
+                .padding(.top, 10)
+
+            Text("Story insights")
+                .font(.headline)
+
+            HStack(spacing: 12) {
+                insightCard(title: "Views", value: insights.views, icon: "eye.fill")
+                insightCard(title: "Likes", value: insights.likes, icon: "heart.fill")
+            }
+
+            HStack(spacing: 12) {
+                insightCard(title: "Replies", value: insights.replies, icon: "bubble.left.fill")
+                insightCard(title: "Shares", value: insights.shares, icon: "paperplane.fill")
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 18)
+    }
+
+    private func insightCard(title: String, value: Int, icon: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AppTheme.Colors.primary)
+
+            Text("\(value)")
+                .font(.system(size: 22, weight: .bold))
+
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 18)
+        .background(AppTheme.Colors.surface, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 

@@ -116,6 +116,27 @@ service cloud.firestore {
       allow delete: if isSignedIn() && 
                        (request.auth.uid == resource.data.creatorId || isAdmin());
     }
+
+    match /videos/{videoId}/comments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       isValidSize(request.resource.data, 20);
+      allow update, delete: if isSignedIn() &&
+                              (request.auth.uid == resource.data.userId || isAdmin());
+    }
+
+    match /videos/{videoId}/comments/{commentId}/likes/{userId} {
+      allow read: if true;
+      allow create, delete: if isOwner(userId);
+      allow update: if false;
+    }
+
+    match /videos/{videoId}/likes/{userId} {
+      allow read: if true;
+      allow create, delete: if isOwner(userId);
+      allow update: if false;
+    }
     
     // Video analytics - 🔥 OPTIMIZED: Lightweight rule
     match /video_analytics/{videoId}/{document=**} {
@@ -176,11 +197,27 @@ service cloud.firestore {
                         isValidImageURL(request.resource.data.thumbnailURL));
       allow delete: if isCreator(resource.data.creatorId) || isAdmin();
     }
+
+    match /shorts/{shortId}/events/{eventId} {
+      allow read: if false;
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.type in ['view', 'like', 'unlike', 'comment', 'share'];
+      allow update, delete: if false;
+    }
     
     // Stories - open for signed-in users
     match /stories/{storyId} {
       allow read: if true;
       allow create, update, delete: if isSignedIn();
+    }
+
+    match /stories/{storyId}/events/{eventId} {
+      allow read: if false;
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.type in ['view', 'like', 'unlike', 'comment', 'share'];
+      allow update, delete: if false;
     }
     
     // Story collections index (one doc per creator)
@@ -235,10 +272,30 @@ service cloud.firestore {
     match /users/{userId}/subscriptions/{document=**} {
       allow read, write: if isOwner(userId);
     }
+    match /users/{userId}/subscribers/{subscriberId} {
+      allow read: if isOwner(userId) || isOwner(subscriberId) || isAdmin();
+      allow create, delete: if isOwner(subscriberId);
+      allow update: if false;
+    }
     match /users/{userId}/watch_history/{document=**} {
       allow read, write: if isOwner(userId);
     }
+    match /users/{userId}/watch-history/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/watch-progress/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/watch_progress/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
     match /users/{userId}/liked_videos/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/liked-videos/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    match /users/{userId}/disliked-videos/{document=**} {
       allow read, write: if isOwner(userId);
     }
     match /users/{userId}/playlists/{document=**} {
@@ -305,6 +362,18 @@ service cloud.firestore {
     }
     
     match /users/{userId}/watchLater/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /users/{userId}/watch-later/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /users/{userId}/comment-drafts/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /users/{userId}/blockedUsers/{document=**} {
       allow read, write: if isOwner(userId);
     }
     
@@ -494,6 +563,26 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isSignedIn() && isValidSize(request.resource.data, 30);
       allow update, delete: if isCreator(resource.data.streamerId) || isAdmin();
+    }
+
+    match /live_streams/{streamId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 40);
+      allow update, delete: if isSignedIn() &&
+                              (request.auth.uid == resource.data.streamerId ||
+                               request.auth.uid == resource.data.creatorId ||
+                               request.auth.uid == resource.data.userId ||
+                               isAdmin());
+    }
+
+    match /liveStreams/{streamId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 40);
+      allow update, delete: if isSignedIn() &&
+                              (request.auth.uid == resource.data.streamerId ||
+                               request.auth.uid == resource.data.creatorId ||
+                               request.auth.uid == resource.data.userId ||
+                               isAdmin());
     }
     
     // ========================================
@@ -741,6 +830,15 @@ service cloud.firestore {
                      (request.auth.uid == resource.data.reporterId || isAdmin());
       allow create: if isSignedIn();
       allow update: if isAdmin();
+    }
+
+    match /content_reports/{reportId} {
+      allow read: if isSignedIn() &&
+                    (request.auth.uid == resource.data.reporterId ||
+                     request.auth.uid == resource.data.reportedBy ||
+                     isAdmin());
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
     
     // 🔥 PERFORMANCE: Group admin-only moderation collections

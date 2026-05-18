@@ -26,8 +26,21 @@ final class StorySeenTracker: ObservableObject {
 
     func markSeen(userId: String, storyId: String, creatorId: String) {
         seenStoryIds.insert(storyId)
-        let data: [String: Any] = ["userId": userId, "storyId": storyId, "creatorId": creatorId, "seenAt": FieldValue.serverTimestamp()]
-        db.collection("story_seen").document("\(userId)_\(storyId)").setData(data)
+        let data: [String: Any] = [
+            "userId": userId,
+            "storyId": storyId,
+            "creatorId": creatorId,
+            "seenAt": FieldValue.serverTimestamp()
+        ]
+        Task {
+            do {
+                try await db.collection("story_seen").document("\(userId)_\(storyId)").setData(data)
+            } catch {
+                #if DEBUG
+                print("⚠️ [StorySeenTracker] markSeen skipped: \(error.localizedDescription)")
+                #endif
+            }
+        }
     }
 
     func fetchSeen(userId: String) async throws {

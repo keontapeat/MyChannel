@@ -8,6 +8,7 @@
 import SwiftUI
 import AVFoundation
 import AVKit
+import UIKit
 
 // MARK: - Minimal Hero Section (Pager)
 struct MinimalHeroSection: View {
@@ -70,6 +71,17 @@ struct MinimalHeroSection: View {
                 .sheet(isPresented: $showingFeaturedManager) {
                     ThermonuclearFeaturedManager()
                         .environmentObject(appState)
+                        .background(
+                            UIKitSheetConfigurator(
+                                configuration: UIKitSheetConfiguration(
+                                    detents: [.large()],
+                                    largestUndimmedDetentIdentifier: .large,
+                                    prefersGrabberVisible: true,
+                                    prefersScrollingExpandsWhenScrolledToEdge: false,
+                                    preferredCornerRadius: 28
+                                )
+                            )
+                        )
                 }
 
                 // Display: Only show carousel if there are actually featured videos
@@ -138,23 +150,104 @@ struct MinimalHeroSection: View {
     // MARK: - Featured Carousel View
     @ViewBuilder
     private var featuredCarouselView: some View {
-        TabView(selection: $selectedIndex) {
-            ForEach(Array(featuredContent.enumerated()), id: \.offset) { index, vid in
-                FeaturedHeroCard(
-                    video: vid,
-                    isCompact: isCompact,
-                    isActive: index == selectedIndex,
-                    allowLiveInPreview: showLiveHeroPreviewInPreviews,
-                    onPlay: { onPlayVideo(vid) },
-                    onAddToList: { onAddToList(vid) }
-                )
-                .padding(.horizontal, 20)
-                .tag(index)
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .automatic))
+        FeaturedUIKitCarousel(
+            videos: featuredContent,
+            selectedIndex: $selectedIndex,
+            isCompact: isCompact,
+            allowLiveInPreview: showLiveHeroPreviewInPreviews,
+            onPlayVideo: onPlayVideo,
+            onAddToList: onAddToList
+        )
         .frame(height: 250)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+private struct FeaturedUIKitCarousel: UIViewRepresentable {
+    let videos: [Video]
+    @Binding var selectedIndex: Int
+    let isCompact: Bool
+    let allowLiveInPreview: Bool
+    let onPlayVideo: (Video) -> Void
+    let onAddToList: (Video) -> Void
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+    
+    func makeUIView(context: Context) -> UICollectionView {
+        let layout = UICollectionViewFlowLayout()
+        layout.scrollDirection = .horizontal
+        layout.minimumLineSpacing = 0
+        let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        collectionView.backgroundColor = .clear
+        collectionView.showsHorizontalScrollIndicator = false
+        collectionView.isPagingEnabled = true
+        collectionView.dataSource = context.coordinator
+        collectionView.delegate = context.coordinator
+        collectionView.register(UICollectionViewCell.self, forCellWithReuseIdentifier: Coordinator.reuseID)
+        return collectionView
+    }
+    
+    func updateUIView(_ collectionView: UICollectionView, context: Context) {
+        context.coordinator.parent = self
+        collectionView.reloadData()
+        let clampedIndex = min(max(selectedIndex, 0), max(videos.count - 1, 0))
+        if videos.indices.contains(clampedIndex), collectionView.numberOfItems(inSection: 0) > clampedIndex {
+            collectionView.scrollToItem(at: IndexPath(item: clampedIndex, section: 0), at: .centeredHorizontally, animated: false)
+        }
+    }
+    
+    final class Coordinator: NSObject, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, UIScrollViewDelegate {
+        static let reuseID = "FeaturedUIKitCarouselCell"
+        var parent: FeaturedUIKitCarousel
+        
+        init(parent: FeaturedUIKitCarousel) {
+            self.parent = parent
+        }
+        
+        func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+            parent.videos.count
+        }
+        
+        func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: Self.reuseID, for: indexPath)
+            cell.contentConfiguration = UIHostingConfiguration {
+                let video = parent.videos[indexPath.item]
+                FeaturedHeroCard(
+                    video: video,
+                    isCompact: parent.isCompact,
+                    isActive: indexPath.item == parent.selectedIndex,
+                    allowLiveInPreview: parent.allowLiveInPreview,
+                    onPlay: { self.parent.onPlayVideo(video) },
+                    onAddToList: { self.parent.onAddToList(video) }
+                )
+                .padding(.horizontal, 20)
+            }
+            .margins(.all, 0)
+            return cell
+        }
+        
+        func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+            collectionView.bounds.size
+        }
+        
+        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            updateSelectedIndex(from: scrollView)
+        }
+        
+        func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+            updateSelectedIndex(from: scrollView)
+        }
+        
+        private func updateSelectedIndex(from scrollView: UIScrollView) {
+            guard scrollView.bounds.width > 0 else { return }
+            let index = Int(round(scrollView.contentOffset.x / scrollView.bounds.width))
+            if parent.videos.indices.contains(index), parent.selectedIndex != index {
+                parent.selectedIndex = index
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
+        }
     }
 }
 

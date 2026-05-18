@@ -46,6 +46,8 @@ struct ProfileView: View {
     @State private var playlists: [Playlist] = []
     @State private var isLoadingPlaylists = false
     @State private var undoPayload: BulkUndoPayload?
+    @State private var watchHistoryVideos: [Video] = []
+    @State private var selectedHighlight: StoryHighlight?
     
     // ⚡ PERFORMANCE: Pagination state with proper type safety
     @State private var isLoadingMoreVideos = false
@@ -88,13 +90,18 @@ struct ProfileView: View {
     private let tabBarOverlaySafeAreaPadding: CGFloat = 180
 
     private var currentUser: User {
-        if let appUser = appState.currentUser {
-            return appUser
-        } else if let authUser = authManager.currentUser {
+        if let authUser = authManager.currentUser {
             return authUser
+        } else if let appUser = appState.currentUser, !isSampleUser(appUser) {
+            return appUser
         } else {
             return User.defaultUser
         }
+    }
+    
+    /// Reject sample users (e.g., "Music Artist") from being used as currentUser.
+    private func isSampleUser(_ user: User) -> Bool {
+        User.sampleUsers.contains { $0.id == user.id || $0.email == user.email }
     }
     
     private var isViewingOwnProfile: Bool {
@@ -109,6 +116,14 @@ struct ProfileView: View {
     private var isOwnerAccount: Bool {
         if Self.ownerUIDs.contains(currentUser.id) { return true }
         if Self.ownerEmails.contains(currentUser.email.lowercased()) { return true }
+        return false
+    }
+
+    private var isOwnerProfile: Bool {
+        if Self.ownerUIDs.contains(user.id) { return true }
+        if Self.ownerEmails.contains(user.email.lowercased()) { return true }
+        if user.username.lowercased() == "sbkeonta_" { return true }
+        if user.displayName.lowercased().contains("shot by keonta") { return true }
         return false
     }
 
@@ -190,6 +205,9 @@ struct ProfileView: View {
             .overlay(alignment: .bottom) {
                 undoOverlay
             }
+            .sheet(item: $selectedHighlight) { highlight in
+                StoryHighlightViewer(highlight: highlight)
+            }
     }
     
     // MARK: - Body Sub-Views (Broken up to help compiler)
@@ -270,6 +288,10 @@ struct ProfileView: View {
                     showingEditProfile: $showingEditProfile,
                     showingSettings: $showingSettings
                 )
+
+                StoryHighlightsTray(creatorId: user.id) { highlight in
+                    selectedHighlight = highlight
+                }
                 
                 // Profile Tabs
                 ProfileTabNavigation(
@@ -576,18 +598,8 @@ struct ProfileView: View {
         .ignoresSafeArea(edges: .top)
         .navigationBarHidden(true)
         .sheet(isPresented: $showingEditProfile) {
-            ProfileEditWrapper(user: $user)
-                .background(
-                    UIKitSheetConfigurator(
-                        configuration: UIKitSheetConfiguration(
-                            detents: [.large()],
-                            largestUndimmedDetentIdentifier: .large,
-                            prefersGrabberVisible: true,
-                            prefersScrollingExpandsWhenScrolledToEdge: false,
-                            preferredCornerRadius: 28
-                        )
-                    )
-                )
+            EditProfileView(user: $user)
+                .environmentObject(appState)
         }
         .sheet(isPresented: $showingSettings) {
             ProfileSettingsWrapper()
@@ -602,6 +614,9 @@ struct ProfileView: View {
                         )
                     )
                 )
+        }
+        .sheet(item: $selectedHighlight) { highlight in
+            StoryHighlightViewer(highlight: highlight)
         }
         .fullScreenCover(isPresented: $showingDownloads) {
             NavigationStack {
@@ -736,8 +751,12 @@ struct ProfileView: View {
         lastVideoDocument = nil
         hasMoreVideos = true
         
+        let userId = currentUser.id
+        let cachedUser = profileCache.getCachedUser()
+        let canUseCache = cachedUser?.id == userId
+        let cachedVideos = canUseCache ? profileCache.getCachedVideos() : []
+
         // Step 1: Check cache for instant video display
-        let cachedVideos = profileCache.getCachedVideos()
         if !cachedVideos.isEmpty && profileCache.isCacheValid() {
             userVideos = cachedVideos
             isLoadingVideos = false
@@ -747,17 +766,19 @@ struct ProfileView: View {
             isLoadingVideos = true
             print("⚡ [ProfileView] Showing stale cache: \(cachedVideos.count) videos (refreshing)")
         } else {
+            if cachedUser != nil && !canUseCache {
+                print("⚠️ [ProfileView] Ignoring cached profile for different user: \(cachedUser?.displayName ?? "unknown")")
+            }
             isLoadingVideos = true
             print("⏳ [ProfileView] No cache - showing skeleton")
         }
         
         // Step 2: Tracked Task — cancellable, single-flight
         loadTask = Task { @MainActor in
-            let userId = currentUser.id
             guard !Task.isCancelled else { return }
             
             // Load complete profile (cache → Firestore → fallback)
-            if let cachedUser = profileCache.getCachedUser() {
+            if canUseCache, let cachedUser {
                 user = cachedUser
                 print("⚡ [ProfileView] Using cached complete profile: \(cachedUser.displayName) (@\(cachedUser.username))")
             } else {
@@ -792,7 +813,7 @@ struct ProfileView: View {
                 
                 var videosWithIntro = result.videos
                 
-                if isViewingOwnProfile && isOwnerAccount, let intro = ownerIntroVideo() {
+                if (isViewingOwnProfile && isOwnerAccount) || isOwnerProfile, let intro = ownerIntroVideo() {
                     videosWithIntro.removeAll { $0.id == intro.id }
                     videosWithIntro.insert(intro, at: 0)
                     PinnedVideosStore.shared.pin(intro.id, for: user.id)
@@ -1001,8 +1022,11 @@ struct ProfileView: View {
             lastVideoDocument = nil
             hasMoreVideos = true
             
+            let cachedUser = profileCache.getCachedUser()
+            let canUseCache = cachedUser?.id == newUser.id
+            let cachedVideos = canUseCache ? profileCache.getCachedVideos() : []
+
             // Show cached videos instantly
-            let cachedVideos = profileCache.getCachedVideos()
             if !cachedVideos.isEmpty { userVideos = cachedVideos }
             isLoadingVideos = true
             
@@ -1030,7 +1054,7 @@ struct ProfileView: View {
                 guard !Task.isCancelled else { return }
                 
                 var videosWithIntro = result.videos
-                if isViewingOwnProfile && isOwnerAccount, let intro = ownerIntroVideo() {
+                if (isViewingOwnProfile && isOwnerAccount) || isOwnerProfile, let intro = ownerIntroVideo() {
                     videosWithIntro.removeAll { $0.id == intro.id }
                     videosWithIntro.insert(intro, at: 0)
                     PinnedVideosStore.shared.pin(intro.id, for: user.id)

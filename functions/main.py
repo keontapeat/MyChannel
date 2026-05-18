@@ -1,5 +1,5 @@
 # Simple Firebase Functions for MyChannel
-from firebase_functions import firestore_fn, https_fn
+from firebase_functions import firestore_fn, https_fn, options
 from firebase_admin import initialize_app, firestore, auth as admin_auth, messaging
 import logging
 from datetime import datetime, timezone
@@ -9,6 +9,8 @@ import json
 from typing import List, Dict, Any
 
 # --- Common headers helpers for performance ---
+options.set_global_options(cpu="gcf_gen1", max_instances=3)
+
 def cache_headers_public(seconds: int = 300) -> Dict[str, str]:
     return {
         "Cache-Control": f"public, max-age={seconds}, s-maxage={seconds * 4}, stale-while-revalidate=60",
@@ -152,6 +154,81 @@ def on_like_deleted(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) ->
         db.collection('videos').document(video_id).update({ 'likeCount': firestore.Increment(-1) })
     except Exception:
         logging.exception('on_like_deleted')
+
+@firestore_fn.on_document_created(document="video_analytics/{videoId}/views/{viewId}")
+def on_video_view_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
+    try:
+        video_id = event.params["videoId"]
+        snap = event.data
+        data = snap.to_dict() if snap else {}
+        watch_duration = int(data.get("watchDuration") or 0)
+        update_data = {
+            "viewCount": firestore.Increment(1),
+            "lastViewedAt": firestore.SERVER_TIMESTAMP,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        }
+        if watch_duration > 0:
+            update_data["totalWatchTime"] = firestore.Increment(watch_duration)
+            update_data["lastWatched"] = firestore.SERVER_TIMESTAMP
+        db.collection('videos').document(video_id).set(update_data, merge=True)
+    except Exception:
+        logging.exception('on_video_view_created')
+
+@firestore_fn.on_document_created(document="shorts/{shortId}/events/{eventId}")
+def on_short_event_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
+    try:
+        short_id = event.params["shortId"]
+        snap = event.data
+        data = snap.to_dict() if snap else {}
+        event_type = data.get("type") or data.get("eventType")
+        update_data = {"updatedAt": firestore.SERVER_TIMESTAMP}
+        if event_type == "view":
+            update_data["viewCount"] = firestore.Increment(1)
+            update_data["lastViewed"] = firestore.SERVER_TIMESTAMP
+            watch_time = int(data.get("watchTime") or data.get("watchDuration") or 0)
+            if watch_time > 0:
+                update_data["totalWatchTime"] = firestore.Increment(watch_time)
+        elif event_type == "like":
+            update_data["likeCount"] = firestore.Increment(1)
+        elif event_type == "unlike":
+            update_data["likeCount"] = firestore.Increment(-1)
+        elif event_type == "comment":
+            update_data["commentCount"] = firestore.Increment(1)
+        elif event_type == "share":
+            update_data["shareCount"] = firestore.Increment(1)
+        else:
+            return
+        db.collection('shorts').document(short_id).set(update_data, merge=True)
+    except Exception:
+        logging.exception('on_short_event_created')
+
+@firestore_fn.on_document_created(document="stories/{storyId}/events/{eventId}")
+def on_story_event_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
+    try:
+        story_id = event.params["storyId"]
+        snap = event.data
+        data = snap.to_dict() if snap else {}
+        event_type = data.get("type") or data.get("eventType")
+        update_data = {"updatedAt": firestore.SERVER_TIMESTAMP}
+        if event_type == "view":
+            update_data["viewCount"] = firestore.Increment(1)
+            update_data["lastViewed"] = firestore.SERVER_TIMESTAMP
+            view_duration = int(data.get("viewDuration") or data.get("watchDuration") or 0)
+            if view_duration > 0:
+                update_data["totalViewTime"] = firestore.Increment(view_duration)
+        elif event_type == "like":
+            update_data["likeCount"] = firestore.Increment(1)
+        elif event_type == "unlike":
+            update_data["likeCount"] = firestore.Increment(-1)
+        elif event_type == "comment":
+            update_data["commentCount"] = firestore.Increment(1)
+        elif event_type == "share":
+            update_data["shareCount"] = firestore.Increment(1)
+        else:
+            return
+        db.collection('stories').document(story_id).set(update_data, merge=True)
+    except Exception:
+        logging.exception('on_story_event_created')
 
 @firestore_fn.on_document_created(document="users/{creatorId}/subscribers/{uid}")
 def on_subscribe_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:

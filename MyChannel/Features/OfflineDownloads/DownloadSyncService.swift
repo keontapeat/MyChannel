@@ -331,11 +331,12 @@ final class DownloadSyncService: ObservableObject {
             "syncedFrom": "offline"
         ])
         
-        // Increment video like count
-        let videoRef = db.collection("videos").document(item.videoId)
-        try await videoRef.updateData([
-            "likeCount": FieldValue.increment(Int64(1))
-        ])
+        let videoLikeRef = db.collection("videos").document(item.videoId)
+            .collection("likes").document(userId)
+        try await videoLikeRef.setData([
+            "likedAt": FieldValue.serverTimestamp(),
+            "syncedFrom": "offline"
+        ], merge: true)
     }
     
     private func syncDislike(_ item: SyncItem) async throws {
@@ -394,11 +395,12 @@ final class DownloadSyncService: ObservableObject {
             "syncedFrom": "offline"
         ])
         
-        // Update channel subscriber count
-        let channelRef = db.collection("channels").document(item.videoId)
-        try await channelRef.updateData([
-            "subscriberCount": FieldValue.increment(Int64(1))
-        ])
+        let subscriberRef = db.collection("users").document(item.videoId)
+            .collection("subscribers").document(userId)
+        try await subscriberRef.setData([
+            "subscribedAt": FieldValue.serverTimestamp(),
+            "syncedFrom": "offline"
+        ], merge: true)
     }
     
     private func syncAddToPlaylist(_ item: SyncItem) async throws {
