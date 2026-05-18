@@ -26,10 +26,10 @@ final class PerspectiveModerationService: ObservableObject {
         let analyzedAt: Date
 
         enum Recommendation: String {
-            case autoApprove  = "Auto-Approve"
-            case sendToReview = "Send to Review"
-            case autoStrike   = "Auto-Strike"
-            case autoBan      = "Auto-Ban"
+            case looksFine        = "Looks Fine"
+            case reviewSuggested  = "Worth Reviewing"
+            case autoStrike       = "Auto-Strike"        // clear violation — strike issued, you notified
+            case ownerReviewBan   = "🚨 Awaiting Your Ban Approval"  // 3 strikes hit — YOU decide ban
         }
     }
 
@@ -41,13 +41,25 @@ final class PerspectiveModerationService: ObservableObject {
         isAnalyzing = true
         defer { isAnalyzing = false }
 
-        async let perspectiveResult = callPerspective(text: text)
-        async let openAIResult = OpenAIAgentService.shared.moderateContent(text)
+        // OpenAI Moderation is always available — use as primary
+        let openAI = (try? await OpenAIAgentService.shared.moderateContent(text))
+            ?? OpenAIModerationResult(flagged: false, categories: [:], scores: [:])
 
-        let (pScore, oResult) = await (perspectiveResult, (try? openAIResult) ?? ModerationResult(flagged: false, categories: [:], scores: [:]))
+        // Perspective is optional — fire concurrently, use if it returns data
+        let perspective = await callPerspective(text: text)
 
-        let toxicity = pScore.toxicity
-        let recommendation = computeRecommendation(toxicity: toxicity, openAIFlagged: oResult.flagged, openAIMaxScore: oResult.maxScore)
+        // Blend: Perspective wins if it responded, otherwise fall back to OpenAI scores
+        let scores: PerspectiveScores = perspective.toxicity > 0 ? perspective : PerspectiveScores(
+            toxicity: openAI.maxScore,
+            severeToxicity: openAI.scores["hate"] ?? 0,
+            threat: openAI.scores["violence"] ?? 0,
+            insult: openAI.scores["harassment"] ?? 0,
+            identityAttack: openAI.scores["hate"] ?? 0,
+            profanity: openAI.scores["sexual"] ?? 0
+        )
+
+        let toxicity = scores.toxicity
+        let recommendation = computeRecommendation(toxicity: toxicity, openAIFlagged: openAI.flagged, openAIMaxScore: openAI.maxScore)
 
         AgentLogService.shared.strikeIssued(
             userId: userId,
@@ -59,13 +71,13 @@ final class PerspectiveModerationService: ObservableObject {
         return ToxicityReport(
             text: text,
             toxicityScore: toxicity,
-            severeToxicityScore: pScore.severeToxicity,
-            threatScore: pScore.threat,
-            insultScore: pScore.insult,
-            identityAttackScore: pScore.identityAttack,
-            profanityScore: pScore.profanity,
-            openAIFlagged: oResult.flagged,
-            openAITopCategory: oResult.topCategory,
+            severeToxicityScore: scores.severeToxicity,
+            threatScore: scores.threat,
+            insultScore: scores.insult,
+            identityAttackScore: scores.identityAttack,
+            profanityScore: scores.profanity,
+            openAIFlagged: openAI.flagged,
+            openAITopCategory: openAI.topCategory,
             recommendation: recommendation,
             analyzedAt: Date()
         )
@@ -87,15 +99,21 @@ final class PerspectiveModerationService: ObservableObject {
     private func computeRecommendation(toxicity: Double, openAIFlagged: Bool, openAIMaxScore: Double) -> ToxicityReport.Recommendation {
         let combined = max(toxicity, openAIMaxScore)
         switch combined {
-        case 0..<0.3:
-            return .autoApprove
-        case 0.3..<0.6:
-            return .sendToReview
-        case 0.6..<0.85:
-            return openAIFlagged ? .autoStrike : .sendToReview
+        case 0..<0.4:
+            return .looksFine
+        case 0.4..<0.7:
+            return .reviewSuggested
         default:
-            return .autoBan
+            // 0.7+ = porn, extreme violence, hate — auto-strike
+            // Ban is NEVER automatic — owner reviews after 3 strikes
+            return openAIFlagged ? .autoStrike : .reviewSuggested
         }
+    }
+
+    /// Call this to check if a user has hit 3 strikes and needs ban review
+    func checkForBanReview(userId: String, currentStrikeCount: Int) -> ToxicityReport.Recommendation? {
+        guard currentStrikeCount >= 3 else { return nil }
+        return .ownerReviewBan
     }
 
     // MARK: - Perspective API call

@@ -37,6 +37,7 @@
 		05AF7A8F2FB98AEF006D2031 /* TUSKit in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A8E2FB98AEF006D2031 /* TUSKit */; };
 		05AF7A922FB98B1D006D2031 /* GSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A912FB98B1D006D2031 /* GSPlayer */; };
 		05E845A52F9B05AF007F7218 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 05E845A42F9B05AF007F7218 /* FirebaseAppCheck */; };
+		13FC3476772D3650D8BB2067 /* JOSESwift in Frameworks */ = {isa = PBXBuildFile; productRef = 6B4161FD8B9817B5086972C3 /* JOSESwift */; };
 		15D4FA1AB8525BEDC303178A /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 1D45B6F95725FBCFB630D724 /* Algorithms */; };
 		1C5B861EC89248BA8D7470FF /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = E5BE666A0BCB4CA5E87B7666 /* Alamofire */; };
 		210AD8E695E2F0E42D8E505A /* IOSSecuritySuite in Frameworks */ = {isa = PBXBuildFile; productRef = D5D0CD39996115F7A7D8A495 /* IOSSecuritySuite */; };
@@ -65,9 +66,11 @@
 		AF9CD66B8313001B528C44C5 /* HaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = 15CF5B74EE600C3258BA3517 /* HaishinKit */; };
 		B26334F888019C70F5039C78 /* AsyncAlgorithms in Frameworks */ = {isa = PBXBuildFile; productRef = AFD72B644DA6FF9DDB6EB5FB /* AsyncAlgorithms */; };
 		B7C52A4B567934ABA7894DA9 /* RealmSwift in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 12F17EB4FE2DED84D709CC50 /* RealmSwift */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C3705B294F29C3A2299AC4D8 /* Valet in Frameworks */ = {isa = PBXBuildFile; productRef = 3F8C2E2673CEF2DD70097D88 /* Valet */; };
 		C3D382E35A237C913E0A310F /* AlertToast in Frameworks */ = {isa = PBXBuildFile; productRef = B6150DDE322042B1D9B84306 /* AlertToast */; };
 		C9CB1950967DA9379BFED236 /* MessageKit in Frameworks */ = {isa = PBXBuildFile; productRef = 481A251AE841C4A937BC879D /* MessageKit */; };
 		D051D9AB9705EADB133DB6E3 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = A0F8FB98ACEF99B34F55C7A3 /* SwiftSoup */; };
+		DBA0A1999C93C212FD0D848B /* X509 in Frameworks */ = {isa = PBXBuildFile; productRef = EBC819EC114223C357F4CEA8 /* X509 */; };
 		E64B595CC85E845F9108F677 /* StripePayments in Frameworks */ = {isa = PBXBuildFile; productRef = 26335CC42FFBE77B65A8B8A0 /* StripePayments */; };
 		F835C05BC455334578E5B742 /* GoogleInteractiveMediaAds in Frameworks */ = {isa = PBXBuildFile; productRef = 74BD607AFEDF03E98FD09927 /* GoogleInteractiveMediaAds */; };
 		FA672CD3A8124FDF35725C70 /* TrustKit in Frameworks */ = {isa = PBXBuildFile; productRef = 50D4A5CC9C57C7663B41670B /* TrustKit */; };
@@ -188,6 +191,9 @@
 				1C5B861EC89248BA8D7470FF /* Alamofire in Frameworks */,
 				47C882EFC55557E288C902B4 /* Logging in Frameworks */,
 				54E00F785B50768172BEC403 /* SwiftyBeaver in Frameworks */,
+				13FC3476772D3650D8BB2067 /* JOSESwift in Frameworks */,
+				C3705B294F29C3A2299AC4D8 /* Valet in Frameworks */,
+				DBA0A1999C93C212FD0D848B /* X509 in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -297,6 +303,9 @@
 				E5BE666A0BCB4CA5E87B7666 /* Alamofire */,
 				A0973FB3C8970C4F7BF41205 /* Logging */,
 				82492D397A4B956084C607B2 /* SwiftyBeaver */,
+				6B4161FD8B9817B5086972C3 /* JOSESwift */,
+				3F8C2E2673CEF2DD70097D88 /* Valet */,
+				EBC819EC114223C357F4CEA8 /* X509 */,
 			);
 			productName = MyChannel;
 			productReference = 055B9AC42E1F0BB6004E6282 /* MyChannel.app */;
@@ -368,6 +377,9 @@
 				354C3298FA84E35E5FD63E17 /* XCRemoteSwiftPackageReference "Alamofire" */,
 				4DC17C440744AC683108DB4D /* XCRemoteSwiftPackageReference "swift-log" */,
 				C749A76E2BFAE8C97B104AC7 /* XCRemoteSwiftPackageReference "SwiftyBeaver" */,
+				A4A08EA5F91E5C704EB667BA /* XCRemoteSwiftPackageReference "JOSESwift" */,
+				E43494CBB279037B498829E8 /* XCRemoteSwiftPackageReference "Valet" */,
+				589EE864CC9805BD29BBC554 /* XCRemoteSwiftPackageReference "swift-certificates" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 055B9AC52E1F0BB6004E6282 /* Products */;
@@ -861,6 +873,14 @@
 				minimumVersion = 1.0.0;
 			};
 		};
+		589EE864CC9805BD29BBC554 /* XCRemoteSwiftPackageReference "swift-certificates" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-certificates";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
 		5AADD5855EFB96312620905B /* XCRemoteSwiftPackageReference "TrustKit" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/datatheorem/TrustKit";
@@ -925,6 +945,14 @@
 				minimumVersion = 1.9.0;
 			};
 		};
+		A4A08EA5F91E5C704EB667BA /* XCRemoteSwiftPackageReference "JOSESwift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airsidemobile/JOSESwift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.0;
+			};
+		};
 		C3C0711B5BB388141DBA2BF3 /* XCRemoteSwiftPackageReference "keychain-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/evgenyneu/keychain-swift";
@@ -979,6 +1007,14 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 0.9.19;
+			};
+		};
+		E43494CBB279037B498829E8 /* XCRemoteSwiftPackageReference "Valet" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/square/Valet";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.2.0;
 			};
 		};
 		F18CDC0825E51E479D713ECC /* XCRemoteSwiftPackageReference "swift-protobuf" */ = {
@@ -1175,6 +1211,11 @@
 			package = 23A6E9F54EF0496A218CF886 /* XCRemoteSwiftPackageReference "stripe-ios" */;
 			productName = StripePayments;
 		};
+		3F8C2E2673CEF2DD70097D88 /* Valet */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E43494CBB279037B498829E8 /* XCRemoteSwiftPackageReference "Valet" */;
+			productName = Valet;
+		};
 		4169AB0A9E33890E9F1EA9C1 /* ConfettiSwiftUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 05AF7A9C2FB98FEB006D2031 /* XCRemoteSwiftPackageReference "ConfettiSwiftUI" */;
@@ -1204,6 +1245,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 14792F9B7B5A87DF5BA2F4AC /* XCRemoteSwiftPackageReference "Down" */;
 			productName = Down;
+		};
+		6B4161FD8B9817B5086972C3 /* JOSESwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A4A08EA5F91E5C704EB667BA /* XCRemoteSwiftPackageReference "JOSESwift" */;
+			productName = JOSESwift;
 		};
 		71106B566EA016B89EBD8451 /* PostHog */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1284,6 +1330,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 354C3298FA84E35E5FD63E17 /* XCRemoteSwiftPackageReference "Alamofire" */;
 			productName = Alamofire;
+		};
+		EBC819EC114223C357F4CEA8 /* X509 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 589EE864CC9805BD29BBC554 /* XCRemoteSwiftPackageReference "swift-certificates" */;
+			productName = X509;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

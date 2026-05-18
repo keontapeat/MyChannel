@@ -56,6 +56,22 @@ class LazyServiceManager: ObservableObject {
             AppSecurityService.shared.configure()
         }
 
+        register("ValetStorage", priority: .critical) {
+            _ = ValetSecureStorageService.shared
+        }
+
+        register("JWTSigning", priority: .critical) {
+            _ = JWTRequestSigningService.shared
+        }
+
+        register("CertValidation", priority: .critical) {
+            _ = CertificateValidationService.shared
+        }
+
+        register("ScreenProtection", priority: .critical) {
+            _ = ScreenProtectionService.shared
+        }
+
         register("Firebase", priority: .critical) {
             FirebaseManager.shared.configureIfPossible()
         }

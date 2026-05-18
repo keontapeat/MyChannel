@@ -83,7 +83,7 @@ final class AlamofireAdminNetworkService: ObservableObject {
     func uploadFile(path: String, fileURL: URL, mimeType: String) async throws -> Bool {
         return try await withCheckedThrowingContinuation { cont in
             session.upload(multipartFormData: { form in
-                form.append(fileURL, withName: "file", mimeType: mimeType)
+                form.append(fileURL, withName: "file", fileName: fileURL.lastPathComponent, mimeType: mimeType)
             }, to: "\(baseURL)\(path)")
             .validate()
             .response { response in
@@ -94,14 +94,26 @@ final class AlamofireAdminNetworkService: ObservableObject {
 
     // MARK: - Download (for report pulls)
 
-    func downloadFile(from url: String, to destination: URL) async throws {
-        let dest: DownloadRequest.Destination = { _, _ in (destination, [.removePreviousFile]) }
+    func downloadFile(from urlString: String, to destination: URL) async throws {
         return try await withCheckedThrowingContinuation { cont in
-            session.download(url, to: dest)
+            session.download(urlString)
                 .validate()
-                .response { response in
-                    if let error = response.error { cont.resume(throwing: error) }
-                    else { cont.resume() }
+                .downloadProgress { _ in }
+                .responseURL { response in
+                    switch response.result {
+                    case .success(let tempURL):
+                        do {
+                            if FileManager.default.fileExists(atPath: destination.path) {
+                                try FileManager.default.removeItem(at: destination)
+                            }
+                            try FileManager.default.moveItem(at: tempURL, to: destination)
+                            cont.resume()
+                        } catch {
+                            cont.resume(throwing: error)
+                        }
+                    case .failure(let error):
+                        cont.resume(throwing: error)
+                    }
                 }
         }
     }

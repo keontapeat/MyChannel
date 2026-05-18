@@ -207,14 +207,6 @@ struct AppSecrets {
         return ""
     }
 
-    static var openAIAPIKey: String {
-        let env = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
-        if !env.isEmpty { return env }
-        let plist = (Bundle.main.object(forInfoDictionaryKey: "OPENAI_API_KEY") as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
-        return ""
-    }
-
     static var pineconeAPIKey: String? {
         let plist = (Bundle.main.object(forInfoDictionaryKey: "PINECONE_API_KEY") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
