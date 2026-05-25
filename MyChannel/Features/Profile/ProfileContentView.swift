@@ -3032,6 +3032,7 @@ private struct AdvancedTableColumnHeader: View {
 
     var body: some View {
         HStack(spacing: 0) {
+            // VIDEO label — flexible, aligns with thumbnail+title
             Text("VIDEO")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(AppTheme.Colors.textTertiary)
@@ -3057,7 +3058,7 @@ private struct AdvancedTableColumnHeader: View {
                                 .foregroundStyle(AppTheme.Colors.primary)
                         }
                     }
-                    .frame(width: 52, alignment: .trailing)
+                    .frame(width: 44, alignment: .trailing)
                 }
                 .buttonStyle(.plain)
             }
@@ -3085,7 +3086,7 @@ private struct AdvancedVideoTableRow: View {
     @State private var isWatchLaterLocal = false
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             // Thumbnail
             ZStack(alignment: .bottomTrailing) {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -3095,7 +3096,7 @@ private struct AdvancedVideoTableRow: View {
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
-            .frame(width: 80, height: 45)
+            .frame(width: 72, height: 40)
             .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
             .overlay(
                 Text(video.formattedDuration)
@@ -3109,10 +3110,10 @@ private struct AdvancedVideoTableRow: View {
                 alignment: .bottomTrailing
             )
 
-            // Title + visibility badge
+            // Title + visibility badge — flexible, takes remaining space
             VStack(alignment: .leading, spacing: 3) {
                 Text(video.title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AppTheme.Colors.textPrimary)
                     .lineLimit(2)
 
@@ -3145,7 +3146,7 @@ private struct AdvancedVideoTableRow: View {
                     }
                 }
             }
-            .frame(minWidth: 80, maxWidth: 110, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             // Stat columns — Views, CTR, WatchTime, Revenue
             AdvancedStatColumn(value: formatViews(video.viewCount), label: nil)
@@ -3205,7 +3206,7 @@ private struct AdvancedStatColumn: View {
         Text(value)
             .font(.system(size: 11, weight: .medium, design: .rounded))
             .foregroundStyle(AppTheme.Colors.textSecondary)
-            .frame(width: 52, alignment: .trailing)
+            .frame(width: 44, alignment: .trailing)
             .lineLimit(1)
     }
 }
