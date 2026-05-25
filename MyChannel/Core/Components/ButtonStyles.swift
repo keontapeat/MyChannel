@@ -114,6 +114,91 @@ struct GlowButtonStyle: ButtonStyle {
     }
 }
 
+// MARK: - UIKit Sheet Presentation Modifier
+/// Configures the underlying UISheetPresentationController so SwiftUI sheets
+/// get native iOS detents, a proper grabber, rounded corners, and
+/// scroll-expand behaviour — identical to system sheets like Apple Music / Maps.
+struct UIKitSheetModifier: ViewModifier {
+    /// Detents to offer. Defaults to medium + large (like UIKit default).
+    var detents: [UISheetPresentationController.Detent] = [.medium(), .large()]
+    /// Show the grabber pill at the top.
+    var showGrabber: Bool = true
+    /// Corner radius of the sheet card. nil → system default.
+    var cornerRadius: CGFloat? = 20
+    /// Allow the sheet to expand further when the user scrolls up inside it.
+    var scrollingExpandsToLargeDetent: Bool = true
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                UIKitSheetConfigurator(
+                    detents: detents,
+                    showGrabber: showGrabber,
+                    cornerRadius: cornerRadius,
+                    scrollingExpandsToLargeDetent: scrollingExpandsToLargeDetent
+                )
+            )
+    }
+}
+
+private struct UIKitSheetConfigurator: UIViewRepresentable {
+    var detents: [UISheetPresentationController.Detent]
+    var showGrabber: Bool
+    var cornerRadius: CGFloat?
+    var scrollingExpandsToLargeDetent: Bool
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        DispatchQueue.main.async {
+            guard
+                let viewController = uiView.parentViewController,
+                let sheet = viewController.sheetPresentationController
+            else { return }
+
+            sheet.detents = detents
+            sheet.prefersGrabberVisible = showGrabber
+            sheet.prefersScrollingExpandsWhenScrolledToEdge = scrollingExpandsToLargeDetent
+            sheet.prefersEdgeAttachedInCompactHeight = false
+            if let radius = cornerRadius {
+                sheet.preferredCornerRadius = radius
+            }
+        }
+    }
+}
+
+private extension UIView {
+    var parentViewController: UIViewController? {
+        var responder: UIResponder? = self
+        while let r = responder {
+            if let vc = r as? UIViewController { return vc }
+            responder = r.next
+        }
+        return nil
+    }
+}
+
+extension View {
+    /// Apply native UIKit sheet presentation controller configuration.
+    func uiKitSheet(
+        detents: [UISheetPresentationController.Detent] = [.medium(), .large()],
+        showGrabber: Bool = true,
+        cornerRadius: CGFloat? = 20,
+        scrollingExpandsToLargeDetent: Bool = true
+    ) -> some View {
+        modifier(UIKitSheetModifier(
+            detents: detents,
+            showGrabber: showGrabber,
+            cornerRadius: cornerRadius,
+            scrollingExpandsToLargeDetent: scrollingExpandsToLargeDetent
+        ))
+    }
+}
+
 // MARK: - Preview
 #Preview {
     VStack(spacing: 20) {

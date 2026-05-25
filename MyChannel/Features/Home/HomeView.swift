@@ -270,8 +270,12 @@ struct HomeView: View {
                 ProfileQuickMenu(user: user, isPresented: $showingQuickProfile)
                     .environmentObject(appState)
                     .environmentObject(AuthenticationManager.shared)
-                    .presentationDetents([.height(680)])
-                    .presentationDragIndicator(.visible)
+                    .uiKitSheet(
+                        detents: [.medium(), .large()],
+                        showGrabber: true,
+                        cornerRadius: 20,
+                        scrollingExpandsToLargeDetent: true
+                    )
             }
         }
         .sheet(isPresented: $showingSettings) {
