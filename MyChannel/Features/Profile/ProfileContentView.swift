@@ -503,7 +503,6 @@ struct ProfileVideosView: View {
                     sortColumn: $advancedSortColumn,
                     sortAscending: $advancedSortAscending
                 )
-                .padding(.horizontal, 16)
                 .padding(.bottom, 8)
 
                 LazyVStack(spacing: 0) {
@@ -513,7 +512,6 @@ struct ProfileVideosView: View {
                             ownerId: user.id,
                             onMetrixTap: { metrixVideoId = video.id }
                         )
-                        .padding(.horizontal, 16)
                         Divider()
                             .padding(.leading, 16)
                     }
@@ -3029,25 +3027,24 @@ private struct AdvancedMetrixItem: Identifiable {
 private struct AdvancedTableColumnHeader: View {
     @Binding var sortColumn: AdvancedSortColumn
     @Binding var sortAscending: Bool
-    @Environment(\.horizontalSizeClass) private var sizeClass
-
     // Same widths used in AdvancedVideoTableRow so columns align perfectly
     private let thumbW: CGFloat = 72
     private let thumbSpacing: CGFloat = 10
     private let statW: CGFloat = 48
     private let menuW: CGFloat = 32
+    private let hPad: CGFloat = 16
 
     private var visibleColumns: [AdvancedSortColumn] {
-        sizeClass == .regular
+        UIDevice.current.userInterfaceIdiom == .pad
             ? AdvancedSortColumn.allCases
-            : [.views, .ctr]          // only 2 cols on compact/phone
+            : [.views, .ctr]          // only 2 cols on phone
     }
 
     var body: some View {
         HStack(spacing: 0) {
-            // Blank space matching thumbnail + gap
+            // Blank space matching hPad + thumbnail + gap
             Color.clear
-                .frame(width: thumbW + thumbSpacing, height: 1)
+                .frame(width: hPad + thumbW + thumbSpacing, height: 1)
 
             // VIDEO label — flexible, covers title column
             Text("VIDEO")
@@ -3080,13 +3077,13 @@ private struct AdvancedTableColumnHeader: View {
                 .buttonStyle(.plain)
             }
 
-            // Spacer matching the 3-dot menu column
-            Color.clear.frame(width: menuW, height: 1)
+            // Spacer matching the 3-dot menu column + hPad
+            Color.clear.frame(width: menuW + hPad, height: 1)
         }
         .padding(.vertical, 6)
-        .padding(.horizontal, 4)
         .background(AppTheme.Colors.surface.opacity(0.6))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, 4)
     }
 }
 
@@ -3102,16 +3099,17 @@ private struct AdvancedVideoTableRow: View {
     @State private var isSubscribedLocal = false
     @State private var isWatchLaterLocal = false
 
-    @Environment(\.horizontalSizeClass) private var sizeClass
-
     private var visibleColumns: [AdvancedSortColumn] {
-        sizeClass == .regular
+        UIDevice.current.userInterfaceIdiom == .pad
             ? AdvancedSortColumn.allCases
             : [.views, .ctr]
     }
 
     var body: some View {
         HStack(spacing: 0) {
+            // Leading padding baked in — reliable regardless of call site
+            Color.clear.frame(width: 16, height: 1)
+
             // Thumbnail — fixed 72pt, then 10pt gap
             ZStack(alignment: .bottomTrailing) {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -3195,6 +3193,9 @@ private struct AdvancedVideoTableRow: View {
                     .frame(width: 32, height: 32)
             }
             .buttonStyle(.plain)
+
+            // Trailing padding baked in
+            Color.clear.frame(width: 16, height: 1)
         }
         .padding(.vertical, 10)
         .contentShape(Rectangle())
