@@ -24,6 +24,10 @@ struct MainTabView: View {
     @State private var selectedTab: TabItem = .home
     @State private var previousTab: TabItem = .home
     @State private var showingUpload: Bool = false
+    @State private var showingCreatePicker: Bool = false
+    @State private var showingFlickUpload: Bool = false
+    @State private var showingGoLive: Bool = false
+    @State private var showingCreatePost: Bool = false
     @State private var isInitialized: Bool = false
     @State private var presentGlobalNowPlaying: Bool = false
     @State private var presentNotificationsInbox: Bool = false
@@ -255,8 +259,8 @@ struct MainTabView: View {
                     selectedTab: $selectedTab,
                     notificationBadges: notificationBadges,
                     onUploadTap: {
-                        if appState.requireAuthentication(hint: "Sign in to upload videos.") {
-                            showingUpload = true
+                        if appState.requireAuthentication(hint: "Sign in to create content.") {
+                            showingCreatePicker = true
                         }
                     },
                     onTabSelected: handleTabSelection
@@ -286,6 +290,22 @@ struct MainTabView: View {
             .ignoresSafeArea(.keyboard)
             .fullScreenCover(isPresented: $showingUpload) {
                 SafeUploadView()
+            }
+            .fullScreenCover(isPresented: $showingFlickUpload) {
+                FlickUploadSheet { _ in showingFlickUpload = false }
+            }
+            .sheet(isPresented: $showingGoLive) {
+                GoLivePlaceholderView()
+            }
+            .sheet(isPresented: $showingCreatePost) {
+                CreatePostPlaceholderView()
+            }
+            .confirmationDialog("Create", isPresented: $showingCreatePicker, titleVisibility: .visible) {
+                Button("Upload video") { showingUpload = true }
+                Button("Flick") { showingFlickUpload = true }
+                Button("Go live") { showingGoLive = true }
+                Button("Post") { showingCreatePost = true }
+                Button("Cancel", role: .cancel) {}
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PresentUploadEditorForVideo"))) { note in
                 if let video = note.object as? Video {
@@ -326,8 +346,8 @@ struct MainTabView: View {
                         notificationBadges: notificationBadges,
                         isHidden: false,
                         onUploadTap: {
-                            if appState.requireAuthentication(hint: "Sign in to upload videos.") {
-                                showingUpload = true
+                            if appState.requireAuthentication(hint: "Sign in to create content.") {
+                                showingCreatePicker = true
                             }
                         },
                         onTabSelected: handleTabSelection
@@ -345,6 +365,22 @@ struct MainTabView: View {
             .ignoresSafeArea(.keyboard)
             .fullScreenCover(isPresented: $showingUpload) {
                 SafeUploadView()
+            }
+            .fullScreenCover(isPresented: $showingFlickUpload) {
+                FlickUploadSheet { _ in showingFlickUpload = false }
+            }
+            .sheet(isPresented: $showingGoLive) {
+                GoLivePlaceholderView()
+            }
+            .sheet(isPresented: $showingCreatePost) {
+                CreatePostPlaceholderView()
+            }
+            .confirmationDialog("Create", isPresented: $showingCreatePicker, titleVisibility: .visible) {
+                Button("Upload video") { showingUpload = true }
+                Button("Flick") { showingFlickUpload = true }
+                Button("Go live") { showingGoLive = true }
+                Button("Post") { showingCreatePost = true }
+                Button("Cancel", role: .cancel) {}
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PresentUploadEditorForVideo"))) { note in
                 if let video = note.object as? Video {
@@ -1019,10 +1055,10 @@ struct CustomTabBar: View {
                     }
                 }
                 
-                // Add profile button when connected (not on profile tab)
+                // Add profile button always (unless profile tab is separated out)
                 if selectedTab != .profile {
                     ConnectedProfileButton(
-                        isSelected: false,
+                        isSelected: selectedTab == .profile,
                         badgeCount: notificationBadges[.profile] ?? 0,
                         action: {
                             onTabSelected(.profile)
@@ -1723,6 +1759,68 @@ struct AccountBlockedView: View {
 struct SafeFloatingMiniPlayer: View {
     var body: some View {
         EmptyView()
+    }
+}
+
+// MARK: - Go Live Placeholder
+struct GoLivePlaceholderView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Spacer()
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .font(.system(size: 64))
+                    .foregroundColor(.red)
+                Text("Go Live")
+                    .font(.system(size: 28, weight: .bold))
+                Text("Live streaming is coming soon.")
+                    .font(.system(size: 16))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+                Spacer()
+            }
+            .navigationTitle("Go Live")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Create Post Placeholder
+struct CreatePostPlaceholderView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Spacer()
+                Image(systemName: "doc.text")
+                    .font(.system(size: 64))
+                    .foregroundColor(AppTheme.Colors.primary)
+                Text("Create Post")
+                    .font(.system(size: 28, weight: .bold))
+                Text("Community posts are coming soon.")
+                    .font(.system(size: 16))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+                Spacer()
+            }
+            .navigationTitle("Create Post")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
     }
 }
 
