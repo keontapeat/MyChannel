@@ -3029,16 +3029,33 @@ private struct AdvancedMetrixItem: Identifiable {
 private struct AdvancedTableColumnHeader: View {
     @Binding var sortColumn: AdvancedSortColumn
     @Binding var sortAscending: Bool
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    // Same widths used in AdvancedVideoTableRow so columns align perfectly
+    private let thumbW: CGFloat = 72
+    private let thumbSpacing: CGFloat = 10
+    private let statW: CGFloat = 48
+    private let menuW: CGFloat = 32
+
+    private var visibleColumns: [AdvancedSortColumn] {
+        sizeClass == .regular
+            ? AdvancedSortColumn.allCases
+            : [.views, .ctr]          // only 2 cols on compact/phone
+    }
 
     var body: some View {
         HStack(spacing: 0) {
-            // VIDEO label — flexible, aligns with thumbnail+title
+            // Blank space matching thumbnail + gap
+            Color.clear
+                .frame(width: thumbW + thumbSpacing, height: 1)
+
+            // VIDEO label — flexible, covers title column
             Text("VIDEO")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(AppTheme.Colors.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            ForEach(AdvancedSortColumn.allCases, id: \.self) { col in
+            ForEach(visibleColumns, id: \.self) { col in
                 Button {
                     HapticManager.shared.impact(style: .light)
                     if sortColumn == col {
@@ -3058,13 +3075,13 @@ private struct AdvancedTableColumnHeader: View {
                                 .foregroundStyle(AppTheme.Colors.primary)
                         }
                     }
-                    .frame(width: 44, alignment: .trailing)
+                    .frame(width: statW, alignment: .trailing)
                 }
                 .buttonStyle(.plain)
             }
 
-            // Spacer for the 3-dot column
-            Spacer().frame(width: 28)
+            // Spacer matching the 3-dot menu column
+            Color.clear.frame(width: menuW, height: 1)
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 4)
@@ -3085,9 +3102,17 @@ private struct AdvancedVideoTableRow: View {
     @State private var isSubscribedLocal = false
     @State private var isWatchLaterLocal = false
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private var visibleColumns: [AdvancedSortColumn] {
+        sizeClass == .regular
+            ? AdvancedSortColumn.allCases
+            : [.views, .ctr]
+    }
+
     var body: some View {
-        HStack(spacing: 8) {
-            // Thumbnail
+        HStack(spacing: 0) {
+            // Thumbnail — fixed 72pt, then 10pt gap
             ZStack(alignment: .bottomTrailing) {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(AppTheme.Colors.textTertiary.opacity(0.12))
@@ -3109,6 +3134,7 @@ private struct AdvancedVideoTableRow: View {
                     .padding(3),
                 alignment: .bottomTrailing
             )
+            .padding(.trailing, 10)
 
             // Title + visibility badge — flexible, takes remaining space
             VStack(alignment: .leading, spacing: 3) {
@@ -3148,11 +3174,13 @@ private struct AdvancedVideoTableRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Stat columns — Views, CTR, WatchTime, Revenue
-            AdvancedStatColumn(value: formatViews(video.viewCount), label: nil)
-            AdvancedStatColumn(value: "—", label: nil)
-            AdvancedStatColumn(value: "—", label: nil)
-            AdvancedStatColumn(value: "—", label: nil)
+            // Stat columns — only show columns matching header
+            ForEach(visibleColumns, id: \.self) { col in
+                AdvancedStatColumn(
+                    value: col == .views ? formatViews(video.viewCount) : "—",
+                    label: nil
+                )
+            }
 
             // 3-dot menu
             Button {
@@ -3164,7 +3192,7 @@ private struct AdvancedVideoTableRow: View {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AppTheme.Colors.textSecondary)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 32, height: 32)
             }
             .buttonStyle(.plain)
         }
@@ -3206,7 +3234,7 @@ private struct AdvancedStatColumn: View {
         Text(value)
             .font(.system(size: 11, weight: .medium, design: .rounded))
             .foregroundStyle(AppTheme.Colors.textSecondary)
-            .frame(width: 44, alignment: .trailing)
+            .frame(width: 48, alignment: .trailing)
             .lineLimit(1)
     }
 }
