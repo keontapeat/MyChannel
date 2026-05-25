@@ -19,7 +19,7 @@ struct AdvancedFeaturesMenu: View {
     @State private var selectedFeature: AdvancedFeature = .arFilters
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Color.black.ignoresSafeArea()
                 

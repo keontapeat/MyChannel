@@ -27,6 +27,11 @@ struct VideoDetailMetaView: View {
     var onChannelTap: ((String) -> Void)? = nil
     var onHashtagTap: ((String) -> Void)? = nil
     var dynamicViewCount: Int? = nil
+    // 🔥 YOUTUBE PARITY: Related videos rail below comments
+    var relatedVideos: [Video] = []
+    var onSelectRelated: ((Video) -> Void)? = nil
+    // 🔥 YOUTUBE PARITY: Show transcript button inside description section
+    var onShowTranscript: (() -> Void)? = nil
     
     // MARK: - Services for Firestore persistence
     @StateObject private var appState = AppState.shared
@@ -84,6 +89,12 @@ struct VideoDetailMetaView: View {
                     // MARK: - Comments Preview
                     commentsPreviewSection
                         .transition(.move(edge: .bottom).combined(with: .opacity))
+                    
+                    // 🔥 YOUTUBE PARITY: Related videos vertical rail
+                    if !relatedVideos.isEmpty {
+                        relatedVideosSection
+                            .transition(.opacity)
+                    }
                     
                     // Bottom safe area padding
                     Spacer()
@@ -417,6 +428,29 @@ struct VideoDetailMetaView: View {
                 }
                 .accessibilityLabel(expandedDescription ? "Show less description" : "Show more description")
             }
+
+            // 🔥 YOUTUBE PARITY: Show transcript button (appears when description is expanded)
+            if expandedDescription, onShowTranscript != nil {
+                Button(action: {
+                    HapticManager.shared.impact(style: .light)
+                    onShowTranscript?()
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "text.alignleft")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Show transcript")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule().fill(AppTheme.Colors.surface)
+                    )
+                }
+                .accessibilityLabel("Show video transcript")
+                .padding(.top, 4)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
@@ -435,6 +469,124 @@ struct VideoDetailMetaView: View {
         .padding(.top, 8)
     }
     
+    // MARK: - 🔥 YOUTUBE PARITY: Related Videos Section
+    private var relatedVideosSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Rectangle()
+                .fill(AppTheme.Colors.surface.opacity(0.4))
+                .frame(height: 0.5)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+
+            HStack {
+                Text("Up next")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+
+            LazyVStack(alignment: .leading, spacing: 16) {
+                ForEach(relatedVideos.filter { $0.id != video.id }.prefix(20)) { related in
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                        onSelectRelated?(related)
+                    } label: {
+                        relatedVideoRow(related)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
+        }
+    }
+
+    @ViewBuilder
+    private func relatedVideoRow(_ video: Video) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Thumbnail
+            ZStack(alignment: .bottomTrailing) {
+                AppAsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Rectangle().fill(AppTheme.Colors.surface)
+                }
+                .aspectRatio(16.0/9.0, contentMode: .fill)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                Text(formatDuration(video.duration))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color.black.opacity(0.75))
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .padding(8)
+            }
+
+            // Meta row
+            HStack(alignment: .top, spacing: 10) {
+                AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { img in
+                    img.resizable().aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Circle().fill(AppTheme.Colors.surface)
+                }
+                .frame(width: 32, height: 32)
+                .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(video.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+
+                    HStack(spacing: 4) {
+                        Text(video.creator.displayName)
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        if video.creator.isVerified {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                    }
+
+                    Text("\(formatCount(video.viewCount)) views \u{2022} \(video.timeAgo)")
+                        .font(.system(size: 12))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                Button(action: {}) {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .padding(8)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private func formatDuration(_ seconds: TimeInterval) -> String {
+        let totalSeconds = Int(seconds.rounded())
+        let h = totalSeconds / 3600
+        let m = (totalSeconds % 3600) / 60
+        let s = totalSeconds % 60
+        if h > 0 {
+            return String(format: "%d:%02d:%02d", h, m, s)
+        }
+        return String(format: "%d:%02d", m, s)
+    }
+
     // MARK: - Comments Preview Section
     private var commentsPreviewSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -527,10 +679,10 @@ struct VideoDetailMetaView: View {
             isLiked.toggle()
             if isLiked { isDisliked = false }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 150_000_000)
             withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) { likeAnimationScale = 0.9 }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            try? await Task.sleep(nanoseconds: 100_000_000)
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { likeAnimationScale = 1.0 }
         }
         // Persist to Firestore via AppState
@@ -621,7 +773,8 @@ struct VideoDetailMetaView: View {
             subscribeButtonScale = isSubscribed ? 0.9 : 1.15
             isSubscribed.toggle()
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 150_000_000)
             withAnimation(.spring(response: 0.3, dampingFraction: 0.65)) {
                 subscribeButtonScale = 1.0
             }
@@ -782,7 +935,7 @@ struct AskAISheet: View {
     @State private var response: String = ""
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 20) {
                 // AI Icon
                 Image(systemName: "sparkles")
@@ -845,8 +998,8 @@ struct AskAISheet: View {
                 // Ask Button
                 Button(action: {
                     isLoading = true
-                    // Simulate AI response
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
                         isLoading = false
                         response = "This is an AI-generated response about the video."
                     }
@@ -895,7 +1048,7 @@ struct RemixSheet: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 24) {
                 // Header
                 VStack(spacing: 8) {
@@ -1117,23 +1270,23 @@ struct AnimatedViewCountText: View {
     }
     
     private func animateCount() {
-        // 🔥 PREMIUM: Smooth count-up animation
+        // 🔥 PREMIUM: Smooth count-up animation — single Task replaces 21 simultaneous DispatchQueue timers
         let steps = min(viewCount, 20)
         guard steps > 0 else {
             displayedCount = viewCount
             return
         }
-        
-        let stepDuration = 0.5 / Double(steps)
-        
-        for step in 0...steps {
-            DispatchQueue.main.asyncAfter(deadline: .now() + stepDuration * Double(step)) {
+        let target = viewCount
+        let stepNanos = UInt64(500_000_000 / steps) // 0.5 s total
+        Task { @MainActor in
+            for step in 0...steps {
                 let progress = Double(step) / Double(steps)
                 let easedProgress = 1 - pow(1 - progress, 3) // Cubic ease-out
-                let newValue = Int(Double(viewCount) * easedProgress)
-                
                 withAnimation(.spring(response: 0.15, dampingFraction: 0.9)) {
-                    displayedCount = newValue
+                    displayedCount = Int(Double(target) * easedProgress)
+                }
+                if step < steps {
+                    try? await Task.sleep(nanoseconds: stepNanos)
                 }
             }
         }
@@ -1161,7 +1314,9 @@ struct AnimatedViewCountText: View {
             expandedDescription: .constant(false),
             onShare: { print("Share tapped") },
             onMore: { print("More tapped") },
-            onComment: { print("Comment tapped") }
+            onComment: { print("Comment tapped") },
+            relatedVideos: [],
+            onSelectRelated: nil
         )
         .preferredColorScheme(.light)
     }

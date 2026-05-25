@@ -19,7 +19,7 @@ struct PremiumSubscriptionView: View {
     @State private var animateFeatures: Bool = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             GeometryReader { geometry in
                 ZStack {
                     // Premium gradient background

@@ -5,7 +5,7 @@ struct UniversalLinkValidatorView: View {
     @State private var result: String = ""
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Checks that the apple-app-site-association is reachable and valid.")
                     .font(.body)

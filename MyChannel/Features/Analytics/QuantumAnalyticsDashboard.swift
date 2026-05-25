@@ -18,7 +18,7 @@ struct QuantumAnalyticsDashboard: View {
     @State private var isQuantumProcessing = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     // Quantum Header
@@ -805,7 +805,7 @@ struct ParallelUniverseAnalysisView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     Text("🌍 Parallel Universe Analysis")

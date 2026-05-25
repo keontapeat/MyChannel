@@ -36,12 +36,7 @@ final class VSMatchWalletService: ObservableObject {
             let data = doc.data() ?? [:]
             
             let available = data["availableBalance"] as? Double ?? 0.0
-            let pending = data["pendingBalance"] as? Double ?? 0.0
-            
-            await MainActor.run {
-                self.balance = available
-            }
-            
+            self.balance = available  // @MainActor class — direct assignment is safe
             return available
         } catch {
             throw WalletError.fetchFailed
@@ -76,27 +71,19 @@ final class VSMatchWalletService: ObservableObject {
     /// Update balance after transaction
     func updateBalance(userId: String, amount: Double, type: VSMatchTransactionType) async throws {
         #if canImport(FirebaseFirestore)
-        let walletRef = db.collection("vs_match_wallets").document(userId)
-        
-        let currentData = try await walletRef.getDocument().data() ?? [:]
-        let currentBalance = currentData["availableBalance"] as? Double ?? 0.0
-        
-        let newBalance: Double
+        // Atomic increment — avoids TOCTOU race from read-modify-write
+        let delta: Double
         switch type {
         case .deposit, .win, .refund:
-            newBalance = currentBalance + amount
+            delta = amount
         case .withdrawal, .wager, .fee:
-            newBalance = currentBalance - amount
+            delta = -amount
         }
-        
-        try await walletRef.setData([
-            "availableBalance": newBalance,
+        try await db.collection("vs_match_wallets").document(userId).setData([
+            "availableBalance": FieldValue.increment(delta),
             "updatedAt": FieldValue.serverTimestamp()
         ], merge: true)
-        
-        await MainActor.run {
-            self.balance = newBalance
-        }
+        self.balance += delta  // Optimistic local update; @MainActor — direct assignment is safe
         #endif
     }
     
@@ -272,12 +259,11 @@ final class VSMatchWalletService: ObservableObject {
             try await releaseHeldFunds(userId: withdrawal.userId, amount: withdrawal.amount)
             #endif
             
-            await MainActor.run {
-                if let index = self.pendingWithdrawals.firstIndex(where: { $0.id == withdrawal.id }) {
-                    var updated = withdrawal
-                    updated.status = .completed
-                    self.pendingWithdrawals[index] = updated
-                }
+            // @MainActor class — direct mutation is safe
+            if let index = self.pendingWithdrawals.firstIndex(where: { $0.id == withdrawal.id }) {
+                var updated = withdrawal
+                updated.status = .completed
+                self.pendingWithdrawals[index] = updated
             }
         } catch {
             // Mark as failed
@@ -288,8 +274,8 @@ final class VSMatchWalletService: ObservableObject {
                 "failedAt": FieldValue.serverTimestamp()
             ])
             
-            // Refund held funds
-            try? await releaseHeldFunds(userId: withdrawal.userId, amount: withdrawal.amount)
+            // Refund held funds to available balance (withdrawal failed)
+            try? await releaseHeldFunds(userId: withdrawal.userId, amount: withdrawal.amount, refundToAvailable: true)
             #endif
         }
     }
@@ -319,10 +305,7 @@ final class VSMatchWalletService: ObservableObject {
             )
         }
         
-        await MainActor.run {
-            self.transactionHistory = transactions
-        }
-        
+        self.transactionHistory = transactions  // @MainActor class — direct assignment is safe
         return transactions
         #else
         return []
@@ -353,31 +336,24 @@ final class VSMatchWalletService: ObservableObject {
     
     private func holdFundsForWithdrawal(userId: String, amount: Double) async throws {
         #if canImport(FirebaseFirestore)
-        let walletRef = db.collection("vs_match_wallets").document(userId)
-        let doc = try await walletRef.getDocument()
-        let data = doc.data() ?? [:]
-        
-        let available = data["availableBalance"] as? Double ?? 0.0
-        let pending = data["pendingBalance"] as? Double ?? 0.0
-        
-        try await walletRef.updateData([
-            "availableBalance": available - amount,
-            "pendingBalance": pending + amount
+        // Atomic increments — avoids read-modify-write race condition
+        try await db.collection("vs_match_wallets").document(userId).updateData([
+            "availableBalance": FieldValue.increment(-amount),
+            "pendingBalance": FieldValue.increment(amount)
         ])
         #endif
     }
     
-    private func releaseHeldFunds(userId: String, amount: Double) async throws {
+    /// Release held (pending) funds. Pass `refundToAvailable: true` on withdrawal failure to restore the user's spendable balance.
+    private func releaseHeldFunds(userId: String, amount: Double, refundToAvailable: Bool = false) async throws {
         #if canImport(FirebaseFirestore)
-        let walletRef = db.collection("vs_match_wallets").document(userId)
-        let doc = try await walletRef.getDocument()
-        let data = doc.data() ?? [:]
-        
-        let pending = data["pendingBalance"] as? Double ?? 0.0
-        
-        try await walletRef.updateData([
-            "pendingBalance": max(0, pending - amount)
-        ])
+        var updates: [String: Any] = [
+            "pendingBalance": FieldValue.increment(-amount)
+        ]
+        if refundToAvailable {
+            updates["availableBalance"] = FieldValue.increment(amount)
+        }
+        try await db.collection("vs_match_wallets").document(userId).updateData(updates)
         #endif
     }
     

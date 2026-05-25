@@ -160,7 +160,7 @@ private struct OwnerFeaturedPickerView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 ForEach(candidates) { video in
                     Button {

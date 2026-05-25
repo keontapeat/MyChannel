@@ -6,6 +6,77 @@
 //
 
 import SwiftUI
+import UIKit
+
+enum iPadLayout {
+    static let maxContentWidth: CGFloat = 900
+    static let tabBarMaxWidth: CGFloat = 500
+    static let signInSheetWidth: CGFloat = 420
+
+    static var isIPad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+
+    static func videoCardWidth(in proxy: GeometryProxy) -> CGFloat {
+        let available = proxy.size.width
+        if available >= 1024 {
+            return (available - 80) / 4
+        } else if available >= 768 {
+            return (available - 64) / 3
+        } else if available >= 500 {
+            return (available - 48) / 2.5
+        } else {
+            return 180
+        }
+    }
+
+    static func gridColumns(for width: CGFloat, minItemWidth: CGFloat = 160) -> [GridItem] {
+        let count = max(1, Int(width / minItemWidth))
+        return Array(repeating: GridItem(.flexible(), spacing: 16), count: count)
+    }
+}
+
+private struct AdaptiveCardWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 180
+}
+
+extension EnvironmentValues {
+    var adaptiveCardWidth: CGFloat {
+        get { self[AdaptiveCardWidthKey.self] }
+        set { self[AdaptiveCardWidthKey.self] = newValue }
+    }
+}
+
+// MARK: - iPad Readable Content Width Modifier
+/// Apple's UIKit gives `readableContentGuide` automatically; SwiftUI does not.
+/// Without this, SwiftUI ScrollView content extends edge-to-edge on iPad and looks
+/// left-aligned/empty in the center. Apply this to inner content (lists, grids,
+/// link sections) on iPad to center them at a readable max width while keeping
+/// edge-to-edge banners/headers untouched.
+///
+/// Reference: https://swiftwithmajid.com/2024/04/23/content-margins-in-swiftui/
+private struct IPadReadableWidthModifier: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    var maxWidth: CGFloat = iPadLayout.maxContentWidth
+
+    func body(content: Content) -> some View {
+        if iPadLayout.isIPad && sizeClass == .regular {
+            content
+                .frame(maxWidth: maxWidth)
+                .frame(maxWidth: .infinity, alignment: .center)
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    /// Centers content at `iPadLayout.maxContentWidth` on iPad regular size class;
+    /// leaves content unchanged on iPhone / compact size class.
+    func iPadReadableWidth(_ maxWidth: CGFloat = iPadLayout.maxContentWidth) -> some View {
+        modifier(IPadReadableWidthModifier(maxWidth: maxWidth))
+    }
+}
 
 // MARK: - Scale Button Style
 /// A button style that scales down slightly when pressed for a tactile feel

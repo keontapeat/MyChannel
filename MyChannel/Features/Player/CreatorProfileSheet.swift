@@ -24,7 +24,7 @@ struct CreatorProfileSheet: View {
     private let avatarSize: CGFloat = 88
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 0) {
                     // MARK: - Banner + Avatar Header

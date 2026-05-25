@@ -53,7 +53,7 @@ struct ProfileSettingsView: View {
     private let qualityOptions = ["Auto", "720p", "1080p", "4K"]
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 // Account Section
                 accountSection
@@ -835,7 +835,7 @@ struct ProfileSettingsFallbackView: View {
     let dismiss: DismissAction
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 24) {
                 Image(systemName: "gearshape.2")
                     .font(.system(size: 64))

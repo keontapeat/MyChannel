@@ -158,7 +158,7 @@ struct StudioCreatePlaylistSheet: View {
     @State private var isPublic = true
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section("Details") {
                     TextField("Playlist Title", text: $title)
@@ -207,7 +207,7 @@ struct StudioEditPlaylistSheet: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section("Details") {
                     TextField("Title", text: $title)

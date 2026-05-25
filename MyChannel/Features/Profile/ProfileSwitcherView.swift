@@ -13,7 +13,7 @@ struct ProfileSwitcherView: View {
     @EnvironmentObject private var appState: AppState
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 // Current Profile
                 if let currentUser = appState.currentUser {

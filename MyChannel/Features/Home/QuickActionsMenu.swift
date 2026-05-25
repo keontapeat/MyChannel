@@ -220,7 +220,7 @@ struct ReportContentSheet: View {
     @State private var additionalDetails: String = ""
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Why are you reporting this content?")
@@ -358,7 +358,7 @@ enum ReportReason: String, CaseIterable {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         VStack {
             Spacer()
             QuickActionsMenu()

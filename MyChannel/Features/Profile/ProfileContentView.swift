@@ -109,6 +109,8 @@ struct ProfileContentView: View {
     var body: some View {
         LazyVStack(spacing: 0) {
             switch selectedTab {
+            case .home:
+                ProfileChannelHomeView(videos: videos, user: user)
             case .videos:
                 ProfileVideosView(
                     videos: videos,
@@ -122,6 +124,8 @@ struct ProfileContentView: View {
                 )
             case .shorts:
                 ProfileShortsView(videos: videos, user: user)
+            case .live:
+                ProfileLiveView(videos: videos, user: user)
             case .playlists:
                 ProfilePlaylistsView(user: user)
             case .downloads:
@@ -865,9 +869,7 @@ struct ProfileVideoCard: View {
         }
         ProfileCacheService.shared.removeVideoFromCache(video.id)
         NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: NSNotification.Name("ShowToast"), object: "Video deleted successfully")
-        }
+        NotificationCenter.default.post(name: NSNotification.Name("ShowToast"), object: "Video deleted successfully")
     }
 }
 
@@ -2263,9 +2265,7 @@ private struct FullWidthVideoCard: View {
         }
         ProfileCacheService.shared.removeVideoFromCache(video.id)
         NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: NSNotification.Name("ShowToast"), object: "Video deleted successfully")
-        }
+        NotificationCenter.default.post(name: NSNotification.Name("ShowToast"), object: "Video deleted successfully")
     }
 }
 

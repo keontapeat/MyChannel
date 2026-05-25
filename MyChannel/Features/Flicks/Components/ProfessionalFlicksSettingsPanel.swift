@@ -16,7 +16,7 @@ struct ProfessionalFlicksSettingsPanel: View {
     private let feedTypes = ["For You", "Following", "Trending"]
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
                     VStack(spacing: 16) {

@@ -1147,7 +1147,7 @@ struct VideoEditorSheet: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section("Video Details") {
                     TextField("Title", text: $title)
@@ -1219,7 +1219,7 @@ struct BulkEditSheet: View {
     @State private var newCategory: VideoCategory = .movies
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section {
                     Text("\(selectedVideoIds.count) videos selected")
@@ -1269,21 +1269,28 @@ struct BulkEditSheet: View {
     }
     
     private func applyBulkEdit() {
+        // Capture @State values on main actor before entering Task
+        let title = updateTitle ? newTitle : nil
+        let description = updateDescription ? newDescription : nil
+        let category = updateCategory ? newCategory : nil
         Task {
-            for videoId in selectedVideoIds {
-                do {
-                    try await VideoFirestoreService.shared.updateVideoMetadata(
-                        videoId: videoId,
-                        title: updateTitle ? newTitle : nil,
-                        description: updateDescription ? newDescription : nil,
-                        category: updateCategory ? newCategory : nil,
-                        tags: nil
-                    )
-                } catch {
-                    print("🚨 Error updating video \(videoId): \(error)")
+            await withTaskGroup(of: Void.self) { group in
+                for videoId in selectedVideoIds {
+                    group.addTask {
+                        do {
+                            try await VideoFirestoreService.shared.updateVideoMetadata(
+                                videoId: videoId,
+                                title: title,
+                                description: description,
+                                category: category,
+                                tags: nil
+                            )
+                        } catch {
+                            print("🚨 Error updating video \(videoId): \(error)")
+                        }
+                    }
                 }
             }
-            
             await MainActor.run {
                 HapticManager.shared.notification(type: .success)
                 onSave()
@@ -1314,7 +1321,7 @@ struct BulkVisibilitySheet: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section {
                     Text("\(selectedVideoIds.count) videos selected")
@@ -1359,29 +1366,29 @@ struct BulkVisibilitySheet: View {
     }
     
     private func applyVisibility() {
+        // Capture @State value on main actor before entering Task
+        let visibility: Video.VisibilityStatus
+        switch selectedVisibility {
+        case .public_:
+            visibility = .public
+        case .unlisted:
+            visibility = .unlisted
+        case .private_:
+            visibility = .private
+        }
         Task {
-            await MainActor.run {
-                isApplying = true
-            }
-
-            let visibility: Video.VisibilityStatus
-            switch selectedVisibility {
-            case .public_:
-                visibility = .public
-            case .unlisted:
-                visibility = .unlisted
-            case .private_:
-                visibility = .private
-            }
-
-            for videoId in selectedVideoIds {
-                do {
-                    try await VideoFirestoreService.shared.updateVideoVisibility(videoId: videoId, visibility: visibility)
-                } catch {
-                    print("🚨 Failed to update visibility for \(videoId): \(error)")
+            await MainActor.run { isApplying = true }
+            await withTaskGroup(of: Void.self) { group in
+                for videoId in selectedVideoIds {
+                    group.addTask {
+                        do {
+                            try await VideoFirestoreService.shared.updateVideoVisibility(videoId: videoId, visibility: visibility)
+                        } catch {
+                            print("🚨 Failed to update visibility for \(videoId): \(error)")
+                        }
+                    }
                 }
             }
-
             await MainActor.run {
                 isApplying = false
                 HapticManager.shared.notification(type: .success)
@@ -1403,7 +1410,7 @@ struct BulkPlaylistSheet: View {
     @State private var selectedPlaylists: Set<String> = []
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section {
                     Text("\(selectedVideoIds.count) videos selected")

@@ -51,7 +51,7 @@ struct MatchResultSubmissionView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 // Background
                 AppTheme.Colors.background.ignoresSafeArea()
@@ -828,8 +828,7 @@ struct MatchResultSubmissionView: View {
     }
     
     private func getCurrentUserId() -> String {
-        // Get from AuthenticationManager
-        return "user-123" // TODO: Replace with actual user ID
+        return AuthenticationManager.shared.currentUser?.id ?? ""
     }
 }
 

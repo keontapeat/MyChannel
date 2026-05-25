@@ -633,7 +633,7 @@ struct WithdrawalSheet: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section("Amount") {
                     HStack {
@@ -686,7 +686,7 @@ struct PaymentHistorySheet: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 ForEach(0..<10, id: \.self) { index in
                     PaymentRow(

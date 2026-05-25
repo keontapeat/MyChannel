@@ -211,10 +211,21 @@ struct ModernVideoPlayerView: View {
                 playerViewModel.setupPlayer(with: adVideo)
                 playerViewModel.play()
                 AdsService.fire(ad.q0)
-                DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 0.25)) { AdsService.fire(ad.q25) }
-                DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 0.50)) { AdsService.fire(ad.q50) }
-                DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 0.75)) { AdsService.fire(ad.q75) }
-                DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 1.00)) {
+                let dur = Double(ad.duration)
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(max(0.0, dur * 0.25) * 1_000_000_000))
+                    AdsService.fire(ad.q25)
+                }
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(max(0.0, dur * 0.50) * 1_000_000_000))
+                    AdsService.fire(ad.q50)
+                }
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(max(0.0, dur * 0.75) * 1_000_000_000))
+                    AdsService.fire(ad.q75)
+                }
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(max(0.0, dur) * 1_000_000_000))
                     AdsService.fire(ad.q100)
                     playerViewModel.setupPlayer(with: video)
                     playerViewModel.play()
@@ -259,7 +270,8 @@ struct ModernVideoPlayerView: View {
     }
     
     private func hideIndicators() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
             withAnimation(.easeInOut(duration: 0.3)) {
                 showVolumeIndicator = false
                 showBrightnessIndicator = false
@@ -268,7 +280,8 @@ struct ModernVideoPlayerView: View {
     }
     
     private func hideControlsAfterDelay() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
             withAnimation(.easeInOut(duration: 0.3)) {
                 showControls = false
             }
@@ -559,12 +572,12 @@ struct ModernProgressBar: View {
                     .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
             }
         }
-        .frame(height: 20)
         .gesture(
             DragGesture()
                 .onChanged { value in
                     isDragging = true
-                    let newProgress = max(0, min(1, value.location.x / UIScreen.main.bounds.width))
+                    // Use geometry.size.width (component width) not UIScreen width
+                    let newProgress = max(0, min(1, value.location.x / geometry.size.width))
                     dragProgress = newProgress
                 }
                 .onEnded { value in
@@ -574,6 +587,7 @@ struct ModernProgressBar: View {
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
     }
+    .frame(height: 20)
 }
 
 // MARK: - Modern Loading View
@@ -771,40 +785,39 @@ class VideoPlayerViewModel: ObservableObject {
             forInterval: CMTime(seconds: 0.1, preferredTimescale: 1000),
             queue: .main
         ) { [weak self] time in
+            // Already dispatched to main queue — no Task{@MainActor} wrapper needed
             guard let self else { return }
-            Task { @MainActor in
-                self.currentTime = time.seconds
+            self.currentTime = time.seconds
+            
+            if let duration = self.player?.currentItem?.duration.seconds, duration.isFinite {
+                self.duration = duration
+                self.currentProgress = time.seconds / duration
+            }
+            
+            if time.seconds - self.lastResumePersist >= 5 {
+                self.lastResumePersist = time.seconds
+                UserDefaults.standard.set(time.seconds, forKey: "resume_\(self.resumeKey)")
                 
-                if let duration = self.player?.currentItem?.duration.seconds, duration.isFinite {
-                    self.duration = duration
-                    self.currentProgress = time.seconds / duration
+                // Update watch history progress
+                if let video = self.currentVideo, self.duration > 0 {
+                    let progress = time.seconds / self.duration
+                    AppState.shared.updateHistoryProgress(contentId: video.id, progress: progress, position: time.seconds)
                 }
-                
-                if time.seconds - self.lastResumePersist >= 5 {
-                    self.lastResumePersist = time.seconds
-                    UserDefaults.standard.set(time.seconds, forKey: "resume_\(self.resumeKey)")
-                    
-                    // Update watch history progress
-                    if let video = self.currentVideo, self.duration > 0 {
-                        let progress = time.seconds / self.duration
-                        AppState.shared.updateHistoryProgress(contentId: video.id, progress: progress, position: time.seconds)
-                    }
+            }
+            
+            if self.duration > 0 {
+                let pct = time.seconds / self.duration
+                if pct >= 0.25 && !self.quartilesFired.contains(25) {
+                    self.quartilesFired.insert(25)
+                    Task { await AnalyticsService.shared.trackVideoQuartile(videoId: self.resumeKey, quartile: 25) }
                 }
-                
-                if self.duration > 0 {
-                    let pct = time.seconds / self.duration
-                    if pct >= 0.25 && !self.quartilesFired.contains(25) {
-                        self.quartilesFired.insert(25)
-                        Task { await AnalyticsService.shared.trackVideoQuartile(videoId: self.resumeKey, quartile: 25) }
-                    }
-                    if pct >= 0.50 && !self.quartilesFired.contains(50) {
-                        self.quartilesFired.insert(50)
-                        Task { await AnalyticsService.shared.trackVideoQuartile(videoId: self.resumeKey, quartile: 50) }
-                    }
-                    if pct >= 0.75 && !self.quartilesFired.contains(75) {
-                        self.quartilesFired.insert(75)
-                        Task { await AnalyticsService.shared.trackVideoQuartile(videoId: self.resumeKey, quartile: 75) }
-                    }
+                if pct >= 0.50 && !self.quartilesFired.contains(50) {
+                    self.quartilesFired.insert(50)
+                    Task { await AnalyticsService.shared.trackVideoQuartile(videoId: self.resumeKey, quartile: 50) }
+                }
+                if pct >= 0.75 && !self.quartilesFired.contains(75) {
+                    self.quartilesFired.insert(75)
+                    Task { await AnalyticsService.shared.trackVideoQuartile(videoId: self.resumeKey, quartile: 75) }
                 }
             }
         }
@@ -826,15 +839,23 @@ class VideoPlayerViewModel: ObservableObject {
     // MARK: Media Selection (Captions/Dubs)
     private func configureMediaSelection() {
         guard let item = player?.currentItem else { return }
-        let asset = item.asset
-        if let legible = asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
-            subtitleGroup = legible
-            subtitleOptions = legible.options
-        }
-        if let audible = asset.mediaSelectionGroup(forMediaCharacteristic: .audible) {
-            audioGroup = audible
-            audioOptions = audible.options
-        }
+        // Wait until the item is ready — mediaSelectionGroup returns nil on a freshly-created item
+        item.publisher(for: \.status)
+            .filter { $0 == .readyToPlay }
+            .first()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, let asset = self.player?.currentItem?.asset else { return }
+                if let legible = asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
+                    self.subtitleGroup = legible
+                    self.subtitleOptions = legible.options
+                }
+                if let audible = asset.mediaSelectionGroup(forMediaCharacteristic: .audible) {
+                    self.audioGroup = audible
+                    self.audioOptions = audible.options
+                }
+            }
+            .store(in: &cancellables)
     }
     
     func selectSubtitle(option: AVMediaSelectionOption?) {
@@ -867,6 +888,7 @@ class VideoPlayerViewModel: ObservableObject {
         }
         player = nil
         cancellables.removeAll()
+        quartilesFired.removeAll()
     }
 
     func togglePiP() {

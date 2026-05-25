@@ -8,7 +8,7 @@ struct HashtagSearchSheet: View {
     @State private var isLoading = true
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Group {
                 if isLoading {
                     ProgressView("Searching #\(hashtag)…")

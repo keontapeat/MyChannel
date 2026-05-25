@@ -45,6 +45,30 @@ struct LiveVersusMatchView: View {
         .background(AppTheme.Colors.background)
         .navigationTitle("LIVE MATCH")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            // Initialise countdown from actual start time
+            if let startedAt = match.startedAt {
+                let elapsed = Date().timeIntervalSince(startedAt)
+                timeRemaining = max(0, match.rules.duration - elapsed)
+            } else {
+                timeRemaining = match.rules.duration
+            }
+            // Tick every second until match ends or view disappears
+            while timeRemaining > 0 && !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                timeRemaining = max(0, timeRemaining - 1)
+            }
+        }
+        .task {
+            // Poll Firestore for live stats every 10 seconds
+            while !Task.isCancelled {
+                if let latest = await matchService.fetchMatch(matchId: match.id),
+                   let stats = latest.finalStats {
+                    liveStats = stats
+                }
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
+            }
+        }
     }
     
     // MARK: - Live Badge
@@ -155,19 +179,24 @@ struct LiveVersusMatchView: View {
             Text("Live Score")
                 .font(.system(size: 18, weight: .bold))
             
-            HStack(spacing: 0) {
-                // Challenger bar
-                Rectangle()
-                    .fill(Color.blue)
-                    .frame(width: challengerProgress)
-                
-                // Opponent bar
-                Rectangle()
-                    .fill(Color.red)
-                    .frame(width: opponentProgress)
+            // GeometryReader replaces deprecated UIScreen.main.bounds
+            GeometryReader { geo in
+                let total = liveStats.challengerViews + liveStats.opponentViews
+                let cFrac: CGFloat = total > 0
+                    ? CGFloat(liveStats.challengerViews) / CGFloat(total)
+                    : 0.5
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color.blue)
+                        .frame(width: geo.size.width * cFrac)
+                    Rectangle()
+                        .fill(Color.red)
+                        .frame(width: geo.size.width * (1 - cFrac))
+                }
+                .frame(height: 40)
+                .cornerRadius(8)
             }
             .frame(height: 40)
-            .cornerRadius(8)
             
             HStack {
                 Text("\(Int(challengerPercentage))%")
@@ -182,20 +211,6 @@ struct LiveVersusMatchView: View {
             }
         }
         .padding(.horizontal, 20)
-    }
-    
-    private var challengerProgress: CGFloat {
-        let total = liveStats.challengerViews + liveStats.opponentViews
-        guard total > 0 else { return UIScreen.main.bounds.width / 2 }
-        let percentage = CGFloat(liveStats.challengerViews) / CGFloat(total)
-        return UIScreen.main.bounds.width * percentage - 40
-    }
-    
-    private var opponentProgress: CGFloat {
-        let total = liveStats.challengerViews + liveStats.opponentViews
-        guard total > 0 else { return UIScreen.main.bounds.width / 2 }
-        let percentage = CGFloat(liveStats.opponentViews) / CGFloat(total)
-        return UIScreen.main.bounds.width * percentage - 40
     }
     
     private var challengerPercentage: Double {

@@ -38,7 +38,7 @@ struct ThermonuclearFeaturedManager: View {
     @State private var showingFullSlotsDialog = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 // Background
                 Color(.systemGroupedBackground)
@@ -353,7 +353,7 @@ struct ThermonuclearFeaturedManager: View {
     
     // MARK: - Video Selector Sheet
     private var videoSelectorSheet: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 // Search + scope toggle
                 VStack(spacing: 10) {

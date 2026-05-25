@@ -164,9 +164,9 @@ class AppState: ObservableObject {
 
     private func hydrateCloudCollectionsIfNeeded() async {
         guard let uid = currentUser?.id else { return }
-        let wl = await UserCollectionsFirestoreService.shared.fetchWatchLater(userId: uid)
-        let subs = await UserCollectionsFirestoreService.shared.fetchSubscriptions(userId: uid)
-        // 🔥 FIX: Mark as listener update to prevent save loop
+        async let wlFetch = UserCollectionsFirestoreService.shared.fetchWatchLater(userId: uid)
+        async let subsFetch = UserCollectionsFirestoreService.shared.fetchSubscriptions(userId: uid)
+        let (wl, subs) = await (wlFetch, subsFetch)
         isSavingFromListener = true
         self.watchLaterVideos = wl
         self.subscriptions = subs
@@ -498,7 +498,8 @@ class AppState: ObservableObject {
         hasError = true
         
         // Auto-clear error after 5 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
             self?.clearError()
         }
     }

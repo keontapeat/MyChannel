@@ -19,7 +19,7 @@ struct RequestFeaturedVideoView: View {
     @State private var lastError: String?
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     videoInfoSection

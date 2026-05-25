@@ -133,18 +133,24 @@ struct VideoPlayerView: View {
                         playerManager.setupPlayer(with: adVideo)
                         playerManager.play()
                         AdsService.fire(ad.q0)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 0.25)) { AdsService.fire(ad.q25) }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 0.50)) { AdsService.fire(ad.q50) }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 0.75)) { AdsService.fire(ad.q75) }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 1.00)) {
+                        let dur = Double(ad.duration)
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: UInt64(max(0.0, dur * 0.25) * 1_000_000_000))
+                            AdsService.fire(ad.q25)
+                        }
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: UInt64(max(0.0, dur * 0.50) * 1_000_000_000))
+                            AdsService.fire(ad.q50)
+                        }
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: UInt64(max(0.0, dur * 0.75) * 1_000_000_000))
+                            AdsService.fire(ad.q75)
+                        }
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: UInt64(max(0.0, dur) * 1_000_000_000))
                             AdsService.fire(ad.q100)
-                            
-                            // 🔥 REVENUE TRACKING: Track ad revenue when ad completes
-                            Task {
-                                let adRevenue = Double.random(in: 0.01...0.50) // Realistic CPM range
-                                await AdsService.trackAdRevenue(for: video, adRevenue: adRevenue)
-                            }
-                            
+                            let adRevenue = Double.random(in: 0.01...0.50)
+                            await AdsService.trackAdRevenue(for: video, adRevenue: adRevenue)
                             playerManager.setupPlayer(with: video)
                             playerManager.play()
                             stopAdTimer()
@@ -192,13 +198,10 @@ struct VideoPlayerView: View {
                     adTimeRemaining = resolved.duration
                     canSkipAd = true
                     startAdTimer()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(resolved.duration)) {
-                        // 🔥 REVENUE TRACKING: Track ad revenue when VAST ad completes
-                        Task {
-                            let adRevenue = Double.random(in: 0.01...0.50) // Realistic CPM range
-                            await AdsService.trackAdRevenue(for: video, adRevenue: adRevenue)
-                        }
-                        
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: UInt64(Double(resolved.duration) * 1_000_000_000))
+                        let adRevenue = Double.random(in: 0.01...0.50)
+                        await AdsService.trackAdRevenue(for: video, adRevenue: adRevenue)
                         playerManager.setupPlayer(with: video)
                         playerManager.play()
                         stopAdTimer()
@@ -254,18 +257,24 @@ extension VideoPlayerView {
             playerManager.setupPlayer(with: adVideo)
             playerManager.play()
             AdsService.fire(ad.q0)
-            DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 0.25)) { AdsService.fire(ad.q25) }
-            DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 0.50)) { AdsService.fire(ad.q50) }
-            DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 0.75)) { AdsService.fire(ad.q75) }
-            DispatchQueue.main.asyncAfter(deadline: .now() + max(0.0, Double(ad.duration) * 1.00)) {
+            let durMid = Double(ad.duration)
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(max(0.0, durMid * 0.25) * 1_000_000_000))
+                AdsService.fire(ad.q25)
+            }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(max(0.0, durMid * 0.50) * 1_000_000_000))
+                AdsService.fire(ad.q50)
+            }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(max(0.0, durMid * 0.75) * 1_000_000_000))
+                AdsService.fire(ad.q75)
+            }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(max(0.0, durMid) * 1_000_000_000))
                 AdsService.fire(ad.q100)
-                
-                // 🔥 REVENUE TRACKING: Track midroll ad revenue
-                Task {
-                    let adRevenue = Double.random(in: 0.01...0.50) // Realistic CPM range
-                    await AdsService.trackAdRevenue(for: video, adRevenue: adRevenue)
-                }
-                
+                let adRevenue = Double.random(in: 0.01...0.50)
+                await AdsService.trackAdRevenue(for: video, adRevenue: adRevenue)
                 playerManager.setupPlayer(with: video)
                 playerManager.play()
                 stopAdTimer()
@@ -295,7 +304,8 @@ extension VideoPlayerView {
             adTimeRemaining = resolved.duration
             canSkipAd = true
             startAdTimer()
-            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(resolved.duration)) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(Double(resolved.duration) * 1_000_000_000))
                 playerManager.setupPlayer(with: video)
                 playerManager.play()
                 stopAdTimer()

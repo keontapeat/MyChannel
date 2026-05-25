@@ -15,7 +15,7 @@ struct DoctorDashboardView: View {
     @State private var showingRecommendationDetail: MyChannelDoctorService.Recommendation?
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     // Header
@@ -545,7 +545,7 @@ struct IssueDetailView: View {
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     // Severity Badge
@@ -633,7 +633,7 @@ struct RecommendationDetailView: View {
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     // Priority Badge

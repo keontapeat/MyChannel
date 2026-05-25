@@ -23,7 +23,7 @@ struct FeaturedVideoAdminView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 // Tab Selector
                 Picker("View", selection: $selectedTab) {
@@ -322,7 +322,7 @@ struct ApprovalSheetView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 20) {
                 Text("Approve Featured Video?")
                     .font(.title2)
@@ -362,7 +362,7 @@ struct RejectionSheetView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section("Rejection Reason") {
                     TextEditor(text: $reason)

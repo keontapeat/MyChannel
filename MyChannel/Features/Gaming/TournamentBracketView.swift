@@ -296,7 +296,7 @@ struct LiveMatchSpectatorView: View {
     @StateObject private var viewModel = LiveMatchViewModel()
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 AppTheme.Colors.background
                     .ignoresSafeArea()

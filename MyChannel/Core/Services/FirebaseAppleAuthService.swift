@@ -22,6 +22,8 @@ final class FirebaseAppleAuthService: NSObject {
     private var pendingNonce: String?
     // Continuation resumed when the flow ends
     private var pendingContinuation: CheckedContinuation<AuthPayload, Error>?
+    // Cached on @MainActor before performRequests() to avoid DispatchQueue.main.sync deadlock on iPadOS 26+
+    nonisolated(unsafe) private var _anchorWindow: UIWindow?
 
     var isAvailable: Bool {
         #if canImport(FirebaseAuth)
@@ -39,6 +41,22 @@ final class FirebaseAppleAuthService: NSObject {
     func generateNoncePair() -> (raw: String, hashed: String) {
         let raw = randomNonceString()
         return (raw, sha256(raw))
+    }
+
+    /// 🔥 iPad-Safe: One-shot atomic nonce holder used by SwiftUI SignInWithAppleButton flow.
+    /// Stores the rawNonce between onRequest and onCompletion across SwiftUI render passes.
+    /// Returns the hashed nonce to use in the request.
+    func captureNonce() -> String {
+        let raw = randomNonceString()
+        AppleSignInNonceHolder.shared.rawNonce = raw
+        return sha256(raw)
+    }
+
+    /// Consumes and returns the previously captured raw nonce. Returns nil if no nonce captured.
+    func consumeNonce() -> String? {
+        let raw = AppleSignInNonceHolder.shared.rawNonce
+        AppleSignInNonceHolder.shared.rawNonce = nil
+        return raw
     }
 
     /// Legacy: stores nonce in shared state. Prefer generateNoncePair() + handleCredential(_:rawNonce:).
@@ -76,6 +94,7 @@ final class FirebaseAppleAuthService: NSObject {
         request.requestedScopes = [.fullName, .email]
         request.nonce = sha256(nonce)
 
+        self._anchorWindow = self.resolveKeyWindow()
         return try await withCheckedThrowingContinuation { continuation in
             let controller = ASAuthorizationController(authorizationRequests: [request])
             self.pendingContinuation = continuation
@@ -84,6 +103,57 @@ final class FirebaseAppleAuthService: NSObject {
             controller.presentationContextProvider = self
             controller.performRequests()
         }
+    }
+
+    // MARK: - Window resolver
+    // 🔥 iPad-Safe: Walks the presented-view-controller chain so Apple's
+    // authorization sheet anchors to the *topmost* presented window (e.g. a sheet
+    // or fullScreenCover), not the root window which on iPad with an active sheet
+    // is the WRONG window and causes the Apple Sign In sheet to fail to appear or
+    // appear behind other UI.
+    //
+    // Reference: Apple recommends returning the window that contains the view
+    // initiating the auth request, not just `keyWindow`.
+    // https://developer.apple.com/documentation/authenticationservices/asauthorizationcontrollerpresentationcontextproviding/presentationanchor(for:)
+    private func resolveKeyWindow() -> UIWindow? {
+        #if canImport(UIKit)
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+
+        // Prefer the foreground active scene's key window
+        let foregroundScene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first
+        guard let scene = foregroundScene else { return nil }
+
+        // Find the key window in this scene
+        let keyWindow = scene.keyWindow
+            ?? scene.windows.first(where: { $0.isKeyWindow })
+            ?? scene.windows.first
+
+        // Walk the presented-view-controller chain to find the topmost window.
+        // On iPad with an active .sheet, the sheet's view lives in the same window
+        // but with a presented view controller chain on top of the root. We need
+        // the window that contains the topmost VC so Apple's auth sheet presents
+        // from the correct anchor.
+        if let window = keyWindow, let root = window.rootViewController {
+            var top: UIViewController = root
+            while let presented = top.presentedViewController {
+                top = presented
+            }
+            // Return the window of the topmost presented controller (may be a
+            // different window if SwiftUI created a fresh UIWindow for the sheet,
+            // which iPadOS 18 sometimes does for form sheets).
+            return top.view.window ?? window
+        }
+
+        // Fallback: create a window in the active scene
+        if keyWindow == nil {
+            let w = UIWindow(windowScene: scene)
+            w.makeKeyAndVisible()
+            return w
+        }
+        return keyWindow
+        #else
+        return nil
+        #endif
     }
 
     // MARK: - Firebase credential exchange
@@ -150,6 +220,7 @@ extension FirebaseAppleAuthService: ASAuthorizationControllerDelegate {
             }
             self.pendingContinuation = nil
             self.activeController = nil
+            self._anchorWindow = nil
             do {
                 let payload = try await self.completeFirebaseSignIn(credential: cred, nonce: nonce)
                 continuation.resume(returning: payload)
@@ -167,6 +238,7 @@ extension FirebaseAppleAuthService: ASAuthorizationControllerDelegate {
             self.pendingContinuation?.resume(throwing: error)
             self.pendingContinuation = nil
             self.activeController = nil
+            self._anchorWindow = nil
         }
     }
 }
@@ -174,27 +246,10 @@ extension FirebaseAppleAuthService: ASAuthorizationControllerDelegate {
 // MARK: - ASAuthorizationControllerPresentationContextProviding
 extension FirebaseAppleAuthService: ASAuthorizationControllerPresentationContextProviding {
     nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        // Must access UIApplication on @MainActor; use DispatchQueue.main.sync to bridge
-        // from the nonisolated protocol requirement. Safe because Apple calls this on main thread.
-        return DispatchQueue.main.sync {
-            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-            // 1. Foreground-active scene key window
-            if let fg = scenes.first(where: { $0.activationState == .foregroundActive }) {
-                if let w = fg.keyWindow { return w }
-                if let w = fg.windows.first { return w }
-            }
-            // 2. Any scene's key window
-            for s in scenes { if let w = s.keyWindow { return w } }
-            // 3. Any scene's first window
-            for s in scenes { if let w = s.windows.first { return w } }
-            // 4. Last resort — create window in the first available scene
-            if let scene = scenes.first {
-                let w = UIWindow(windowScene: scene)
-                w.makeKeyAndVisible()
-                return w
-            }
-            return UIWindow()
-        }
+        // Return the window cached on @MainActor before performRequests() was called.
+        // This avoids DispatchQueue.main.sync, which deadlocks on iPadOS 26+ because Apple
+        // now calls presentationAnchor synchronously on the main thread before performRequests() returns.
+        return _anchorWindow ?? UIWindow()
     }
 }
 
@@ -203,4 +258,28 @@ struct AuthPayload {
     let uid: String
     let email: String?
     let displayName: String
+}
+
+// MARK: - 🔥 iPad-Safe Nonce Holder
+// Class-based storage that survives SwiftUI render passes and avoids @State capture issues
+// in SignInWithAppleButton onRequest/onCompletion closures. This is the iPad bug fix.
+final class AppleSignInNonceHolder: @unchecked Sendable {
+    static let shared = AppleSignInNonceHolder()
+    private let lock = NSLock()
+    private var _rawNonce: String?
+
+    private init() {}
+
+    var rawNonce: String? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _rawNonce
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _rawNonce = newValue
+        }
+    }
 }

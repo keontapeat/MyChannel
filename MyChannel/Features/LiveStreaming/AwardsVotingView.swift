@@ -68,7 +68,7 @@ struct AwardsVotingView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 AppTheme.Colors.background.ignoresSafeArea()
                 
@@ -267,7 +267,7 @@ struct CategoryVotingSheet: View {
     @State private var errorMessage = ""
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 AppTheme.Colors.background.ignoresSafeArea()
                 

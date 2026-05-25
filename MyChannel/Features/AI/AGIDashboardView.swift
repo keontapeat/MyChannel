@@ -24,7 +24,7 @@ struct AGIDashboardView: View {
     @StateObject private var videoAGI = VideoCoCreatorAGI.shared
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     // 👑 MASTER STATUS

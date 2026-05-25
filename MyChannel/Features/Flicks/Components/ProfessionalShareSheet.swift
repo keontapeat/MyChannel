@@ -5,7 +5,7 @@ struct ProfessionalShareSheet: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(.white.opacity(0.3))

@@ -13,7 +13,7 @@ struct CampaignCreatorView: View {
     @StateObject private var viewModel = CampaignCreatorViewModel()
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 // Progress indicator
                 progressBar

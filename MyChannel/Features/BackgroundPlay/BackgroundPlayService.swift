@@ -277,17 +277,14 @@ class BackgroundPlayService: ObservableObject {
             forInterval: CMTime(seconds: 1, preferredTimescale: 600),
             queue: .main
         ) { [weak self] time in
-            Task { @MainActor in
-                await self?.updatePlaybackProgress(time)
-            }
+            // Already on main queue — @MainActor annotation on Task is redundant
+            Task { await self?.updatePlaybackProgress(time) }
         }
         
         // Monitor player status
         player.publisher(for: \.status)
             .sink { [weak self] status in
-                Task { @MainActor in
-                    await self?.handlePlayerStatusChange(status)
-                }
+                Task { await self?.handlePlayerStatusChange(status) }
             }
             .store(in: &cancellables)
     }

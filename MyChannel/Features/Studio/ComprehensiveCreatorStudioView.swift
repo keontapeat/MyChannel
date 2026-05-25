@@ -2476,7 +2476,7 @@ struct AdPreviewView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 Text("Ad Preview")
                     .font(.title)

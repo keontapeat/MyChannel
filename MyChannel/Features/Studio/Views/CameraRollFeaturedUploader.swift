@@ -192,7 +192,7 @@ struct CameraRollUploadSheet: View {
     @FocusState private var titleFocused: Bool
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     // Thumbnail preview

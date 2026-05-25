@@ -29,7 +29,7 @@ class EnhancedAnalyticsManager {
     
     func startSession() {
         sessionStartTime = Date()
-        logEvent("session_start", parameters: [
+        logEvent("app_session_start", parameters: [
             "timestamp": Date().timeIntervalSince1970,
             "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
         ])
@@ -39,7 +39,7 @@ class EnhancedAnalyticsManager {
         guard let startTime = sessionStartTime else { return }
         let sessionDuration = Date().timeIntervalSince(startTime)
         
-        logEvent("session_end", parameters: [
+        logEvent("app_session_end", parameters: [
             "session_duration": sessionDuration,
             "timestamp": Date().timeIntervalSince1970
         ])

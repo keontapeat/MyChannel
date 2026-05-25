@@ -315,6 +315,16 @@ final class VideoFirestoreService: ObservableObject {
             let snap = try await query.getDocuments()
             print("📺 [VideoFirestoreService] Found \(snap.documents.count) videos in Firestore")
             
+            let trackerCounts: [String: Int] = await withTaskGroup(of: (String, Int).self) { group in
+                for doc in snap.documents {
+                    let docId = doc.documentID
+                    group.addTask { (docId, await RealtimeViewTracker.shared.getViewCount(for: docId)) }
+                }
+                var result: [String: Int] = [:]
+                for await (id, count) in group { result[id] = count }
+                return result
+            }
+            
             // 🔥 FIX: Use for-loop instead of compactMap since we need async/await
             var videos: [Video] = []
             for doc in snap.documents {
@@ -336,9 +346,7 @@ final class VideoFirestoreService: ObservableObject {
                 
                 print("  - Video: \(d["title"] as? String ?? "untitled") (id: \(doc.documentID)) - Firestore viewCount: \(viewCount)")
                 
-                // 🔥 FIX: Get real-time view count from tracker (which fetches from Firestore)
-                // This ensures we have the most up-to-date count
-                let trackerCount = await RealtimeViewTracker.shared.getViewCount(for: doc.documentID)
+                let trackerCount = trackerCounts[doc.documentID] ?? 0
                 
                 // Use the higher of the two (Firestore or tracker cache)
                 let finalViewCount = max(viewCount, trackerCount)
@@ -438,7 +446,7 @@ final class VideoFirestoreService: ObservableObject {
                 
                 // Skip records that are not yet ready (processing or missing URL)
                 let processingStatus = (d["processingStatus"] as? String)?.lowercased() ?? "completed"
-                let rawVideoUrl = (d["videoUrl"] as? String) ?? ""
+                let rawVideoUrl = (d["videoUrl"] as? String) ?? (d["videoURL"] as? String) ?? ""
                 if rawVideoUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || processingStatus != "completed" {
                     print("  ⏭️ Skipping not-ready video (processingStatus=\(processingStatus)) id=\(doc.documentID)")
                     continue
@@ -456,8 +464,23 @@ final class VideoFirestoreService: ObservableObject {
                 let creatorId = d["userId"] as? String ?? ""
                 var creator = User.defaultUser
                 
-                if !creatorId.isEmpty {
-                    // Try to fetch the actual creator from users collection
+                let embeddedName = d["creatorDisplayName"] as? String ?? d["creatorName"] as? String ?? ""
+                if !creatorId.isEmpty && !embeddedName.isEmpty {
+                    creator = User(
+                        id: creatorId,
+                        username: d["creatorUsername"] as? String ?? "user",
+                        displayName: embeddedName,
+                        email: "",
+                        profileImageURL: d["creatorProfileImage"] as? String ?? d["creatorAvatarURL"] as? String,
+                        bannerImageURL: nil,
+                        bio: nil,
+                        subscriberCount: 0,
+                        videoCount: 0,
+                        isVerified: (d["creatorVerified"] as? Bool) ?? false,
+                        isCreator: true,
+                        createdAt: Date()
+                    )
+                } else if !creatorId.isEmpty {
                     if let creatorDoc = try? await db.collection("users").document(creatorId).getDocument(),
                        creatorDoc.exists,
                        let creatorData = creatorDoc.data() {
@@ -482,7 +505,7 @@ final class VideoFirestoreService: ObservableObject {
                     id: doc.documentID,
                     title: d["title"] as? String ?? "",
                     description: d["description"] as? String ?? "",
-                    thumbnailURL: d["thumbnailUrl"] as? String ?? "",
+                    thumbnailURL: d["thumbnailUrl"] as? String ?? d["thumbnailURL"] as? String ?? "",
                     videoURL: rawVideoUrl,
                     duration: (d["duration"] as? Double) ?? 0,
                     viewCount: viewCount,
@@ -530,6 +553,16 @@ final class VideoFirestoreService: ObservableObject {
             let snap = try await query.getDocuments()
             let lastDoc = snap.documents.last
             
+            let trackerCounts: [String: Int] = await withTaskGroup(of: (String, Int).self) { group in
+                for doc in snap.documents {
+                    let docId = doc.documentID
+                    group.addTask { (docId, await RealtimeViewTracker.shared.getViewCount(for: docId)) }
+                }
+                var result: [String: Int] = [:]
+                for await (id, count) in group { result[id] = count }
+                return result
+            }
+            
             var videos: [Video] = []
             for doc in snap.documents {
                 let d = doc.data()
@@ -548,8 +581,7 @@ final class VideoFirestoreService: ObservableObject {
                     ])
                 }
                 
-                // 🔥 FIX: Get real-time view count from tracker (which fetches from Firestore)
-                let trackerCount = await RealtimeViewTracker.shared.getViewCount(for: doc.documentID)
+                let trackerCount = trackerCounts[doc.documentID] ?? 0
                 
                 // Use the higher of the two (Firestore or tracker cache)
                 let finalViewCount = max(viewCount, trackerCount)

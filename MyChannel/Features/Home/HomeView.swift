@@ -99,6 +99,9 @@ struct HomeView: View {
     @State private var allAssetStories: [AssetStory] = []  // All stories (for pager)
     @Namespace private var storiesNS
 
+    // 🔥 YOUTUBE PARITY: Home filter chips
+    @State private var selectedHomeChip: HomeFilterChip = .all
+
     private var activeStoriesHeroId: String? {
         if case let .stories(story) = route { return story.id }
         return nil
@@ -120,6 +123,7 @@ struct HomeView: View {
     }
 
     var body: some View {
+        GeometryReader { geo in
         NavigationStack {
             ZStack(alignment: .top) {
                 Color(.systemBackground)
@@ -128,6 +132,13 @@ struct HomeView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: 0) {
                         Color.clear.frame(height: 100)
+
+                        // 🔥 YOUTUBE PARITY: Filter chips bar
+                        HomeFilterChipsBar(
+                            selected: $selectedHomeChip,
+                            onChipTap: { chip in handleHomeChipTap(chip) }
+                        )
+                        .padding(.bottom, 8)
 
                         if showingStories && (!assetStories.isEmpty || appState.isAuthenticated) {
                             AssetBouncyStoriesRow(
@@ -365,7 +376,7 @@ struct HomeView: View {
                     .onDisappear { self.route = nil }
 
             case .artistMusicProfile(let catalogArtist):
-                NavigationView {
+                NavigationStack {
                     ArtistProfileView(artist: catalogArtist)
                 }
                 .onDisappear { self.route = nil }
@@ -428,6 +439,9 @@ struct HomeView: View {
                 name: NSNotification.Name(shouldPause ? "LivePreviewsShouldPause" : "LivePreviewsShouldResume"),
                 object: nil
             )
+        }
+        .environment(\.adaptiveCardWidth, iPadLayout.videoCardWidth(in: geo))
+        .environment(\.horizontalSizeClass, .compact)
         }
     }
 
@@ -502,16 +516,14 @@ struct HomeView: View {
         // 2. Reload stories
         loadUserStories()
         
-        // 3. Reload watch history + collections from Firestore
+        // 3. Reload watch history + collections from Firestore in parallel
         if let userId = appState.currentUser?.id {
-            let history = await HistoryService.shared.fetch(userId: userId, limit: 100)
+            async let historyFetch = HistoryService.shared.fetch(userId: userId, limit: 100)
+            async let wlFetch = UserCollectionsFirestoreService.shared.fetchWatchLater(userId: userId)
+            async let subsFetch = UserCollectionsFirestoreService.shared.fetchSubscriptions(userId: userId)
+            let (history, wl, subs) = await (historyFetch, wlFetch, subsFetch)
             await MainActor.run {
                 appState.watchHistory = history
-            }
-            // Re-hydrate cloud collections (watch later, subscriptions, likes)
-            let wl = await UserCollectionsFirestoreService.shared.fetchWatchLater(userId: userId)
-            let subs = await UserCollectionsFirestoreService.shared.fetchSubscriptions(userId: userId)
-            await MainActor.run {
                 appState.watchLaterVideos = wl
                 appState.subscriptions = subs
             }
@@ -557,12 +569,20 @@ struct HomeView: View {
                 let followed = Array(appState.subscriptions)
                 print("📖 [HomeView] Fetching stories from \(followed.count) followed creators")
                 if let stories = try? await DatabaseService.shared.fetchActiveStoriesForCreators(followed), !stories.isEmpty {
-                    for s in stories {
-                        guard shouldIncludeStory(s, currentUserId: currentUser.id, blockedUserIds: blockedUserIds) else { continue }
+                    let filtered = stories.filter { shouldIncludeStory($0, currentUserId: currentUser.id, blockedUserIds: blockedUserIds) }
+                    let creatorIds = Set(filtered.map { $0.creatorId })
+                    let userMap: [String: User] = await withTaskGroup(of: (String, User?).self) { group in
+                        for cid in creatorIds {
+                            group.addTask { (cid, try? await UserFirestoreService.shared.fetchUser(id: cid)) }
+                        }
+                        var result: [String: User] = [:]
+                        for await (cid, u) in group { result[cid] = u }
+                        return result
+                    }
+                    for s in filtered {
                         let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
-                        let user = try? await UserFirestoreService.shared.fetchUser(id: s.creatorId)
-                        let name = user?.username ?? s.creatorId
-                        collected.append(AssetStory(media: media, username: name, authorImageName: user?.profileImageURL ?? "", creatorId: s.creatorId, originalStoryId: s.id))
+                        let u = userMap[s.creatorId]
+                        collected.append(AssetStory(media: media, username: u?.username ?? s.creatorId, authorImageName: u?.profileImageURL ?? "", creatorId: s.creatorId, originalStoryId: s.id))
                     }
                 }
             } else {
@@ -575,12 +595,20 @@ struct HomeView: View {
                 print("📖 [HomeView] No stories from others — fetching all active stories")
                 if let allStories = try? await DatabaseService.shared.fetchAllActiveStories(limit: 24), !allStories.isEmpty {
                     print("📖 [HomeView] Got \(allStories.count) stories from fetchAllActiveStories")
-                    for s in allStories {
-                        guard shouldIncludeStory(s, currentUserId: currentUser.id, blockedUserIds: blockedUserIds) else { continue }
+                    let filtered = allStories.filter { shouldIncludeStory($0, currentUserId: currentUser.id, blockedUserIds: blockedUserIds) }
+                    let creatorIds = Set(filtered.map { $0.creatorId })
+                    let userMap: [String: User] = await withTaskGroup(of: (String, User?).self) { group in
+                        for cid in creatorIds {
+                            group.addTask { (cid, try? await UserFirestoreService.shared.fetchUser(id: cid)) }
+                        }
+                        var result: [String: User] = [:]
+                        for await (cid, u) in group { result[cid] = u }
+                        return result
+                    }
+                    for s in filtered {
                         let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
-                        let user = try? await UserFirestoreService.shared.fetchUser(id: s.creatorId)
-                        let name = user?.username ?? s.creatorId
-                        collected.append(AssetStory(media: media, username: name, authorImageName: user?.profileImageURL ?? "", creatorId: s.creatorId, originalStoryId: s.id))
+                        let u = userMap[s.creatorId]
+                        collected.append(AssetStory(media: media, username: u?.username ?? s.creatorId, authorImageName: u?.profileImageURL ?? "", creatorId: s.creatorId, originalStoryId: s.id))
                     }
                 }
             }
@@ -669,6 +697,7 @@ struct HomeView: View {
 
     private func loadWatchHistoryFromFirestore() {
         guard let userId = appState.currentUser?.id else { return }
+        guard appState.watchHistory.isEmpty else { return }
         Task {
             let history = await HistoryService.shared.fetch(userId: userId, limit: 100)
             await MainActor.run {
@@ -685,6 +714,26 @@ struct HomeView: View {
 
     private func openVideo(_ video: Video) {
         route = .video(video)
+    }
+
+    // 🔥 YOUTUBE PARITY: Handle Home chip filter taps
+    private func handleHomeChipTap(_ chip: HomeFilterChip) {
+        switch chip {
+        case .all:
+            break // Default home view, no navigation
+        case .music:
+            route = .custom("musicHub")
+        case .live:
+            route = .allLiveTV
+        case .gaming:
+            route = .custom("exploreHub")
+        case .news, .mixes, .podcasts, .newToYou:
+            route = .trending // Surface curated content for now
+        case .recentlyUploaded:
+            route = .trending
+        case .watched:
+            NotificationCenter.default.post(name: .openFullHistory, object: nil)
+        }
     }
 
     // MARK: - ULTRA-THERMONUCLEAR FAB 🔥💥😤

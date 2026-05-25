@@ -57,7 +57,7 @@ struct VideoMoreOptionsSheet: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 Section {
                     Label("Video: \(video.title)", systemImage: "film")
@@ -368,7 +368,7 @@ struct AddToPlaylistSheet: View {
     @State private var newTitle: String = ""
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 Section("Your Playlists") {
                     ForEach(playlists) { p in

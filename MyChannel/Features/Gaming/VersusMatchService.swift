@@ -217,11 +217,11 @@ class VersusMatchService: ObservableObject {
             "platformFee": platformFee
         ])
         
-        // Update player stats
-        await updatePlayerStats(winnerId: winnerId, loserId: loserId, match: match)
-        
-        // Award championship points
-        await awardChampionshipPoints(winnerId: winnerId, match: match)
+        // Update stats and award points in parallel — independent operations
+        async let statsUpdate: Void = updatePlayerStats(winnerId: winnerId, loserId: loserId, match: match)
+        async let pointsUpdate: Void = awardChampionshipPoints(winnerId: winnerId, match: match)
+        await statsUpdate
+        await pointsUpdate
         
         print("✅ Match completed! Winner: \(winnerId), Payout: $\(winnerPayout)")
     }
@@ -265,14 +265,15 @@ class VersusMatchService: ObservableObject {
     }
     
     func fetchMyMatches(userId: String) async throws -> [VersusMatch] {
-        // Fetch matches where user is either challenger or opponent
-        let snapshot = try await db.collection("versus_matches")
+        // Fetch challenger and opponent matches in parallel
+        async let challengerFetch = db.collection("versus_matches")
             .whereField("challengerId", isEqualTo: userId)
             .getDocuments()
-        
-        let snapshot2 = try await db.collection("versus_matches")
+        async let opponentFetch = db.collection("versus_matches")
             .whereField("opponentId", isEqualTo: userId)
             .getDocuments()
+        
+        let (snapshot, snapshot2) = try await (challengerFetch, opponentFetch)
         
         var matches = try snapshot.documents.compactMap { doc in
             try parseMatch(from: doc.data(), id: doc.documentID)
@@ -303,12 +304,15 @@ class VersusMatchService: ObservableObject {
             throw MatchError.invalidData
         }
         
-        // Parse rules (simplified for now)
-        let rules = VersusMatch.MatchRules(
-            duration: 3600, // 1 hour
-            category: category,
-            winCondition: .mostViews
-        )
+        // Decode stored rules; fall back to defaults if data is missing or malformed
+        let rules: VersusMatch.MatchRules
+        if let rulesString = data["rules"] as? String,
+           let rulesData = Data(base64Encoded: rulesString),
+           let decoded = try? JSONDecoder().decode(VersusMatch.MatchRules.self, from: rulesData) {
+            rules = decoded
+        } else {
+            rules = VersusMatch.MatchRules(duration: 3600, category: category, winCondition: .mostViews)
+        }
         
         return VersusMatch(
             id: id,
@@ -348,20 +352,25 @@ class VersusMatchService: ObservableObject {
     
     private func updatePlayerStats(winnerId: String, loserId: String, match: VersusMatch) async {
         print("📊 Updating player stats...")
-        
-        // Update winner stats
-        try? await db.collection("player_stats").document(winnerId).setData([
-            "wins": FieldValue.increment(Int64(1)),
-            "totalEarnings": FieldValue.increment(Int64(match.wagerAmount)),
-            "lastMatchDate": Timestamp(date: Date())
-        ], merge: true)
-        
-        // Update loser stats
-        try? await db.collection("player_stats").document(loserId).setData([
-            "losses": FieldValue.increment(Int64(1)),
-            "totalLosses": FieldValue.increment(Int64(match.wagerAmount)),
-            "lastMatchDate": Timestamp(date: Date())
-        ], merge: true)
+        let db = self.db
+        let wagerAmount = match.wagerAmount  // Double — avoids Int64 truncation bug
+        let now = Timestamp(date: Date())
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try? await db.collection("player_stats").document(winnerId).setData([
+                    "wins": FieldValue.increment(Int64(1)),
+                    "totalEarnings": FieldValue.increment(wagerAmount),
+                    "lastMatchDate": now
+                ], merge: true)
+            }
+            group.addTask {
+                try? await db.collection("player_stats").document(loserId).setData([
+                    "losses": FieldValue.increment(Int64(1)),
+                    "totalLosses": FieldValue.increment(wagerAmount),
+                    "lastMatchDate": now
+                ], merge: true)
+            }
+        }
     }
     
     private func awardChampionshipPoints(winnerId: String, match: VersusMatch) async {
@@ -386,8 +395,11 @@ class VersusMatchService: ObservableObject {
     private func loadMatches() {
         Task {
             do {
-                activeMatches = try await fetchActiveMatches()
-                upcomingMatches = try await fetchUpcomingMatches()
+                async let activeFetch = fetchActiveMatches()
+                async let upcomingFetch = fetchUpcomingMatches()
+                let (active, upcoming) = try await (activeFetch, upcomingFetch)
+                activeMatches = active
+                upcomingMatches = upcoming
             } catch {
                 print("❌ Error loading matches: \(error)")
             }

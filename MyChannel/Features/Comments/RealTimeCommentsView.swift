@@ -17,16 +17,19 @@ struct RealTimeCommentsView: View {
     @State private var newCommentText = ""
     @State private var showingCommentComposer = false
     @State private var selectedComment: RealTimeComment?
-    @State private var sortOption: RealTimeCommentSortOption = .newest
+    // 🔥 YOUTUBE PARITY: Default to "Top comments" sort like YouTube does.
+    @State private var sortOption: RealTimeCommentSortOption = .top
     
     
     enum RealTimeCommentSortOption: String, CaseIterable {
-        case newest = "Newest"
-        case popular = "Popular"
-        case oldest = "Oldest"
+        case top = "Top comments"
+        case newest = "Newest first"
+        case popular = "Most liked"
+        case oldest = "Oldest first"
         
         var systemImage: String {
             switch self {
+            case .top: return "star.fill"
             case .newest: return "clock"
             case .popular: return "heart.fill"
             case .oldest: return "clock.arrow.circlepath"
@@ -58,7 +61,11 @@ struct RealTimeCommentsView: View {
                             canPin: AppState.shared.currentUser?.id == video.creatorId,
                             isPinned: commentsManager.pinnedCommentId == comment.id,
                             onPin: { commentsManager.pin(commentId: comment.id) },
-                            onUnpin: { commentsManager.unpin() }
+                            onUnpin: { commentsManager.unpin() },
+                            // 🔥 YOUTUBE PARITY: pass creator for heart badge.
+                            // Pinned comments are auto-hearted (matches YT creator behavior).
+                            creator: video.creator,
+                            isHeartedByCreator: commentsManager.pinnedCommentId == comment.id
                         )
                         .padding(.horizontal)
                     }
@@ -194,15 +201,45 @@ struct RealTimeCommentsView: View {
     }
     
     // MARK: - Sorted Comments
+    // 🔥 YOUTUBE PARITY: "Top" sort uses YouTube's blended ranking — engagement
+    // (likes*2 + replies*3) plus a recency boost so fresh good comments surface.
+    // Pinned comment is always rendered first regardless of sort.
     private var sortedComments: [RealTimeComment] {
+        let pinnedId = commentsManager.pinnedCommentId
+        let all = commentsManager.comments
+        let pinned = all.first(where: { $0.id == pinnedId })
+        let rest = all.filter { $0.id != pinnedId }
+
+        let sorted: [RealTimeComment]
         switch sortOption {
+        case .top:
+            sorted = rest.sorted { lhs, rhs in
+                let lhsScore = topScore(for: lhs)
+                let rhsScore = topScore(for: rhs)
+                if lhsScore == rhsScore { return lhs.createdAt > rhs.createdAt }
+                return lhsScore > rhsScore
+            }
         case .newest:
-            return commentsManager.comments.sorted { $0.createdAt > $1.createdAt }
+            sorted = rest.sorted { $0.createdAt > $1.createdAt }
         case .popular:
-            return commentsManager.comments.sorted { $0.likeCount > $1.likeCount }
+            sorted = rest.sorted { $0.likeCount > $1.likeCount }
         case .oldest:
-            return commentsManager.comments.sorted { $0.createdAt < $1.createdAt }
+            sorted = rest.sorted { $0.createdAt < $1.createdAt }
         }
+
+        if let pinned = pinned {
+            return [pinned] + sorted
+        }
+        return sorted
+    }
+
+    private func topScore(for comment: RealTimeComment) -> Double {
+        // Engagement weight: likes count twice, replies count three times (YouTube heuristic)
+        let engagement = Double(comment.likeCount) * 2.0 + Double(comment.replyCount) * 3.0
+        // Recency boost: newer comments get up to +20 pts in first 24h, decaying
+        let ageHours = max(0.0, -comment.createdAt.timeIntervalSinceNow / 3600.0)
+        let recencyBoost = max(0.0, 20.0 - ageHours * 0.5)
+        return engagement + recencyBoost
     }
 }
 
@@ -216,7 +253,11 @@ struct RealTimeCommentRow: View {
     var isPinned: Bool = false
     var onPin: (() -> Void)? = nil
     var onUnpin: (() -> Void)? = nil
-    
+    // 🔥 YOUTUBE PARITY: Creator heart badge — when the creator has hearted this
+    // comment, show their avatar overlaid with a small red heart next to the like.
+    var creator: User? = nil
+    var isHeartedByCreator: Bool = false
+
     @State private var isLiked = false
     @State private var showingReplies = false
     @State private var showingMoreOptions = false
@@ -310,7 +351,28 @@ struct RealTimeCommentRow: View {
                             }
                         }
                         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isLiked)
-                        
+
+                        // 🔥 YOUTUBE PARITY: Creator heart badge
+                        if isHeartedByCreator, let creator = creator {
+                            ZStack(alignment: .bottomTrailing) {
+                                AsyncImage(url: URL(string: creator.profileImageURL ?? "")) { image in
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Circle().fill(AppTheme.Colors.surface)
+                                }
+                                .frame(width: 18, height: 18)
+                                .clipShape(Circle())
+
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(.red)
+                                    .padding(2)
+                                    .background(Circle().fill(AppTheme.Colors.background))
+                                    .offset(x: 3, y: 3)
+                            }
+                            .accessibilityLabel("\u{2764}\u{FE0F} by \(creator.displayName)")
+                        }
+
                         Button("Reply") {
                             onReply(comment)
                         }
@@ -609,7 +671,7 @@ struct CommentComposerSheet: View {
     @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 16) {
                 // Video info
                 HStack(spacing: 12) {

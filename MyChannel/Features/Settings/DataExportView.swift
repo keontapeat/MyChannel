@@ -5,7 +5,7 @@ struct DataExportView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 16) {
                 Text("Export your basic profile and app usage data as JSON.")
                     .font(.body)

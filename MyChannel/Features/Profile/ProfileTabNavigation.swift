@@ -125,16 +125,21 @@ private struct UIKitProfileTabRow: UIViewRepresentable {
             let text = count.map { "\(tab.title) \($0)" } ?? tab.title
             let font = UIFont.systemFont(ofSize: 15, weight: parent.selectedTab == tab ? .semibold : .regular)
             let textWidth = text.size(withAttributes: [.font: font]).width
-            let iconWidth: CGFloat = parent.selectedTab == tab ? 20 : 0
-            return CGSize(width: ceil(textWidth + iconWidth + 30), height: 56)
+            // Cell layout: 16pt leading padding + [icon(16) + spacing(8) if selected] + textWidth + 16pt trailing padding
+            let iconAndSpacing: CGFloat = parent.selectedTab == tab ? (16 + 8) : 0
+            return CGSize(width: ceil(textWidth + iconAndSpacing + 32), height: 56)
         }
         
         private func tabCount(for tab: ProfileTab) -> Int? {
             switch tab {
+            case .home:
+                return nil
             case .videos:
                 return parent.user.videoCount > 0 ? parent.user.videoCount : nil
             case .shorts:
                 return parent.user.videoCount > 5 ? parent.user.videoCount / 3 : nil
+            case .live:
+                return nil
             case .playlists:
                 return parent.user.videoCount > 10 ? parent.user.videoCount / 8 : nil
             case .downloads:
@@ -294,10 +299,14 @@ struct ProfileTabButton: View {
     
     private func getTabCount(for tab: ProfileTab) -> Int? {
         switch tab {
+        case .home:
+            return nil
         case .videos:
             return user.videoCount > 0 ? user.videoCount : nil
         case .shorts:
             return user.videoCount > 5 ? user.videoCount / 3 : nil // Estimate flicks count
+        case .live:
+            return nil
         case .playlists:
             return user.videoCount > 10 ? user.videoCount / 8 : nil // Estimate playlists count
         case .downloads:

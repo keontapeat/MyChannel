@@ -713,7 +713,7 @@ struct ReplyToCommentSheet: View {
     @State private var replyText = ""
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 16) {
                 // Original comment
                 VStack(alignment: .leading, spacing: 8) {

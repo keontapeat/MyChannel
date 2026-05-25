@@ -8,6 +8,15 @@ struct LiveStreamHealthResult {
 }
 
 enum LiveStreamHealthChecker {
+    private static let probeSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.waitsForConnectivity = false
+        config.httpMaximumConnectionsPerHost = 4
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = nil
+        return URLSession(configuration: config)
+    }()
+
     static func rankHealthyChannels(_ channels: [LiveTVChannel],
                                     timeout: TimeInterval = 1.0) async -> [LiveTVChannel] {
         guard !channels.isEmpty else { return [] }
@@ -45,11 +54,17 @@ enum LiveStreamHealthChecker {
 
     private static func quickProbe(urlString: String, timeout: TimeInterval) async -> Bool {
         guard let url = URL(string: urlString) else { return false }
-        // 1) Try HEAD
-        if await httpProbe(url: url, method: "HEAD", timeout: timeout) { return true }
-        // 2) Try small GET with Range to avoid downloading too much
-        if await rangedGetProbe(url: url, timeout: timeout) { return true }
-        // 3) As a last resort, ask AVURLAsset if it can become playable
+        // 1) Race HEAD and rangedGET in parallel — first success wins
+        let passed = await withTaskGroup(of: Bool.self) { group -> Bool in
+            group.addTask { await httpProbe(url: url, method: "HEAD", timeout: timeout) }
+            group.addTask { await rangedGetProbe(url: url, timeout: timeout) }
+            for await success in group {
+                if success { group.cancelAll(); return true }
+            }
+            return false
+        }
+        if passed { return true }
+        // 2) As a last resort, ask AVURLAsset if it can become playable
         return await assetProbe(url: url, timeout: timeout * 1.2)
     }
 
@@ -61,17 +76,8 @@ enum LiveStreamHealthChecker {
         req.setValue("MyChannel/1.0 (iOS) VideoPlayer", forHTTPHeaderField: "User-Agent")
         req.setValue("application/vnd.apple.mpegurl, application/x-mpegURL, */*", forHTTPHeaderField: "Accept")
         
-        // Use optimized session configuration
-        let config = URLSessionConfiguration.ephemeral
-        config.waitsForConnectivity = false
-        config.timeoutIntervalForRequest = timeout
-        config.timeoutIntervalForResource = timeout
-        config.requestCachePolicy = .reloadIgnoringLocalCacheData // Always fresh for live streams
-        config.urlCache = nil // No caching for live streams
-        let session = URLSession(configuration: config)
-
         do {
-            let (_, resp) = try await session.data(for: req)
+            let (_, resp) = try await probeSession.data(for: req)
             if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
                 return true
             }
@@ -86,14 +92,8 @@ enum LiveStreamHealthChecker {
         req.setValue("bytes=0-2048", forHTTPHeaderField: "Range")
         req.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
         req.setValue("MyChannel/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
-        let config = URLSessionConfiguration.ephemeral
-        config.waitsForConnectivity = false
-        config.timeoutIntervalForRequest = timeout
-        config.timeoutIntervalForResource = timeout
-        let session = URLSession(configuration: config)
-
         do {
-            let (data, resp) = try await session.data(for: req)
+            let (data, resp) = try await probeSession.data(for: req)
             if let http = resp as? HTTPURLResponse, (200...206).contains(http.statusCode) {
                 // M3U8 playlist usually starts with #EXTM3U
                 if let s = String(data: data, encoding: .utf8), s.contains("#EXTM3U") {

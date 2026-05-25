@@ -278,6 +278,7 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var profileContent: some View {
+        GeometryReader { geo in
         ScrollView {
             VStack(spacing: 0) {
                 // Profile Header - flush to top
@@ -292,14 +293,16 @@ struct ProfileView: View {
                 StoryHighlightsTray(creatorId: user.id) { highlight in
                     selectedHighlight = highlight
                 }
-                
+                .iPadReadableWidth()
+
                 // Profile Tabs
                 ProfileTabNavigation(
                     selectedTab: $selectedTab,
                     user: user,
                     scrollOffset: scrollOffset
                 )
-                
+                .iPadReadableWidth()
+
                 // Profile Content
                 SafeProfileContentView(
                     selectedTab: $selectedTab,
@@ -312,7 +315,8 @@ struct ProfileView: View {
                     videoManagementContext: videoManagementContext,
                     isLoadingVideos: isLoadingVideos
                 )
-                
+                .iPadReadableWidth()
+
                 // Quick Actions and Links
                 VStack(spacing: 16) {
                     Divider()
@@ -588,8 +592,10 @@ struct ProfileView: View {
                     }
                 }
                 .padding(.vertical)
+                .iPadReadableWidth()
             }
         }
+        .frame(maxWidth: .infinity)
         // 🔥 FIX: Provide breathing room so History & bottom sections stay above the floating tab bar
         .safeAreaInset(edge: .bottom) {
             Color.clear
@@ -689,6 +695,7 @@ struct ProfileView: View {
                     )
                 )
             )
+        }
         }
     }
 
@@ -1181,18 +1188,22 @@ struct ProfileView: View {
         
         Task {
             do {
-                for id in idsToDelete {
-                    try await VideoFirestoreService.shared.deleteVideo(videoId: id)
-                    try? await DatabaseService.shared.deleteVideo(id: id)
-                    PinnedVideosStore.shared.unpin(id, for: user.id)
-                    // ⚡ PERFORMANCE: Also remove from cache
-                    profileCache.removeVideoFromCache(id)
-                    await MainActor.run {
-                        userVideos.removeAll { $0.id == id }
+                try await withThrowingTaskGroup(of: Void.self) { group in
+                    for id in idsToDelete {
+                        group.addTask {
+                            try await VideoFirestoreService.shared.deleteVideo(videoId: id)
+                            try? await DatabaseService.shared.deleteVideo(id: id)
+                        }
                     }
+                    try await group.waitForAll()
                 }
                 
                 await MainActor.run {
+                    for id in idsToDelete {
+                        PinnedVideosStore.shared.unpin(id, for: user.id)
+                        profileCache.removeVideoFromCache(id)
+                        userVideos.removeAll { $0.id == id }
+                    }
                     selectedVideoIDs.removeAll()
                     isManagingVideos = false
                     isBulkDeletingVideos = false
@@ -1230,10 +1241,16 @@ struct ProfileView: View {
     
     private func applyBulkVisibility(_ visibility: Video.VisibilityStatus) {
         guard !selectedVideoIDs.isEmpty else { return }
+        let ids = selectedVideoIDs
         Task {
             do {
-                for id in selectedVideoIDs {
-                    try await VideoFirestoreService.shared.updateVideoVisibility(videoId: id, visibility: visibility)
+                try await withThrowingTaskGroup(of: Void.self) { group in
+                    for id in ids {
+                        group.addTask {
+                            try await VideoFirestoreService.shared.updateVideoVisibility(videoId: id, visibility: visibility)
+                        }
+                    }
+                    try await group.waitForAll()
                 }
                 await MainActor.run {
                     showingBulkVisibilitySheet = false
@@ -1250,12 +1267,18 @@ struct ProfileView: View {
     
     private func applyBulkPlaylists(_ playlistIDs: Set<String>) {
         guard !playlistIDs.isEmpty else { return }
+        let videoIds = selectedVideoIDs
         Task {
             do {
-                for playlistId in playlistIDs {
-                    for videoId in selectedVideoIDs {
-                        try await PlaylistFirestoreService.shared.addVideoToPlaylist(videoId: videoId, playlistId: playlistId)
+                try await withThrowingTaskGroup(of: Void.self) { group in
+                    for playlistId in playlistIDs {
+                        for videoId in videoIds {
+                            group.addTask {
+                                try await PlaylistFirestoreService.shared.addVideoToPlaylist(videoId: videoId, playlistId: playlistId)
+                            }
+                        }
                     }
+                    try await group.waitForAll()
                 }
                 await MainActor.run {
                     showingBulkPlaylistSheet = false

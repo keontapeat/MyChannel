@@ -20,7 +20,7 @@ struct QuickAgentSetupView: View {
     @State private var showSuccess = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     // Header

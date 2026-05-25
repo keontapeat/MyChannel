@@ -42,16 +42,20 @@ final class SubscriptionsViewModel: ObservableObject {
     // MARK: - Filter & Sort Options
     enum FilterOption: String, CaseIterable {
         case all = "All"
-        case unwatched = "Unwatched"
         case today = "Today"
-        case thisWeek = "This Week"
-        
+        case continueWatching = "Continue"
+        case unwatched = "Unwatched"
+        case live = "Live"
+        case posts = "Posts"
+
         var icon: String {
             switch self {
             case .all: return "square.grid.2x2"
-            case .unwatched: return "circle.fill"
             case .today: return "calendar"
-            case .thisWeek: return "calendar.badge.clock"
+            case .continueWatching: return "play.circle"
+            case .unwatched: return "circle.fill"
+            case .live: return "dot.radiowaves.left.and.right"
+            case .posts: return "doc.text"
             }
         }
     }
@@ -106,15 +110,20 @@ final class SubscriptionsViewModel: ObservableObject {
         switch filterOption {
         case .all:
             break
-        case .unwatched:
-            // Filter unwatched (you'd need to track watch history)
-            break
         case .today:
             let today = Calendar.current.startOfDay(for: Date())
             result = result.filter { $0.createdAt >= today }
-        case .thisWeek:
-            let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-            result = result.filter { $0.createdAt >= weekAgo }
+        case .continueWatching:
+            let watchedIds = (UserDefaults.standard.array(forKey: "partialWatchIds") as? [String]) ?? []
+            result = result.filter { watchedIds.contains($0.id) }
+        case .unwatched:
+            let watchedIds = Set((UserDefaults.standard.array(forKey: "partialWatchIds") as? [String]) ?? [])
+            let fullyWatchedIds = Set((UserDefaults.standard.array(forKey: "completedWatchIds") as? [String]) ?? [])
+            result = result.filter { !watchedIds.contains($0.id) && !fullyWatchedIds.contains($0.id) }
+        case .live:
+            result = result.filter { $0.isLiveStream }
+        case .posts:
+            result = []
         }
         
         // Apply sort
@@ -176,12 +185,14 @@ final class SubscriptionsViewModel: ObservableObject {
         do {
             let subscriptions = try await fetchSubscriptions(userId: userId)
             
-            // Fetch full user objects for channels
-            var channels: [User] = []
-            for channelId in subscriptions {
-                if let user = try? await UserFirestoreService.shared.fetchUser(id: channelId) {
-                    channels.append(user)
+            // Fetch all channel user objects in parallel
+            let channels: [User] = await withTaskGroup(of: User?.self) { group in
+                for channelId in subscriptions {
+                    group.addTask { try? await UserFirestoreService.shared.fetchUser(id: channelId) }
                 }
+                var result: [User] = []
+                for await user in group { if let u = user { result.append(u) } }
+                return result
             }
             
             subscribedChannels = channels.sorted { $0.displayName < $1.displayName }
@@ -192,8 +203,9 @@ final class SubscriptionsViewModel: ObservableObject {
     }
     
     func refreshFeed(userId: String) async {
-        await loadSubscribedVideos(userId: userId)
-        await loadSubscribedChannels(userId: userId)
+        async let videosFetch: Void = loadSubscribedVideos(userId: userId)
+        async let channelsFetch: Void = loadSubscribedChannels(userId: userId)
+        _ = await (videosFetch, channelsFetch)
     }
     
     // MARK: - Subscriptions Management
@@ -245,19 +257,17 @@ final class SubscriptionsViewModel: ObservableObject {
     }
     
     private func fetchVideosFromChannels(channelIds: [String]) async throws -> [Video] {
-        var allVideos: [Video] = []
-        
-        // Fetch latest 5 videos from each channel (120 total if 24 channels)
-        for channelId in channelIds {
-            let videos = await VideoFirestoreService.shared.fetchVideosByCreator(
-                creatorId: channelId,
-                limit: 5
-            )
-            allVideos.append(contentsOf: videos)
+        // Fetch latest 5 videos from each channel in parallel
+        await withTaskGroup(of: [Video].self) { group in
+            for channelId in channelIds {
+                group.addTask {
+                    await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: channelId, limit: 5)
+                }
+            }
+            var allVideos: [Video] = []
+            for await batch in group { allVideos.append(contentsOf: batch) }
+            return allVideos.sorted { $0.createdAt > $1.createdAt }
         }
-        
-        // Sort by date (newest first)
-        return allVideos.sorted { $0.createdAt > $1.createdAt }
     }
 }
 

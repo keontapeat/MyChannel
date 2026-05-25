@@ -13,7 +13,7 @@ struct LanguageSettingsView: View {
     ]
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 ForEach(supported, id: \.code) { item in
                     HStack {

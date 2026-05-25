@@ -18,7 +18,7 @@ final class IPTVOrgService {
     }
 
     private struct StreamDTO: Decodable {
-        let channel: String
+        let channel: String?
         let url: String
         let status: String?
         let http_referrer: String?
@@ -49,9 +49,10 @@ final class IPTVOrgService {
             )
 
             let streamMap = Dictionary(grouping: streams.filter { s in
+                guard s.channel != nil else { return false }
                 let u = s.url.lowercased()
                 return u.hasPrefix("http") && (u.contains(".m3u8") || u.contains("m3u8?"))
-            }) { $0.channel }
+            }) { $0.channel ?? "" }
 
             var mapped: [LiveTVChannel] = []
 
@@ -85,8 +86,9 @@ final class IPTVOrgService {
                 mapped.append(channel)
             }
 
-            // Health-rank the candidates
-            let healthy = await LiveStreamHealthChecker.rankHealthyChannels(mapped, timeout: 1.5)
+            // Health-rank only the top candidates to avoid probing hundreds of streams
+            let candidates = Array(mapped.prefix(limit * 3))
+            let healthy = await LiveStreamHealthChecker.rankHealthyChannels(candidates, timeout: 1.5)
             cache = healthy
             cacheTime = Date()
             return Array(healthy.prefix(limit))

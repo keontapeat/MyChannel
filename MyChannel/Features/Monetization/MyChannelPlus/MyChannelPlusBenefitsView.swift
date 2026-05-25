@@ -13,7 +13,7 @@ struct MyChannelPlusBenefitsView: View {
     @State private var showingBenefitsExpanded = true
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 AppTheme.Colors.background.ignoresSafeArea()
                 

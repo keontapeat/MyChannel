@@ -222,7 +222,8 @@ struct ProfessionalVideoPlayer: View {
                     removal: .opacity.combined(with: .move(edge: .bottom))
                 ))
                 .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showUnmuteTip = false }
                     }
                 }
@@ -303,7 +304,8 @@ struct ProfessionalVideoPlayer: View {
             }
             
             // Fade out
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 400_000_000)
                 withAnimation(.easeOut(duration: 0.3)) {
                     if index < likeParticles.count {
                         likeParticles[index].opacity = 0
@@ -313,9 +315,8 @@ struct ProfessionalVideoPlayer: View {
                 }
             }
         }
-        
-        // Cleanup particles
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
             likeParticles.removeAll()
         }
     }
@@ -900,14 +901,16 @@ struct ProfessionalVideoPlayer: View {
 
     private func showPlayPauseIcon() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { showPlayIcon = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 900_000_000)
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { showPlayIcon = false }
         }
     }
 
     private func heartPulse() {
         withAnimation(.spring(response: 0.32, dampingFraction: 0.7)) { showHeartPulse = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 600_000_000)
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { showHeartPulse = false }
         }
         HapticManager.shared.impact(style: .medium)
@@ -919,7 +922,8 @@ struct ProfessionalVideoPlayer: View {
 
     private func revealOverlayTemporarily() {
         withAnimation(.easeInOut(duration: 0.2)) { overlayVisible = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_400_000_000)
             if isPlaying {
                 withAnimation(.easeOut(duration: 0.25)) { overlayVisible = false }
             }
@@ -1011,18 +1015,16 @@ struct FlicksAnimatedCount: View {
             displayedValue = value
             return
         }
-        
-        let stepDuration = 0.4 / Double(steps)
-        
-        for step in 0...steps {
-            DispatchQueue.main.asyncAfter(deadline: .now() + stepDuration * Double(step)) {
+        let target = value
+        let stepNanos = UInt64(400_000_000 / steps) // 0.4 s total
+        Task { @MainActor in
+            for step in 0...steps {
                 let progress = Double(step) / Double(steps)
-                let easedProgress = 1 - pow(1 - progress, 3) // Cubic ease-out
-                let newValue = Int(Double(value) * easedProgress)
-                
+                let easedProgress = 1 - pow(1 - progress, 3)
                 withAnimation(.spring(response: 0.12, dampingFraction: 0.9)) {
-                    displayedValue = newValue
+                    displayedValue = Int(Double(target) * easedProgress)
                 }
+                if step < steps { try? await Task.sleep(nanoseconds: stepNanos) }
             }
         }
     }

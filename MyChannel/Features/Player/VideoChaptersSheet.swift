@@ -48,7 +48,7 @@ struct VideoChaptersSheet: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List(filteredChapters, id: \.chapter.id) { item in
                 Button {
                     onSelect(item.chapter.start)

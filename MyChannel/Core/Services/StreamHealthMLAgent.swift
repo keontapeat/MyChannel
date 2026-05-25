@@ -73,7 +73,7 @@ final class StreamHealthMLAgent: ObservableObject {
         config.timeoutIntervalForRequest = 1.5 // 🔥 BLAZING 1.5s timeout
         config.timeoutIntervalForResource = 2.0
         config.waitsForConnectivity = false
-        config.httpMaximumConnectionsPerHost = 10
+        config.httpMaximumConnectionsPerHost = 3
         config.urlCache = nil
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: config)
@@ -81,6 +81,7 @@ final class StreamHealthMLAgent: ObservableObject {
     
     // MARK: - Background Monitoring
     private var monitoringTask: Task<Void, Never>?
+    private let maxConcurrentChecks = 6
     
     private init() {
         print("🔥 [StreamHealthML] THERMONUCLEAR Stream Health Agent ONLINE!")
@@ -226,13 +227,6 @@ final class StreamHealthMLAgent: ObservableObject {
                 }
             }
             
-            // Try fallback if available
-            if let fallback = channel.previewFallbackURL {
-                if await self.blazingHeadProbe(url: fallback) {
-                    return .degraded
-                }
-            }
-            
             return .unhealthy
         }
         
@@ -254,15 +248,28 @@ final class StreamHealthMLAgent: ObservableObject {
                 latencyMs: 0, lastChecked: Date(), consecutiveFailures: 0, successRate: 0
             ), count: channels.count)
             
-            for (index, channel) in channels.enumerated() {
+            var nextIndex = 0
+            while nextIndex < min(maxConcurrentChecks, channels.count) {
+                let index = nextIndex
+                let channel = channels[index]
                 group.addTask {
                     let result = await self.ultraFastCheck(channel)
                     return (index, result)
                 }
+                nextIndex += 1
             }
             
             for await (index, result) in group {
                 results[index] = result
+                if nextIndex < channels.count {
+                    let index = nextIndex
+                    let channel = channels[index]
+                    group.addTask {
+                        let result = await self.ultraFastCheck(channel)
+                        return (index, result)
+                    }
+                    nextIndex += 1
+                }
             }
             
             return results
@@ -409,7 +416,7 @@ final class StreamHealthMLAgent: ObservableObject {
         print("🔥 [StreamHealthML] THERMONUCLEAR initial health check starting...")
         
         // 🔥 Only check top 20 initially for SPEED
-        let topChannels = Array(LiveTVChannel.sampleChannels.prefix(20))
+        let topChannels = Array(LiveTVChannel.sampleChannels.prefix(8))
         _ = await ultraFastBatchCheck(topChannels)
         
         isInitialized = true
@@ -427,7 +434,7 @@ final class StreamHealthMLAgent: ObservableObject {
         }
         
         if !channelsToCheck.isEmpty {
-            _ = await ultraFastBatchCheck(Array(channelsToCheck.prefix(8)))
+            _ = await ultraFastBatchCheck(Array(channelsToCheck.prefix(4)))
         }
     }
     

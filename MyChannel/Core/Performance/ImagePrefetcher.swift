@@ -207,6 +207,10 @@ class ImageCache {
         return nil
     }
     
+    func remove(for url: URL) {
+        cache.removeObject(forKey: url as NSURL)
+    }
+
     func clearCache() {
         cache.removeAllObjects()
         print("✅ [ImageCache] Cache cleared (was \(hits) hits, \(misses) misses)")

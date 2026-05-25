@@ -15,7 +15,7 @@ struct NotificationSettingsView: View {
     @State private var animateChanges = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 LazyVStack(spacing: 24) {
                     headerSection

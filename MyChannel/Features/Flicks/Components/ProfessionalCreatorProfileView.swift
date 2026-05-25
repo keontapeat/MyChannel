@@ -5,7 +5,7 @@ struct ProfessionalCreatorProfileView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 32) {
                     VStack(spacing: 20) {

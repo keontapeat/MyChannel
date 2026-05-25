@@ -156,9 +156,42 @@ struct SubscriptionsView: View {
         }
     }
     
+    // MARK: - Subscriptions Filter Chips (YouTube parity)
+    private var subsFilterChipsBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(SubscriptionsViewModel.FilterOption.allCases, id: \.self) { option in
+                    Button {
+                        HapticManager.shared.impact(style: .light)
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                            viewModel.filterOption = option
+                        }
+                    } label: {
+                        Text(option.rawValue)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(viewModel.filterOption == option ? AppTheme.Colors.background : AppTheme.Colors.textPrimary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(viewModel.filterOption == option ? AppTheme.Colors.textPrimary : AppTheme.Colors.surface)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: viewModel.filterOption)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .background(AppTheme.Colors.background)
+    }
+
     // MARK: - 🔥 PREMIUM: Feed Tab with staggered animations
     private var feedTab: some View {
         ScrollView {
+            subsFilterChipsBar
+
             if !viewModel.subscribedChannels.isEmpty {
                 // Hero row: top subscribed channels with quick actions
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -220,6 +253,7 @@ struct SubscriptionsView: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
+            .iPadReadableWidth()
         }
     }
     
@@ -248,6 +282,7 @@ struct SubscriptionsView: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
+            .iPadReadableWidth()
         }
     }
     

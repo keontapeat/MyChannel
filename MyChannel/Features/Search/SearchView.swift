@@ -409,10 +409,8 @@ struct SearchView: View {
         isSearching = true
         currentPage = 1
         
-        searchTask = Task {
-            defer { 
-                Task { @MainActor in isSearching = false }
-            }
+        searchTask = Task { @MainActor in
+            defer { isSearching = false }
             
             do {
                 // Track search analytics
@@ -499,15 +497,14 @@ struct SearchView: View {
         isLoadingMore = true
         currentPage += 1
         
-        Task {
-            defer { Task { @MainActor in isLoadingMore = false } }
+        Task { @MainActor in
+            defer { isLoadingMore = false }
             
             do {
                 // Add actual load more logic here
                 print("📄 [SearchView] Loading more results for page \(currentPage)")
             } catch {
                 print("🚨 [SearchView] Load more error: \(error)")
-                await MainActor.run { isLoadingMore = false }
             }
         }
     }
@@ -1226,7 +1223,7 @@ struct VoiceSearchSheet: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 32) {
                 Spacer()
                 

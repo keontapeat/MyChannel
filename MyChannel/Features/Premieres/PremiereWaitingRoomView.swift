@@ -223,7 +223,7 @@ struct PremiereWaitingRoomView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         PremiereWaitingRoomView(
             premiere: VideoPremiere(
                 id: "preview-premiere",

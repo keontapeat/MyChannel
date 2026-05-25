@@ -178,6 +178,7 @@ private struct PreviewTransitionContainer<Content: View>: View {
     SplashContainer(previewMode: .splashOnly)
         .environmentObject(AuthenticationManager.shared)
         .environmentObject(AppState())
+        .environmentObject(GlobalVideoPlayerManager.shared)
         .preferredColorScheme(.light)
 }
 
@@ -185,5 +186,6 @@ private struct PreviewTransitionContainer<Content: View>: View {
     SplashContainer(previewMode: .safeMainTab)
         .environmentObject(AuthenticationManager.shared)
         .environmentObject(AppState())
+        .environmentObject(GlobalVideoPlayerManager.shared)
         .preferredColorScheme(.light)
 }

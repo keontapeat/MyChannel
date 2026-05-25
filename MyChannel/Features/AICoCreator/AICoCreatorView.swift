@@ -19,7 +19,7 @@ struct AICoCreatorView: View {
     @State private var showingContentGaps = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     // Header
@@ -566,7 +566,7 @@ struct ScriptEditorView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 if let script = script {
                     Text("Generated Script: \(script.title)")
@@ -598,7 +598,7 @@ struct ThumbnailGeneratorView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 Text("AI Thumbnail Generator")
                     .font(.title2)
@@ -624,7 +624,7 @@ struct ContentGapAnalysisView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 Text("Content Gap Analysis")
                     .font(.title2)

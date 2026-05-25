@@ -457,7 +457,7 @@ struct VideoPerformance: Identifiable {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         CreatorRevenueDashboardView()
     }
 }

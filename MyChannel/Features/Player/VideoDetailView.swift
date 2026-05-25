@@ -261,7 +261,7 @@ struct VideoDetailView: View {
             showControls: true
         )
         .frame(maxWidth: .infinity)
-        .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
+        .aspectRatio(16.0/9.0, contentMode: .fit)
         .background(Color.black)
         
         // Minimal top bar for YouTube embed
@@ -312,7 +312,7 @@ struct VideoDetailView: View {
                 // 🔥 FIX: Use PiPEnabledVideoPlayer to allow manual PiP activation
                 PiPEnabledVideoPlayer(player: player)
                     .frame(maxWidth: .infinity)
-                    .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
+                    .aspectRatio(16.0/9.0, contentMode: .fit)
                     .background(Color.black)
                     // 🔥 PHASE 141: Pinch-to-zoom on video player
                     .scaleEffect(pinchScale)
@@ -333,7 +333,7 @@ struct VideoDetailView: View {
                 // 🔥 FIX: Show black background while player loads (prevents white screen)
                 Color.black
                     .frame(maxWidth: .infinity)
-                    .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
+                    .aspectRatio(16.0/9.0, contentMode: .fit)
                     .overlay {
                         ProgressView()
                             .tint(.white)
@@ -568,7 +568,8 @@ struct VideoDetailView: View {
                 if isLeft {
                     playerManager.seekBackward(10)
                     showSeekRippleBackward = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 500_000_000)
                         showSeekRippleBackward = false
                     }
                     HapticManager.shared.impact(style: .medium)
@@ -576,7 +577,8 @@ struct VideoDetailView: View {
                 } else {
                     playerManager.seekForward(10)
                     showSeekRippleForward = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 500_000_000)
                         showSeekRippleForward = false
                     }
                     HapticManager.shared.impact(style: .medium)
@@ -939,7 +941,8 @@ struct VideoDetailView: View {
                     scrubFraction = playerManager.duration > 0 ? playerManager.currentTime / playerManager.duration : 0
                 } else {
                     playerManager.seek(to: scrubFraction)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 50_000_000)
                         scrubPreviewImage = nil
                     }
                 }
@@ -1044,26 +1047,28 @@ struct VideoDetailView: View {
     @ViewBuilder
     private var scrubPreview: some View {
         if isScrubbing, let img = scrubPreviewImage, playerManager.duration > 0 {
-            let trackWidth = UIScreen.main.bounds.width - 40
-            let x = CGFloat(scrubFraction) * max(0, trackWidth - 160)
-            VStack(spacing: 6) {
-                Image(uiImage: img)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 160, height: 90)
-                    .clipped()
-                    .cornerRadius(8)
-                    .shadow(radius: 3)
-                Text(formatTime(playerManager.duration * scrubFraction))
-                    .font(.caption2.monospacedDigit())
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.black.opacity(0.6))
-                    .clipShape(Capsule())
+            GeometryReader { geo in
+                // geo.size.width already reflects the padded track width
+                let x = CGFloat(scrubFraction) * max(0, geo.size.width - 160)
+                VStack(spacing: 6) {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 160, height: 90)
+                        .clipped()
+                        .cornerRadius(8)
+                        .shadow(radius: 3)
+                    Text(formatTime(playerManager.duration * scrubFraction))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.black.opacity(0.6))
+                        .clipShape(Capsule())
+                }
+                .offset(x: x, y: -100)
+                .transition(.opacity)
             }
-            .offset(x: x, y: -100)
-            .transition(.opacity)
         }
     }
     
@@ -1125,7 +1130,7 @@ struct VideoDetailView: View {
             if pendingContentResume { playerManager.play(); pendingContentResume = false }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
+        .aspectRatio(16.0/9.0, contentMode: .fit)
         .transition(.opacity)
         .zIndex(100)
     }
@@ -1265,7 +1270,7 @@ struct VideoDetailView: View {
                 .padding(.bottom, 40) // Increased bottom padding to avoid controls overlap
             }
         }
-        .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
+        .aspectRatio(16.0/9.0, contentMode: .fit)
         .transition(.asymmetric(
             insertion: .opacity.combined(with: .scale(scale: 0.95)),
             removal: .opacity
@@ -1361,7 +1366,7 @@ struct VideoDetailView: View {
             .accessibilityLabel("Close video")
         }
         .frame(maxWidth: .infinity)
-        .frame(height: UIScreen.main.bounds.width * 9.0 / 16.0)
+        .aspectRatio(16.0/9.0, contentMode: .fit)
         .transition(.opacity)
         .zIndex(200)
     }
@@ -1416,7 +1421,13 @@ struct VideoDetailView: View {
                                     },
                                     onChannelTap: { channelName in handleChannelTap(channelName) },
                                     onHashtagTap: { hashtag in handleHashtagTap(hashtag) },
-                                    dynamicViewCount: currentViewCount) // 🔥 REAL-TIME: Pass reactive view count
+                                    dynamicViewCount: currentViewCount, // 🔥 REAL-TIME: Pass reactive view count
+                                    relatedVideos: recommendedVideos, // 🔥 YOUTUBE PARITY: Related videos rail
+                                    onSelectRelated: { next in
+                                        trackRecommendationClick(next)
+                                        playNext(next)
+                                    },
+                                    onShowTranscript: { showingTranscript = true }) // 🔥 YOUTUBE PARITY: Open transcript sheet
                 .overlay(alignment: .bottom) {
                     // Simple Up Next bar with autoplay toggle
                     if let next = recommendedVideos.first(where: { $0.id != video.id }) {
@@ -1501,7 +1512,7 @@ struct VideoDetailView: View {
                 )
         }
         .sheet(isPresented: $showingSubtitlePicker) {
-            NavigationView {
+            NavigationStack {
                 List {
                     Button("Off") {
                         playerManager.selectSubtitle(option: nil)
@@ -1924,6 +1935,15 @@ struct VideoDetailView: View {
         .onChange(of: playerManager.isPlaying) { newValue in
             print("🎵 Player state changed to: \(newValue ? "Playing" : "Paused")")
             controlsCoordinator.updatePlayingState(newValue)
+            if newValue {
+                Task {
+                    let latestCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
+                    await MainActor.run {
+                        currentViewCount = latestCount
+                        print("📊 [VideoDetailView] View count updated after play: \(latestCount)")
+                    }
+                }
+            }
         }
         .onReceive(playerManager.$currentTime) { _ in
             handleCurrentTimeChange()
@@ -1966,17 +1986,12 @@ struct VideoDetailView: View {
             }
         }
         .task {
-            // 🔥 FIX: Always fetch latest view count from Firestore on appear
+            // View count + recommendations in parallel
             print("📊 [VideoDetailView] Fetching latest view count for: \(video.id)")
-            let latestCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
+            async let viewCountFetch = RealtimeViewTracker.shared.getViewCount(for: video.id)
+            async let recsFetch = recommendationService.recommendations(for: video, userId: appState.currentUser?.id, limit: 20)
+            let (latestCount, recs) = await (viewCountFetch, recsFetch)
             print("📊 [VideoDetailView] Latest view count from Firestore: \(latestCount)")
-            
-            // 🔥 Load Up Next recommendations from VideoDetailRecommendationService
-            let recs = await recommendationService.recommendations(
-                for: video,
-                userId: appState.currentUser?.id,
-                limit: 20
-            )
 
             await MainActor.run {
                 currentViewCount = latestCount
@@ -1985,25 +2000,11 @@ struct VideoDetailView: View {
 
             recommendationService.prefetchNextPlayerItem(from: recs)
 
-            // 🔥 PHASE 154: Load sentiment heatmap for scrubber
-            try? await heatmapService.loadHeatmap(videoId: video.id)
-
-            // 🔥 PHASE 146: Load timestamped comments
-            try? await timestampedCommentsService.loadComments(videoId: video.id)
-
-            // 🔥 PHASE 145: Detect silence regions for auto-skip
-            try? await speedCurvesService.detectSilence(videoId: video.id)
-        }
-        .onChange(of: playerManager.isPlaying) { isPlaying in
-            // 🔥 FIX: Update view count when video starts playing
-            if isPlaying {
-                Task {
-                    let latestCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
-                    await MainActor.run {
-                        currentViewCount = latestCount
-                        print("📊 [VideoDetailView] View count updated after play: \(latestCount)")
-                    }
-                }
+            // Heatmap, comments, silence detection in parallel
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { _ = try? await heatmapService.loadHeatmap(videoId: video.id) }
+                group.addTask { _ = try? await timestampedCommentsService.loadComments(videoId: video.id) }
+                group.addTask { _ = try? await speedCurvesService.detectSilence(videoId: video.id) }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SeekToTimestamp"))) { notification in
@@ -2069,7 +2070,8 @@ struct VideoDetailView: View {
                 let skipTo = seg.endSec / playerManager.duration
                 playerManager.seek(to: min(1.0, skipTo))
                 withAnimation { showSilenceSkipIndicator = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
                     withAnimation { showSilenceSkipIndicator = false }
                 }
             }
@@ -2085,7 +2087,8 @@ struct VideoDetailView: View {
                 if abs(newTime - card.timestamp) < 0.5 && currentVideoCard?.id != card.id {
                     currentVideoCard = card
                     showingVideoCards = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 8_000_000_000)
                         if currentVideoCard?.id == card.id {
                             showingVideoCards = false
                             currentVideoCard = nil

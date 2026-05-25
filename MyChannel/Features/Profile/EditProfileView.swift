@@ -538,7 +538,8 @@ struct EditProfileView: View {
     
     // MARK: - Form Fields Section
     private var formFieldsSection: some View {
-        VStack(spacing: 24) {
+        let progress = getFieldProgress()
+        return VStack(spacing: 24) {
             // Section header with progress
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -546,7 +547,7 @@ struct EditProfileView: View {
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                     
-                    Text("\(getFieldProgress())/5 fields completed")
+                    Text("\(progress)/5 fields completed")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
@@ -560,13 +561,13 @@ struct EditProfileView: View {
                         .frame(width: 40, height: 40)
                     
                     Circle()
-                        .trim(from: 0, to: CGFloat(getFieldProgress()) / 5.0)
+                        .trim(from: 0, to: CGFloat(progress) / 5.0)
                         .stroke(AppTheme.Colors.primary, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                         .frame(width: 40, height: 40)
                         .rotationEffect(.degrees(-90))
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: getFieldProgress())
+                        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: progress)
                     
-                    Text("\(Int((Double(getFieldProgress()) / 5.0) * 100))%")
+                    Text("\(Int((Double(progress) / 5.0) * 100))%")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(AppTheme.Colors.primary)
                 }
@@ -767,15 +768,8 @@ struct EditProfileView: View {
         print("💾 [EditProfile] selectedBannerUIImage: \(selectedBannerUIImage != nil ? "YES" : "NO")")
         isSaving = true
         HapticManager.shared.impact(style: .medium)
-        // Bust cache NOW so loadProfileSafely on return fetches fresh Firestore data (new photo URL)
-        ProfileCacheService.shared.clearCache()
         
         Task {
-            defer {
-                Task { @MainActor in
-                    isSaving = false
-                }
-            }
             var remoteBannerURL: String? = user.bannerVideoURL
 
             if isVideoCover {
@@ -799,50 +793,52 @@ struct EditProfileView: View {
                 }
             }
 
-            // Upload profile image if selected
-            var profileImageURL: String? = user.profileImageURL
-            if let profileImage = selectedProfileUIImage {
-                print("📤 Starting profile image upload for user: \(user.id)")
-                do {
-                    // UserMediaStorageService is @MainActor, so this will run on main actor
-                    let uploadedURL = try await UserMediaStorageService.shared.uploadAvatar(uid: user.id, image: profileImage)
-                    profileImageURL = uploadedURL
-                    print("✅ Profile image uploaded successfully: \(uploadedURL)")
-                    
-                    // Verify the URL is valid
-                    if URL(string: uploadedURL) == nil {
-                        print("⚠️ Uploaded URL is invalid: \(uploadedURL)")
-                    } else {
-                        print("✅ Uploaded URL is valid: \(uploadedURL)")
+            // Upload profile image and banner image in parallel
+            print("📤 Starting parallel uploads for user: \(user.id)")
+            let capturedProfileImage = selectedProfileUIImage
+            let capturedBannerImage = (!isVideoCover) ? selectedBannerUIImage : nil
+            let capturedDefaultBannerURL = (!isVideoCover) ? selectedDefaultBannerImageURL : nil
+            let existingProfileURL = user.profileImageURL
+            let existingBannerURL = user.bannerImageURL
+            let uid = user.id
+            let (profileImageURL, imageBannerURL): (String?, String?) = await withTaskGroup(of: (Bool, String?).self) { group in
+                group.addTask {
+                    guard let img = capturedProfileImage else {
+                        print("ℹ️ No profile image selected - keeping existing URL: \(existingProfileURL ?? "nil")")
+                        return (true, existingProfileURL)
                     }
-                } catch {
-                    print("🚨 Profile image upload failed: \(error.localizedDescription)")
-                    print("🚨 Full error: \(error)")
-                    // If upload fails, keep existing image but log the error
-                    // The user can try again
-                    profileImageURL = user.profileImageURL // Keep existing URL
-                    print("⚠️ Keeping existing profile image URL: \(profileImageURL ?? "nil")")
-                }
-            } else {
-                print("ℹ️ No profile image selected - keeping existing URL: \(profileImageURL ?? "nil")")
-            }
-            
-            // Upload banner image if selected
-            var imageBannerURL: String? = user.bannerImageURL
-            if !isVideoCover {
-                if let bannerImage = selectedBannerUIImage {
                     do {
-                        let uploadedURL = try await UserMediaStorageService.shared.uploadBanner(uid: user.id, image: bannerImage)
-                        imageBannerURL = uploadedURL
+                        let url = try await UserMediaStorageService.shared.uploadAvatar(uid: uid, image: img)
+                        print("✅ Profile image uploaded successfully: \(url)")
+                        return (true, url)
+                    } catch {
+                        print("🚨 Profile image upload failed: \(error.localizedDescription)")
+                        return (true, existingProfileURL)
+                    }
+                }
+                group.addTask {
+                    guard let img = capturedBannerImage else {
+                        return (false, capturedDefaultBannerURL ?? existingBannerURL)
+                    }
+                    do {
+                        let url = try await UserMediaStorageService.shared.uploadBanner(uid: uid, image: img)
+                        return (false, url)
                     } catch {
                         print("Banner image upload failed: \(error)")
+                        return (false, existingBannerURL)
                     }
-                } else if let defaultImageURL = selectedDefaultBannerImageURL {
-                    imageBannerURL = defaultImageURL
                 }
+                var profileURL: String? = existingProfileURL
+                var bannerURL: String? = existingBannerURL
+                for await (isProfile, url) in group {
+                    if isProfile { profileURL = url } else { bannerURL = url }
+                }
+                return (profileURL, bannerURL)
             }
+            print("✅ Parallel uploads complete — profile: \(profileImageURL ?? "nil"), banner: \(imageBannerURL ?? "nil")")
 
-            let previousProfileImageURL = user.profileImageURL
+            let previousProfileImageURL = existingProfileURL
+            let previousBannerImageURL = existingBannerURL
             var updatedUser = user
             print("🔨 Creating updated user object with profileImageURL: \(profileImageURL ?? "nil")")
             updatedUser = User(
@@ -909,9 +905,10 @@ struct EditProfileView: View {
                 
                 // Force sync with auth manager and app state to ensure all references are updated
                 await MainActor.run {
-                    // Clear ALL image caches so the new profile picture URL fetches fresh
-                    ImageCache.shared.clearCache()
-                    print("🗑️ Cleared all image caches for profile picture refresh")
+                    // Evict only the old avatar/banner URLs so other cached images are unaffected
+                    if let old = previousProfileImageURL.flatMap(URL.init) { ImageCache.shared.remove(for: old) }
+                    if let old = previousBannerImageURL.flatMap(URL.init) { ImageCache.shared.remove(for: old) }
+                    print("🗑️ Evicted old avatar/banner from image cache")
                     
                     // Update all references again to ensure consistency
                     authManager.currentUser = updatedUser
@@ -1048,11 +1045,12 @@ private struct VideoBannerPreview: View {
     let isMuted: Bool
     let contentMode: UserBannerContentMode
     @State private var player = AVPlayer()
+    @State private var loopObserver: NSObjectProtocol?
     var body: some View {
         FlicksPlayerLayerView(player: player, videoGravity: contentMode == .fill ? .resizeAspectFill : .resizeAspect)
             .onAppear {
                 let item = AVPlayerItem(url: url)
-                NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { _ in
+                loopObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { _ in
                     item.seek(to: .zero, completionHandler: nil)
                     player.play()
                 }
@@ -1063,7 +1061,13 @@ private struct VideoBannerPreview: View {
             .onChange(of: isMuted) { muted in
                 player.isMuted = muted
             }
-            .onDisappear { player.pause() }
+            .onDisappear {
+                player.pause()
+                if let obs = loopObserver {
+                    NotificationCenter.default.removeObserver(obs)
+                    loopObserver = nil
+                }
+            }
     }
 }
 

@@ -26,7 +26,7 @@ struct EnhancedVideoShareSheet: View {
     @State private var copiedToClipboard = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 // Drag indicator
                 RoundedRectangle(cornerRadius: 3)

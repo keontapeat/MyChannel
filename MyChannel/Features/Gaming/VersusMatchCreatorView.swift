@@ -26,7 +26,7 @@ struct VersusMatchCreatorView: View {
     @State private var errorMessage = ""
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     // Header
@@ -435,8 +435,15 @@ struct VersusMatchCreatorView: View {
                     customRules: customRules.isEmpty ? nil : [customRules]
                 )
                 
+                guard let challengerId = AuthenticationManager.shared.currentUser?.id else {
+                    errorMessage = MatchError.userNotLoggedIn.localizedDescription
+                    showingError = true
+                    isCreating = false
+                    return
+                }
+                
                 _ = try await matchService.createMatch(
-                    challengerId: "currentUserId", // TODO: Get from auth
+                    challengerId: challengerId,
                     opponentId: opponent.id,
                     matchType: selectedMatchType,
                     wagerAmount: wager,

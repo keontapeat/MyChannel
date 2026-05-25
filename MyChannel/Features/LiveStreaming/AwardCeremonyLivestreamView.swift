@@ -715,7 +715,7 @@ struct ChatMessageRow: View {
 // MARK: - Preview
 
 #Preview("Award Ceremony") {
-    NavigationView {
+    NavigationStack {
         AwardCeremonyLivestreamView()
     }
 }

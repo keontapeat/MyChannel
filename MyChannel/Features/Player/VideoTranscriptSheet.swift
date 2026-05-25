@@ -12,7 +12,7 @@ struct VideoTranscriptSheet: View {
     private let languages = ["English", "Spanish", "French", "German", "Japanese", "Korean"]
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 // Search and Language Controls
                 VStack(spacing: 12) {

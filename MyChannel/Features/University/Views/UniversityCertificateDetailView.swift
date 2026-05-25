@@ -407,7 +407,7 @@ struct UniversityCertificateDetailView: View {
 
 // MARK: - Preview
 #Preview("iOS Development Certificate") {
-    NavigationView {
+    NavigationStack {
         UniversityCertificateDetailView(
             careerPath: CareerPath.allCareerPaths.first { $0.id == "ios-development" }!,
             progress: CareerPathProgress(
@@ -430,7 +430,7 @@ struct UniversityCertificateDetailView: View {
 }
 
 #Preview("Accounting Certificate") {
-    NavigationView {
+    NavigationStack {
         UniversityCertificateDetailView(
             careerPath: CareerPath.allCareerPaths.first { $0.id == "accounting" }!,
             progress: CareerPathProgress(

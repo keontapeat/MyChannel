@@ -46,7 +46,7 @@ struct VotingResultsView: View {
     ]
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 AppTheme.Colors.background.ignoresSafeArea()
                 

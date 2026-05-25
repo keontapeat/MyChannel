@@ -15,7 +15,7 @@ struct RefereeDashboardView: View {
     @State private var showingReviewSheet = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 // Background
                 AppTheme.Colors.background.ignoresSafeArea()
@@ -304,7 +304,7 @@ struct MatchReviewSheet: View {
     @State private var isSubmitting = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 AppTheme.Colors.background.ignoresSafeArea()
                 

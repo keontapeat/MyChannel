@@ -14,7 +14,7 @@ struct CreativeUploadView: View {
     @StateObject private var viewModel = CreativeUploadViewModel()
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     // Upload area

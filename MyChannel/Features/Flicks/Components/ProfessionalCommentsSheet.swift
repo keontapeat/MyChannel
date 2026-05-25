@@ -9,7 +9,7 @@ struct ProfessionalCommentsSheet: View {
     @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(.white.opacity(0.2))

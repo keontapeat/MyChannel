@@ -19,7 +19,7 @@ struct AIContentFactoryView: View {
     @State private var selectedGeneratedVideo: AIGeneratedVideo?
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     // Header with stats
@@ -603,7 +603,7 @@ struct GeneratedVideoDetailView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     // Video Preview

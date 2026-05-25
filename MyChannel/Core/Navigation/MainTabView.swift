@@ -28,6 +28,8 @@ struct MainTabView: View {
     @State private var presentGlobalNowPlaying: Bool = false
     @State private var presentNotificationsInbox: Bool = false
     
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    
     @State private var notificationBadges: [TabItem: Int] = [:]
     private let tabBarReservedBottomInset: CGFloat = 72
     
@@ -75,10 +77,11 @@ struct MainTabView: View {
         .onAppear {
             setupInitialState()
             
-            // 🔥 FIX: Delay inbox listener to prevent crash
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            // Delay inbox fetch slightly to avoid blocking launch
+            Task {
+                try? await Task.sleep(nanoseconds: 500_000_000)
                 if let uid = authManager.currentUser?.id {
-                    Task { try? await inbox.fetchNotifications(userId: uid) }
+                    try? await inbox.fetchNotifications(userId: uid)
                     print("📨 [MainTabView] Started inbox listener for user: \(uid)")
                 }
             }
@@ -237,36 +240,20 @@ struct MainTabView: View {
         }
     }
     
+    private var shouldShowiPadSidebar: Bool {
+        // Show sidebar on iPad with regular size class (full-screen iPad)
+        // Falls back to bottom tab bar in Slide Over / Stage Manager compact mode
+        iPadLayout.isIPad && horizontalSizeClass == .regular
+    }
+    
     @ViewBuilder
     private var mainContent: some View {
-        ZStack(alignment: .bottom) {
-            // Main Content
-            SafeContentView(selectedTab: selectedTab)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(selectedTab == .flicks ? Color.black : AppTheme.Colors.background)
-                .zIndex(5)
-                .allowsHitTesting(true)
-                .safeAreaInset(edge: .bottom) {
-                    // Flicks tab is fullscreen - no inset needed, overlay handles its own bottom clearance
-                    if selectedTab != .flicks {
-                        VStack(spacing: 8) {
-                            // Show audio bar when not in fullscreen (PiP doesn't affect layout)
-                            if !globalPlayer.showingFullscreen {
-                                GlobalNowPlayingBar()
-                            }
-                            // Reserve tab bar space (no mini player padding needed - native PiP floats)
-                            Color.clear.frame(height: tabBarReservedBottomInset)
-                        }
-                    }
-                }
-            
-            // Tab bar fixed at bottom
-            VStack {
-                Spacer()
-                CustomTabBar(
+        if shouldShowiPadSidebar {
+            HStack(spacing: 0) {
+                // Left Sidebar (YouTube iPad parity)
+                iPadSidebar(
                     selectedTab: $selectedTab,
                     notificationBadges: notificationBadges,
-                    isHidden: false,
                     onUploadTap: {
                         if appState.requireAuthentication(hint: "Sign in to upload videos.") {
                             showingUpload = true
@@ -274,25 +261,98 @@ struct MainTabView: View {
                     },
                     onTabSelected: handleTabSelection
                 )
-                .padding(.bottom, 8)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .zIndex(999)
-            .allowsHitTesting(true)
+                .frame(width: 80)
+                .background(Color(.systemBackground).ignoresSafeArea())
+                
+                Divider().ignoresSafeArea()
 
-            // Native iOS PiP replaces the custom mini player bar.
-            // When user swipes down or backgrounds the app, the system PiP
-            // floating window appears automatically — no custom overlay needed.
-        }
-        .ignoresSafeArea(.keyboard)
-        .fullScreenCover(isPresented: $showingUpload) {
-            SafeUploadView()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PresentUploadEditorForVideo"))) { note in
-            if let video = note.object as? Video {
-                showingUpload = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    NotificationCenter.default.post(name: Notification.Name("StartUploadEditorWithExistingVideo"), object: video)
+                ZStack(alignment: .bottom) {
+                    // Main Content
+                    SafeContentView(selectedTab: selectedTab)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(selectedTab == .flicks ? Color.black : AppTheme.Colors.background)
+                        .zIndex(5)
+                        .allowsHitTesting(true)
+                    
+                    if selectedTab != .flicks && !globalPlayer.showingFullscreen {
+                        VStack(spacing: 0) {
+                            Spacer()
+                            GlobalNowPlayingBar()
+                        }
+                        .zIndex(999)
+                    }
+                }
+            }
+            .ignoresSafeArea(.keyboard)
+            .fullScreenCover(isPresented: $showingUpload) {
+                SafeUploadView()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PresentUploadEditorForVideo"))) { note in
+                if let video = note.object as? Video {
+                    showingUpload = true
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 150_000_000)
+                        NotificationCenter.default.post(name: Notification.Name("StartUploadEditorWithExistingVideo"), object: video)
+                    }
+                }
+            }
+        } else {
+            ZStack(alignment: .bottom) {
+                // Main Content
+                SafeContentView(selectedTab: selectedTab)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(selectedTab == .flicks ? Color.black : AppTheme.Colors.background)
+                    .zIndex(5)
+                    .allowsHitTesting(true)
+                    .safeAreaInset(edge: .bottom) {
+                        // Flicks tab is fullscreen - no inset needed, overlay handles its own bottom clearance
+                        if selectedTab != .flicks {
+                            VStack(spacing: 8) {
+                                // Show audio bar when not in fullscreen (PiP doesn't affect layout)
+                                if !globalPlayer.showingFullscreen {
+                                    GlobalNowPlayingBar()
+                                }
+                                // Reserve tab bar space (no mini player padding needed - native PiP floats)
+                                Color.clear.frame(height: tabBarReservedBottomInset)
+                            }
+                        }
+                    }
+                
+                // Tab bar fixed at bottom
+                VStack {
+                    Spacer()
+                    CustomTabBar(
+                        selectedTab: $selectedTab,
+                        notificationBadges: notificationBadges,
+                        isHidden: false,
+                        onUploadTap: {
+                            if appState.requireAuthentication(hint: "Sign in to upload videos.") {
+                                showingUpload = true
+                            }
+                        },
+                        onTabSelected: handleTabSelection
+                    )
+                    .padding(.bottom, 8)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .zIndex(999)
+                .allowsHitTesting(true)
+
+                // Native iOS PiP replaces the custom mini player bar.
+                // When user swipes down or backgrounds the app, the system PiP
+                // floating window appears automatically — no custom overlay needed.
+            }
+            .ignoresSafeArea(.keyboard)
+            .fullScreenCover(isPresented: $showingUpload) {
+                SafeUploadView()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PresentUploadEditorForVideo"))) { note in
+                if let video = note.object as? Video {
+                    showingUpload = true
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 150_000_000)
+                        NotificationCenter.default.post(name: Notification.Name("StartUploadEditorWithExistingVideo"), object: video)
+                    }
                 }
             }
         }
@@ -319,8 +379,8 @@ struct MainTabView: View {
         
         print("✅ [MainTabView] setupInitialState completed (lightweight ops only)")
         
-        // 🔥 CRITICAL FIX: Delay heavy operations to prevent crash on launch
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
             // Clear fullscreen state on app launch
             print("🔄 [MainTabView] Delayed init - Clearing fullscreen state")
             globalPlayer.showingFullscreen = false
@@ -341,7 +401,7 @@ struct MainTabView: View {
     }
     
     private func safeUserStateSync(_ newUser: User?) {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             print("🔄 MainTabView: Setting appState.currentUser to profileImageURL: \(newUser?.profileImageURL ?? "nil")")
             appState.currentUser = newUser
         }
@@ -379,7 +439,7 @@ struct MainTabView: View {
         }
 
         // Switch tabs on the next runloop tick so the focus change doesn't eat the tap
-        DispatchQueue.main.async {
+        Task { @MainActor in
             var tx = SwiftUI.Transaction()
             tx.disablesAnimations = true
             withTransaction(tx) {
@@ -388,7 +448,8 @@ struct MainTabView: View {
             
             // If switching TO search, explicitly focus the field after selection
             if targetTab == .search {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 50_000_000)
                     NotificationCenter.default.post(name: NSNotification.Name("FocusSearchBar"), object: nil)
                 }
             }
@@ -444,7 +505,7 @@ struct MainTabView: View {
     }
     
     private func handleError(_ message: String) {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             errorMessage = message
             hasError = true
         }
@@ -494,8 +555,9 @@ struct SafeContentView: View {
             case .search:
                 SafeSearchView()
             case .profile:
-                NavigationView {
+                NavigationStack {
                     ProfileView()
+                        .navigationBarHidden(true)
                 }
             case .upload:
                 EmptyView()
@@ -792,6 +854,118 @@ enum TabItem: String, CaseIterable, Hashable {
     }
 }
 
+// MARK: - iPad Sidebar Navigation
+struct iPadSidebar: View {
+    @Binding var selectedTab: TabItem
+    let notificationBadges: [TabItem: Int]
+    let onUploadTap: () -> Void
+    let onTabSelected: (TabItem) -> Void
+    
+    var body: some View {
+        VStack(spacing: 32) {
+            // Top padding
+            Color.clear.frame(height: 20)
+            
+            // Home
+            SidebarButton(
+                tab: .home,
+                isSelected: selectedTab == .home,
+                badgeCount: notificationBadges[.home] ?? 0,
+                action: { onTabSelected(.home) }
+            )
+            
+            // Shorts (Flicks)
+            SidebarButton(
+                tab: .flicks,
+                isSelected: selectedTab == .flicks,
+                badgeCount: notificationBadges[.flicks] ?? 0,
+                action: { onTabSelected(.flicks) }
+            )
+            
+            // Upload (Create)
+            Button(action: {
+                HapticManager.shared.impact(style: .medium)
+                onUploadTap()
+            }) {
+                VStack(spacing: 4) {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 24, weight: .light))
+                        .foregroundColor(.primary)
+                    Text("Create")
+                        .font(.system(size: 10))
+                        .foregroundColor(.primary)
+                }
+            }
+            .buttonStyle(.plain)
+            
+            // Subscriptions
+            SidebarButton(
+                tab: .subscriptions,
+                isSelected: selectedTab == .subscriptions,
+                badgeCount: notificationBadges[.subscriptions] ?? 0,
+                action: { onTabSelected(.subscriptions) }
+            )
+            
+            // Search
+            SidebarButton(
+                tab: .search,
+                isSelected: selectedTab == .search,
+                badgeCount: notificationBadges[.search] ?? 0,
+                action: { onTabSelected(.search) }
+            )
+            
+            Spacer()
+            
+            // Profile (You) at bottom
+            SidebarButton(
+                tab: .profile,
+                isSelected: selectedTab == .profile,
+                badgeCount: notificationBadges[.profile] ?? 0,
+                action: { onTabSelected(.profile) }
+            )
+            .padding(.bottom, 32)
+        }
+    }
+}
+
+struct SidebarButton: View {
+    let tab: TabItem
+    let isSelected: Bool
+    let badgeCount: Int
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: {
+            HapticManager.shared.impact(style: .light)
+            action()
+        }) {
+            VStack(spacing: 4) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: tab.iconName(isSelected: isSelected))
+                        .font(.system(size: 24, weight: isSelected ? .semibold : .light))
+                        .foregroundColor(isSelected ? .primary : .secondary)
+                    
+                    if badgeCount > 0 {
+                        Text("\(badgeCount)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(Color.red)
+                            .clipShape(Capsule())
+                            .offset(x: 10, y: -8)
+                    }
+                }
+                
+                Text(tab == .profile ? "You" : tab.title)
+                    .font(.system(size: 10))
+                    .foregroundColor(isSelected ? .primary : .secondary)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - Custom Tab Bar
 struct CustomTabBar: View {
     @Binding var selectedTab: TabItem
@@ -800,12 +974,15 @@ struct CustomTabBar: View {
     let onUploadTap: () -> Void
     let onTabSelected: (TabItem) -> Void
     
+    // 🔥 YOUTUBE PARITY: Tab order matches YouTube mobile exactly:
+    // Home · Flicks · (+) · Subscriptions · Profile
+    // Search lives in the header (MinimalNavigationHeader), not the tab bar.
     // Separate tabs into main group and profile. When Home is selected, show it as a separated button on the left.
     private var mainTabs: [TabItem] {
         if selectedTab == .home {
-            return [.subscriptions, .flicks, .search]
+            return [.flicks, .subscriptions]
         } else {
-            return [.home, .subscriptions, .flicks, .search]
+            return [.home, .flicks, .subscriptions]
         }
     }
     
@@ -893,6 +1070,7 @@ struct CustomTabBar: View {
             }
             }
             .padding(.horizontal, 24)
+            .frame(maxWidth: iPadLayout.tabBarMaxWidth)
             .animation(.spring(response: 0.5, dampingFraction: 0.8), value: selectedTab)
             .onAppear {
                 print("📱 [CustomTabBar] Tab bar rendered with selected tab: \(selectedTab.title)")

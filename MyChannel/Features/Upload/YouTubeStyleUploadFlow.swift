@@ -933,29 +933,30 @@ struct YouTubeStyleUploadFlow: View {
         guard let videoURL = videoURL else { return }
         
         Task {
-            var thumbnails: [UIImage] = []
             let asset = AVAsset(url: videoURL)
-            let imageGenerator = AVAssetImageGenerator(asset: asset)
-            imageGenerator.appliesPreferredTrackTransform = true
+            let timeRatios = [0.1, 0.25, 0.4, 0.55, 0.7, 0.85]
+            let capturedDuration = videoDuration
             
-            // Generate 6 thumbnails at different times
-            let times = [0.1, 0.25, 0.4, 0.55, 0.7, 0.85]
-            
-            for timeRatio in times {
-                do {
-                    let time = CMTime(seconds: videoDuration * timeRatio, preferredTimescale: 600)
-                    let cgImage = try imageGenerator.copyCGImage(at: time, actualTime: nil)
-                    let thumbnail = UIImage(cgImage: cgImage)
-                    thumbnails.append(thumbnail)
-                } catch {
-                    print("Failed to generate thumbnail at \(timeRatio): \(error)")
+            // Generate all 6 thumbnails in parallel — each task uses its own generator instance
+            let thumbnails: [UIImage] = await withTaskGroup(of: (Int, UIImage?).self) { group in
+                for (i, ratio) in timeRatios.enumerated() {
+                    group.addTask {
+                        let gen = AVAssetImageGenerator(asset: asset)
+                        gen.appliesPreferredTrackTransform = true
+                        let t = CMTime(seconds: capturedDuration * ratio, preferredTimescale: 600)
+                        let img = (try? gen.copyCGImage(at: t, actualTime: nil)).map(UIImage.init)
+                        return (i, img)
+                    }
                 }
+                var pairs: [(Int, UIImage?)] = []
+                for await pair in group { pairs.append(pair) }
+                return pairs.sorted { $0.0 < $1.0 }.compactMap { $0.1 }
             }
             
             await MainActor.run {
                 self.generatedThumbnails = thumbnails
-                if let firstThumbnail = thumbnails.first {
-                    self.videoThumbnail = firstThumbnail
+                if let first = thumbnails.first {
+                    self.videoThumbnail = first
                     self.selectedThumbnailIndex = 0
                 }
             }

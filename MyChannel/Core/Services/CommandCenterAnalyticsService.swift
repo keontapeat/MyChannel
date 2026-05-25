@@ -53,11 +53,11 @@ class CommandCenterAnalyticsService: ObservableObject {
     }
     
     func trackSessionStart(userId: String) {
-        Analytics.logEvent("session_start", parameters: ["user_id": userId])
+        Analytics.logEvent("command_center_session_start", parameters: ["user_id": userId])
     }
     
     func trackSessionEnd(userId: String, duration: TimeInterval) {
-        Analytics.logEvent("session_end", parameters: [
+        Analytics.logEvent("command_center_session_end", parameters: [
             "user_id": userId,
             "duration_seconds": duration
         ])

@@ -281,7 +281,8 @@ struct LiveTVPlayerView: View {
                         .onAppear {
                             swipeHintOpacity = 0.4
                             // Auto-hide hint after 5 seconds
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 5_000_000_000)
                                 withAnimation(.easeOut(duration: 0.5)) {
                                     showSwipeHint = false
                                 }
@@ -516,7 +517,7 @@ struct LiveTVPlayerView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 12)
                     }
-                    .frame(maxHeight: UIScreen.main.bounds.height * 0.5)
+                    .frame(maxHeight: UIScreen.main.bounds.height * 0.5) // TODO: replace with GeometryReader when view hierarchy allows
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 20)
@@ -563,7 +564,8 @@ struct LiveTVPlayerView: View {
             currentWatchingChannel = channel
             
             // 🔥 Loading timeout - show error if stream doesn't start in 15 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 15.0) { [self] in
+            Task { @MainActor [self] in
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
                 if player == nil && streamError == nil {
                     streamError = .streamUnavailable
                     HapticManager.shared.notification(type: .warning)
@@ -706,7 +708,8 @@ struct LiveTVPlayerView: View {
         updateSubtitleAvailability()
         updateDVRAvailability()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
             restoreSavedPlaybackPositionIfNeeded(for: channel)
         }
     }
@@ -720,7 +723,8 @@ struct LiveTVPlayerView: View {
             if item.status == .failed {
                 // Try next URL if available
                 if currentIndex + 1 < urls.count {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 500_000_000)
                         setupPlayerWithURLs(urls, currentIndex: currentIndex + 1)
                     }
                 }
@@ -795,12 +799,12 @@ struct LiveTVPlayerView: View {
             item.preferredForwardBufferDuration = 6.0
             
             // Try to resume playback smoothly
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 500_000_000)
                 player.play()
             }
-            
-            // If still stalling after 3 seconds, try fallback URL
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
                 if player.timeControlStatus != .playing && currentIndex + 1 < urls.count {
                     // Try fallback URL
                     if let nextURL = URL(string: urls[currentIndex + 1]) {
@@ -1057,7 +1061,8 @@ struct LiveTVPlayerView: View {
         updateSubtitleAvailability()
         updateDVRAvailability()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
             restoreSavedPlaybackPositionIfNeeded(for: newChannel)
         }
     }

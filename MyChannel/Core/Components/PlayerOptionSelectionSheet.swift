@@ -20,7 +20,7 @@ struct PlayerOptionSelectionSheet: View {
     @State private var searchFocused = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 VStack(spacing: 12) {
                     Text(title)

@@ -14,8 +14,6 @@ struct SignInSheetView: View {
     @State private var isLoadingGoogle: Bool = false
     @State private var showFullAuth: Bool = false
     @State private var errorMessage: String = ""
-    @State private var appleSignInRawNonce: String = ""
-    @State private var appleSignInHashedNonce: String = ""
 
     var body: some View {
         NavigationStack {
@@ -73,29 +71,36 @@ struct SignInSheetView: View {
                     .buttonStyle(.plain)
                     .disabled(isLoadingGoogle)
 
-                    // Apple — Custom Button calling AuthenticationManager directly.
-                    // This fixes the Guideline 2.1(a) issue where the native SignInWithAppleButton
-                    // exhibits "no response" on iPad OS when placed inside a SwiftUI sheet.
-                    Button(action: {
-                        Task { await appleTap() }
-                    }) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "applelogo")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                            Text("Sign in with Apple")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity, alignment: .center)
+                    // Apple — Native SignInWithAppleButton handles presentationAnchor
+                    // automatically on all platforms including iPadOS (no custom window
+                    // resolution needed). Uses iPad-safe AppleSignInNonceHolder class
+                    // to survive SwiftUI render passes between onRequest and onCompletion.
+                    SignInWithAppleButton(.continue) { request in
+                        request.requestedScopes = [.fullName, .email]
+                        request.nonce = FirebaseAppleAuthService.shared.captureNonce()
+                    } onCompletion: { result in
+                        switch result {
+                        case .success(let auth):
+                            guard let cred = auth.credential as? ASAuthorizationAppleIDCredential else {
+                                errorMessage = "Apple Sign In returned invalid credentials. Please try again."
+                                return
+                            }
+                            guard let rawNonce = FirebaseAppleAuthService.shared.consumeNonce() else {
+                                errorMessage = "Apple Sign In nonce missing. Please try again."
+                                return
+                            }
+                            Task {
+                                await AuthenticationManager.shared.signInWithAppleCredential(cred, rawNonce: rawNonce)
+                            }
+                        case .failure(let error):
+                            if (error as? ASAuthorizationError)?.code != .canceled {
+                                errorMessage = error.localizedDescription
+                            }
                         }
-                        .padding(.vertical, 14)
-                        .padding(.horizontal, 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.black)
-                        )
                     }
-                    .buttonStyle(.plain)
+                    .signInWithAppleButtonStyle(.black)
+                    .frame(height: 50)
+                    .cornerRadius(12)
                     .disabled(isLoadingGoogle)
 
                     // Divider
@@ -156,6 +161,11 @@ struct SignInSheetView: View {
                     dismiss()
                 }
             }
+            .onChange(of: authManager.authState) { newState in
+                if case .error(let message) = newState {
+                    errorMessage = message
+                }
+            }
             .onReceive(NotificationCenter.default.publisher(for: .userDidLogin)) { _ in
                 showFullAuth = false
                 dismiss()
@@ -164,13 +174,10 @@ struct SignInSheetView: View {
                 AuthenticationView()
             }
         }
+        .modifier(SignInSheetSizingModifier())
     }
 
     // MARK: - Actions
-    private func appleTap() async {
-        await AuthenticationManager.shared.signInWithApple()
-    }
-
     private func googleTap() async {
         isLoadingGoogle = true
         defer { isLoadingGoogle = false }
@@ -185,6 +192,27 @@ struct SignInSheetView: View {
     SignInSheetView()
         .environmentObject(AuthenticationManager.shared)
         .environmentObject(AppState())
+}
+
+// MARK: - 🔥 iPad Parity: Apple-recommended sheet sizing
+// On iPadOS 18+ we use the official `.presentationSizing(.form)` API which is the
+// modern replacement for the broken `.presentationDetents` + `.frame(maxWidth:)`
+// combo that did not work on iPad. On earlier iPadOS / iPhone we fall back to
+// `presentationDetents` which works correctly there.
+//
+// Reference: https://nilcoalescing.com/blog/FormSheetInSwiftUI/
+private struct SignInSheetSizingModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content
+                .presentationSizing(.form)
+                .presentationDragIndicator(.visible)
+        } else {
+            content
+                .presentationDetents([.height(560), .large])
+                .presentationDragIndicator(.visible)
+        }
+    }
 }
 
 

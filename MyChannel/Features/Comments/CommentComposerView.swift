@@ -8,7 +8,7 @@ struct CommentComposerView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 Text("Compose Comment")
                     .font(.title)

@@ -350,7 +350,7 @@ struct FlickUploadSheet: View {
     @State private var showingPicker = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 24) {
                 Spacer()
                 
@@ -431,7 +431,7 @@ struct FlickEditorSheet: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section("Flick Details") {
                     TextField("Title", text: $title)

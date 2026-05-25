@@ -18,7 +18,7 @@ struct PremiumCheckoutView: View {
     @State private var animateSuccess = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 // Background
                 tier.gradient.opacity(0.1)

@@ -21,7 +21,7 @@ struct PerformanceDashboard: View {
     @State private var selectedTab = 0
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 // Tab Selector
                 Picker("Metrics", selection: $selectedTab) {

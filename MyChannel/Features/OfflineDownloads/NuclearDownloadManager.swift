@@ -267,20 +267,23 @@ final class NuclearDownloadManager: NSObject, ObservableObject {
         return download
     }
     
-    /// Download multiple videos (batch download)
+    /// Download multiple videos (batch download) — all queued concurrently via withTaskGroup
     func downloadVideos(_ videos: [Video], quality: NuclearDownloadQuality? = nil) async -> [Result<NuclearDownload, Error>] {
-        var results: [Result<NuclearDownload, Error>] = []
-        
-        for video in videos {
-            do {
-                let download = try await downloadVideo(video, quality: quality)
-                results.append(.success(download))
-            } catch {
-                results.append(.failure(error))
+        await withTaskGroup(of: Result<NuclearDownload, Error>.self) { group in
+            for video in videos {
+                group.addTask {
+                    do {
+                        let download = try await self.downloadVideo(video, quality: quality)
+                        return .success(download)
+                    } catch {
+                        return .failure(error)
+                    }
+                }
             }
+            var results: [Result<NuclearDownload, Error>] = []
+            for await result in group { results.append(result) }
+            return results
         }
-        
-        return results
     }
     
     /// Download a Short/Flick for offline viewing
