@@ -296,17 +296,11 @@ struct EditProfileView: View {
                             VideoBannerPreview(url: url, isMuted: bannerVideoMuted, contentMode: bannerContentMode)
                         } else {
                             Rectangle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [AppTheme.Colors.primary.opacity(0.3), AppTheme.Colors.secondary.opacity(0.3)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
+                                .fill(AppTheme.Colors.surface)
                                 .overlay(
                                     Image(systemName: "video.fill")
                                         .font(.system(size: 36))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.5))
                                 )
                         }
                     }
