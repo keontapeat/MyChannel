@@ -47,6 +47,9 @@ struct EditProfileView: View {
     @State private var selectedDefaultBannerImageURL: String? = nil
     @State private var selectedDefaultBannerVideoURL: String? = nil
     
+    // Perf: defer expensive image/video preview rendering until after first paint
+    @State private var heavyContentReady: Bool = false
+    
     var body: some View {
         ZStack {
             // Background
@@ -54,11 +57,9 @@ struct EditProfileView: View {
                 .ignoresSafeArea()
             
             ScrollView {
-                LazyVStack(spacing: 0) {
-                    // Header section
+                VStack(spacing: 0) {
                     headerSection
                     
-                    // Content sections
                     VStack(spacing: 28) {
                         profileImagesSection
                         formFieldsSection
@@ -155,8 +156,12 @@ struct EditProfileView: View {
                 .disabled(isSaving || !hasUnsavedChanges)
             }
         }
-        .onAppear {
+        .task {
             initializeFields()
+            // Yield one frame so the form fields paint immediately,
+            // then enable the heavier banner/profile image loads.
+            await Task.yield()
+            await MainActor.run { heavyContentReady = true }
         }
         .onChange(of: displayName) { _ in checkForChanges() }
         .onChange(of: username) { _ in checkForChanges() }
@@ -288,11 +293,11 @@ struct EditProfileView: View {
                     }
 
                     ZStack {
-                        if let urlStr = selectedDefaultBannerVideoURL, let url = URL(string: urlStr) {
+                        if heavyContentReady, let urlStr = selectedDefaultBannerVideoURL, let url = URL(string: urlStr) {
                             VideoBannerPreview(url: url, isMuted: bannerVideoMuted, contentMode: bannerContentMode)
-                        } else if let local = bannerVideoLocalURL {
+                        } else if heavyContentReady, let local = bannerVideoLocalURL {
                             VideoBannerPreview(url: local, isMuted: bannerVideoMuted, contentMode: bannerContentMode)
-                        } else if let currentRemote = user.bannerVideoURL, let url = URL(string: currentRemote) {
+                        } else if heavyContentReady, let currentRemote = user.bannerVideoURL, let url = URL(string: currentRemote) {
                             VideoBannerPreview(url: url, isMuted: bannerVideoMuted, contentMode: bannerContentMode)
                         } else {
                             Rectangle()
@@ -346,13 +351,13 @@ struct EditProfileView: View {
                             Image(uiImage: selectedImage)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
-                        } else if let urlStr = selectedDefaultBannerImageURL, let url = URL(string: urlStr) {
+                        } else if heavyContentReady, let urlStr = selectedDefaultBannerImageURL, let url = URL(string: urlStr) {
                             CachedAsyncImage(url: url) { image in
                                 image.resizable().aspectRatio(contentMode: .fill)
                             } placeholder: {
                                 Rectangle().fill(AppTheme.Colors.surface)
                             }
-                        } else if let bannerURL = user.bannerImageURL {
+                        } else if heavyContentReady, let bannerURL = user.bannerImageURL {
                             CachedAsyncImage(url: URL(string: bannerURL)) { image in
                                 image.resizable().aspectRatio(contentMode: .fill)
                             } placeholder: {
@@ -402,7 +407,7 @@ struct EditProfileView: View {
                                 Image(uiImage: selectedImage)
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
-                            } else if let profileURL = user.profileImageURL {
+                            } else if heavyContentReady, let profileURL = user.profileImageURL {
                                 CachedAsyncImage(url: URL(string: profileURL)) { image in
                                     image
                                         .resizable()
@@ -410,10 +415,6 @@ struct EditProfileView: View {
                                 } placeholder: {
                                     Circle()
                                         .fill(AppTheme.Colors.surface)
-                                        .overlay(
-                                            ProgressView()
-                                                .progressViewStyle(CircularProgressViewStyle(tint: AppTheme.Colors.primary))
-                                        )
                                 }
                             } else {
                                 Circle()

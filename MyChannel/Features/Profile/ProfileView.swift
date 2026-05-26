@@ -604,7 +604,7 @@ struct ProfileView: View {
         .ignoresSafeArea(edges: .top)
         .navigationBarHidden(true)
         .sheet(isPresented: $showingEditProfile) {
-            EditProfileView(user: $user)
+            ProfileEditWrapper(user: $user)
                 .environmentObject(appState)
         }
         .sheet(isPresented: $showingSettings) {

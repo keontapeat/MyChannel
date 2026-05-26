@@ -90,8 +90,10 @@ struct PublicProfileView: View {
         .navigationBarHidden(true)
         .sheet(isPresented: $showingEditProfile) {
             if isCurrentUserProfile {
-                EditProfileView(user: $editableUser)
-                    .environmentObject(appState)
+                NavigationStack {
+                    EditProfileView(user: $editableUser)
+                }
+                .environmentObject(appState)
             }
         }
         .sheet(isPresented: $showingSettings) {

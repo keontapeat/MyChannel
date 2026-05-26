@@ -143,9 +143,11 @@ struct QuickProfileMenu: View {
         }
         .sheet(isPresented: $showingEditProfile) {
             if let currentUser = appState.currentUser {
-                EditProfileView(user: .constant(currentUser))
-                    .environmentObject(appState)
-                    .environmentObject(authManager)
+                NavigationStack {
+                    EditProfileView(user: .constant(currentUser))
+                }
+                .environmentObject(appState)
+                .environmentObject(authManager)
             }
         }
     }
