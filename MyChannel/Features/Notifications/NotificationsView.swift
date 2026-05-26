@@ -45,7 +45,8 @@ struct NotificationsView: View {
                 NotificationSettingsView()
             }
             .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 50_000_000)
                     withAnimation { hasAppeared = true }
                 }
             }
@@ -291,7 +292,8 @@ struct StoreNotificationCard: View {
                             withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
                                 swipeOffset = -400
                             }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 220_000_000)
                                 onDelete()
                             }
                         } else {
@@ -299,7 +301,8 @@ struct StoreNotificationCard: View {
                                 swipeOffset = 0
                             }
                         }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 120_000_000)
                             isSwiping = false
                         }
                     }
@@ -492,7 +495,8 @@ struct NotificationCard: View {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 offset = -400
                             }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 200_000_000)
                                 onSwipeDelete?()
                             }
                         } else {
@@ -500,7 +504,8 @@ struct NotificationCard: View {
                                 offset = 0
                             }
                         }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 100_000_000)
                             isSwiping = false
                         }
                     }

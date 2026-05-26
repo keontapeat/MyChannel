@@ -484,10 +484,10 @@ class CreateStoryViewModel: ObservableObject {
         
         haptic.impactOccurred()
         
-        // Auto-stop after 15 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
-            if self.cameraState.isRecording {
-                self.stopRecording()
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 15_000_000_000)
+            if self?.cameraState.isRecording == true {
+                self?.stopRecording()
             }
         }
     }
@@ -512,7 +512,8 @@ class CreateStoryViewModel: ObservableObject {
         cameraState.focusPoint = point
         cameraState.focusPulseID = UUID()
         haptic.impactOccurred()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
             self?.cameraState.focusPoint = nil
         }
     }

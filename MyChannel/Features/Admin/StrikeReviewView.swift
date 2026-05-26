@@ -459,7 +459,7 @@ struct StrikeCaseReviewSheet: View {
                 ?? data["photoURL"] as? String
                 ?? data["avatarURL"] as? String
             if let urlStr, let url = URL(string: urlStr) {
-                DispatchQueue.main.async { profileImageURL = url }
+                Task { @MainActor in profileImageURL = url }
             }
         }
     }
@@ -474,7 +474,7 @@ struct StrikeCaseReviewSheet: View {
             .order(by: "flaggedAt", descending: true)
             .limit(to: 10)
             .getDocuments { snap, _ in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     loadingFlagged = false
                     guard let docs = snap?.documents else { return }
                     flaggedContentImages = docs.compactMap { doc -> FlaggedContent? in
@@ -515,7 +515,7 @@ struct StrikeCaseReviewSheet: View {
         db.collection("reports")
             .whereField("reportedUserId", isEqualTo: strikeCase.userId)
             .getDocuments { snap, _ in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     reporterCount = snap?.documents.count ?? 0
                 }
             }
@@ -531,7 +531,7 @@ struct StrikeCaseReviewSheet: View {
             .order(by: "createdAt", descending: true)
             .limit(to: 20)
             .getDocuments { snap, error in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     loadingVideos = false
                     guard let docs = snap?.documents else { return }
                     userVideos = docs.compactMap { doc -> UserVideo? in

@@ -19,7 +19,7 @@ class PiPPlayerManager: NSObject, AVPictureInPictureControllerDelegate {
     private var playerLayer: AVPlayerLayer?  // 🔥 PERF: Reusable layer
     private var lastPlayer: AVPlayer?  // 🔥 PERF: Track for skip redundant setup
     var isPiPPossible = false  // 🔥 PERF: Cached state (internal access for chevron check)
-    private var retryWorkItem: DispatchWorkItem?  // 🔥 PERF: Cancellable retry
+    private var retryTask: Task<Void, Never>?  // 🔥 PERF: Cancellable retry
     var onPiPStarted: (() -> Void)?  // 🔥 Callback fired when PiP actually begins
     var onPiPFailed: (() -> Void)?   // 🔥 Callback fired when PiP fails
     
@@ -43,7 +43,7 @@ class PiPPlayerManager: NSObject, AVPictureInPictureControllerDelegate {
         }
         
         // 🔥 PERF: Cancel pending retries
-        retryWorkItem?.cancel()
+        retryTask?.cancel()
         
         // 🔥 PERF: Reuse player layer
         if playerLayer == nil {
@@ -75,7 +75,7 @@ class PiPPlayerManager: NSObject, AVPictureInPictureControllerDelegate {
             
             // 🔥 PERF: KVO with cached state
             pipPossibleObservation = controller.observe(\.isPictureInPicturePossible, options: [.new, .initial]) { [weak self] controller, _ in
-                DispatchQueue.main.async {
+                Task { @MainActor [weak self] in
                     self?.isPiPPossible = controller.isPictureInPicturePossible
                 }
             }
@@ -102,20 +102,22 @@ class PiPPlayerManager: NSObject, AVPictureInPictureControllerDelegate {
             return
         }
         
-        retryWorkItem?.cancel()
+        retryTask?.cancel()
         var retryCount = 0
         let maxRetries = 10
         
         func tryStart() {
             guard retryCount < maxRetries else {
                 print("⚠️ [PiPPlayerManager] PiP not possible after retries")
-                DispatchQueue.main.async { onFailed?() }
+                Task { @MainActor in onFailed?() }
                 return
             }
-            let workItem = DispatchWorkItem { [weak self] in
+            self.retryTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 100_000_000)
                 guard let self = self,
                       let controller = self.pipController,
-                      !controller.isPictureInPictureActive else { return }
+                      !controller.isPictureInPictureActive,
+                      !Task.isCancelled else { return }
                 if controller.isPictureInPicturePossible {
                     controller.startPictureInPicture()
                     print("✅ [PiPPlayerManager] PiP started after \(retryCount) retries")
@@ -124,21 +126,19 @@ class PiPPlayerManager: NSObject, AVPictureInPictureControllerDelegate {
                     tryStart()
                 }
             }
-            self.retryWorkItem = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
         }
         tryStart()
     }
     
     /// 🔥 PERF: Stop with cleanup
     func stopPiP() {
-        retryWorkItem?.cancel()
+        retryTask?.cancel()
         pipController?.stopPictureInPicture()
     }
     
     func cleanup() {
-        retryWorkItem?.cancel()
-        retryWorkItem = nil
+        retryTask?.cancel()
+        retryTask = nil
         pipPossibleObservation?.invalidate()
         pipPossibleObservation = nil
         pipController = nil

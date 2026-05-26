@@ -119,11 +119,10 @@ class CameraManager: NSObject, ObservableObject {
     }
 
     func focus(at point: CGPoint) {
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             self?.focusPoint = point
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                self?.focusPoint = nil
-            }
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            self?.focusPoint = nil
         }
 
         sessionQueue.async { [weak self] in
@@ -145,7 +144,7 @@ class CameraManager: NSObject, ObservableObject {
         photoCaptureCompletion = completion
         sessionQueue.async { [weak self] in
             guard let self, let photoOutput = self.photoOutput else {
-                DispatchQueue.main.async { completion(nil) }
+                Task { @MainActor in completion(nil) }
                 return
             }
             photoOutput.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
@@ -166,7 +165,7 @@ class CameraManager: NSObject, ObservableObject {
         videoRecordingCompletion = completion
         sessionQueue.async { [weak self] in
             guard let self, let videoOutput = self.videoOutput, videoOutput.isRecording else {
-                DispatchQueue.main.async { completion(nil) }
+                Task { @MainActor in completion(nil) }
                 return
             }
             videoOutput.stopRecording()
@@ -177,7 +176,7 @@ class CameraManager: NSObject, ObservableObject {
 extension CameraManager: AVCapturePhotoCaptureDelegate {
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         guard error == nil, let data = photo.fileDataRepresentation() else {
-            DispatchQueue.main.async { self.photoCaptureCompletion?(nil) }
+            Task { @MainActor [weak self] in self?.photoCaptureCompletion?(nil) }
             return
         }
         let tempURL = FileManager.default.temporaryDirectory
@@ -185,9 +184,9 @@ extension CameraManager: AVCapturePhotoCaptureDelegate {
             .appendingPathExtension("jpg")
         do {
             try data.write(to: tempURL)
-            DispatchQueue.main.async { self.photoCaptureCompletion?(tempURL) }
+            Task { @MainActor [weak self] in self?.photoCaptureCompletion?(tempURL) }
         } catch {
-            DispatchQueue.main.async { self.photoCaptureCompletion?(nil) }
+            Task { @MainActor [weak self] in self?.photoCaptureCompletion?(nil) }
         }
     }
 }
@@ -195,9 +194,9 @@ extension CameraManager: AVCapturePhotoCaptureDelegate {
 extension CameraManager: AVCaptureFileOutputRecordingDelegate {
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
         if error != nil {
-            DispatchQueue.main.async { self.videoRecordingCompletion?(nil) }
+            Task { @MainActor [weak self] in self?.videoRecordingCompletion?(nil) }
         } else {
-            DispatchQueue.main.async { self.videoRecordingCompletion?(outputFileURL) }
+            Task { @MainActor [weak self] in self?.videoRecordingCompletion?(outputFileURL) }
         }
     }
 }

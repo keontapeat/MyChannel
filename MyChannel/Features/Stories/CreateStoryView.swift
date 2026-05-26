@@ -66,7 +66,8 @@ struct CreateStoryView: View {
                             },
                             onRemove: {
                                 viewModel.removeSticker(sticker)
-                            }
+                            },
+                            canvasSize: geometry.size
                         )
                     }
                     
@@ -78,7 +79,8 @@ struct CreateStoryView: View {
                             },
                             onRemove: {
                                 viewModel.removeTextOverlay()
-                            }
+                            },
+                            canvasSize: geometry.size
                         )
                     }
                 }

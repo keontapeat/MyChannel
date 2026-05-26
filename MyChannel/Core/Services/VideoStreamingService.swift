@@ -81,8 +81,8 @@ class VideoStreamingService: ObservableObject {
             // Step 4: Upload video file with progress tracking
             let videoURL = try await uploadVideoFile(url) { progress in
                 let adjustedProgress = 0.3 + (progress * 0.6) // 30% to 90%
-                DispatchQueue.main.async {
-                    self.uploadProgress = adjustedProgress
+                Task { @MainActor [weak self] in
+                    self?.uploadProgress = adjustedProgress
                 }
                 progressHandler(adjustedProgress)
             }

@@ -42,7 +42,7 @@ final class NowPlayingService {
         // Async load artwork
         if let urlStr = thumbnailURL, let url = URL(string: urlStr) {
             Task.detached {
-                if let (data, _) = try? await URLSession.shared.data(from: url),
+                if let (data, _) = try? await URLSession.configured.data(from: url),
                    let img = UIImage(data: data) {
                     let artwork = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
                     await MainActor.run {

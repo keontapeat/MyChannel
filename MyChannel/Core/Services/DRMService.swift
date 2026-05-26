@@ -185,7 +185,7 @@ extension DRMService: AVAssetResourceLoaderDelegate {
             throw DRMError.invalidCertificateURL
         }
         
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, _) = try await URLSession.configured.data(from: url)
         return data
     }
     

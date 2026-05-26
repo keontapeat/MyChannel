@@ -466,7 +466,7 @@ struct NotificationPreferencesView: View {
     // MARK: - Helper Methods
     private func checkNotificationPermissions() {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 systemNotificationsStatus = settings.authorizationStatus
             }
         }
@@ -474,7 +474,7 @@ struct NotificationPreferencesView: View {
     
     private func requestNotificationPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 if granted {
                     systemNotificationsStatus = .authorized
                     pushNotificationsEnabled = true

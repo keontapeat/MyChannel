@@ -29,7 +29,7 @@ struct LiveControlService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(req)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.configured.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode ?? 500 < 300 else { throw NetworkError.invalidResponse }
         return try JSONDecoder().decode(StartResponse.self, from: data)
     }
@@ -40,12 +40,12 @@ struct LiveControlService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONEncoder().encode(["id": id])
-        _ = try? await URLSession.shared.data(for: request)
+        _ = try? await URLSession.configured.data(for: request)
     }
 
     func status(id: String) async throws -> StatusResponse {
         guard let url = buildURL("/live/status/\(id)") else { throw NetworkError.invalidURL }
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await URLSession.configured.data(from: url)
         guard (response as? HTTPURLResponse)?.statusCode ?? 500 < 300 else { throw NetworkError.invalidResponse }
         return try JSONDecoder().decode(StatusResponse.self, from: data)
     }

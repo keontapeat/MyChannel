@@ -31,8 +31,8 @@ class PerformanceOptimizer: ObservableObject {
     
     // MARK: - App Launch Optimization
     func optimizeAppLaunch() {
-        // Defer heavy operations until after UI is ready
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 100_000_000)
             self.preloadCriticalResources()
         }
         
@@ -412,7 +412,9 @@ extension View {
         perform action: @escaping (T) -> Void
     ) -> some View {
         self.onChange(of: value) { newValue in
-            DispatchQueue.main.asyncAfter(deadline: .now() + debounceTime) {
+            let delay = debounceTime
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 if newValue == value {
                     action(newValue)
                 }

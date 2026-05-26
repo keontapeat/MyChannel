@@ -182,7 +182,9 @@ struct AdvancedTextField: View {
         validationState = .validating
         showValidation = true
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + validation.debounceTime) {
+        let debounce = validation.debounceTime
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(debounce * 1_000_000_000))
             let result = validation.validator(text)
             withAnimation(.easeInOut(duration: 0.2)) {
                 switch result {

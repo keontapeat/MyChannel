@@ -344,7 +344,7 @@ class EnhancedVideoUploadService: ObservableObject {
     }
     
     private func downloadOptimizedVideo(from url: URL) async throws -> URL {
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, _) = try await URLSession.configured.data(from: url)
         
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -855,7 +855,7 @@ class EnhancedVideoUploadService: ObservableObject {
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.httpBody = try JSONEncoder().encode(request)
         
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        let (data, response) = try await URLSession.configured.data(for: urlRequest)
         
         guard let httpResponse = response as? HTTPURLResponse,
               200...299 ~= httpResponse.statusCode else {

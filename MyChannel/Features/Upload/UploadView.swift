@@ -175,7 +175,7 @@ struct UploadView: View {
             Task {
                 isSavingDraft = true
                 do {
-                    let draft = try UploadDraftStorage.shared.saveDraft(from: uploadManager)
+                    let draft = try await UploadDraftStorage.shared.saveDraft(from: uploadManager)
                     restoreDraft = draft
                     dismiss()
                 } catch {
@@ -1674,7 +1674,7 @@ struct UploadCreationModeBar: View {
     
     private var isPad: Bool { hSizeClass == .regular }
     private var isCompactWidth: Bool {
-        UIScreen.main.bounds.width < 360
+        ((UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.width ?? 390) < 360
     }
     private var showLabels: Bool {
         return isPad || (!isCompactWidth && sizeCategory <= .large)

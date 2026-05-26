@@ -248,8 +248,8 @@ struct YouTubePremiumUpsellSheet: View {
                     // Update premium service
                     try await premiumService.subscribe(to: .pro)
                     
-                    // Dismiss after animation
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
                         dismiss()
                     }
                 }
@@ -260,8 +260,8 @@ struct YouTubePremiumUpsellSheet: View {
                 
                 showConfetti = true
                 HapticManager.shared.notification(type: .success)
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
                     dismiss()
                 }
             }

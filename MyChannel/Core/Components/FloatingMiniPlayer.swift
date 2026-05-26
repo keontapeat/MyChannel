@@ -676,7 +676,7 @@ struct FloatingMiniPlayer: View {
                 
                 // Set dragging flag on first update
                 if !isDragging {
-                    DispatchQueue.main.async {
+                    Task { @MainActor in
                         isDragging = true
                         lastPosition = position
                         HapticManager.shared.impact(style: .light)
@@ -725,7 +725,8 @@ struct FloatingMiniPlayer: View {
                 if verticalSwipe > 100 && value.translation.height < 0 && verticalSwipe > horizontalSwipe {
                     // Swipe up to expand
                     globalPlayer.expandPlayer()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 50_000_000)
                         NotificationCenter.default.post(name: NSNotification.Name("PresentVideoDetailFromMiniPlayer"), object: nil)
                     }
                     HapticManager.shared.impact(style: .medium)
@@ -988,18 +989,16 @@ struct FloatingMiniPlayer: View {
         lastTapTime = now
         
         if tapCount == 1 {
-            // Single tap - KEEP MINI PLAYER VISIBLE, just toggle controls
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 300_000_000)
                 if self.tapCount == 1 {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         self.showingControls.toggle()
                     }
-                    // Auto-hide controls after 3 seconds (but keep mini player visible)
                     if self.showingControls {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                self.showingControls = false
-                            }
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            self.showingControls = false
                         }
                     }
                 }
@@ -1015,7 +1014,8 @@ struct FloatingMiniPlayer: View {
             showingControls = true
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
             withAnimation(.easeInOut(duration: 0.2)) {
                 showingControls = false
             }

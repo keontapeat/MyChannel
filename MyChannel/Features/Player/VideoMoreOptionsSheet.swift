@@ -250,7 +250,8 @@ struct VideoMoreOptionsSheet: View {
                         ToastView(text: "Link copied!")
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                             .onAppear {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                Task { @MainActor in
+                                    try? await Task.sleep(nanoseconds: 2_000_000_000)
                                     withAnimation {
                                         showCopyToast = false
                                     }
@@ -292,9 +293,7 @@ struct VideoMoreOptionsSheet: View {
         }
         ProfileCacheService.shared.removeVideoFromCache(video.id)
         NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: NSNotification.Name("ShowToast"), object: "Video deleted successfully")
-        }
+        NotificationCenter.default.post(name: NSNotification.Name("ShowToast"), object: "Video deleted successfully")
     }
     
     private func reportVideo(reason: VideoReportReason = .spam) async {

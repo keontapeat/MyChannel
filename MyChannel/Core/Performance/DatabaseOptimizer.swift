@@ -270,7 +270,8 @@ class DatabaseOptimizer: ObservableObject {
     
     // MARK: - Performance Metrics
     private func updateQueryMetrics(queryTime: TimeInterval, documentCount: Int) {
-        DispatchQueue.main.async {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             self.queryPerformance.averageQueryTime = (self.queryPerformance.averageQueryTime + queryTime) / 2
             self.queryPerformance.totalQueries += 1
             self.queryPerformance.documentsRetrieved += documentCount

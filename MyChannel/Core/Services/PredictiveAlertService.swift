@@ -84,7 +84,7 @@ final class PredictiveAlertService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body { request.httpBody = try? JSONSerialization.data(withJSONObject: body) }
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, _) = try await URLSession.configured.data(for: request)
             return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         } catch { return nil }
     }

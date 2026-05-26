@@ -18,7 +18,7 @@ class VertexAIService: ObservableObject {
     
     private let projectID: String
     private let location: String = "us-central1"
-    private let session = URLSession.shared
+    private let session = URLSession.configured
     private var cancellables = Set<AnyCancellable>()
     
     @Published var isLoading = false

@@ -427,6 +427,8 @@ struct ModernPlayerControlsView: View {
                     
                     ModernProgressBar(
                         progress: viewModel.currentProgress,
+                        duration: video.duration,
+                        chapters: video.parsedChapters,
                         onSeek: { progress in
                             viewModel.seek(to: progress)
                         }
@@ -542,6 +544,8 @@ struct ModernPlayerControlsView: View {
 // MARK: - Modern Progress Bar
 struct ModernProgressBar: View {
     let progress: Double
+    var duration: TimeInterval = 0
+    var chapters: [Video.Chapter] = []
     let onSeek: (Double) -> Void
     
     @State private var isDragging = false
@@ -564,6 +568,19 @@ struct ModernProgressBar: View {
                     .fill(Color.white)
                     .frame(width: geometry.size.width * displayProgress, height: isDragging ? 6 : 4)
                 
+                // Chapter Gaps
+                if duration > 0 && !chapters.isEmpty {
+                    ForEach(chapters) { chapter in
+                        if chapter.start > 0 {
+                            let xOffset = geometry.size.width * (chapter.start / duration)
+                            Rectangle()
+                                .fill(Color.black.opacity(0.5)) // Gap color
+                                .frame(width: 2, height: isDragging ? 6 : 4)
+                                .offset(x: xOffset)
+                        }
+                    }
+                }
+                
                 // Thumb
                 Circle()
                     .fill(Color.white)
@@ -571,23 +588,22 @@ struct ModernProgressBar: View {
                     .offset(x: geometry.size.width * displayProgress - (isDragging ? 8 : 6))
                     .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
             }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isDragging = true
+                        let newProgress = max(0, min(1, value.location.x / geometry.size.width))
+                        dragProgress = newProgress
+                    }
+                    .onEnded { value in
+                        isDragging = false
+                        onSeek(dragProgress)
+                    }
+            )
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
         }
-        .gesture(
-            DragGesture()
-                .onChanged { value in
-                    isDragging = true
-                    // Use geometry.size.width (component width) not UIScreen width
-                    let newProgress = max(0, min(1, value.location.x / geometry.size.width))
-                    dragProgress = newProgress
-                }
-                .onEnded { value in
-                    isDragging = false
-                    onSeek(dragProgress)
-                }
-        )
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
+        .frame(height: 20)
     }
-    .frame(height: 20)
 }
 
 // MARK: - Modern Loading View

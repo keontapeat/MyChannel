@@ -1020,8 +1020,8 @@ struct ShazamView: View {
                 pulseScale = 1.5
             }
             
-            // Simulate finding a song after 3 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
                 withAnimation {
                     isListening = false
                     pulseScale = 1.0

@@ -339,7 +339,7 @@ class BackupRecoveryService {
             throw BackupError.invalidURL
         }
         
-        let (data, _) = try await URLSession.shared.data(from: downloadURL)
+        let (data, _) = try await URLSession.configured.data(from: downloadURL)
         
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: [[String: Any]]] else {
             throw BackupError.invalidBackupFormat

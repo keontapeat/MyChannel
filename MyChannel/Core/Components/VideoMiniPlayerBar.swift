@@ -115,7 +115,8 @@ struct VideoMiniPlayerBar: View {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             dragOffset = 400
                         }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 300_000_000)
                             globalPlayer.stopImmediately()
                         }
                         HapticManager.shared.impact(style: .medium)

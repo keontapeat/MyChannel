@@ -168,7 +168,8 @@ struct QuickAgentSetupView: View {
             showSuccess = true
             
             // Reset after 3 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
                 showSuccess = false
             }
         }

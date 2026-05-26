@@ -17,7 +17,7 @@ final class RealMLAgentsService: ObservableObject {
     static let shared = RealMLAgentsService()
     
     private let baseURL: String
-    private let session = URLSession.shared
+    private let session = URLSession.configured
     
     @Published var isLoading = false
     @Published var lastError: String?

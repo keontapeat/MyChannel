@@ -61,7 +61,8 @@ class StallRecoveryManager: ObservableObject {
     private func recoverWithWait(player: AVPlayer, videoId: String, waitTime: TimeInterval) {
         print("⏰ [StallRecovery] Waiting \(waitTime)s before retry")
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + waitTime) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(waitTime * 1_000_000_000))
             guard let self = self else { return }
             
             player.play()

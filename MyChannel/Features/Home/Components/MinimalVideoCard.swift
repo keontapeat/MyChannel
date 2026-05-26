@@ -12,6 +12,12 @@ struct MinimalVideoCard: View {
     let video: Video
     let action: () -> Void
     var useLivePreview: Bool = false
+    var cardWidth: CGFloat? = nil
+
+    /// Resolved width: explicit cardWidth, or environment adaptive width, or 180pt fallback
+    @Environment(\.adaptiveCardWidth) private var envCardWidth
+    private var resolvedWidth: CGFloat { cardWidth ?? envCardWidth }
+    private var resolvedHeight: CGFloat { (resolvedWidth * 9 / 16).rounded() }
 
     /// Returns true only for actual live streams with a real HLS manifest (.m3u8).
     /// Regular uploaded videos, Firebase Storage mp4s, and YouTube are excluded.
@@ -41,7 +47,7 @@ struct MinimalVideoCard: View {
                         // AVPlayer and WKWebView (YouTube) since they render outside
                         // SwiftUI's layer hierarchy.
                         VideoLiveThumbnailView(video: video, cornerRadius: 12)
-                            .frame(width: 180, height: 101)
+                            .frame(width: resolvedWidth, height: resolvedHeight)
                     } else {
                         MultiSourceAsyncImage(
                             urls: video.posterCandidates,
@@ -49,13 +55,13 @@ struct MinimalVideoCard: View {
                                 image
                                     .resizable()
                                     .scaledToFill()
-                                    .frame(width: 180, height: 101)
+                                    .frame(width: resolvedWidth, height: resolvedHeight)
                                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             },
                             placeholder: {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .fill(Color(.systemGray6))
-                                    .frame(width: 180, height: 101)
+                                    .frame(width: resolvedWidth, height: resolvedHeight)
                                     .overlay(
                                         Image(systemName: video.category.iconName)
                                             .font(.system(size: 24))
@@ -103,7 +109,7 @@ struct MinimalVideoCard: View {
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
-                .frame(width: 180, alignment: .leading)
+                .frame(width: resolvedWidth, alignment: .leading)
             }
         }
         .buttonStyle(PressableScaleStyle(scale: 0.96))

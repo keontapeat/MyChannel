@@ -70,40 +70,32 @@ struct SplashView: View {
             logoOpacity = 1.0
         }
         
-        // Start pulse effect
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)
             withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
                 pulseScale = 1.1
             }
-        }
-        
-        // Show loading after 1.5s
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
             withAnimation(.easeInOut(duration: 0.4)) {
                 showProgress = true
             }
-            
-            // Animate progress
             animateProgress()
         }
     }
     
     private func animateProgress() {
-        let progressSteps: [Double] = [0.3, 0.6, 0.85, 1.0]
-        
-        for (index, targetProgress) in progressSteps.enumerated() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.4) {
+        Task { @MainActor in
+            let progressSteps: [Double] = [0.3, 0.6, 0.85, 1.0]
+            for (i, targetProgress) in progressSteps.enumerated() {
                 withAnimation(.easeOut(duration: 0.3)) {
                     progress = targetProgress
                 }
-                
-                // Complete when done
-                if targetProgress >= 1.0 {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        onComplete?()
-                    }
+                if i < progressSteps.count - 1 {
+                    try? await Task.sleep(nanoseconds: 400_000_000)
                 }
             }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            onComplete?()
         }
     }
 }
@@ -136,8 +128,8 @@ struct MinimalSplashView: View {
                 logoScale = 1.0
             }
             
-            // Auto complete after 2 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
                 onComplete?()
             }
         }

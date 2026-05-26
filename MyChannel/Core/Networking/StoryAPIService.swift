@@ -90,7 +90,7 @@ class StoryAPIService: ObservableObject {
         request.httpMethod = "PUT"
         request.httpBody = data
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
-        let (body, response) = try await URLSession.shared.data(for: request)
+        let (body, response) = try await URLSession.configured.data(for: request)
         _ = body
         guard let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode else {
             throw APIError.serverError((response as? HTTPURLResponse)?.statusCode ?? 500, "Upload failed")

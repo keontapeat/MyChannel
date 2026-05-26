@@ -12,7 +12,6 @@
 //  4. Falling back to backup streams when needed
 
 import Foundation
-import AVFoundation
 import Combine
 
 @MainActor
@@ -146,7 +145,7 @@ final class LiveTVManager: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("en-US", forHTTPHeaderField: "Accept-Language")
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.configured.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
@@ -294,34 +293,17 @@ final class LiveTVManager: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "HEAD"
-        request.timeoutInterval = 8.0
+        request.timeoutInterval = 3.0
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
         
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await URLSession.configured.data(for: request)
             if let httpResponse = response as? HTTPURLResponse {
                 return (200...399).contains(httpResponse.statusCode)
             }
-        } catch {
-            // Try AVAsset check as backup
-            return await checkAssetPlayability(url)
-        }
+        } catch { }
         
         return false
-    }
-    
-    private func checkAssetPlayability(_ url: URL) async -> Bool {
-        let asset = AVURLAsset(url: url, options: [
-            AVURLAssetPreferPreciseDurationAndTimingKey: false
-        ])
-        
-        return await withCheckedContinuation { continuation in
-            asset.loadValuesAsynchronously(forKeys: ["playable"]) {
-                var error: NSError?
-                let status = asset.statusOfValue(forKey: "playable", error: &error)
-                continuation.resume(returning: status == .loaded && asset.isPlayable)
-            }
-        }
     }
     
     // MARK: - Cache Management

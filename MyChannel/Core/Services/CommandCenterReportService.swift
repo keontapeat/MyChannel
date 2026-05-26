@@ -27,8 +27,11 @@ final class CommandCenterReportService: ObservableObject {
         defer { isGenerating = false }
 
         let pdfURL = reportsDir.appendingPathComponent("DailyReport_\(dateStamp()).pdf")
-        guard let pdf = buildPDF(metrics: metrics) else { return nil }
-        pdf.write(to: pdfURL)
+        guard let pdf = buildPDF(metrics: metrics),
+              let pdfData = pdf.dataRepresentation() else { return nil }
+        await Task.detached(priority: .utility) {
+            try? pdfData.write(to: pdfURL, options: .atomic)
+        }.value
         lastGeneratedPDFURL = pdfURL
         AgentLogService.shared.reportGenerated(type: "daily_pdf", rowCount: metrics.userRows.count)
         return pdfURL
@@ -44,7 +47,10 @@ final class CommandCenterReportService: ObservableObject {
         for row in rows {
             csv += "\(row.userId),\(row.displayName),\(row.email),\(row.signUpDate),\(row.strikeCount),\(row.status),\(row.totalVideos)\n"
         }
-        try? csv.write(to: url, atomically: true, encoding: .utf8)
+        let usersCSV = csv
+        await Task.detached(priority: .utility) {
+            try? usersCSV.write(to: url, atomically: true, encoding: .utf8)
+        }.value
         lastGeneratedCSVURL = url
         AgentLogService.shared.reportGenerated(type: "users_csv", rowCount: rows.count)
         return url
@@ -58,7 +64,10 @@ final class CommandCenterReportService: ObservableObject {
         for row in rows {
             csv += "\(row.userId),\(row.signal),\(row.confidence),\(row.detectedAt),\(row.actionTaken)\n"
         }
-        try? csv.write(to: url, atomically: true, encoding: .utf8)
+        let fraudCSV = csv
+        await Task.detached(priority: .utility) {
+            try? fraudCSV.write(to: url, atomically: true, encoding: .utf8)
+        }.value
         lastGeneratedCSVURL = url
         AgentLogService.shared.reportGenerated(type: "fraud_csv", rowCount: rows.count)
         return url
@@ -72,7 +81,10 @@ final class CommandCenterReportService: ObservableObject {
         for row in rows {
             csv += "\(row.videoId),\(row.title),\(row.creatorId),\(String(format: "%.2f", row.toxicityScore)),\(row.recommendation),\(row.reviewedAt)\n"
         }
-        try? csv.write(to: url, atomically: true, encoding: .utf8)
+        let contentCSV = csv
+        await Task.detached(priority: .utility) {
+            try? contentCSV.write(to: url, atomically: true, encoding: .utf8)
+        }.value
         lastGeneratedCSVURL = url
         AgentLogService.shared.reportGenerated(type: "content_csv", rowCount: rows.count)
         return url

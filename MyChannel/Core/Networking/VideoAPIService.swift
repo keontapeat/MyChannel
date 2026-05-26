@@ -308,7 +308,7 @@ class VideoAPIService: ObservableObject {
         
         // Use async/await for URLSession
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await URLSession.configured.data(for: request)
             
             await MainActor.run {
                 isUploading = false

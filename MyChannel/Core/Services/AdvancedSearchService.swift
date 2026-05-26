@@ -96,8 +96,8 @@ class AdvancedSearchService: ObservableObject {
         isSearching = true
         
         defer {
-            DispatchQueue.main.async {
-                self.isSearching = false
+            Task { @MainActor [weak self] in
+                self?.isSearching = false
             }
         }
         

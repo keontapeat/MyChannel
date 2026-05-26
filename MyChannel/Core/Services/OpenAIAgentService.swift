@@ -55,7 +55,7 @@ final class OpenAIAgentService: ObservableObject {
         request.setValue("Bearer \(AppSecrets.openAIAPIKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try? JSONSerialization.data(withJSONObject: ["input": text])
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await URLSession.configured.data(for: request)
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let results = (json["results"] as? [[String: Any]])?.first else {
             return OpenAIModerationResult(flagged: false, categories: [:], scores: [:])
@@ -80,7 +80,7 @@ final class OpenAIAgentService: ObservableObject {
             "model": "text-embedding-3-small",
             "input": text
         ])
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await URLSession.configured.data(for: request)
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let dataArr = (json["data"] as? [[String: Any]])?.first,
               let embedding = dataArr["embedding"] as? [Double] else { return [] }

@@ -115,7 +115,7 @@ final class PlacementOptimizationAgent: ObservableObject {
         
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, _) = try await URLSession.configured.data(for: request)
             
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let predictions = json["predictions"] as? [[String: Any]],
@@ -389,7 +389,7 @@ final class PlacementOptimizationAgent: ObservableObject {
         ]
         
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        _ = try await URLSession.shared.data(for: request)
+        _ = try await URLSession.configured.data(for: request)
         
         print("✅ [VertexAI-Placement] Model retraining triggered")
     }

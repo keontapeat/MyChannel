@@ -555,7 +555,7 @@ class EnhancedSubscriptionService: ObservableObject {
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.httpBody = try JSONEncoder().encode(request)
         
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        let (data, response) = try await URLSession.configured.data(for: urlRequest)
         
         guard let httpResponse = response as? HTTPURLResponse,
               200...299 ~= httpResponse.statusCode else {

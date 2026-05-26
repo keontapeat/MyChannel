@@ -115,7 +115,8 @@ final class PinchToZoomService: ObservableObject {
         currentAspectRatio = modes[nextIdx]
         zoomState.aspectRatio = currentAspectRatio
         showAspectRatioHUD = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
             self?.showAspectRatioHUD = false
         }
     }

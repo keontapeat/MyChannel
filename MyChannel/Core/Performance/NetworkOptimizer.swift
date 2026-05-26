@@ -69,7 +69,7 @@ class NetworkOptimizer: ObservableObject {
     // MARK: - Network Monitoring
     private func setupNetworkMonitoring() {
         monitor.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 self?.isOnline = path.status == .satisfied
                 self?.updateConnectionQuality(path)
             }
@@ -174,7 +174,7 @@ class NetworkOptimizer: ObservableObject {
         
         for attempt in 0..<maxRetries {
             do {
-                let (data, response) = try await URLSession.shared.data(for: request)
+                let (data, response) = try await URLSession.configured.data(for: request)
                 
                 // Validate response
                 guard let httpResponse = response as? HTTPURLResponse,

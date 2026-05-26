@@ -263,8 +263,8 @@ class ProCameraEngine: NSObject, ObservableObject {
             // Show focus indicator
             focusPoint = point
             
-            // Hide after delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 self?.focusPoint = nil
             }
             

@@ -173,7 +173,7 @@ final class MusicCatalogService: ObservableObject {
         let q = term.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? term
         let urlString = "https://itunes.apple.com/search?term=\(q)&entity=musicArtist&country=\(country)&limit=\(limit)"
         guard let url = URL(string: urlString) else { return [] }
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await URLSession.configured.data(from: url)
         guard let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode else { return [] }
         let decoded = try JSONDecoder().decode(iTunesSearchResponse.self, from: data)
         var artists = decoded.results.compactMap { r -> CatalogArtist? in
@@ -220,7 +220,7 @@ final class MusicCatalogService: ObservableObject {
     private func fetchTopTrackArtwork(for artistId: Int, country: String) async throws -> String? {
         let urlString = "https://itunes.apple.com/lookup?id=\(artistId)&entity=song&country=\(country)&limit=1"
         guard let url = URL(string: urlString) else { return nil }
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await URLSession.configured.data(from: url)
         guard let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode else { return nil }
         let decoded = try JSONDecoder().decode(iTunesSearchResponse.self, from: data)
         // First result is usually the artist entity itself, second is the song
@@ -232,7 +232,7 @@ final class MusicCatalogService: ObservableObject {
         let q = term.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? term
         let urlString = "https://itunes.apple.com/search?term=\(q)&entity=album&country=\(country)&limit=\(limit)"
         guard let url = URL(string: urlString) else { return [] }
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await URLSession.configured.data(from: url)
         guard let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode else { return [] }
         let decoded = try JSONDecoder().decode(iTunesSearchResponse.self, from: data)
         return decoded.results.compactMap { r in
@@ -266,7 +266,7 @@ final class MusicCatalogService: ObservableObject {
         let cap = min(max(limit, 1), 200)
         let urlString = "https://itunes.apple.com/lookup?id=\(artistId)&entity=album&country=\(country)&limit=\(cap)"
         guard let url = URL(string: urlString) else { return [] }
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await URLSession.configured.data(from: url)
         guard let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode else { return [] }
         let decoded = try JSONDecoder().decode(iTunesSearchResponse.self, from: data)
         var seen = Set<Int>()
@@ -395,7 +395,7 @@ final class MusicCatalogService: ObservableObject {
         // Retry once on failure
         for attempt in 0..<2 {
             if attempt > 0 { try? await Task.sleep(nanoseconds: 500_000_000) }
-            guard let (data, response) = try? await URLSession.shared.data(from: url),
+            guard let (data, response) = try? await URLSession.configured.data(from: url),
                   let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode,
                   let decoded = try? JSONDecoder().decode(iTunesSearchResponse.self, from: data),
                   !decoded.results.isEmpty else { continue }
@@ -424,7 +424,7 @@ final class MusicCatalogService: ObservableObject {
     // MARK: - Internal
     private func fetchSongs(from urlString: String) async throws -> [CatalogSong] {
         guard let url = URL(string: urlString) else { return [] }
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await URLSession.configured.data(from: url)
         guard let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode else { return [] }
         let decoded = try JSONDecoder().decode(iTunesSearchResponse.self, from: data)
         return decoded.results.compactMap { r in
@@ -456,7 +456,7 @@ final class MusicCatalogService: ObservableObject {
         let normalizedLimit = min(max(limit, 10), 100)
         let urlString = "\(appleRSSBaseURL)/\(country.lowercased())/music/most-played/\(normalizedLimit)/songs.json"
         guard let url = URL(string: urlString) else { return [] }
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await URLSession.configured.data(from: url)
         guard let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode else { return [] }
         let decoded = try JSONDecoder().decode(AppleMusicRSSResponse.self, from: data)
         return decoded.feed.results.prefix(limit).map { item in

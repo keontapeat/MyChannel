@@ -9,6 +9,7 @@ struct LiveTVChannelsView: View {
     @State private var showingPlayer = false
     @State private var selectedChannel: LiveTVChannel?
     @State private var heroIndex: Int = 0
+    @State private var heroTimer: Timer?
     @State private var aiTrendingChannels: [LiveTVChannel] = []
     @State private var selectedTopTab: TopTab = .home
     @StateObject private var libraryStore = LiveTVLibraryStore.shared
@@ -167,6 +168,9 @@ struct LiveTVChannelsView: View {
             .onAppear {
                 startHeroTimer()
             }
+            .onDisappear {
+                stopHeroTimer()
+            }
 
             // Page dots
             HStack(spacing: 6) {
@@ -209,11 +213,17 @@ struct LiveTVChannelsView: View {
     // MARK: - Start hero auto-scroll
     private func startHeroTimer() {
         guard heroChannels.count > 1 else { return }
-        Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
+        heroTimer?.invalidate()
+        heroTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
             withAnimation(.easeInOut(duration: 0.5)) {
                 heroIndex = (heroIndex + 1) % heroChannels.count
             }
         }
+    }
+
+    private func stopHeroTimer() {
+        heroTimer?.invalidate()
+        heroTimer = nil
     }
 
     // MARK: - Header / Search / Filters

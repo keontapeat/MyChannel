@@ -271,6 +271,46 @@ struct Video: Identifiable, Codable, Hashable {
     }
     
     // MARK: - Computed Properties
+    var parsedChapters: [Chapter] {
+        if let existing = chapters, !existing.isEmpty { return existing }
+        
+        // Auto-parse chapters from description (YouTube parity)
+        // Format: "0:00 Intro" or "1:23:45 Conclusion"
+        var found: [Chapter] = []
+        let lines = description.components(separatedBy: .newlines)
+        
+        let regex = try? NSRegularExpression(pattern: #"^(?:(?:([0-5]?[0-9]):)?([0-5]?[0-9]):([0-5][0-9]))\s+(.+)$|^(?:([0-5]?[0-9]):([0-5][0-9]))\s+(.+)$"#)
+        
+        for line in lines {
+            let nsString = line as NSString
+            let range = NSRange(location: 0, length: nsString.length)
+            if let match = regex?.firstMatch(in: line, options: [], range: range) {
+                // Extract time
+                var seconds: TimeInterval = 0
+                var title = ""
+                
+                if match.range(at: 1).location != NSNotFound { // H:MM:SS format
+                    let h = Double(nsString.substring(with: match.range(at: 1))) ?? 0
+                    let m = Double(nsString.substring(with: match.range(at: 2))) ?? 0
+                    let s = Double(nsString.substring(with: match.range(at: 3))) ?? 0
+                    seconds = (h * 3600) + (m * 60) + s
+                    title = nsString.substring(with: match.range(at: 4))
+                } else if match.range(at: 5).location != NSNotFound { // MM:SS format
+                    let m = Double(nsString.substring(with: match.range(at: 5))) ?? 0
+                    let s = Double(nsString.substring(with: match.range(at: 6))) ?? 0
+                    seconds = (m * 60) + s
+                    title = nsString.substring(with: match.range(at: 7))
+                }
+                
+                found.append(Chapter(id: UUID().uuidString, title: title.trimmingCharacters(in: .whitespaces), start: seconds, thumbnailURL: nil))
+            }
+        }
+        
+        // YouTube rule: Must have at least 3 chapters, and first one must start at 0:00
+        guard found.count >= 3, found.first?.start == 0 else { return [] }
+        return found
+    }
+    
     var formattedDuration: String {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60

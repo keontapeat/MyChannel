@@ -315,7 +315,7 @@ class VideoService: ObservableObject {
             mimeType: "video/mp4",
             additionalFields: ["type": "video"],
             progressHandler: { [weak self] progress in
-                DispatchQueue.main.async {
+                Task { @MainActor [weak self] in
                     self?.uploadProgress = 0.5 + (progress * 0.3) // 50% to 80% of total progress
                 }
             }

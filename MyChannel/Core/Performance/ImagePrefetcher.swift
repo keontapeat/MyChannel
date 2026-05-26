@@ -180,7 +180,8 @@ class ImageCache {
             print("⚠️ [ImageCache] Memory warning - clearing 50% of cache")
             // 🔥 Don't clear everything - just reduce
             self?.cache.totalCostLimit = self?.maxCacheSize ?? 0 / 2
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
                 self?.cache.totalCostLimit = self?.maxCacheSize ?? 0
             }
         }

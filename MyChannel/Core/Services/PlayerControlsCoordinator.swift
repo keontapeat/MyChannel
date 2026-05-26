@@ -30,7 +30,7 @@ final class PlayerControlsCoordinator: ObservableObject {
     
     // MARK: - Internal State
     private var hideTimer: Timer?
-    private var chapterTooltipWorkItem: DispatchWorkItem?
+    private var chapterTooltipTask: Task<Void, Never>?
     private var chapterTooltipX: CGFloat = 0
     
     /// Time before controls auto-hide when playing (seconds)
@@ -169,7 +169,7 @@ final class PlayerControlsCoordinator: ObservableObject {
             return nil
         }
         
-        chapterTooltipWorkItem?.cancel()
+        chapterTooltipTask?.cancel()
         chapterTooltipX = clampedX
         
         if hoveredChapter?.id != chapter.id {
@@ -183,19 +183,19 @@ final class PlayerControlsCoordinator: ObservableObject {
     }
     
     func clearHoveredChapter() {
-        chapterTooltipWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak self] in
+        chapterTooltipTask?.cancel()
+        chapterTooltipTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard !Task.isCancelled else { return }
             withAnimation(.easeInOut(duration: 0.15)) {
                 self?.hoveredChapter = nil
             }
             self?.resumeAutoHideIfNeeded()
         }
-        chapterTooltipWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: workItem)
     }
     
     func immediateClearHoveredChapter() {
-        chapterTooltipWorkItem?.cancel()
+        chapterTooltipTask?.cancel()
         hoveredChapter = nil
     }
     
@@ -220,8 +220,8 @@ final class PlayerControlsCoordinator: ObservableObject {
     
     func cleanup() {
         cancelHideTimer()
-        chapterTooltipWorkItem?.cancel()
-        chapterTooltipWorkItem = nil
+        chapterTooltipTask?.cancel()
+        chapterTooltipTask = nil
     }
     
     // MARK: - Player Mode State Machine

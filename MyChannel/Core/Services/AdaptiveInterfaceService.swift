@@ -41,7 +41,7 @@ final class AdaptiveInterfaceService: ObservableObject {
 
     func detectCapability() {
         let device = UIDevice.current
-        let screen = UIScreen.main.bounds
+        let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds ?? CGRect(x: 0, y: 0, width: 390, height: 844)
         let ramGB = Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824)
         let cpuCores = ProcessInfo.processInfo.processorCount
         let supportsProMotion = UIScreen.main.maximumFramesPerSecond > 60

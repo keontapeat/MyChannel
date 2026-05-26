@@ -132,53 +132,14 @@ struct UIKitSheetModifier: ViewModifier {
         content
             .background(
                 UIKitSheetConfigurator(
-                    detents: detents,
-                    showGrabber: showGrabber,
-                    cornerRadius: cornerRadius,
-                    scrollingExpandsToLargeDetent: scrollingExpandsToLargeDetent
+                    configuration: UIKitSheetConfiguration(
+                        detents: detents,
+                        prefersGrabberVisible: showGrabber,
+                        prefersScrollingExpandsWhenScrolledToEdge: scrollingExpandsToLargeDetent,
+                        preferredCornerRadius: cornerRadius
+                    )
                 )
             )
-    }
-}
-
-private struct UIKitSheetConfigurator: UIViewRepresentable {
-    var detents: [UISheetPresentationController.Detent]
-    var showGrabber: Bool
-    var cornerRadius: CGFloat?
-    var scrollingExpandsToLargeDetent: Bool
-
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        view.backgroundColor = .clear
-        return view
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {
-        DispatchQueue.main.async {
-            guard
-                let viewController = uiView.parentViewController,
-                let sheet = viewController.sheetPresentationController
-            else { return }
-
-            sheet.detents = detents
-            sheet.prefersGrabberVisible = showGrabber
-            sheet.prefersScrollingExpandsWhenScrolledToEdge = scrollingExpandsToLargeDetent
-            sheet.prefersEdgeAttachedInCompactHeight = false
-            if let radius = cornerRadius {
-                sheet.preferredCornerRadius = radius
-            }
-        }
-    }
-}
-
-private extension UIView {
-    var parentViewController: UIViewController? {
-        var responder: UIResponder? = self
-        while let r = responder {
-            if let vc = r as? UIViewController { return vc }
-            responder = r.next
-        }
-        return nil
     }
 }
 

@@ -98,7 +98,7 @@ struct AdPlayerOverlay: View {
         guard let url = URL(string: vastUrl) else { return nil }
         
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await URLSession.configured.data(from: url)
             let vastString = String(data: data, encoding: .utf8) ?? ""
             
             // Extract MediaFile URL from VAST XML
@@ -161,8 +161,8 @@ struct AdPlayerOverlay: View {
         let item = AVPlayerItem(asset: asset)
         
         // 🔥 FIX: Observe player item status to know when it's ready
-        playerItemObserver = item.observe(\.status, options: [.new, .initial]) { [self] playerItem, _ in
-            DispatchQueue.main.async {
+        playerItemObserver = item.observe(\.status, options: [.new, .initial]) { playerItem, _ in
+            Task { @MainActor in
                 switch playerItem.status {
                 case .readyToPlay:
                     print("✅ [AdPlayerOverlay] Player item ready to play!")
@@ -174,7 +174,7 @@ struct AdPlayerOverlay: View {
                     }
                 case .failed:
                     print("❌ [AdPlayerOverlay] Player item failed: \(playerItem.error?.localizedDescription ?? "unknown")")
-                    self.isReady = true  // Hide loading even on error
+                    self.isReady = true
                     self.onFinish()
                 case .unknown:
                     print("⏳ [AdPlayerOverlay] Player item status unknown (loading...)")
@@ -201,9 +201,7 @@ struct ViewabilityTrackingView: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
         view.backgroundColor = .clear
-        DispatchQueue.main.async {
-            onViewReady(view)
-        }
+        Task { @MainActor in onViewReady(view) }
         return view
     }
     

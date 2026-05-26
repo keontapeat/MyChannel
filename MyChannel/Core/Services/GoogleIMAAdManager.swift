@@ -188,7 +188,7 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
         guard let url = URL(string: vastURL) else { return nil }
         
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.configured.data(from: url)
             
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
@@ -441,7 +441,7 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
         // 🔥 FIX: Wait for player to be ready before playing
         // Use modern Swift KVO observation
         playerItemObservation = playerItem.observe(\.status, options: [.new, .initial]) { [weak self] item, change in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 print("📊 [GoogleIMAAdManager] PlayerItem status changed: \(item.status.rawValue)")
                 
                 switch item.status {
@@ -489,8 +489,8 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
         player.play()
         print("▶️ [GoogleIMAAdManager] Called play() on ad player - rate: \(player.rate)")
         
-        // 🔥 FIX: Add timeout - if video doesn't start playing within 5 seconds, use fallback
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
             guard let self = self,
                   let player = self.adPlayer,
                   player.rate == 0,
@@ -755,7 +755,7 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         
-        URLSession.shared.dataTask(with: request) { _, _, error in
+        URLSession.configured.dataTask(with: request) { _, _, error in
             if let error = error {
                 print("⚠️ [GoogleIMAAdManager] Tracking failed: \(error)")
             } else {

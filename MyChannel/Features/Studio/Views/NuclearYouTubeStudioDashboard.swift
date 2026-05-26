@@ -859,9 +859,10 @@ class NuclearStudioViewModel: ObservableObject {
                     self.pulseOpacity = 0
                 }
                 
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    self.pulseScale = 1.0
-                    self.pulseOpacity = 1.0
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    self?.pulseScale = 1.0
+                    self?.pulseOpacity = 1.0
                 }
             }
         }

@@ -82,7 +82,8 @@ class UIPerformanceOptimizer: ObservableObject {
         
         let depth = calculateViewDepth(view: window)
         
-        DispatchQueue.main.async {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             self.renderingMetrics.viewHierarchyDepth = depth
             
             if depth > 20 {
@@ -209,8 +210,8 @@ struct LazyContainer<Content: View>: View {
             } else {
                 Color.clear
                     .onAppear {
-                        // Delay loading to improve initial render
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 100_000_000)
                             isVisible = true
                         }
                     }
@@ -331,7 +332,8 @@ struct LazyRenderModifier: ViewModifier {
                 Rectangle()
                     .fill(Color.clear)
                     .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 50_000_000)
                             isVisible = true
                         }
                     }

@@ -1108,7 +1108,8 @@ struct SharePlaylistSheet: View {
                     UIPasteboard.general.string = playlist.shareCode
                     copied = true
                     
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
                         copied = false
                     }
                 } label: {

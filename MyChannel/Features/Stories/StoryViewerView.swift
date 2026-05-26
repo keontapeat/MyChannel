@@ -31,6 +31,8 @@ struct StoryViewerView: View {
     @State private var showingDeleteConfirmation: Bool = false
     @State private var showingArchiveConfirmation: Bool = false
     @State private var hapticFeedback = UIImpactFeedbackGenerator(style: .light)
+    @State private var viewWidth: CGFloat = 0
+    @State private var viewerCountTimer: Timer?
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -50,6 +52,8 @@ struct StoryViewerView: View {
 
     var body: some View {
         GeometryReader { geometry in
+            ZStack {}
+            .onAppear { viewWidth = geometry.size.width }
             ZStack {
                 Color.black
                     .ignoresSafeArea()
@@ -246,6 +250,8 @@ struct StoryViewerView: View {
         }
         .onDisappear {
             stopStoryTimer()
+            viewerCountTimer?.invalidate()
+            viewerCountTimer = nil
             
             // Stop view tracking
             Task {
@@ -400,7 +406,8 @@ struct StoryViewerView: View {
         
         // Update viewer count from tracker (live updates)
         // Note: No [weak self] needed - StoryViewerView is a struct (value type)
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+        viewerCountTimer?.invalidate()
+        viewerCountTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             viewerCount = StoryViewTracker.shared.viewerCount
         }
     }
@@ -437,7 +444,7 @@ struct StoryViewerView: View {
     }
 
     private func handleTapGesture(at location: CGPoint) {
-        let screenWidth = UIScreen.main.bounds.width
+        let screenWidth = viewWidth > 0 ? viewWidth : (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.width ?? 390
         hapticFeedback.impactOccurred()
 
         if location.x < screenWidth / 3 {
@@ -449,7 +456,8 @@ struct StoryViewerView: View {
                 resumeStory()
             } else {
                 pauseStory()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 100_000_000)
                     resumeStory()
                 }
             }

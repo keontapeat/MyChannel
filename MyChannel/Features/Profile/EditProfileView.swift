@@ -930,7 +930,8 @@ struct EditProfileView: View {
                 
                 // Clear selected profile image whenever we have a new URL from Storage
                 // (covers first-ever upload where previousProfileImageURL is nil)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
                     if selectedProfileUIImage != nil, finalProfileImageURL != nil {
                         print("✅ Clearing selectedProfileUIImage - new URL: \(finalProfileImageURL!)")
                         selectedProfileUIImage = nil
@@ -939,7 +940,8 @@ struct EditProfileView: View {
                     }
                 }
                 if selectedBannerUIImage != nil && imageBannerURL != nil {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 1_000_000_000)
                         selectedBannerUIImage = nil
                     }
                 }
@@ -947,7 +949,8 @@ struct EditProfileView: View {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     showingSaveConfirmation = true
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         showingSaveConfirmation = false
                     }
@@ -960,7 +963,8 @@ struct EditProfileView: View {
                 NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
                 
                 HapticManager.shared.impact(style: .light)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
                     dismiss()
                 }
             }
@@ -1007,12 +1011,14 @@ struct EditProfileView: View {
             let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let fileURL = docs.appendingPathComponent("banner_\(user.id)_\(UUID().uuidString).mov")
             try? FileManager.default.removeItem(at: fileURL)
-            if url.startAccessingSecurityScopedResource() {
-                defer { url.stopAccessingSecurityScopedResource() }
-                try FileManager.default.copyItem(at: url, to: fileURL)
-            } else {
-                try FileManager.default.copyItem(at: url, to: fileURL)
-            }
+            try await Task.detached(priority: .utility) {
+                if url.startAccessingSecurityScopedResource() {
+                    defer { url.stopAccessingSecurityScopedResource() }
+                    try FileManager.default.copyItem(at: url, to: fileURL)
+                } else {
+                    try FileManager.default.copyItem(at: url, to: fileURL)
+                }
+            }.value
             let details = await bannerVideoDetails(for: fileURL)
             await MainActor.run {
                 bannerVideoLocalURL = fileURL

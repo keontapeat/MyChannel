@@ -63,7 +63,7 @@ final class PlutoTVChannelFetcher: ObservableObject {
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
         
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await URLSession.configured.data(for: request)
             if let httpResponse = response as? HTTPURLResponse {
                 return (200...399).contains(httpResponse.statusCode)
             }
@@ -102,7 +102,7 @@ final class PlutoTVChannelFetcher: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.configured.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {

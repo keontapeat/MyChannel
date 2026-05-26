@@ -32,7 +32,7 @@ final class LiveChatWebSocketService: ObservableObject {
         guard let url = URL(string: "\(baseWSURL)/\(streamId)?token=\(authToken)") else { return }
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
-        webSocketTask = URLSession.shared.webSocketTask(with: request)
+        webSocketTask = URLSession.configured.webSocketTask(with: request)
         webSocketTask?.resume()
         isConnected = true
         receiveLoop()

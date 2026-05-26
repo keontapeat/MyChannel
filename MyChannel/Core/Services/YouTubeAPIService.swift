@@ -51,7 +51,7 @@ final class YouTubeAPIService {
             .init(name: "safeSearch", value: "strict")
         ]
 
-        let (data, _) = try await URLSession.shared.data(from: comps.url!)
+        let (data, _) = try await URLSession.configured.data(from: comps.url!)
         let decoded = try JSONDecoder().decode(SearchResponse.self, from: data)
 
         // Map results to our Video model
@@ -119,7 +119,7 @@ final class YouTubeAPIService {
             .init(name: "maxResults", value: String(max(1, min(maxResults, 50))))
         ]
 
-        let (data, _) = try await URLSession.shared.data(from: comps.url!)
+        let (data, _) = try await URLSession.configured.data(from: comps.url!)
         let decoded = try JSONDecoder().decode(SearchResponse.self, from: data)
 
         let vids: [Video] = decoded.items.compactMap { item in

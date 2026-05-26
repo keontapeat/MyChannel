@@ -290,7 +290,8 @@ class VideoPlayerManager: ObservableObject {
                 installReadyObserver(on: player)
                 
                 // 🔥 THERMONUCLEAR: Relax stalling after 2s for smoother playback
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
                     guard let self = self, !self.isCleanedUp else { return }
                     self.player?.automaticallyWaitsToMinimizeStalling = true
                 }
@@ -683,12 +684,12 @@ class VideoPlayerManager: ObservableObject {
         if selectedQuality == .auto {
             item.preferredPeakBitRate = 1_800_000 // ~1.8 Mbps
         }
-        // Relax constraints after a few seconds to allow quality ramp-up
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard let self = self, !self.isCleanedUp, let current = self.player?.currentItem else { return }
             self.player?.automaticallyWaitsToMinimizeStalling = true
             if self.selectedQuality == .auto {
-                current.preferredPeakBitRate = 0 // back to adaptive
+                current.preferredPeakBitRate = 0
             }
         }
     }
@@ -701,7 +702,8 @@ class VideoPlayerManager: ObservableObject {
         if selectedQuality == .auto {
             item.preferredPeakBitRate = initialBitrate
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + relaxAfterSeconds) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(relaxAfterSeconds * 1_000_000_000))
             guard let self = self, !self.isCleanedUp, let current = self.player?.currentItem else { return }
             self.player?.automaticallyWaitsToMinimizeStalling = true
             if self.selectedQuality == .auto {

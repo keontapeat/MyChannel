@@ -58,7 +58,7 @@ class WebSocketGateway: ObservableObject {
             request.setValue("Bearer \(userId)", forHTTPHeaderField: "Authorization")
         }
         
-        webSocket = URLSession.shared.webSocketTask(with: request)
+        webSocket = URLSession.configured.webSocketTask(with: request)
         webSocket?.resume()
         
         isConnected = true

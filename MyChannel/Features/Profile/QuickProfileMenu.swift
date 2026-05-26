@@ -81,7 +81,8 @@ struct QuickProfileMenu: View {
                     title: "Edit Profile",
                     action: {
                         dismiss()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 300_000_000)
                             showingEditProfile = true
                         }
                     }
@@ -92,7 +93,8 @@ struct QuickProfileMenu: View {
                     title: "Settings",
                     action: {
                         dismiss()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 300_000_000)
                             showingSettings = true
                         }
                     }

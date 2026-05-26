@@ -869,7 +869,8 @@ struct TermsAndConditionsSheet: View {
                         }
                         .onAppear {
                             // Auto-scroll to bottom after a delay to ensure user sees content
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 2_000_000_000)
                                 withAnimation(.easeInOut(duration: 1.0)) {
                                     proxy.scrollTo("bottom", anchor: .bottom)
                                 }

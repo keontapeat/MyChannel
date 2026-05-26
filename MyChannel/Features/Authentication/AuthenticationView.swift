@@ -71,20 +71,22 @@ struct AuthenticationView: View {
             if isAuth {
                 // Small delay lets SwiftUI finish processing the state change
                 // before tearing down the fullScreenCover — prevents iPad dismiss bugs
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 150_000_000)
                     dismiss()
                 }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .userDidLogin)) { _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 150_000_000)
                 dismiss()
             }
         }
         .onAppear {
-            // Safety: if we appear while already authenticated (race condition), dismiss immediately
             if authManager.isAuthenticated {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 100_000_000)
                     dismiss()
                 }
             }
@@ -265,8 +267,6 @@ struct SignInView: View {
     @State private var isLoading: Bool = false
     @State private var showingError: Bool = false
     @State private var errorMessage: String = ""
-    @State private var appleSignInRawNonce: String = ""
-    @State private var appleSignInHashedNonce: String = ""
     
     let onSignUp: () -> Void
     let onForgotPassword: () -> Void
@@ -388,17 +388,36 @@ struct SignInView: View {
                     
                     // Social sign in
                     VStack(spacing: 12) {
-                        SocialSignInButton(
-                            title: "Continue with Apple",
-                            icon: "applelogo",
-                            backgroundColor: .black,
-                            textColor: .white
-                        ) {
-                            Task {
-                                await AuthenticationManager.shared.signInWithApple()
+                        SignInWithAppleButton(.continue) { request in
+                            request.requestedScopes = [.fullName, .email]
+                            request.nonce = FirebaseAppleAuthService.shared.captureNonce()
+                        } onCompletion: { result in
+                            switch result {
+                            case .success(let auth):
+                                guard let cred = auth.credential as? ASAuthorizationAppleIDCredential else {
+                                    errorMessage = "Apple Sign In returned invalid credentials. Please try again."
+                                    showingError = true
+                                    return
+                                }
+                                guard let rawNonce = FirebaseAppleAuthService.shared.consumeNonce() else {
+                                    errorMessage = "Apple Sign In nonce missing. Please try again."
+                                    showingError = true
+                                    return
+                                }
+                                Task {
+                                    await AuthenticationManager.shared.signInWithAppleCredential(cred, rawNonce: rawNonce)
+                                }
+                            case .failure(let error):
+                                if (error as? ASAuthorizationError)?.code != .canceled {
+                                    errorMessage = error.localizedDescription
+                                    showingError = true
+                                }
                             }
                         }
-                        
+                        .signInWithAppleButtonStyle(.black)
+                        .frame(height: 50)
+                        .cornerRadius(AppTheme.CornerRadius.lg)
+
                         SocialSignInButton(
                             title: "Continue with Google",
                             icon: "globe",
@@ -922,8 +941,8 @@ struct ForgotPasswordView: View {
     private func sendResetEmail() {
         isLoading = true
         
-        // Simulate sending reset email
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             isLoading = false
             
             if email.contains("@") {

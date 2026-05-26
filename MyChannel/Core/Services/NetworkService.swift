@@ -80,7 +80,7 @@ class NetworkService: ObservableObject {
         request.timeoutInterval = 5.0
         
         session.dataTask(with: request) { [weak self] _, response, _ in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 self?.isConnected = (response as? HTTPURLResponse)?.statusCode == 200
             }
         }.resume()

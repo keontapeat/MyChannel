@@ -1456,7 +1456,7 @@ class CommandCenterViewModel: ObservableObject {
         let body: [String: Any] = ["contents": [["parts": [["text": prompt]]]], "generationConfig": ["maxOutputTokens": 400]]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, _) = try await URLSession.configured.data(for: request)
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let candidates = json["candidates"] as? [[String: Any]],
                let content = candidates.first?["content"] as? [String: Any],
@@ -1509,7 +1509,7 @@ class CommandCenterViewModel: ObservableObject {
         let body: [String: Any] = ["contents": [["parts": [["text": prompt]]]], "generationConfig": ["maxOutputTokens": 500]]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, _) = try await URLSession.configured.data(for: request)
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let candidates = json["candidates"] as? [[String: Any]],
                   let content = candidates.first?["content"] as? [String: Any],

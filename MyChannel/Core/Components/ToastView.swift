@@ -100,10 +100,11 @@ class ToastManager: ObservableObject {
             toast = ToastData(text: text, type: type, duration: duration)
         }
         
-        // Auto-hide after duration
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+        let dur = duration
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(dur * 1_000_000_000))
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                self.toast = nil
+                self?.toast = nil
             }
         }
     }

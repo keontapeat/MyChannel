@@ -223,7 +223,7 @@ class MoneyEscrowService: ObservableObject {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.configured.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
@@ -245,7 +245,7 @@ class MoneyEscrowService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["paymentIntentId": paymentIntentId])
         
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.configured.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
@@ -260,7 +260,7 @@ class MoneyEscrowService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["paymentIntentId": paymentIntentId])
         
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.configured.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
@@ -282,7 +282,7 @@ class MoneyEscrowService: ObservableObject {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.configured.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {

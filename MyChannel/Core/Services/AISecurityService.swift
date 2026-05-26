@@ -50,7 +50,7 @@ final class AISecurityService: ObservableObject {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await URLSession.configured.data(for: request)
         let result = try JSONDecoder().decode(SecurityAnalysisResult.self, from: data)
         
         // Update state
@@ -74,7 +74,7 @@ final class AISecurityService: ObservableObject {
         let parameters: [String: Any] = ["text": text]
         request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await URLSession.configured.data(for: request)
         return try JSONDecoder().decode(PromptInjectionResult.self, from: data)
     }
     
@@ -93,7 +93,7 @@ final class AISecurityService: ObservableObject {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await URLSession.configured.data(for: request)
         return try JSONDecoder().decode(RateLimitResult.self, from: data)
     }
     
@@ -107,7 +107,7 @@ final class AISecurityService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: employeeData)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await URLSession.configured.data(for: request)
         return try JSONDecoder().decode(InsiderThreatResult.self, from: data)
     }
     
@@ -127,7 +127,7 @@ final class AISecurityService: ObservableObject {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await URLSession.configured.data(for: request)
         return try JSONDecoder().decode(APIShieldResult.self, from: data)
     }
     

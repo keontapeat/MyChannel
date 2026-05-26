@@ -26,7 +26,7 @@ class ObjectStorageOrchestrator {
     private var uploadBytes: [Provider: Int64] = [:]
     private var errorCount: [Provider: Int] = [:]
     
-    private let session = URLSession.shared
+    private let session = URLSession.configured
     
     private let storageQueue = DispatchQueue(label: "com.mychannel.storage", qos: .utility, attributes: .concurrent)
     

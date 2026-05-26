@@ -156,14 +156,11 @@ struct NotificationsBellButton: View {
 
     private func shakeBell() {
         let shakeSeq: [Double] = [-8, 8, -6, 6, -4, 4, -2, 2, 0]
-        var delay = 0.0
-        for angle in shakeSeq {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                withAnimation(.easeInOut(duration: 0.07)) {
-                    bellAngle = angle
-                }
+        Task { @MainActor in
+            for angle in shakeSeq {
+                withAnimation(.easeInOut(duration: 0.07)) { bellAngle = angle }
+                try? await Task.sleep(nanoseconds: 70_000_000)
             }
-            delay += 0.07
         }
     }
 
@@ -171,7 +168,8 @@ struct NotificationsBellButton: View {
         withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
             badgeScale = 1.3
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 150_000_000)
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 badgeScale = 1.0
             }

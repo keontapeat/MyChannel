@@ -189,6 +189,7 @@ struct FacebookParityStoryCreatorView: View {
     // MARK: - Story Canvas
     
     private var storyCanvas: some View {
+        GeometryReader { geo in
         ZStack {
             // Background/Media
             if let media = viewModel.selectedMedia {
@@ -228,7 +229,7 @@ struct FacebookParityStoryCreatorView: View {
                             .fill(Color.black.opacity(0.3))
                             .blur(radius: 10)
                     )
-                    .position(x: UIScreen.main.bounds.width / 2, y: UIScreen.main.bounds.height / 2)
+                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
                     .gesture(
                         DragGesture()
                             .onChanged { value in
@@ -250,7 +251,7 @@ struct FacebookParityStoryCreatorView: View {
                 // Top safe zone (14% from top)
                 Rectangle()
                     .fill(Color.red.opacity(0.1))
-                    .frame(height: UIScreen.main.bounds.height * 0.14)
+                    .frame(height: geo.size.height * 0.14)
                     .overlay(
                         Text("Safe Zone - Keep content below this area")
                             .font(.caption)
@@ -262,7 +263,7 @@ struct FacebookParityStoryCreatorView: View {
                 // Bottom safe zone (20% from bottom)
                 Rectangle()
                     .fill(Color.red.opacity(0.1))
-                    .frame(height: UIScreen.main.bounds.height * 0.20)
+                    .frame(height: geo.size.height * 0.20)
                     .overlay(
                         Text("Safe Zone - Keep content above this area")
                             .font(.caption)
@@ -271,7 +272,8 @@ struct FacebookParityStoryCreatorView: View {
             }
             .opacity(0.3) // Subtle indication
         }
-        .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width * (16.0/9.0))
+        } // GeometryReader
+        .aspectRatio(9/16, contentMode: .fit)
         .clipped()
         .cornerRadius(12)
     }

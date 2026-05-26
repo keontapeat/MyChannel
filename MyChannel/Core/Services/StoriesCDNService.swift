@@ -114,7 +114,7 @@ class StoriesCDNService: ObservableObject {
                     size: size
                 )
                 
-                let (data, _) = try await URLSession.shared.data(from: optimizedURL)
+                let (data, _) = try await URLSession.configured.data(from: optimizedURL)
                 
                 guard let image = UIImage(data: data) else {
                     throw StoriesCDNError.invalidImageData
@@ -296,8 +296,8 @@ class StoriesCDNService: ObservableObject {
                 }
             }
             
-            // Timeout after 3 seconds for Stories
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
                 observer.invalidate()
                 continuation.resume()
             }

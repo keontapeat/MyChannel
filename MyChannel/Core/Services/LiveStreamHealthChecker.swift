@@ -54,8 +54,11 @@ enum LiveStreamHealthChecker {
 
     private static func quickProbe(urlString: String, timeout: TimeInterval) async -> Bool {
         guard let url = URL(string: urlString) else { return false }
-        // 1) Race HEAD and rangedGET in parallel — first success wins
-        let passed = await withTaskGroup(of: Bool.self) { group -> Bool in
+        // Race HEAD and rangedGET in parallel — first success wins.
+        // AVAsset probing is intentionally omitted: for unreachable HLS streams
+        // AVFoundation retries master playlists and all variant tracks, producing
+        // dozens of timed-out requests per channel and flooding the network.
+        return await withTaskGroup(of: Bool.self) { group -> Bool in
             group.addTask { await httpProbe(url: url, method: "HEAD", timeout: timeout) }
             group.addTask { await rangedGetProbe(url: url, timeout: timeout) }
             for await success in group {
@@ -63,9 +66,6 @@ enum LiveStreamHealthChecker {
             }
             return false
         }
-        if passed { return true }
-        // 2) As a last resort, ask AVURLAsset if it can become playable
-        return await assetProbe(url: url, timeout: timeout * 1.2)
     }
 
     private static func httpProbe(url: URL, method: String, timeout: TimeInterval) async -> Bool {
@@ -106,25 +106,8 @@ enum LiveStreamHealthChecker {
         return false
     }
 
-    private static func assetProbe(url: URL, timeout: TimeInterval) async -> Bool {
-        let asset = AVURLAsset(url: url)
-        return await withCheckedContinuation { cont in
-            let keys = ["playable"]
-            asset.loadValuesAsynchronously(forKeys: keys) {
-                var playable = false
-                for key in keys {
-                    var err: NSError?
-                    let status = asset.statusOfValue(forKey: key, error: &err)
-                    if status == .loaded {
-                        playable = true
-                    }
-                }
-                cont.resume(returning: playable)
-            }
-            // crude timeout: fallback to true/false after timeout
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-                // do not override if continuation already resumed — benign here
-            }
-        }
-    }
+    // NOTE: assetProbe is intentionally removed. AVURLAsset.loadValuesAsynchronously
+    // for unreachable HLS streams internally retries master playlists and all variant
+    // tracks with no upper bound, producing 30+ timeout errors per channel in the log.
+    // HEAD + rangedGET in quickProbe are sufficient health signals.
 }

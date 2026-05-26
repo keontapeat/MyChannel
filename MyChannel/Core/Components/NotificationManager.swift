@@ -21,16 +21,16 @@ class NotificationManager: ObservableObject {
     
     func requestPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            DispatchQueue.main.async {
-                self.hasPermission = granted
+            Task { @MainActor [weak self] in
+                self?.hasPermission = granted
             }
         }
     }
     
     private func checkNotificationPermission() {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
-            DispatchQueue.main.async {
-                self.hasPermission = settings.authorizationStatus == .authorized
+            Task { @MainActor [weak self] in
+                self?.hasPermission = settings.authorizationStatus == .authorized
             }
         }
     }
@@ -42,9 +42,11 @@ class NotificationManager: ObservableObject {
             inAppNotifications.append(notification)
         }
         
-        // Auto dismiss after delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + notification.duration) {
-            self.dismissInAppNotification(notification.id)
+        let notifId = notification.id
+        let notifDuration = notification.duration
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(notifDuration * 1_000_000_000))
+            self?.dismissInAppNotification(notifId)
         }
     }
     
@@ -252,7 +254,8 @@ struct InAppNotificationView: View {
                             dragOffset = 300
                             opacity = 0
                         }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 200_000_000)
                             onDismiss()
                         }
                     } else {
@@ -354,15 +357,15 @@ struct HUDNotificationView: View {
                 opacity = 1.0
             }
             
-            // Auto dismiss
-            DispatchQueue.main.asyncAfter(deadline: .now() + notification.duration) {
+            let dur = notification.duration
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(dur * 1_000_000_000))
                 withAnimation(.easeInOut(duration: 0.3)) {
                     scale = 0.8
                     opacity = 0.0
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    onDismiss()
-                }
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                onDismiss()
             }
         }
     }

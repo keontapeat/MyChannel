@@ -696,7 +696,8 @@ struct FlicksView: View {
         withAnimation {
             showLikeBurst = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 600_000_000)
             withAnimation {
                 showLikeBurst = false
             }

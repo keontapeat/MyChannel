@@ -199,7 +199,7 @@ final class RedisCacheService: @unchecked Sendable {
             request.httpMethod = "GET"
             request.timeoutInterval = 2 // 2 second timeout for cache
             
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.configured.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200,
@@ -241,7 +241,7 @@ final class RedisCacheService: @unchecked Sendable {
             
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
             
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await URLSession.configured.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
@@ -265,7 +265,7 @@ final class RedisCacheService: @unchecked Sendable {
             let body = ["key": key]
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
             
-            _ = try? await URLSession.shared.data(for: request)
+            _ = try? await URLSession.configured.data(for: request)
         } catch {
             print("⚠️ [Redis L2] Delete failed: \(error.localizedDescription)")
         }
@@ -278,7 +278,7 @@ final class RedisCacheService: @unchecked Sendable {
         request.httpMethod = "POST"
         request.timeoutInterval = 5
         
-        _ = try? await URLSession.shared.data(for: request)
+        _ = try? await URLSession.configured.data(for: request)
     }
     
     // MARK: - 🚀 BATCH OPERATIONS (Optimized)
@@ -295,7 +295,7 @@ final class RedisCacheService: @unchecked Sendable {
             
             request.httpBody = try JSONSerialization.data(withJSONObject: ["keys": keys])
             
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.configured.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else {
@@ -343,7 +343,7 @@ final class RedisCacheService: @unchecked Sendable {
             ]
             
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            _ = try? await URLSession.shared.data(for: request)
+            _ = try? await URLSession.configured.data(for: request)
         } catch {
             print("⚠️ [Redis L2] Batch set failed: \(error.localizedDescription)")
         }

@@ -421,10 +421,11 @@ class AudioSwapService: ObservableObject {
         // For now, just simulate playback
         currentlyPlaying = track.id
         
-        // Auto-stop after 30 seconds (preview length)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-            if self.currentlyPlaying == track.id {
-                self.stopAudioPreview()
+        let trackId = track.id
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
+            if self?.currentlyPlaying == trackId {
+                self?.stopAudioPreview()
             }
         }
     }

@@ -326,7 +326,7 @@ class TranscodingService {
             return firstThumb
         }
         
-        let spriteData = try await URLSession.shared.data(from: spriteURL).0
+        let spriteData = try await URLSession.configured.data(from: spriteURL).0
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("sprite_\(UUID().uuidString).jpg")
         try spriteData.write(to: tempURL)
         

@@ -15,6 +15,7 @@ struct PremiereWaitingRoomView: View {
     @State private var timeUntilStart: TimeInterval = 0
     @State private var isLoading = true
     @State private var showingShareSheet = false
+    @State private var countdownTimer: Timer?
     
     var body: some View {
         GeometryReader { geometry in
@@ -62,6 +63,10 @@ struct PremiereWaitingRoomView: View {
         .task {
             await loadWaitingRoom()
             startCountdownTimer()
+        }
+        .onDisappear {
+            countdownTimer?.invalidate()
+            countdownTimer = nil
         }
         .sheet(isPresented: $showingShareSheet) {
             NativeShareSheet(items: [generateShareURL()])
@@ -191,12 +196,13 @@ struct PremiereWaitingRoomView: View {
     }
     
     private func startCountdownTimer() {
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+        countdownTimer?.invalidate()
+        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [self] timer in
             if timeUntilStart > 0 {
                 timeUntilStart -= 1
             } else {
                 timer.invalidate()
-                // Refresh waiting room status
+                countdownTimer = nil
                 Task {
                     await loadWaitingRoom()
                 }

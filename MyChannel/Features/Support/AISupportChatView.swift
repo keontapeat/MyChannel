@@ -57,8 +57,8 @@ struct AISupportChatView: View {
         .navigationTitle("AI Support")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            // Auto-focus input
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 500_000_000)
                 isInputFocused = true
             }
         }

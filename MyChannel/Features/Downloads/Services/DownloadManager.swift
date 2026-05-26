@@ -179,7 +179,7 @@ class DownloadManager: ObservableObject {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try? JSONSerialization.data(withJSONObject: mlData)
             
-            let (_, _) = try await URLSession.shared.data(for: request)
+            let (_, _) = try await URLSession.configured.data(for: request)
         } catch {
             print("ML tracking error: \(error)")
         }

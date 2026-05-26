@@ -168,7 +168,8 @@ struct AccountSwitcherView: View {
     private func switchTo(_ user: User) {
         guard !isProcessing else { return }
         isProcessing = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
             auth.currentUser = user
             auth.isAuthenticated = true
             appState.updateUser(user)

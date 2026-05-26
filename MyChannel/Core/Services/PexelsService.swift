@@ -40,7 +40,7 @@ final class PexelsService: ObservableObject {
         components.queryItems = [URLQueryItem(name: "query", value: query), URLQueryItem(name: "per_page", value: String(perPage))]
         var request = URLRequest(url: components.url!)
         request.setValue(apiKey, forHTTPHeaderField: "Authorization")
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await URLSession.configured.data(for: request)
         struct Raw: Decodable { let photos: [RawP]? }
         struct RawP: Decodable { let id: Int; let width: Int; let height: Int; let photographer: String; let alt: String?; let src: Src }
         struct Src: Decodable { let medium: String; let large: String }
@@ -54,7 +54,7 @@ final class PexelsService: ObservableObject {
         components.queryItems = [URLQueryItem(name: "query", value: query), URLQueryItem(name: "per_page", value: String(perPage))]
         var request = URLRequest(url: components.url!)
         request.setValue(apiKey, forHTTPHeaderField: "Authorization")
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await URLSession.configured.data(for: request)
         struct Raw: Decodable { let videos: [RawV]? }
         struct RawV: Decodable { let id: Int; let duration: Double; let user: User; let video_files: [VF]? }
         struct User: Decodable { let name: String }

@@ -164,7 +164,7 @@ final class AudioPreviewPlayer: ObservableObject {
         guard let next = queue.first else { return }
         var req = URLRequest(url: next.url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         req.httpMethod = "HEAD"
-        URLSession.shared.dataTask(with: req) { _,_,_ in }.resume()
+        URLSession.configured.dataTask(with: req) { _,_,_ in }.resume()
     }
     
     // MARK: - Transport

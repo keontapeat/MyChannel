@@ -753,9 +753,7 @@ struct MediaGridPickerView: View {
         PHImageManager.default().requestAVAsset(forVideo: asset, options: opts) { avAsset, _, _ in
             guard let avAsset = avAsset else { return }
             if let urlAsset = avAsset as? AVURLAsset {
-                DispatchQueue.main.async {
-                    onPick(urlAsset.url)
-                }
+                Task { @MainActor in onPick(urlAsset.url) }
                 return
             }
             let export = AVAssetExportSession(asset: avAsset, presetName: AVAssetExportPresetHighestQuality)
@@ -764,7 +762,7 @@ struct MediaGridPickerView: View {
             export?.outputURL = tempURL
             export?.outputFileType = .mp4
             export?.exportAsynchronously {
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     if export?.status == .completed {
                         onPick(tempURL)
                     }
@@ -863,7 +861,7 @@ private struct AlbumThumbnailView: View {
             guard let asset else { return }
             let size = CGSize(width: 112, height: 112)
             manager.requestImage(for: asset, targetSize: size, contentMode: .aspectFill, options: nil) { img, _ in
-                DispatchQueue.main.async { image = img }
+                Task { @MainActor in image = img }
             }
         }
     }
@@ -977,7 +975,7 @@ private struct NuclearGridCell: View {
                 Color.white.opacity(0.2)
             }
         }
-        .frame(height: UIScreen.main.bounds.width/3 - 1)
+        .aspectRatio(1.0, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 4))
         .overlay(
             RoundedRectangle(cornerRadius: 4)
@@ -1017,7 +1015,7 @@ private struct NuclearGridCell: View {
                     if let avAsset = avAsset {
                         let totalSeconds = CMTimeGetSeconds(avAsset.duration)
                         let formatted = formatDuration(totalSeconds)
-                        DispatchQueue.main.async { durationText = formatted }
+                        Task { @MainActor in durationText = formatted }
                     }
                 }
             }
@@ -1126,7 +1124,7 @@ private struct VideoPreviewSheet: View {
             vopts.isNetworkAccessAllowed = true
             PHImageManager.default().requestAVAsset(forVideo: asset, options: vopts) { avAsset, _, _ in
                 if let avAsset = avAsset {
-                    DispatchQueue.main.async {
+                    Task { @MainActor in
                         if let urlAsset = avAsset as? AVURLAsset {
                             player = AVPlayer(url: urlAsset.url)
                         }

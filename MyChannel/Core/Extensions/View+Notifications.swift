@@ -36,7 +36,9 @@ extension View {
                     .padding(.horizontal, 20)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+                        let d = duration
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: UInt64(d * 1_000_000_000))
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 isPresented.wrappedValue = false
                             }
@@ -108,7 +110,7 @@ struct ModernConfettiView: View {
             let particle = ModernConfettiParticle(
                 id: UUID(),
                 position: CGPoint(
-                    x: CGFloat.random(in: 0...UIScreen.main.bounds.width),
+                    x: CGFloat.random(in: 0...((UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.width ?? 390)),
                     y: -50
                 ),
                 color: [
@@ -134,8 +136,8 @@ struct ModernConfettiView: View {
             }
         }
         
-        // Clear particles after animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
             particles = []
         }
     }

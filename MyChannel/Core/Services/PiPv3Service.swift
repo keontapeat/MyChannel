@@ -81,7 +81,7 @@ final class PiPv3Service: ObservableObject {
 
     var cornerOffset: CGPoint {
         let margin: CGFloat = 16
-        let screen = UIScreen.main.bounds
+        let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds ?? CGRect(x: 0, y: 0, width: 390, height: 844)
         let size = pipSizePoints
         switch config.corner {
         case .topLeft: return CGPoint(x: margin, y: margin + 60)

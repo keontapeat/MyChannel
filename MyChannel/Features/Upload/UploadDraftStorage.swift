@@ -53,14 +53,16 @@ final class UploadDraftStorage: ObservableObject {
         load()
     }
     
-    func saveDraft(from manager: VideoUploadManager) throws -> UploadDraft {
+    func saveDraft(from manager: VideoUploadManager) async throws -> UploadDraft {
         guard let url = manager.videoURL else { throw UploadError.noVideoSelected }
         let draftsDir = try ensureDraftsDirectory()
         let dst = draftsDir.appendingPathComponent("draft-\(UUID().uuidString).mp4")
         if FileManager.default.fileExists(atPath: dst.path) {
             try? FileManager.default.removeItem(at: dst)
         }
-        try FileManager.default.copyItem(at: url, to: dst)
+        try await Task.detached(priority: .utility) {
+            try FileManager.default.copyItem(at: url, to: dst)
+        }.value
         let draft = UploadDraft(
             title: manager.title,
             description: manager.description,

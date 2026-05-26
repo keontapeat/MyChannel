@@ -111,7 +111,8 @@ struct VerticalShortsView: View {
                 .onEnded { value in
                     dragOffset = 0
                     
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 1_000_000_000)
                         withAnimation(.easeInOut(duration: 0.3)) {
                             showActions = true
                         }

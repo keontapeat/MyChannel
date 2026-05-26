@@ -690,6 +690,7 @@ struct NowPlayingView: View {
 
 struct LyricsDisplayView: View {
     @State private var currentLineIndex: Int = 2
+    @State private var lyricsTimer: Timer?
     
     // Sample lyrics for demo
     private let sampleLyrics: [String] = [
@@ -721,12 +722,16 @@ struct LyricsDisplayView: View {
             .padding(.vertical, 40)
         }
         .onAppear {
-            // Simulate lyrics scrolling
-            Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+            lyricsTimer?.invalidate()
+            lyricsTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
                 withAnimation {
                     currentLineIndex = (currentLineIndex + 1) % sampleLyrics.count
                 }
             }
+        }
+        .onDisappear {
+            lyricsTimer?.invalidate()
+            lyricsTimer = nil
         }
     }
 }
@@ -856,7 +861,8 @@ struct SleepTimerSheet: View {
                         selectedTime = time.1
                         HapticManager.shared.impact(style: .medium)
                         // Set timer
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 500_000_000)
                             dismiss()
                         }
                     } label: {

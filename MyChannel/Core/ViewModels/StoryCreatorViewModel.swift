@@ -81,7 +81,7 @@ class StoryCreatorViewModel: ObservableObject {
                 thumbnail: thumbnail
             )
             
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 withAnimation(.spring()) {
                     self.contentItems.append(item)
                 }
@@ -431,13 +431,9 @@ class StoryCreatorViewModel: ObservableObject {
         do {
             let cgImage = try imageGenerator.copyCGImage(at: time, actualTime: nil)
             let thumbnail = UIImage(cgImage: cgImage)
-            DispatchQueue.main.async {
-                completion(thumbnail)
-            }
+            Task { @MainActor in completion(thumbnail) }
         } catch {
-            DispatchQueue.main.async {
-                completion(nil)
-            }
+            Task { @MainActor in completion(nil) }
         }
     }
     

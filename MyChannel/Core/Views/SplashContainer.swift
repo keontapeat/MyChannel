@@ -72,8 +72,8 @@ struct SplashContainer: View {
                 .animation(.easeInOut(duration: 0.4), value: showSplash)
                 .onAppear {
                     print("🎬 [SplashContainer] Started - waiting for SplashView completion")
-                    // 🔥 BACKUP TIMER: Only transition if SplashView callback fails
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 5_000_000_000)
                         if showSplash {
                             print("⏰ [SplashContainer] Backup timer triggered - forcing transition")
                             proceedFromSplash()
@@ -102,8 +102,8 @@ struct SplashContainer: View {
             showSplash = false
         }
         showLaunchMask = true
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
             withAnimation(.easeInOut(duration: 0.25)) {
                 showLaunchMask = false
             }
@@ -166,7 +166,8 @@ private struct PreviewTransitionContainer<Content: View>: View {
             showSplash = false
         }
         showLaunchMask = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
             withAnimation(.easeInOut(duration: 0.25)) {
                 showLaunchMask = false
             }

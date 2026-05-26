@@ -185,8 +185,8 @@ class GlobalVideoPlayerManager: ObservableObject {
                 pipController.setup(with: player)
             }
             
-            // Fallback: explicitly start PiP if auto-start didn't trigger
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 300_000_000)
                 guard let self = self else { return }
                 if !self.pipController.isActive {
                     self.pipController.startPiP()
@@ -607,7 +607,8 @@ class GlobalVideoPlayerManager: ObservableObject {
             
             // 🔥 NATIVE PIP: Optionally auto-start PiP if not showing fullscreen
             if !showFullscreen {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 500_000_000)
                     self?.pipController.startPiP()
                 }
             }

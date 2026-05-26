@@ -58,7 +58,8 @@ struct VideoPreviewOverlay: View {
                             .scaleEffect(1.5)
                     }
                 }
-                .frame(maxWidth: UIScreen.main.bounds.width - 40)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 20)
                 .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
                 
                 // Video Info
@@ -152,8 +153,8 @@ struct VideoPreviewOverlay: View {
         // Cleanup
         player?.pause()
         player = nil
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
             onDismiss()
         }
     }
@@ -166,9 +167,9 @@ struct VideoPreviewOverlay: View {
         newPlayer.isMuted = true
         newPlayer.play()
         
-        // Auto-loop after 10 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-            newPlayer.seek(to: .zero)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            await newPlayer.seek(to: .zero)
             newPlayer.play()
         }
         
@@ -239,7 +240,7 @@ struct VideoLongPressModifier: ViewModifier {
 struct ClearBackgroundView: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
-        DispatchQueue.main.async {
+        Task { @MainActor in
             view.superview?.superview?.backgroundColor = .clear
         }
         return view

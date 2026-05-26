@@ -13,7 +13,7 @@ class AnthropicService: ObservableObject {
     static let shared = AnthropicService()
     
     private let baseURL = "https://api.anthropic.com/v1"
-    private let session = URLSession.shared
+    private let session = URLSession.configured
     private var cancellables = Set<AnyCancellable>()
     
     @Published var isLoading = false

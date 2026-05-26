@@ -248,9 +248,9 @@ final class RealTimeRevenueTracker: ObservableObject {
                         // Haptic feedback!
                         HapticManager.shared.notification(type: .success)
                         
-                        // Hide animation after 2 seconds
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            self.showEarningAnimation = false
+                        Task { @MainActor [weak self] in
+                            try? await Task.sleep(nanoseconds: 2_000_000_000)
+                            self?.showEarningAnimation = false
                         }
                     }
                     
@@ -316,9 +316,9 @@ final class RealTimeRevenueTracker: ObservableObject {
                 // Trigger animation
                 self.showEarningAnimation = true
                 HapticManager.shared.impact(style: .medium)
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    self.showEarningAnimation = false
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    self?.showEarningAnimation = false
                 }
                 
                 // Add to recent earnings

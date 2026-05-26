@@ -814,7 +814,7 @@ private final class ThermonuclearPlayerView: UIView {
             // 🔥 All URLs failed - notify caller so they can hide the channel
             if !hasNotifiedAllFailed {
                 hasNotifiedAllFailed = true
-                DispatchQueue.main.async { [weak self] in
+                Task { @MainActor [weak self] in
                     self?.onAllFailedCallback?()
                 }
             }
@@ -880,7 +880,7 @@ private final class ThermonuclearPlayerView: UIView {
         
         // 🔥 Status observer
         statusObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 guard let self else { return }
                 switch item.status {
                 case .readyToPlay:
@@ -897,10 +897,9 @@ private final class ThermonuclearPlayerView: UIView {
         
         // 🔥 Time control observer
         timeControlObserver = player.observe(\.timeControlStatus, options: [.new]) { [weak self] p, _ in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 if p.timeControlStatus == .playing {
                     self?.notifyReady(onReady)
-                    // 🔥 Generate snapshot after playing
                     self?.generateSnapshotIfNeeded(from: asset, onSnapshot: onSnapshot)
                 }
             }
@@ -918,7 +917,7 @@ private final class ThermonuclearPlayerView: UIView {
         
         // 🔥 BLAZING FAST RETRY - 600ms timeout!
         let retry = DispatchWorkItem { [weak self] in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 guard let self, self.player?.timeControlStatus != .playing else { return }
                 self.tryNextURL(onReady: onReady, onSnapshot: onSnapshot)
             }
@@ -961,7 +960,7 @@ private final class ThermonuclearPlayerView: UIView {
         guard !hasNotifiedReady else { return }
         hasNotifiedReady = true
         retryWorkItem?.cancel()
-        DispatchQueue.main.async { onReady() }
+        Task { @MainActor in onReady() }
     }
 
     private func applyInitialPlaybackFractionIfNeeded() {
@@ -1005,7 +1004,7 @@ private final class ThermonuclearPlayerView: UIView {
             do {
                 let cgImage = try generator.copyCGImage(at: time, actualTime: nil)
                 let image = UIImage(cgImage: cgImage)
-                DispatchQueue.main.async { onSnapshot(image) }
+                Task { @MainActor in onSnapshot(image) }
             } catch {
                 // Silent fail - video will show instead
             }
@@ -1092,7 +1091,7 @@ private struct BulletproofAsyncImage: View {
                 var request = URLRequest(url: imageURL)
                 request.cachePolicy = shouldSkipCache ? .reloadIgnoringLocalCacheData : .useProtocolCachePolicy
                 
-                let (data, response) = try await URLSession.shared.data(for: request)
+                let (data, response) = try await URLSession.configured.data(for: request)
                 
                 // 🔥 Validate image isn't too small (YouTube "unavailable" placeholder is often tiny)
                 guard let uiImage = UIImage(data: data) else {

@@ -136,11 +136,13 @@ class UltimateStoryViewModel: ObservableObject {
         HapticManager.shared.impact(style: .medium)
     }
     
+    var canvasSize: CGSize = CGSize(width: 390, height: 844)
+
     func updateElement(_ id: UUID, offset: CGSize) {
         if let index = editableElements.firstIndex(where: { $0.id == id }) {
             let element = editableElements[index]
-            let newX = element.position.x + (offset.width / UIScreen.main.bounds.width)
-            let newY = element.position.y + (offset.height / UIScreen.main.bounds.height)
+            let newX = element.position.x + (offset.width / canvasSize.width)
+            let newY = element.position.y + (offset.height / canvasSize.height)
             editableElements[index].position = CGPoint(x: newX, y: newY)
         }
     }

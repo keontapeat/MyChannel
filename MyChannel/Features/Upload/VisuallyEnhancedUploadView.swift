@@ -208,7 +208,8 @@ struct EnhancedProgressStep: View {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
                                 checkmarkScale = 1.2
                             }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 300_000_000)
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                     checkmarkScale = 1.0
                                 }

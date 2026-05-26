@@ -282,7 +282,7 @@ final class EmailMarketingService: ObservableObject {
             request.setValue("Bearer YOUR_SENDGRID_API_KEY", forHTTPHeaderField: "Authorization")
             request.httpBody = try JSONSerialization.data(withJSONObject: emailData)
             
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await URLSession.configured.data(for: request)
             
             if let httpResponse = response as? HTTPURLResponse {
                 return (200...299).contains(httpResponse.statusCode)

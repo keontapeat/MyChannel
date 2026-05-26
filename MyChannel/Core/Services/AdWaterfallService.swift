@@ -105,7 +105,7 @@ final class AdWaterfallService: ObservableObject {
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
             urlRequest.httpBody = try JSONEncoder().encode(request)
             
-            let (data, response) = try await URLSession.shared.data(for: urlRequest)
+            let (data, response) = try await URLSession.configured.data(for: urlRequest)
             
             if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
                 return try JSONDecoder().decode(AdResponse.self, from: data)
@@ -175,7 +175,7 @@ final class AdWaterfallService: ObservableObject {
                 URLQueryItem(name: "cust_params", value: buildCustomParams(request: request))
             ]
             
-            let (data, response) = try await URLSession.shared.data(from: components.url!)
+            let (data, response) = try await URLSession.configured.data(from: components.url!)
             
             if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
                 // Parse Ad Manager response (simplified)
@@ -237,7 +237,7 @@ final class AdWaterfallService: ObservableObject {
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
             urlRequest.httpBody = try JSONEncoder().encode(bidRequest)
             
-            let (data, response) = try await URLSession.shared.data(for: urlRequest)
+            let (data, response) = try await URLSession.configured.data(for: urlRequest)
             
             if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
                 let bidResponse = try JSONDecoder().decode(OpenRTBBidResponse.self, from: data)

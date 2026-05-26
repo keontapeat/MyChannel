@@ -155,7 +155,7 @@ final class IPOReadinessService: ObservableObject {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         #endif
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await URLSession.configured.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw IPOError.http((resp as? HTTPURLResponse)?.statusCode ?? 0)
         }

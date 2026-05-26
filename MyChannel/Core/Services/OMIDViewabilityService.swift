@@ -62,7 +62,7 @@ final class OMIDViewabilityService: ObservableObject {
         
         let geometryData = ViewabilityMetrics.GeometryData(
             adViewBounds: session.adView?.bounds ?? .zero,
-            screenBounds: UIScreen.main.bounds,
+            screenBounds: (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds ?? CGRect(x: 0, y: 0, width: 390, height: 844),
             visiblePercentage: calculateVisiblePercentage(adView: session.adView)
         )
         

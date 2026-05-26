@@ -142,7 +142,7 @@ class LoadBalancerService {
         // Simulate health check (ping server endpoint)
         do {
             let url = URL(string: "\(server.endpoint)/health")!
-            let (_, response) = try await URLSession.shared.data(from: url)
+            let (_, response) = try await URLSession.configured.data(from: url)
             
             if let httpResponse = response as? HTTPURLResponse {
                 return httpResponse.statusCode == 200

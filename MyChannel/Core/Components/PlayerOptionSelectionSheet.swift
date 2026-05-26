@@ -55,7 +55,8 @@ struct PlayerOptionSelectionSheet: View {
                             let impact = UIImpactFeedbackGenerator(style: .light)
                             impact.impactOccurred()
                             onSelect(item)
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 100_000_000)
                                 dismiss()
                             }
                         } label: {

@@ -996,7 +996,7 @@ extension NuclearDownloadManager: URLSessionDelegate, URLSessionDownloadDelegate
         guard let url = URL(string: urlString) else { return nil }
         
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await URLSession.configured.data(from: url)
             let thumbURL = completedDirectory.appendingPathComponent("\(videoId)_thumb.jpg")
             try data.write(to: thumbURL)
             return thumbURL

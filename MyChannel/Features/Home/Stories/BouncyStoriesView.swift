@@ -95,15 +95,14 @@ struct BouncyStoryBubble: View {
     }
 
     private func startBouncing() {
-        Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { _ in
-            withAnimation(.easeInOut(duration: 0.6)) {
-                bounceScale = bounceScale == 1.0 ? 1.1 : 1.0
-            }
+        withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+            bounceScale = 1.1
         }
     }
 
     private func toggleWithDelay() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
             withAnimation(.easeInOut(duration: 0.5)) {
                 showProfilePic.toggle()
             }

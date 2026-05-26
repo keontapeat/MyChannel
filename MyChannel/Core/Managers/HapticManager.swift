@@ -37,7 +37,8 @@ class HapticManager {
     // MARK: - Custom Patterns
     func doubleImpact() {
         impact(style: .medium)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 100_000_000)
             self.impact(style: .light)
         }
     }
@@ -56,14 +57,16 @@ class HapticManager {
     
     func likePattern() {
         impact(style: .light)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 50_000_000)
             self.impact(style: .medium)
         }
     }
     
     func sharePattern() {
         selection()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 100_000_000)
             self.impact(style: .light)
         }
     }

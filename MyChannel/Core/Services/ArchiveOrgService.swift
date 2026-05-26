@@ -40,7 +40,7 @@ final class ArchiveOrgService {
         let urlString = "https://archive.org/advancedsearch.php?q=\(q)&fl[]=identifier&fl[]=title&fl[]=year&rows=\(rows)&page=\(page)&output=json"
         guard let url = URL(string: urlString) else { return [] }
 
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, _) = try await URLSession.configured.data(from: url)
         let decoded = try JSONDecoder().decode(AdvancedSearchResponse.self, from: data)
 
         var movies: [FreeMovie] = []
@@ -54,7 +54,7 @@ final class ArchiveOrgService {
 
     private func buildMovie(for identifier: String, titleFallback: String?, yearFallback: String?) async throws -> FreeMovie {
         let metaURL = URL(string: "https://archive.org/metadata/\(identifier)")!
-        let (data, _) = try await URLSession.shared.data(from: metaURL)
+        let (data, _) = try await URLSession.configured.data(from: metaURL)
         let meta = try JSONDecoder().decode(MetadataResponse.self, from: data)
 
         let mp4 = meta.files

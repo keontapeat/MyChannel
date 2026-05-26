@@ -39,7 +39,7 @@ final class StripeCreatorPayoutService: ObservableObject {
             "currency": currency
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.configured.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw URLError(.badServerResponse)
         }

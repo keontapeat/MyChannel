@@ -221,8 +221,8 @@ class FlicksCDNService: ObservableObject {
                 }
             }
             
-            // Timeout after 5 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
                 observer.invalidate()
                 continuation.resume()
             }
@@ -251,7 +251,7 @@ class FlicksCDNService: ObservableObject {
                     size: size
                 )
                 
-                let (data, _) = try await URLSession.shared.data(from: optimizedURL)
+                let (data, _) = try await URLSession.configured.data(from: optimizedURL)
                 
                 guard let image = UIImage(data: data) else {
                     throw FlicksCDNError.invalidImageData

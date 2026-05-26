@@ -891,13 +891,15 @@ struct AssetStoriesPagerView: View {
         heartScale = 0.6
         if reduceMotion {
             heartScale = 1.25
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 400_000_000)
                 showHeart = false
                 heartScale = 0.6
             }
         } else {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.65)) { heartScale = 1.25 }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 600_000_000)
                 showHeart = false
                 heartScale = 0.6
             }

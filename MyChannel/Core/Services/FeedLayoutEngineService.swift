@@ -35,7 +35,7 @@ final class FeedLayoutEngineService: ObservableObject {
 
     func detectLayout() {
         guard AppConfig.Features.enableFeedLayoutEngine else { return }
-        let width = UIScreen.main.bounds.width
+        let width = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.width ?? 390
         let layout: FeedLayout
         if width >= 1024 {
             layout = FeedLayout(id: "tablet_grid", type: .grid, columns: 3, spacing: 16, thumbnailAspect: 16/9, showMetadata: true, sectionOrder: ["hero", "trending", "subscriptions", "recommended", "live"])
@@ -51,7 +51,7 @@ final class FeedLayoutEngineService: ObservableObject {
         struct Req: Encodable { let task: String; let userId: String; let screenWidth: Double }
         struct Raw: Decodable { let id: String; let type: String; let columns: Int?; let spacing: Double?; let aspect: Double?; let meta: Bool?; let sections: [String]? }
         let r: Raw = try await CloudRunAgentRouter.post(.myChannelContent, path: "/predict",
-            body: Req(task: "fetch_feed_layout", userId: userId, screenWidth: UIScreen.main.bounds.width))
+            body: Req(task: "fetch_feed_layout", userId: userId, screenWidth: Double((UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.width ?? 390)))
         activeLayout = FeedLayout(id: r.id, type: .init(rawValue: r.type) ?? .list, columns: r.columns ?? 1,
             spacing: r.spacing ?? 8, thumbnailAspect: r.aspect ?? 16/9, showMetadata: r.meta ?? true,
             sectionOrder: r.sections ?? ["trending", "subscriptions", "recommended"])

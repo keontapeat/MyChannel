@@ -276,9 +276,9 @@ extension ImageCache {
         let newLimit = Int(Double(currentLimit) * (1.0 - percentage))
         cache.totalCostLimit = newLimit
         
-        // Restore limit after cleanup
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            self.cache.totalCostLimit = currentLimit
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            self?.cache.totalCostLimit = currentLimit
         }
     }
 }

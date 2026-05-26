@@ -72,7 +72,7 @@ final class MusicDownloadService: ObservableObject {
             saveDownloads()
         } else {
             // Download from regular URL
-            let (data, _) = try await URLSession.shared.data(from: streamURL)
+            let (data, _) = try await URLSession.configured.data(from: streamURL)
             downloadProgress = 0.8
             try data.write(to: localURL)
             downloadProgress = 1.0
@@ -96,7 +96,7 @@ final class MusicDownloadService: ObservableObject {
         }
         #else
         // Fallback for non-Firebase builds
-        let (data, _) = try await URLSession.shared.data(from: streamURL)
+        let (data, _) = try await URLSession.configured.data(from: streamURL)
         let fileName = "\(songId).m4a"
         let localURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Music")

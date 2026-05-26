@@ -1691,15 +1691,16 @@ struct AnimatedStatText: View {
         let animationDuration = 0.6
         let stepDuration = animationDuration / Double(steps)
         
-        for step in 0...steps {
-            DispatchQueue.main.asyncAfter(deadline: .now() + stepDuration * Double(step)) {
+        Task { @MainActor in
+            for step in 0...steps {
                 let progress = Double(step) / Double(steps)
-                // Cubic ease-out for premium feel
                 let easedProgress = 1 - pow(1 - progress, 3)
                 let newValue = value * easedProgress
-                
                 withAnimation(.spring(response: 0.15, dampingFraction: 0.9)) {
                     displayedValue = newValue
+                }
+                if step < steps {
+                    try? await Task.sleep(nanoseconds: UInt64(stepDuration * 1_000_000_000))
                 }
             }
         }

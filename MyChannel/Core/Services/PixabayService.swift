@@ -35,7 +35,7 @@ final class PixabayService: ObservableObject {
             URLQueryItem(name: "per_page", value: String(perPage)),
             URLQueryItem(name: "image_type", value: imageType)
         ]
-        let (data, _) = try await URLSession.shared.data(from: components.url!)
+        let (data, _) = try await URLSession.configured.data(from: components.url!)
         struct Raw: Decodable { let hits: [RawH]? }
         struct RawH: Decodable { let id: Int; let tags: String; let previewURL: String; let webformatURL: String; let largeImageURL: String; let views: Int; let downloads: Int; let user: String }
         let r = try JSONDecoder().decode(Raw.self, from: data)

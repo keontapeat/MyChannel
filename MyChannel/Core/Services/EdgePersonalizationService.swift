@@ -162,7 +162,7 @@ final class EdgePersonalizationService: ObservableObject {
             request.timeoutInterval = 3
             
             do {
-                let (_, response) = try await URLSession.shared.data(for: request)
+                let (_, response) = try await URLSession.configured.data(for: request)
                 isEdgeAvailable = (response as? HTTPURLResponse)?.statusCode == 200
                 print("🌐 [Edge] Availability: \(isEdgeAvailable ? "✅ Online" : "❌ Offline")")
             } catch {
@@ -186,7 +186,7 @@ final class EdgePersonalizationService: ObservableObject {
         
         do {
             let startTime = Date()
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.configured.data(for: request)
             let latency = Int(Date().timeIntervalSince(startTime) * 1000)
             
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }

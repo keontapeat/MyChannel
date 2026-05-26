@@ -471,7 +471,8 @@ struct CreatorProfileSheet: View {
         withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
             subscribeScale = 0.9
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 100_000_000)
             withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
                 subscribeScale = 1.0
                 isSubscribed.toggle()

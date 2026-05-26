@@ -16,7 +16,7 @@ class OpenAIService: ObservableObject {
     static let shared = OpenAIService()
     
     private let baseURL = "https://api.openai.com/v1"
-    private let session = URLSession.shared
+    private let session = URLSession.configured
     private var cancellables = Set<AnyCancellable>()
     
     @Published var isLoading = false

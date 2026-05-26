@@ -85,9 +85,9 @@ class ViewStateMonitor: ObservableObject {
 extension View {
     func safeStateUpdate<T: Equatable>(_ value: T, perform action: @escaping () -> Void) -> some View {
         self.onChange(of: value) { newValue in
-            // Debounce rapid state changes
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                if newValue == value { // Only execute if value hasn't changed again
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                if newValue == value {
                     action()
                 }
             }

@@ -44,6 +44,11 @@ struct YouTubeStyleUploadFlow: View {
     @State private var showUploadError = false
     @State private var uploadErrorMessage = ""
     
+    // Creation mode (bottom tab bar on contentSelection)
+    @State private var selectedCreateMode: CreateContentMode = .video
+    @State private var showLiveSetup = false
+    @State private var showPostComposer = false
+    
     private let categories = [
         "Entertainment", "Music", "Gaming", "Sports", "News", "Education",
         "Technology", "Lifestyle", "Comedy", "Travel", "Food", "Fashion"
@@ -78,8 +83,13 @@ struct YouTubeStyleUploadFlow: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                bottomActionBar
-                    .background(Color(.systemBackground))
+                if currentStep == .contentSelection {
+                    createModeBar
+                        .background(Color(.systemBackground))
+                } else {
+                    bottomActionBar
+                        .background(Color(.systemBackground))
+                }
             }
             .background(Color(.systemBackground))
             .navigationBarHidden(true)
@@ -94,6 +104,21 @@ struct YouTubeStyleUploadFlow: View {
             CameraRecorderView { url in
                 videoURL = url
                 processSelectedVideo()
+            }
+        }
+        .fullScreenCover(isPresented: $showLiveSetup) {
+            GoLiveSetupView(onClose: { showLiveSetup = false }, onStart: { _ in
+                showLiveSetup = false
+            })
+        }
+        .fullScreenCover(isPresented: $showPostComposer) {
+            NavigationStack {
+                CreateCommunityPostView(creator: appState.currentUser ?? User.defaultUser)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("Close") { showPostComposer = false }
+                        }
+                    }
             }
         }
         .onChange(of: selectedVideo) { _ in
@@ -116,19 +141,10 @@ struct YouTubeStyleUploadFlow: View {
                     .clipShape(Circle())
             }
             
-            VStack(spacing: 2) {
-                Text(currentStep.title)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.primary)
-                
-                if currentStep != .completed {
-                    Text(currentStep == .contentSelection ? "Choose a video and start creating" : currentStep.subtitle)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity)
+            Text(currentStep.title)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.primary)
+                .frame(maxWidth: .infinity)
             
             if currentStep.canSkip {
                 Button("Skip") {
@@ -152,18 +168,21 @@ struct YouTubeStyleUploadFlow: View {
     
     // MARK: - Progress Indicator
     
+    @ViewBuilder
     private var progressIndicator: some View {
-        HStack(spacing: 8) {
-            ForEach(Array(UploadStep.allCases.enumerated()), id: \.offset) { index, _ in
-                Capsule()
-                    .fill(index <= currentStep.rawValue ? Color.red : Color(.systemGray5))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 4)
-                    .animation(.easeInOut(duration: 0.25), value: currentStep)
+        if currentStep != .contentSelection {
+            HStack(spacing: 8) {
+                ForEach(Array(UploadStep.allCases.enumerated()), id: \.offset) { index, _ in
+                    Capsule()
+                        .fill(index <= currentStep.rawValue ? Color.red : Color(.systemGray5))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 4)
+                        .animation(.easeInOut(duration: 0.25), value: currentStep)
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
     }
     
     // MARK: - Content Selection View
@@ -750,6 +769,51 @@ struct YouTubeStyleUploadFlow: View {
         .padding(.horizontal, 20)
     }
     
+    // MARK: - Create Mode Bar (contentSelection bottom tab)
+    
+    private var createModeBar: some View {
+        HStack(spacing: 0) {
+            ForEach(CreateContentMode.allCases, id: \.self) { mode in
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        selectedCreateMode = mode
+                    }
+                    switch mode {
+                    case .video, .flicks:
+                        break
+                    case .live:
+                        showLiveSetup = true
+                    case .post:
+                        showPostComposer = true
+                    }
+                } label: {
+                    if selectedCreateMode == mode {
+                        Text(mode.title)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 9)
+                            .background(Capsule().fill(Color.primary))
+                    } else {
+                        Text(mode.title)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.primary)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 9)
+                    }
+                }
+                .buttonStyle(.plain)
+                if mode != CreateContentMode.allCases.last {
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+    }
+    
     // MARK: - Bottom Action Bar
     
     @ViewBuilder
@@ -1150,6 +1214,18 @@ struct YouTubeStyleUploadFlow: View {
 }
 
 // MARK: - Supporting Types and Views
+
+enum CreateContentMode: String, CaseIterable, Hashable {
+    case video, flicks, live, post
+    var title: String {
+        switch self {
+        case .video:  return "Video"
+        case .flicks: return "Flicks"
+        case .live:   return "Live"
+        case .post:   return "Post"
+        }
+    }
+}
 
 enum UploadStep: Int, CaseIterable {
     case contentSelection = 0

@@ -165,7 +165,7 @@ extension AdsService {
         guard let url = URL(string: urlString) else { return nil }
         
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.configured.data(from: url)
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else { return nil }
             
@@ -257,7 +257,7 @@ extension AdsService {
             print("Failed to serialize tracking data: \(error)")
         }
         
-        URLSession.shared.dataTask(with: req) { data, response, error in
+        URLSession.configured.dataTask(with: req) { data, response, error in
             if let error = error {
                 print("Ad tracking failed: \(error)")
             } else {
@@ -278,7 +278,7 @@ extension AdsService {
     
     static func resolveVASTMedia(from url: URL) async -> (mediaURL: String, click: String?, duration: Int)? {
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.configured.data(from: url)
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else { return nil }
             

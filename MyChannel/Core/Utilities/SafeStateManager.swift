@@ -17,7 +17,7 @@ class SafeStateManager: ObservableObject {
     /// Safely update state with debouncing to prevent rapid changes
     func safeUpdate<T>(_ keyPath: ReferenceWritableKeyPath<SafeStateManager, T>, to value: T, delay: TimeInterval = 0.05) {
         stateQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 self?[keyPath: keyPath] = value
             }
         }
@@ -25,7 +25,7 @@ class SafeStateManager: ObservableObject {
     
     /// Batch multiple state updates to prevent multiple re-renders
     func batchUpdates(_ updates: @escaping () -> Void) {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             updates()
         }
     }
@@ -48,7 +48,8 @@ struct SafeState<T: Equatable>: DynamicProperty {
             guard !isUpdating else { return }
             
             isUpdating = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 10_000_000)
                 self.value = newValue
                 self.isUpdating = false
             }

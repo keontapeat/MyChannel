@@ -170,7 +170,7 @@ final class PublicCreatorAPIService: ObservableObject {
         }
         #endif
 
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await URLSession.configured.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let msg = String(data: data, encoding: .utf8) ?? "portal_error"
             throw APIError.http((resp as? HTTPURLResponse)?.statusCode ?? 0, msg)

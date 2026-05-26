@@ -123,7 +123,8 @@ struct ProfileQuickMenu: View {
                     action: {
                         HapticManager.shared.impact(style: .medium)
                         isPresented = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 300_000_000)
                             NotificationCenter.default.post(
                                 name: Notification.Name("OpenCreatorStudioDashboard"),
                                 object: user
@@ -137,7 +138,8 @@ struct ProfileQuickMenu: View {
                     title: "View Channel",
                     action: {
                         isPresented = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 300_000_000)
                             NotificationCenter.default.post(
                                 name: Notification.Name("OpenFullProfile"),
                                 object: user
@@ -151,7 +153,8 @@ struct ProfileQuickMenu: View {
                     title: "Settings",
                     action: {
                         isPresented = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 300_000_000)
                             NotificationCenter.default.post(
                                 name: Notification.Name("OpenSettings"),
                                 object: nil
@@ -165,7 +168,8 @@ struct ProfileQuickMenu: View {
                     title: "Switch Profile",
                     action: {
                         isPresented = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 300_000_000)
                             NotificationCenter.default.post(
                                 name: Notification.Name("ShowSwitchProfile"),
                                 object: nil

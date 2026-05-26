@@ -46,7 +46,7 @@ class AdvancedVideoStreamingEngine: NSObject, ObservableObject {
     
     private func setupNetworkMonitoring() {
         networkMonitor.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 self?.updateNetworkSpeed(path)
             }
         }
@@ -111,7 +111,7 @@ class AdvancedVideoStreamingEngine: NSObject, ObservableObject {
     
     private func setupQualityObserver() {
         qualityObserver = player?.currentItem?.observe(\.presentationSize) { [weak self] item, _ in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 self?.updateCurrentQuality(from: item.presentationSize)
             }
         }

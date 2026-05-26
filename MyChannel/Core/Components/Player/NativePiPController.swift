@@ -147,14 +147,13 @@ class NativePiPController: NSObject, ObservableObject {
 // MARK: - AVPictureInPictureControllerDelegate (THERMONUCLEAR OPTIMIZED)
 extension NativePiPController: AVPictureInPictureControllerDelegate {
     nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        // 🔥 PERF: Use DispatchQueue.main for faster execution than Task
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             self?.isPiPActive = true
         }
     }
     
     nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             self?.isPiPActive = true
             print("✅ [NativePiP] PiP STARTED")
         }
@@ -165,7 +164,7 @@ extension NativePiPController: AVPictureInPictureControllerDelegate {
     }
     
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             self?.isPiPActive = false
             print("✅ [NativePiP] PiP STOPPED")
         }
@@ -175,7 +174,7 @@ extension NativePiPController: AVPictureInPictureControllerDelegate {
         _ pictureInPictureController: AVPictureInPictureController,
         failedToStartPictureInPictureWithError error: Error
     ) {
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             self?.isPiPActive = false
             print("❌ [NativePiP] Failed: \(error.localizedDescription)")
         }
@@ -186,7 +185,7 @@ extension NativePiPController: AVPictureInPictureControllerDelegate {
         restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
     ) {
         // 🔥 THERMONUCLEAR: Instant UI restore without delay
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             self?.isPiPActive = false
             
             // 🔥 PERF: Post notification immediately

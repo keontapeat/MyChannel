@@ -12,6 +12,7 @@ struct InteractiveStickerView: View {
     let sticker: CreateStoryViewModel.StickerItem
     let onUpdate: (CreateStoryViewModel.StickerItem) -> Void
     let onRemove: () -> Void
+    var canvasSize: CGSize = CGSize(width: 390, height: 844)
     
     @State private var currentPosition: CGSize = .zero
     @State private var currentScale: CGFloat = 1.0
@@ -110,8 +111,8 @@ struct InteractiveStickerView: View {
         .rotationEffect(.degrees(currentRotation + sticker.rotation))
         .offset(currentPosition)
         .position(
-            x: sticker.position.x * UIScreen.main.bounds.width,
-            y: sticker.position.y * UIScreen.main.bounds.height
+            x: sticker.position.x * canvasSize.width,
+            y: sticker.position.y * canvasSize.height
         )
         .onTapGesture {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
@@ -126,8 +127,8 @@ struct InteractiveStickerView: View {
                     }
                     .onEnded { value in
                         var updatedSticker = sticker
-                        let newX = (sticker.position.x * UIScreen.main.bounds.width + value.translation.width) / UIScreen.main.bounds.width
-                        let newY = (sticker.position.y * UIScreen.main.bounds.height + value.translation.height) / UIScreen.main.bounds.height
+                        let newX = (sticker.position.x * canvasSize.width + value.translation.width) / canvasSize.width
+                        let newY = (sticker.position.y * canvasSize.height + value.translation.height) / canvasSize.height
                         updatedSticker.position = CGPoint(
                             x: max(0, min(1, newX)),
                             y: max(0, min(1, newY))
@@ -169,6 +170,7 @@ struct InteractiveTextOverlay: View {
     let textOverlay: CreateStoryViewModel.TextOverlay
     let onUpdate: (CreateStoryViewModel.TextOverlay) -> Void
     let onRemove: () -> Void
+    var canvasSize: CGSize = CGSize(width: 390, height: 844)
     
     @State private var currentPosition: CGSize = .zero
     @State private var currentScale: CGFloat = 1.0
@@ -212,8 +214,8 @@ struct InteractiveTextOverlay: View {
         .rotationEffect(.degrees(currentRotation + textOverlay.rotation))
         .offset(currentPosition)
         .position(
-            x: textOverlay.position.x * UIScreen.main.bounds.width,
-            y: textOverlay.position.y * UIScreen.main.bounds.height
+            x: textOverlay.position.x * canvasSize.width,
+            y: textOverlay.position.y * canvasSize.height
         )
         .onTapGesture {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
@@ -228,8 +230,8 @@ struct InteractiveTextOverlay: View {
                     }
                     .onEnded { value in
                         var updatedOverlay = textOverlay
-                        let newX = (textOverlay.position.x * UIScreen.main.bounds.width + value.translation.width) / UIScreen.main.bounds.width
-                        let newY = (textOverlay.position.y * UIScreen.main.bounds.height + value.translation.height) / UIScreen.main.bounds.height
+                        let newX = (textOverlay.position.x * canvasSize.width + value.translation.width) / canvasSize.width
+                        let newY = (textOverlay.position.y * canvasSize.height + value.translation.height) / canvasSize.height
                         updatedOverlay.position = CGPoint(
                             x: max(0, min(1, newX)),
                             y: max(0, min(1, newY))

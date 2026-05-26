@@ -367,15 +367,12 @@ struct AwardCeremonyLivestreamView: View {
             showConfetti = true
         }
         
-        // Hide after 5 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
             withAnimation(AppTheme.AnimationPresets.easeInOut) {
                 showWinnerAnimation = false
             }
-        }
-        
-        // Stop confetti after 10 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
             showConfetti = false
         }
     }

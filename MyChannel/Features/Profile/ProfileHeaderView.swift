@@ -511,15 +511,16 @@ struct AnimatedStatItem: View {
         let steps = min(targetValue, 30) // Max 30 steps for performance
         let stepDuration = animationDuration / Double(steps)
         
-        for step in 0...steps {
-            DispatchQueue.main.asyncAfter(deadline: .now() + stepDuration * Double(step)) {
-                // Ease-out curve for more natural feel
+        Task { @MainActor in
+            for step in 0...steps {
                 let progress = Double(step) / Double(steps)
-                let easedProgress = 1 - pow(1 - progress, 3) // Cubic ease-out
+                let easedProgress = 1 - pow(1 - progress, 3)
                 let newValue = Int(Double(targetValue) * easedProgress)
-                
                 withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
                     displayedValue = newValue
+                }
+                if step < steps {
+                    try? await Task.sleep(nanoseconds: UInt64(stepDuration * 1_000_000_000))
                 }
             }
         }

@@ -68,7 +68,9 @@ struct FlicksGestureOverlay: View {
             // Potential single tap - wait to see if double tap follows
             lastTapTime = now
             
-            DispatchQueue.main.asyncAfter(deadline: .now() + doubleTapThreshold) {
+            let threshold = doubleTapThreshold
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(threshold * 1_000_000_000))
                 if let storedTapTime = lastTapTime,
                    storedTapTime == now {
                     // Single tap confirmed

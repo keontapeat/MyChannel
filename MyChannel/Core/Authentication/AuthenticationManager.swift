@@ -367,7 +367,8 @@ class AuthenticationManager: ObservableObject {
         } catch {
             print("🍎 [Apple Sign In] Error: \(error.localizedDescription)")
             authState = .error(error.localizedDescription)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
                 if case .error = self?.authState { self?.authState = .unauthenticated }
             }
         }
@@ -387,7 +388,8 @@ class AuthenticationManager: ObservableObject {
         } catch {
             print("🍎 [Apple Sign In] Error (iPad-safe path): \(error.localizedDescription)")
             authState = .error(error.localizedDescription)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
                 if case .error = self?.authState { self?.authState = .unauthenticated }
             }
         }
@@ -454,8 +456,8 @@ class AuthenticationManager: ObservableObject {
             } catch {
                 print("🍎 [Apple Sign In] Error: \(error.localizedDescription)")
                 authState = .error(error.localizedDescription)
-                // Reset to unauthenticated after a brief delay so the UI isn't stuck
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
                     if case .error = self?.authState {
                         self?.authState = .unauthenticated
                     }

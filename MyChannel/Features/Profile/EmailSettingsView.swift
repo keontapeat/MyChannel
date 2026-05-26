@@ -583,8 +583,8 @@ struct ChangeEmailSheet: View {
         
         isLoading = true
         HapticManager.shared.impact(style: .medium)
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
             isLoading = false
             onEmailChanged(newEmail)
             isPresented = false
@@ -721,8 +721,8 @@ struct AddBackupEmailSheet: View {
         
         isLoading = true
         HapticManager.shared.impact(style: .medium)
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
             isLoading = false
             onEmailAdded(backupEmail)
             isPresented = false

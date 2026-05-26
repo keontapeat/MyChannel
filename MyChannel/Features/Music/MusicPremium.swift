@@ -877,8 +877,8 @@ struct StemPlayerView: View {
             }
         }
         .onAppear {
-            // Simulate AI processing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
                 withAnimation {
                     isProcessing = false
                 }

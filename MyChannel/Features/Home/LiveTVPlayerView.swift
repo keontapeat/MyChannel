@@ -517,7 +517,7 @@ struct LiveTVPlayerView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 12)
                     }
-                    .frame(maxHeight: UIScreen.main.bounds.height * 0.5) // TODO: replace with GeometryReader when view hierarchy allows
+                    .frame(maxHeight: ((UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.height ?? 844) * 0.5)
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 20)
@@ -626,7 +626,7 @@ struct LiveTVPlayerView: View {
     private func setupPlayerWithURLs(_ urls: [String], currentIndex: Int = 0) {
         guard currentIndex < urls.count, let url = URL(string: urls[currentIndex]) else {
             // 🔥 All URLs failed - show error state
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 if NetworkOptimizer.shared.connectionQuality == .poor {
                     streamError = .networkError
                 } else {
@@ -741,7 +741,7 @@ struct LiveTVPlayerView: View {
         monitor.pathUpdateHandler = { path in
             guard let currentItem = playerRef?.currentItem else { return }
             
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 if path.status == .satisfied {
                     if path.usesInterfaceType(.wifi) {
                         // WiFi - use high bitrate for best quality

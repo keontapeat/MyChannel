@@ -41,7 +41,7 @@ final class RegionBlockingService: ObservableObject {
         // Get user's IP and location
         do {
             guard let url = URL(string: "https://ipapi.co/json/") else { return nil }
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await URLSession.configured.data(from: url)
             let response = try JSONDecoder().decode(IPAPIResponse.self, from: data)
             
             // Basic VPN detection
@@ -202,7 +202,7 @@ final class RegionBlockingService: ObservableObject {
         // Simple VPN detection - in production would use specialized service
         do {
             guard let url = URL(string: "https://vpnapi.io/api/\(ip)?key=YOUR_VPN_API_KEY") else { return false }
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await URLSession.configured.data(from: url)
             let response = try JSONDecoder().decode(VPNResponse.self, from: data)
             return response.security.vpn || response.security.proxy
         } catch {

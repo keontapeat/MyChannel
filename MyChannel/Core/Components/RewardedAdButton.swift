@@ -69,8 +69,8 @@ struct RewardedAdButton<Label: View>: View {
             // Load ad first
             adManager.loadRewardedAd()
             
-            // Wait a bit then try to show
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
                 if adManager.isRewardedAdReady {
                     adManager.showRewardedAd(
                         onReward: { amount in

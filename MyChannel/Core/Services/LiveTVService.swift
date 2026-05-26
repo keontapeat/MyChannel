@@ -134,31 +134,13 @@ final class LiveTVService {
         request.timeoutInterval = 2.0
         
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await URLSession.configured.data(for: request)
             if let httpResponse = response as? HTTPURLResponse {
                 return (200...299).contains(httpResponse.statusCode)
             }
-        } catch {
-            // Try asset-based check as fallback
-            return await checkAssetPlayability(url)
-        }
+        } catch { }
         
         return false
-    }
-    
-    private func checkAssetPlayability(_ url: URL) async -> Bool {
-        let asset = AVURLAsset(url: url)
-        return await withCheckedContinuation { continuation in
-            asset.loadValuesAsynchronously(forKeys: ["playable"]) {
-                var playable = false
-                var error: NSError?
-                let status = asset.statusOfValue(forKey: "playable", error: &error)
-                if status == .loaded {
-                    playable = asset.isPlayable
-                }
-                continuation.resume(returning: playable)
-            }
-        }
     }
 }
 

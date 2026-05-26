@@ -288,8 +288,8 @@ struct ChangePasswordView: View {
         isChangingPassword = true
         HapticManager.shared.impact(style: .medium)
         
-        // Simulate API call
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             isChangingPassword = false
             
             // Simulate random success/failure for demo

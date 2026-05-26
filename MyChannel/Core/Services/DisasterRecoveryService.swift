@@ -336,7 +336,7 @@ final class DisasterRecoveryService: ObservableObject {
             request.httpMethod = check.method
             request.timeoutInterval = check.timeout
             
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await URLSession.configured.data(for: request)
             let responseTime = Date().timeIntervalSince(startTime)
             
             if let httpResponse = response as? HTTPURLResponse {

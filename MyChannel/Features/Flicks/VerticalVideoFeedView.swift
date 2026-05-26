@@ -102,7 +102,8 @@ struct VerticalVideoFeedView: View {
                     dragOffset = 0
                     
                     // Show actions after scroll ends
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 1_000_000_000)
                         withAnimation(.easeInOut(duration: 0.3)) {
                             showActions = true
                         }

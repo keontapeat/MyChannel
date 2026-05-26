@@ -121,7 +121,7 @@ final class PasskeyAuthService: NSObject, ObservableObject {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         #endif
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await URLSession.configured.data(for: req)
         guard (resp as? HTTPURLResponse).map({ (200...299).contains($0.statusCode) }) ?? false else {
             throw PKError.http((resp as? HTTPURLResponse)?.statusCode ?? 0)
         }

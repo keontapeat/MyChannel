@@ -115,7 +115,7 @@ struct ModernCameraView: View {
                 type: .image,
                 duration: nil
             )
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 onMediaCaptured(mediaItem)
                 dismiss()
             }
@@ -126,7 +126,8 @@ struct ModernCameraView: View {
         isRecording = true
         cameraManager.startVideoRecording()
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 15_000_000_000)
             if isRecording {
                 stopRecording()
             }
@@ -144,7 +145,7 @@ struct ModernCameraView: View {
                 type: .video,
                 duration: 15.0
             )
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 onMediaCaptured(mediaItem)
                 dismiss()
             }

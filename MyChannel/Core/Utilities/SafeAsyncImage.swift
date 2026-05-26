@@ -58,7 +58,7 @@ struct SafeAsyncImage<Content: View, Placeholder: View>: View {
         
         Task {
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
+                let (data, _) = try await URLSession.configured.data(from: url)
                 if let uiImage = UIImage(data: data) {
                     await MainActor.run {
                         phase = .success(Image(uiImage: uiImage))

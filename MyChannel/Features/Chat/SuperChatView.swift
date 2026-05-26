@@ -185,9 +185,8 @@ struct SuperChatView<Service: LiveChatServiceProtocol & ObservableObject>: View 
     
     private func sendSuperChat() {
         isProcessingPayment = true
-        
-        // Simulate payment processing
-        let workItem = DispatchWorkItem {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             let superChatMessage = LiveChatMessage(
                 streamId: streamId,
                 userId: AppState.shared.currentUser?.id ?? "",
@@ -196,7 +195,6 @@ struct SuperChatView<Service: LiveChatServiceProtocol & ObservableObject>: View 
                 messageType: .superChat,
                 superChatAmount: selectedAmount
             )
-            
             Task {
                 try? await chatService.sendMessage(superChatMessage)
                 await MainActor.run {
@@ -205,8 +203,6 @@ struct SuperChatView<Service: LiveChatServiceProtocol & ObservableObject>: View 
                 }
             }
         }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: workItem)
     }
 }
 

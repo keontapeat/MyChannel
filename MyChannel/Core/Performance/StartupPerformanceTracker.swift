@@ -201,7 +201,7 @@ struct PerformanceTracked: ViewModifier {
         content
             .onAppear {
                 let start = Date()
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     let duration = Date().timeIntervalSince(start)
                     renderTime = duration
                     PerformanceMonitor.shared.measureViewRender(name, duration: duration)

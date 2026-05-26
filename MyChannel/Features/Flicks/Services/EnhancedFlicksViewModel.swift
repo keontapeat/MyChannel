@@ -55,12 +55,9 @@ class EnhancedFlicksViewModel: ObservableObject {
     
     private func setupAlbumArtRotation() {
         rotationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            // Timer fires on main RunLoop — dispatch directly, no Task allocation needed
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.albumArtRotation += 2.0
-                if self.albumArtRotation >= 360 { self.albumArtRotation = 0 }
-            }
+            guard let self else { return }
+            self.albumArtRotation += 2.0
+            if self.albumArtRotation >= 360 { self.albumArtRotation = 0 }
         }
     }
     

@@ -93,7 +93,7 @@ class VertexAIAgentService: ObservableObject {
     // Scale Agent (1)
     private let scaleMasterAgentID = "4ccac2e1-16b0-49d4-9956-872853239fb3" // ✅ Scale Master AI
     
-    private let session = URLSession.shared
+    private let session = URLSession.configured
     private var cancellables = Set<AnyCancellable>()
     
     private init() {

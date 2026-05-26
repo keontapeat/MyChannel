@@ -45,7 +45,7 @@ final class MLAgentsClient: ObservableObject {
         request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
         request.timeoutInterval = 30
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.configured.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {

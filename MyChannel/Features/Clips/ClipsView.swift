@@ -685,7 +685,8 @@ struct ClipShareSheet: View {
         isCopied = true
         HapticManager.shared.successPattern()
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             isCopied = false
         }
     }

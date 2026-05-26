@@ -256,29 +256,28 @@ struct NuclearFlicksView: View {
     
     // MARK: - Video Player
     private func flickVideoPlayer(flick: NuclearFlick, isActive: Bool) -> some View {
-        let screenWidth = UIScreen.main.bounds.width  // video player needs absolute screen size
-        let screenHeight = UIScreen.main.bounds.height
-        
-        return Group {
-            if flick.contentSource == Video.ContentSource.youtube, let ytId = flick.externalID {
-                YouTubePlayerView(
-                    videoID: ytId,
-                    autoplay: isActive,
-                    startTime: 0,
-                    muted: flicksMuted,
-                    showControls: false
-                )
-                .background(Color.black)
-            } else {
-                NuclearVideoPlayerView(
-                    flick: flick,
-                    isActive: isActive,
-                    isMuted: flicksMuted
-                )
+        GeometryReader { geo in
+            Group {
+                if flick.contentSource == Video.ContentSource.youtube, let ytId = flick.externalID {
+                    YouTubePlayerView(
+                        videoID: ytId,
+                        autoplay: isActive,
+                        startTime: 0,
+                        muted: flicksMuted,
+                        showControls: false
+                    )
+                    .background(Color.black)
+                } else {
+                    NuclearVideoPlayerView(
+                        flick: flick,
+                        isActive: isActive,
+                        isMuted: flicksMuted
+                    )
+                }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
         }
-        .frame(width: screenWidth, height: screenHeight)
-        .clipped()
         .ignoresSafeArea()
     }
     
@@ -606,11 +605,9 @@ struct NuclearFlicksView: View {
             doubleTapHeartVisible = true
         }
         
-        // Hide after animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            withAnimation {
-                doubleTapHeartVisible = false
-            }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            withAnimation { doubleTapHeartVisible = false }
         }
         
         // Haptic feedback
@@ -840,8 +837,8 @@ struct NuclearVideoPlayerView: View {
                             .foregroundColor(.white.opacity(0.4))
                     }
                     .onAppear {
-                        // Auto-skip after a brief moment so user isn't stuck
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 800_000_000)
                             NotificationCenter.default.post(
                                 name: .flickVideoUnavailable,
                                 object: nil,
@@ -900,8 +897,8 @@ struct NuclearVideoPlayerView: View {
             playerManager.play()
         }
         
-        // Timeout: hide spinner after 6s to prevent stuck loading on deleted videos
-        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [self] in
+        Task { @MainActor [self] in
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
             if playerManager.isLoading && !playerManager.isPlaying {
                 loadingTimedOut = true
                 print("⏰ [NuclearFlicks] Loading timed out for flick: \(flick.id) — video likely deleted")

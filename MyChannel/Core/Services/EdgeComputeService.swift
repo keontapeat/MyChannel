@@ -57,7 +57,7 @@ final class EdgeComputeService: ObservableObject {
         req.timeoutInterval = 6
 
         do {
-            let (data, resp) = try await URLSession.shared.data(for: req)
+            let (data, resp) = try await URLSession.configured.data(for: req)
             if let http = resp as? HTTPURLResponse {
                 lastRegion = http.value(forHTTPHeaderField: "cf-colo")
                 lastCacheStatus = http.value(forHTTPHeaderField: "cf-cache-status")
@@ -74,7 +74,7 @@ final class EdgeComputeService: ObservableObject {
         guard let url = URL(string: "\(Endpoint.feed)/purge?uid=\(uid)") else { return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
-        _ = try? await URLSession.shared.data(for: req)
+        _ = try? await URLSession.configured.data(for: req)
     }
 }
 

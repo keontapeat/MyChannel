@@ -81,7 +81,7 @@ final class AdvancedTargetingAgent: ObservableObject {
         
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, _) = try await URLSession.configured.data(for: request)
             
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let similarUsers = json["similar_user_ids"] as? [String] {
@@ -250,7 +250,7 @@ final class AdvancedTargetingAgent: ObservableObject {
         
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, _) = try await URLSession.configured.data(for: request)
             
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let predictions = json["predictions"] as? [[String: Any]],
@@ -303,7 +303,7 @@ final class AdvancedTargetingAgent: ObservableObject {
         ]
         
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        _ = try await URLSession.shared.data(for: request)
+        _ = try await URLSession.configured.data(for: request)
         
         print("✅ [VertexAI-Targeting] Model retraining triggered")
     }

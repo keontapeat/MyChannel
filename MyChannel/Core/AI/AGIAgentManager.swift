@@ -224,7 +224,7 @@ class AGIAgentManager: ObservableObject {
         request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
         request.timeoutInterval = 10
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, _) = try await URLSession.configured.data(for: request)
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let predictions = json["predictions"] as? [[String: Any]],
                let first = predictions.first,
@@ -264,7 +264,7 @@ class AGIAgentManager: ObservableObject {
             "generationConfig": ["maxOutputTokens": 512, "temperature": 0.7]
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.configured.data(for: request)
         if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
             let body = String(data: data, encoding: .utf8) ?? "unknown error"
             throw NSError(domain: "Gemini", code: httpResponse.statusCode,

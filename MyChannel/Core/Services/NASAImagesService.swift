@@ -31,7 +31,7 @@ final class NASAImagesService: ObservableObject {
         var items = [URLQueryItem(name: "api_key", value: apiKey)]
         if let d = date { items.append(URLQueryItem(name: "date", value: d)) }
         components.queryItems = items
-        let (data, _) = try await URLSession.shared.data(from: components.url!)
+        let (data, _) = try await URLSession.configured.data(from: components.url!)
         struct Raw: Decodable { let title: String?; let explanation: String?; let url: String?; let date: String?; let center: String? }
         let r = try JSONDecoder().decode(Raw.self, from: data)
         apod = NASAImage(id: r.date ?? UUID().uuidString, title: r.title ?? "", description: r.explanation ?? "",
@@ -41,7 +41,7 @@ final class NASAImagesService: ObservableObject {
     func search(query: String, page: Int = 1) async throws {
         var components = URLComponents(string: "https://images-api.nasa.gov/search")!
         components.queryItems = [URLQueryItem(name: "q", value: query), URLQueryItem(name: "media_type", value: "image"), URLQueryItem(name: "page", value: String(page))]
-        let (data, _) = try await URLSession.shared.data(from: components.url!)
+        let (data, _) = try await URLSession.configured.data(from: components.url!)
         struct RawItem: Decodable { let data: [RawData]?; let links: [RawLink]? }
         struct RawData: Decodable { let title: String?; let description: String?; let date_created: String?; let center: String?; let nasa_id: String? }
         struct RawLink: Decodable { let href: String?; let rel: String? }

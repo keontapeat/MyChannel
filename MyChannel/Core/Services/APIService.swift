@@ -13,7 +13,7 @@ class APIService: ObservableObject {
     static let shared = APIService()
     
     private let baseURL = "https://api.mychannel.com/v1"
-    private let session = URLSession.shared
+    private let session = URLSession.configured
     
     @Published var isConnected = false
     @Published var apiError: APIError?

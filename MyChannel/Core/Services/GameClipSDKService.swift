@@ -55,7 +55,7 @@ public final class GameClipSDK {
         req.setValue(clientId, forHTTPHeaderField: "X-MyChannel-Client-Id")
         req.httpBody = try JSONEncoder().encode(metadata)
 
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await URLSession.configured.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let msg = String(data: data, encoding: .utf8) ?? "ingest_error"
             throw SDKError.http((resp as? HTTPURLResponse)?.statusCode ?? 0, msg)
@@ -69,7 +69,7 @@ public final class GameClipSDK {
         req.httpMethod = "PUT"
         req.setValue("video/mp4", forHTTPHeaderField: "Content-Type")
         let data = try Data(contentsOf: fileURL)
-        let (_, resp) = try await URLSession.shared.upload(for: req, from: data)
+        let (_, resp) = try await URLSession.configured.upload(for: req, from: data)
         guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw SDKError.http((resp as? HTTPURLResponse)?.statusCode ?? 0, "upload_failed")
         }
@@ -83,7 +83,7 @@ public final class GameClipSDK {
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue(clientId, forHTTPHeaderField: "X-MyChannel-Client-Id")
 
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await URLSession.configured.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let msg = String(data: data, encoding: .utf8) ?? "finalize_error"
             throw SDKError.http((resp as? HTTPURLResponse)?.statusCode ?? 0, msg)

@@ -41,7 +41,7 @@ struct UniversalLinkValidatorView: View {
             var lines: [String] = []
             for url in urls {
                 do {
-                    let (data, resp) = try await URLSession.shared.data(from: url)
+                    let (data, resp) = try await URLSession.configured.data(from: url)
                     if let http = resp as? HTTPURLResponse {
                         lines.append("\nURL: \(url.absoluteString)\nStatus: \(http.statusCode)")
                         lines.append("Content-Type: \(http.value(forHTTPHeaderField: "Content-Type") ?? "")")
