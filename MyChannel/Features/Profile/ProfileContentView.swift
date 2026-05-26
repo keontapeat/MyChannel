@@ -3027,24 +3027,27 @@ private struct AdvancedMetrixItem: Identifiable {
 private struct AdvancedTableColumnHeader: View {
     @Binding var sortColumn: AdvancedSortColumn
     @Binding var sortAscending: Bool
+    @Environment(\.horizontalSizeClass) private var hSizeClass
     // Same widths used in AdvancedVideoTableRow so columns align perfectly
-    private let thumbW: CGFloat = 72
-    private let thumbSpacing: CGFloat = 10
-    private let statW: CGFloat = 48
-    private let menuW: CGFloat = 32
-    private let hPad: CGFloat = 16
+    static let thumbW: CGFloat = 72
+    static let thumbSpacing: CGFloat = 10
+    static let statW: CGFloat = 44
+    static let statWCompact: CGFloat = 40
+    static let menuW: CGFloat = 32
+    static let hPad: CGFloat = 16
+
+    private var isCompact: Bool { hSizeClass != .regular }
+    private var statW: CGFloat { isCompact ? Self.statWCompact : Self.statW }
 
     private var visibleColumns: [AdvancedSortColumn] {
-        UIDevice.current.userInterfaceIdiom == .pad
-            ? AdvancedSortColumn.allCases
-            : [.views, .ctr]          // only 2 cols on phone
+        isCompact ? [.views, .ctr] : AdvancedSortColumn.allCases
     }
 
     var body: some View {
         HStack(spacing: 0) {
-            // Blank space matching hPad + thumbnail + gap
+            // Leading space matching thumbnail + gap (outer hPad applied to the whole row)
             Color.clear
-                .frame(width: hPad + thumbW + thumbSpacing, height: 1)
+                .frame(width: Self.thumbW + Self.thumbSpacing, height: 1)
 
             // VIDEO label — flexible, covers title column
             Text("VIDEO")
@@ -3066,6 +3069,8 @@ private struct AdvancedTableColumnHeader: View {
                         Text(col.title)
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(sortColumn == col ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                         if sortColumn == col {
                             Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
                                 .font(.system(size: 8, weight: .bold))
@@ -3077,9 +3082,10 @@ private struct AdvancedTableColumnHeader: View {
                 .buttonStyle(.plain)
             }
 
-            // Spacer matching the 3-dot menu column + hPad
-            Color.clear.frame(width: menuW + hPad, height: 1)
+            // Spacer matching the 3-dot menu column
+            Color.clear.frame(width: Self.menuW, height: 1)
         }
+        .padding(.horizontal, Self.hPad)
         .padding(.vertical, 6)
         .background(AppTheme.Colors.surface.opacity(0.6))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -3099,17 +3105,18 @@ private struct AdvancedVideoTableRow: View {
     @State private var isSubscribedLocal = false
     @State private var isWatchLaterLocal = false
 
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+
+    private var isCompact: Bool { hSizeClass != .regular }
+    private var statW: CGFloat {
+        isCompact ? AdvancedTableColumnHeader.statWCompact : AdvancedTableColumnHeader.statW
+    }
     private var visibleColumns: [AdvancedSortColumn] {
-        UIDevice.current.userInterfaceIdiom == .pad
-            ? AdvancedSortColumn.allCases
-            : [.views, .ctr]
+        isCompact ? [.views, .ctr] : AdvancedSortColumn.allCases
     }
 
     var body: some View {
         HStack(spacing: 0) {
-            // Leading padding baked in — reliable regardless of call site
-            Color.clear.frame(width: 16, height: 1)
-
             // Thumbnail — fixed 72pt, then 10pt gap
             ZStack(alignment: .bottomTrailing) {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -3174,10 +3181,12 @@ private struct AdvancedVideoTableRow: View {
 
             // Stat columns — only show columns matching header
             ForEach(visibleColumns, id: \.self) { col in
-                AdvancedStatColumn(
-                    value: col == .views ? formatViews(video.viewCount) : "—",
-                    label: nil
-                )
+                Text(col == .views ? formatViews(video.viewCount) : "—")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(width: statW, alignment: .trailing)
             }
 
             // 3-dot menu
@@ -3190,13 +3199,11 @@ private struct AdvancedVideoTableRow: View {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AppTheme.Colors.textSecondary)
-                    .frame(width: 32, height: 32)
+                    .frame(width: AdvancedTableColumnHeader.menuW, height: 32)
             }
             .buttonStyle(.plain)
-
-            // Trailing padding baked in
-            Color.clear.frame(width: 16, height: 1)
         }
+        .padding(.horizontal, AdvancedTableColumnHeader.hPad)
         .padding(.vertical, 10)
         .contentShape(Rectangle())
         .onTapGesture {
