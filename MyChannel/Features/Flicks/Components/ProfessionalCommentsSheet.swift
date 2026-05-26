@@ -1,12 +1,27 @@
 import SwiftUI
 
+enum CommentSortOption: String, CaseIterable {
+    case top = "Top"
+    case newest = "Newest"
+}
+
 struct ProfessionalCommentsSheet: View {
     let video: Video
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
     @State private var newComment = ""
     @State private var comments: [VideoComment] = []
+    @State private var sortOption: CommentSortOption = .top
     @FocusState private var isTextFieldFocused: Bool
+    
+    var sortedComments: [VideoComment] {
+        switch sortOption {
+        case .top:
+            return comments.sorted { $0.likeCount > $1.likeCount }
+        case .newest:
+            return comments.sorted { $0.createdAt > $1.createdAt }
+        }
+    }
     
     var body: some View {
         NavigationStack {
@@ -29,6 +44,15 @@ struct ProfessionalCommentsSheet: View {
                     
                     Spacer()
                     
+                    // Sort picker
+                    Picker("Sort", selection: $sortOption) {
+                        ForEach(CommentSortOption.allCases, id: \.self) { option in
+                            Text(option.rawValue).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 120)
+                    
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark")
                             .font(.system(size: 16, weight: .semibold))
@@ -44,7 +68,7 @@ struct ProfessionalCommentsSheet: View {
                 
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(comments) { comment in
+                        ForEach(sortedComments) { comment in
                             ProfessionalCommentRow(comment: comment)
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 16)
@@ -137,6 +161,8 @@ struct ProfessionalCommentRow: View {
     let comment: VideoComment
     @State private var isLiked = false
     @State private var showReplies = false
+    @State private var replyText = ""
+    @State private var showingReplyInput = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -199,7 +225,7 @@ struct ProfessionalCommentRow: View {
                         }
                         .buttonStyle(.plain)
                         
-                        Button(action: { }) {
+                        Button(action: { showingReplyInput.toggle() }) {
                             Text("Reply")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppTheme.Colors.primary)
@@ -232,6 +258,84 @@ struct ProfessionalCommentRow: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .padding(.leading, 56)
+                .padding(.top, 12)
+                
+                if showReplies {
+                    // Nested replies
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(0..<min(comment.replyCount, 3), id: \.self) { index in
+                            HStack(alignment: .top, spacing: 12) {
+                                Circle()
+                                    .fill(AppTheme.Colors.primary.opacity(0.5))
+                                    .frame(width: 32, height: 32)
+                                    .overlay(
+                                        Text("R\(index + 1)")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundStyle(.white)
+                                    )
+                                
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("@user\(index + 1)")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                                    
+                                    Text("This is a sample reply to the comment...")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(AppTheme.Colors.textPrimary)
+                                        .lineLimit(2)
+                                }
+                                
+                                Spacer()
+                            }
+                            .padding(.leading, 56)
+                        }
+                        
+                        if comment.replyCount > 3 {
+                            Text("View all \(comment.replyCount) replies")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppTheme.Colors.primary)
+                                .padding(.leading, 56)
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+            }
+            
+            // Reply input field
+            if showingReplyInput {
+                HStack(spacing: 12) {
+                    Circle()
+                        .fill(AppTheme.Colors.primary)
+                        .frame(width: 32, height: 32)
+                        .overlay(
+                            Text("Y")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                        )
+                    
+                    HStack(spacing: 8) {
+                        TextField("Add a reply...", text: $replyText)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 14, weight: .medium))
+                        
+                        if !replyText.isEmpty {
+                            Button("Reply") {
+                                showingReplyInput = false
+                                replyText = ""
+                                HapticManager.shared.impact(style: .light)
+                            }
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(AppTheme.Colors.primary, in: Capsule())
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+                }
                 .padding(.leading, 56)
                 .padding(.top, 12)
             }

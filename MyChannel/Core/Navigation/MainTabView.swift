@@ -260,7 +260,7 @@ struct MainTabView: View {
                     notificationBadges: notificationBadges,
                     onUploadTap: {
                         if appState.requireAuthentication(hint: "Sign in to create content.") {
-                            showingCreatePicker = true
+                            showingUpload = true
                         }
                     },
                     onTabSelected: handleTabSelection
@@ -290,22 +290,10 @@ struct MainTabView: View {
             .ignoresSafeArea(.keyboard)
             .fullScreenCover(isPresented: $showingUpload) {
                 SafeUploadView()
+                    .environmentObject(appState)
             }
             .fullScreenCover(isPresented: $showingFlickUpload) {
                 FlickUploadSheet { _ in showingFlickUpload = false }
-            }
-            .sheet(isPresented: $showingGoLive) {
-                GoLivePlaceholderView()
-            }
-            .sheet(isPresented: $showingCreatePost) {
-                CreatePostPlaceholderView()
-            }
-            .confirmationDialog("Create", isPresented: $showingCreatePicker, titleVisibility: .visible) {
-                Button("Upload video") { showingUpload = true }
-                Button("Flick") { showingFlickUpload = true }
-                Button("Go live") { showingGoLive = true }
-                Button("Post") { showingCreatePost = true }
-                Button("Cancel", role: .cancel) {}
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PresentUploadEditorForVideo"))) { note in
                 if let video = note.object as? Video {
@@ -347,7 +335,7 @@ struct MainTabView: View {
                         isHidden: false,
                         onUploadTap: {
                             if appState.requireAuthentication(hint: "Sign in to create content.") {
-                                showingCreatePicker = true
+                                showingUpload = true
                             }
                         },
                         onTabSelected: handleTabSelection
@@ -365,22 +353,10 @@ struct MainTabView: View {
             .ignoresSafeArea(.keyboard)
             .fullScreenCover(isPresented: $showingUpload) {
                 SafeUploadView()
+                    .environmentObject(appState)
             }
             .fullScreenCover(isPresented: $showingFlickUpload) {
                 FlickUploadSheet { _ in showingFlickUpload = false }
-            }
-            .sheet(isPresented: $showingGoLive) {
-                GoLivePlaceholderView()
-            }
-            .sheet(isPresented: $showingCreatePost) {
-                CreatePostPlaceholderView()
-            }
-            .confirmationDialog("Create", isPresented: $showingCreatePicker, titleVisibility: .visible) {
-                Button("Upload video") { showingUpload = true }
-                Button("Flick") { showingFlickUpload = true }
-                Button("Go live") { showingGoLive = true }
-                Button("Post") { showingCreatePost = true }
-                Button("Cancel", role: .cancel) {}
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PresentUploadEditorForVideo"))) { note in
                 if let video = note.object as? Video {
@@ -566,7 +542,7 @@ struct SafeContentView: View {
             case .flicks:
                 // Embed Flicks inside the tab with embedded flag on
                 ErrorBoundary {
-                    NuclearFlicksView()
+                    FlicksView()
                 } fallback: {
                     if #available(iOS 17.0, *) {
                         return AnyView(

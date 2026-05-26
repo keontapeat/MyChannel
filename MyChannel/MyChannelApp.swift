@@ -68,6 +68,9 @@ struct MyChannelApp: App {
             // Validation in background
             Task { LiveTVChannel.validateAllChannelURLs() }
             #endif
+            
+            // 🔥 STRONGER: Warmup Flicks on app launch for instant playback
+            NuclearFlicksViewModel.warmupOnLaunch()
         }
         
         let initTime = Date().timeIntervalSince(initStartTime)
