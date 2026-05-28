@@ -179,6 +179,11 @@ struct RefereeDashboardView: View {
 struct DisputedMatchCard: View {
     let match: DisputedMatch
     
+    private func safeInt(_ value: Double, fallback: Int = 0) -> Int {
+        guard value.isFinite else { return fallback }
+        return Int(value.rounded())
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
@@ -212,8 +217,8 @@ struct DisputedMatchCard: View {
             
             // Info row
             HStack(spacing: 16) {
-                infoItem(icon: "dollarsign.circle.fill", text: "$\(Int(match.wagerAmount))")
-                infoItem(icon: "brain", text: "\(Int(match.aiConfidence * 100))%")
+                infoItem(icon: "dollarsign.circle.fill", text: "$\(safeInt(match.wagerAmount))")
+                infoItem(icon: "brain", text: "\(safeInt(match.aiConfidence * 100))%")
                 infoItem(icon: "clock.fill", text: match.timeAgo)
             }
             
@@ -303,6 +308,11 @@ struct MatchReviewSheet: View {
     @State private var showingPlayer1Video = true
     @State private var isSubmitting = false
     
+    private func safeInt(_ value: Double, fallback: Int = 0) -> Int {
+        guard value.isFinite else { return fallback }
+        return Int(value.rounded())
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -358,7 +368,7 @@ struct MatchReviewSheet: View {
             VStack(spacing: 12) {
                 infoRow(label: "Match ID", value: match.id.prefix(12).description)
                 infoRow(label: "Game", value: match.game)
-                infoRow(label: "Wager", value: "$\(Int(match.wagerAmount))")
+                infoRow(label: "Wager", value: "$\(safeInt(match.wagerAmount))")
                 infoRow(label: "Submitted", value: match.timeAgo)
                 infoRow(label: "Reason", value: match.disputeReason)
             }
@@ -499,7 +509,7 @@ struct MatchReviewSheet: View {
                 analysisRow(
                     icon: "checkmark.circle.fill",
                     label: "Overall Confidence",
-                    value: "\(Int(match.aiConfidence * 100))%",
+                    value: "\(safeInt(match.aiConfidence * 100))%",
                     color: confidenceColor
                 )
                 

@@ -61,7 +61,7 @@ struct FlicksView: View {
     @State private var savedVideoIds: Set<String> = UserDefaults.standard.stringArray(forKey: "saved_videos").map { Set($0) } ?? []
     @State private var showMoreOptions = false
     @State private var selectedMoreOptionsFlick: NuclearFlick?
-    @State private var selectedSound: MusicTrack?
+    @State private var selectedSound: FlickMusicTrack?
     @State private var showCreatorVideos = false
     @State private var showPlaylistPicker = false
     @State private var showSearchBar = false
@@ -845,12 +845,12 @@ struct FlicksView: View {
     
     private func notInterested(flick: NuclearFlick) {
         print("👎 [Flicks] Not interested in flick: \(flick.id)")
-        removeUnavailableFlick(id: flick.id)
+        viewModel.removeUnavailableFlick(id: flick.id)
         notificationFeedback.notificationOccurred(.warning)
         // TODO: Send to backend for recommendation tuning
     }
     
-    private func soundPage(sound: MusicTrack) -> some View {
+    private func soundPage(sound: FlickMusicTrack) -> some View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Header
@@ -1403,7 +1403,8 @@ struct FlickCreator: Identifiable, Hashable {
     let isVerified: Bool
 }
 
-struct FlickMusicTrack: Hashable {
+struct FlickMusicTrack: Identifiable, Hashable {
+    var id: String { "\(title)|\(artist)|\(albumArt)" }
     let title: String
     let artist: String
     let albumArt: String
@@ -1510,10 +1511,7 @@ struct NuclearVideoPlayerView: View {
             playerManager.player?.isMuted = muted
         }
         .onChange(of: playbackSpeed) { speed in
-            playerManager.player?.rate = speed
-        }
-        .onChange(of: savedVideoIds) { saved in
-            UserDefaults.standard.set(Array(saved), forKey: "saved_videos")
+            playerManager.player?.rate = Float(speed)
         }
         .onReceive(NotificationCenter.default.publisher(for: .pauseFlicksPlayback)) { _ in
             playerManager.pause()
@@ -1527,7 +1525,7 @@ struct NuclearVideoPlayerView: View {
         playerManager.setupPlayer(with: video)
         playerManager.setLooping(true)
         playerManager.player?.isMuted = isMuted
-        playerManager.player?.rate = playbackSpeed
+        playerManager.player?.rate = Float(playbackSpeed)
         
         if isActive {
             playerManager.play()
@@ -1724,7 +1722,7 @@ class NuclearFlicksViewModel: ObservableObject {
             let viewModel = NuclearFlicksViewModel()
             await viewModel.loadInitialFlicks()
             // Pre-warm player pool
-            PlayerPoolManager.shared.prewarmPool()
+            _ = PlayerPoolManager.shared.getPoolStats()
             print("✅ [NuclearFlicks] App-wide warmup complete")
         }
     }
@@ -1931,10 +1929,6 @@ class NuclearFlicksViewModel: ObservableObject {
     
     func openShare(flick: NuclearFlick) {
         shareFlick = flick
-    }
-    
-    func openMoreOptions(flick: NuclearFlick) {
-        selectedMoreOptionsFlick = flick
     }
     
     func removeUnavailableFlick(id: String) {

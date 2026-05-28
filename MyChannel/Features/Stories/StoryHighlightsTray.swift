@@ -16,7 +16,7 @@ struct StoryHighlightsTray: View {
                                 onSelect(highlight)
                             } label: {
                                 VStack(spacing: 8) {
-                                    AsyncImage(url: URL(string: highlight.coverImageURL)) { image in
+                                    CachedAsyncImage(url: URL(string: highlight.coverImageURL)) { image in
                                         image.resizable().aspectRatio(contentMode: .fill)
                                     } placeholder: {
                                         Circle().fill(AppTheme.Colors.surface)

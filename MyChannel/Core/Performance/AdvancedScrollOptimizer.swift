@@ -39,11 +39,22 @@ class AdvancedScrollOptimizer: ObservableObject {
         }
         
         let elapsed = displayLink.timestamp - lastFrameTime
+        guard elapsed.isFinite, elapsed > 0 else {
+            frameCount = 0
+            lastFrameTime = displayLink.timestamp
+            return
+        }
         frameCount += 1
         
         // Update FPS every second
         if elapsed >= 1.0 {
             let fps = Double(frameCount) / elapsed
+            guard fps.isFinite else {
+                currentFPS = 60.0
+                frameCount = 0
+                lastFrameTime = displayLink.timestamp
+                return
+            }
             currentFPS = fps
             
             // Track dropped frames (below 60fps)

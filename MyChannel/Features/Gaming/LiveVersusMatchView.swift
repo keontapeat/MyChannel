@@ -20,6 +20,11 @@ struct LiveVersusMatchView: View {
     )
     @State private var timeRemaining: TimeInterval = 0
     
+    private func safeInt(_ value: Double, fallback: Int = 0) -> Int {
+        guard value.isFinite else { return fallback }
+        return Int(value.rounded())
+    }
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -253,7 +258,7 @@ struct LiveVersusMatchView: View {
                 .font(.system(size: 16))
                 .foregroundColor(.secondary)
             
-            Text("$\(Int(match.wagerAmount * 2))")
+            Text("$\(safeInt(match.wagerAmount * 2))")
                 .font(.system(size: 48, weight: .black))
                 .foregroundStyle(
                     LinearGradient(
@@ -263,7 +268,7 @@ struct LiveVersusMatchView: View {
                     )
                 )
             
-            Text("Winner takes home $\(Int(match.wagerAmount * 2 * 0.9))")
+            Text("Winner takes home $\(safeInt(match.wagerAmount * 2 * 0.9))")
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
         }

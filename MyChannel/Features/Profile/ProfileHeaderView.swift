@@ -102,9 +102,6 @@ struct ProfileHeaderView: View {
                 Spacer()
 
                 ProfileAvatarView(urlString: user.profileImageURL, size: currentAvatarSize)
-                    .onChange(of: user.profileImageURL) { newURL in
-                        print("🔄 ProfileHeaderView: profileImageURL changed to: \(newURL ?? "nil")")
-                    }
                     .overlay(Circle().stroke(.white, lineWidth: 4))
                     .shadow(color: .black.opacity(0.5), radius: 14, x: 0, y: 6)
                     .transition(.scale.combined(with: .opacity))
@@ -426,20 +423,24 @@ private struct ProfileVideoBackground: View {
     }
 
     private func setupAndPlay() {
-        let item = AVPlayerItem(url: url)
-        player.actionAtItemEnd = .none
-        endObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: item,
-            queue: .main
-        ) { _ in
-            item.seek(to: .zero, completionHandler: nil)
+        guard !isInPreviews else { return }
+        // ⚡ PERF: Defer AVPlayer setup off the first frame to avoid blocking profile render
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [self] in
+            let item = AVPlayerItem(url: url)
+            player.actionAtItemEnd = .none
+            endObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: item,
+                queue: .main
+            ) { _ in
+                item.seek(to: .zero, completionHandler: nil)
+                player.play()
+            }
+            player.replaceCurrentItem(with: item)
+            player.isMuted = isMuted
             player.play()
+            isReady = true
         }
-        player.replaceCurrentItem(with: item)
-        player.isMuted = isMuted
-        player.play()
-        isReady = true
     }
 }
 
@@ -496,32 +497,16 @@ struct AnimatedStatItem: View {
         .onAppear {
             guard !hasAnimated else { return }
             hasAnimated = true
-            animateCount()
-        }
-        .onChange(of: targetValue) { newValue in
-            // Re-animate when value changes
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                displayedValue = newValue
+            // ⚡ PERF: Use single delayed animation instead of sleep loop
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                withAnimation(.easeOut(duration: animationDuration)) {
+                    displayedValue = targetValue
+                }
             }
         }
-    }
-    
-    private func animateCount() {
-        // 🔥 PREMIUM: Smooth count-up animation with easing
-        let steps = min(targetValue, 30) // Max 30 steps for performance
-        let stepDuration = animationDuration / Double(steps)
-        
-        Task { @MainActor in
-            for step in 0...steps {
-                let progress = Double(step) / Double(steps)
-                let easedProgress = 1 - pow(1 - progress, 3)
-                let newValue = Int(Double(targetValue) * easedProgress)
-                withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
-                    displayedValue = newValue
-                }
-                if step < steps {
-                    try? await Task.sleep(nanoseconds: UInt64(stepDuration * 1_000_000_000))
-                }
+        .onChange(of: targetValue) { newValue in
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                displayedValue = newValue
             }
         }
     }

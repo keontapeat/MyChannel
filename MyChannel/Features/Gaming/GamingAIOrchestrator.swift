@@ -68,6 +68,12 @@ final class GamingAIOrchestrator: ObservableObject {
         config.timeoutIntervalForResource = 60
         return URLSession(configuration: config)
     }()
+
+    /// Prevents runtime traps when converting telemetry values to Int for logs.
+    private func safeInt(_ value: Double, fallback: Int = 0) -> Int {
+        guard value.isFinite else { return fallback }
+        return Int(value.rounded())
+    }
     
     private init() {
         Task {
@@ -102,7 +108,7 @@ final class GamingAIOrchestrator: ObservableObject {
         latencyMs = Date().timeIntervalSince(startTime) * 1000
         isOnline = agentsActive == 7
         
-        print("✅ [GamingAI] \(agentsActive)/7 agents online in \(Int(latencyMs))ms")
+        print("✅ [GamingAI] \(agentsActive)/7 agents online in \(safeInt(latencyMs))ms")
     }
     
     // MARK: - 🌐 Cloud Function API Calls
@@ -201,7 +207,7 @@ final class GamingAIOrchestrator: ObservableObject {
         totalPredictions += 5
         let latency = Date().timeIntervalSince(startTime) * 1000
         
-        print("✅ [GamingAI] Match created in \(Int(latency))ms - Fairness: \(Int(fairnessResult.fairnessScore * 100))%")
+        print("✅ [GamingAI] Match created in \(safeInt(latency))ms - Fairness: \(safeInt(fairnessResult.fairnessScore * 100))%")
         
         return AIMatchCreationResult(
             fairnessScore: fairnessResult.fairnessScore,
@@ -324,7 +330,7 @@ final class GamingAIOrchestrator: ObservableObject {
         totalPredictions += 4
         let latency = Date().timeIntervalSince(startTime) * 1000
         
-        print("✅ [GamingAI] Verification complete in \(Int(latency))ms - Status: \(verificationStatus)")
+        print("✅ [GamingAI] Verification complete in \(safeInt(latency))ms - Status: \(verificationStatus)")
         
         return AIMatchVerificationResult(
             status: verificationStatus,
@@ -441,7 +447,7 @@ final class GamingAIOrchestrator: ObservableObject {
         ])
         #endif
 
-        print("✅ [GamingAI] Rankings refreshed in \(Int(latencyMs))ms — avg confidence: \(Int(avgConfidence * 100))%")
+        print("✅ [GamingAI] Rankings refreshed in \(safeInt(latencyMs))ms — avg confidence: \(safeInt(avgConfidence * 100))%")
         return AIRankingRefreshResult(
             sortedPlayerIds: sorted,
             skillMap: skills,
@@ -866,6 +872,15 @@ final class TournamentBracketAI: ObservableObject {
     ) async -> GeneratedBracket {
         bracketsGenerated += 1
         
+        guard players.count >= 2 else {
+            return GeneratedBracket(
+                rounds: players.isEmpty ? [] : [players],
+                seeds: Dictionary(uniqueKeysWithValues: players.enumerated().map { ($0.element, $0.offset + 1) }),
+                fairnessScore: 1.0,
+                estimatedDuration: 0
+            )
+        }
+        
         // Sort players by ELO rating for seeding
         let sortedPlayers = players.sorted { p1, p2 in
             (skills[p1]?.eloRating ?? 1000) > (skills[p2]?.eloRating ?? 1000)
@@ -907,7 +922,7 @@ final class TournamentBracketAI: ObservableObject {
             let p2Elo = skills[firstRound[i + 1]]?.eloRating ?? 1000
             totalEloDiff += abs(p1Elo - p2Elo)
         }
-        let avgEloDiff = totalEloDiff / Double(half)
+        let avgEloDiff = half > 0 ? totalEloDiff / Double(half) : 0
         let fairnessScore = max(0.5, 1.0 - (avgEloDiff / 500.0))
         
         // Estimate duration (30 min per match)

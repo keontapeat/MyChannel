@@ -324,6 +324,9 @@ class TournamentService: ObservableObject {
     
     private func generateBracketRounds(participants: [String], participantNames: [String]) -> [BracketRound] {
         let participantCount = participants.count
+        guard participantCount >= 2 else {
+            return []
+        }
         let numRounds = Int(ceil(log2(Double(participantCount))))
         
         var rounds: [BracketRound] = []

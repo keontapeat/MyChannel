@@ -18,6 +18,11 @@ struct ChampionshipHubView: View {
     @State private var aiRankingConfidence: Double = 0
     @State private var isAIRefreshing: Bool = false
     
+    private func safeInt(_ value: Double, fallback: Int = 0) -> Int {
+        guard value.isFinite else { return fallback }
+        return Int(value.rounded())
+    }
+    
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 28) {
@@ -323,7 +328,7 @@ struct ChampionshipHubView: View {
             // Confidence pill
             if aiRankingConfidence > 0 {
                 VStack(spacing: 2) {
-                    Text("\(Int(aiRankingConfidence * 100))%")
+                    Text("\(safeInt(aiRankingConfidence * 100))%")
                         .font(.system(size: 15, weight: .black))
                         .foregroundColor(Color(red:0.4,green:0.2,blue:1.0))
                     Text("conf.")
@@ -673,6 +678,11 @@ struct MedalCard: View {
 struct CompetitorRankingCard: View {
     let competitor: ChampionshipBeltSystem.RankedCompetitor
     let division: ChampionshipBeltSystem.ChampionshipDivision
+    
+    private func safeInt(_ value: Double, fallback: Int = 0) -> Int {
+        guard value.isFinite else { return fallback }
+        return Int(value.rounded())
+    }
 
     private var rankColor: Color {
         switch competitor.rank {
@@ -731,7 +741,7 @@ struct CompetitorRankingCard: View {
                         .foregroundColor(AppTheme.Colors.textSecondary)
                     Text("·")
                         .foregroundColor(AppTheme.Colors.textSecondary)
-                    Text("\(Int(competitor.winRate))%")
+                    Text("\(safeInt(competitor.winRate))%")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                     if competitor.winStreak > 1 {

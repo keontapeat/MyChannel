@@ -1,22 +1,17 @@
 import SwiftUI
 
-enum CommentSortOption: String, CaseIterable {
-    case top = "Top"
-    case newest = "Newest"
-}
-
 struct ProfessionalCommentsSheet: View {
     let video: Video
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
     @State private var newComment = ""
     @State private var comments: [VideoComment] = []
-    @State private var sortOption: CommentSortOption = .top
+    @State private var sortOption: CommentSortOption = .topComments
     @FocusState private var isTextFieldFocused: Bool
     
     var sortedComments: [VideoComment] {
         switch sortOption {
-        case .top:
+        case .topComments:
             return comments.sorted { $0.likeCount > $1.likeCount }
         case .newest:
             return comments.sorted { $0.createdAt > $1.createdAt }
@@ -47,7 +42,7 @@ struct ProfessionalCommentsSheet: View {
                     // Sort picker
                     Picker("Sort", selection: $sortOption) {
                         ForEach(CommentSortOption.allCases, id: \.self) { option in
-                            Text(option.rawValue).tag(option)
+                            Text(option.pickerLabel).tag(option)
                         }
                     }
                     .pickerStyle(.segmented)

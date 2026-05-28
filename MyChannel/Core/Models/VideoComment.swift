@@ -84,6 +84,14 @@ enum CommentSortOption: String, CaseIterable {
         case .newest: return "Newest first"
         }
     }
+
+    /// Short label for compact pickers (e.g. segmented control).
+    var pickerLabel: String {
+        switch self {
+        case .topComments: return "Top"
+        case .newest: return "Newest"
+        }
+    }
 }
 
 // MARK: - Comments Manager

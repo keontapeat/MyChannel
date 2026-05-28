@@ -40,6 +40,15 @@ final class LiveTVIntelligenceAgent: ObservableObject {
     private let vertexAI = VertexAIService.shared
     private var cancellables = Set<AnyCancellable>()
     
+    private func safeInt(_ value: Double, fallback: Int = 0) -> Int {
+        guard value.isFinite else { return fallback }
+        return Int(value.rounded())
+    }
+    
+    private func finite(_ value: Double, fallback: Double = 0) -> Double {
+        value.isFinite ? value : fallback
+    }
+    
     private init() {
         setupModels()
     }
@@ -136,9 +145,9 @@ final class LiveTVIntelligenceAgent: ObservableObject {
         // Update metrics
         let predictionTime = Date().timeIntervalSince(startTime)
         predictionCount += 1
-        avgPredictionTime = (avgPredictionTime * Double(predictionCount - 1) + predictionTime) / Double(predictionCount)
+        avgPredictionTime = (finite(avgPredictionTime) * Double(predictionCount - 1) + finite(predictionTime)) / Double(predictionCount)
         
-        print("🎯 [LiveTV-AI] Generated \(recommendations.count) recommendations in \(Int(predictionTime * 1000))ms")
+        print("🎯 [LiveTV-AI] Generated \(recommendations.count) recommendations in \(safeInt(predictionTime * 1000))ms")
         
         return recommendations
     }
@@ -182,7 +191,7 @@ final class LiveTVIntelligenceAgent: ObservableObject {
             let engagementSpike = calculateEngagementSpike(channel: channel)
             let contentFreshness = calculateContentFreshness(channel: channel)
             
-            let trendingScore = (viewerGrowth * 0.35) + (socialBuzz * 0.25) + (engagementSpike * 0.25) + (contentFreshness * 0.15)
+                let trendingScore = finite((viewerGrowth * 0.35) + (socialBuzz * 0.25) + (engagementSpike * 0.25) + (contentFreshness * 0.15))
             
             if trendingScore > 0.5 {
                 trending.append(TrendingChannel(
@@ -349,11 +358,12 @@ final class LiveTVIntelligenceAgent: ObservableObject {
         watchDuration: TimeInterval,
         completed: Bool
     ) {
+        let safeWatchDuration = watchDuration.isFinite ? max(0, watchDuration) : 0
         let event = LiveTVWatchEvent(
             userId: userId,
             channelId: channel.id,
             category: channel.category,
-            watchDuration: watchDuration,
+            watchDuration: safeWatchDuration,
             completed: completed,
             timestamp: Date(),
             timeOfDay: Calendar.current.component(.hour, from: Date()),
@@ -363,7 +373,9 @@ final class LiveTVIntelligenceAgent: ObservableObject {
         userWatchHistory.append(event)
         
         // Update trending scores
-        trendingScores[channel.id, default: 0] += watchDuration / 60 // Add minutes watched
+        if safeWatchDuration > 0 {
+            trendingScores[channel.id, default: 0] += safeWatchDuration / 60 // Add minutes watched
+        }
         
         // Trigger model update if enough new data
         if userWatchHistory.count % 50 == 0 {
@@ -372,7 +384,7 @@ final class LiveTVIntelligenceAgent: ObservableObject {
             }
         }
         
-        print("📊 [LiveTV-AI] Recorded watch event: \(channel.name) for \(Int(watchDuration))s")
+        print("📊 [LiveTV-AI] Recorded watch event: \(channel.name) for \(safeInt(safeWatchDuration))s")
     }
     
     // MARK: - Private Helper Methods

@@ -104,18 +104,58 @@ final class FeaturedStore: ObservableObject {
         for videoId in videoIds {
             do {
                 let videoDoc = try await db.collection("videos").document(videoId).getDocument()
-                if let video = try? videoDoc.data(as: Video.self) {
-                    let titleLower = video.title.lowercased()
-                    let hasBlockedTitle = blockedTitleSubstrings.contains { titleLower.contains($0) }
-                    
-                    // Filter only by explicit bad-title list
-                    let shouldExclude = hasBlockedTitle
-                    
-                    if shouldExclude {
-                        print("🚫 [FeaturedStore] Filtering out: '\(video.title)' by '\(video.creator.displayName)'")
-                    } else {
-                        loadedVideos.append(StoredFeatured(from: video))
-                    }
+                guard let d = videoDoc.data() else { continue }
+                
+                // Manually parse — Codable fails because Firestore stores flat creator fields, not a nested User object
+                let title = d["title"] as? String ?? ""
+                let description = d["description"] as? String ?? ""
+                let thumbnailURL = (d["thumbnailURL"] as? String) ?? (d["thumbnailUrl"] as? String) ?? ""
+                let videoURL = (d["videoURL"] as? String) ?? (d["videoUrl"] as? String) ?? ""
+                let duration = (d["duration"] as? Double) ?? 0
+                let viewCount = (d["viewCount"] as? Int) ?? 0
+                let likeCount = (d["likeCount"] as? Int) ?? 0
+                let categoryRaw = d["category"] as? String ?? ""
+                let tags = (d["tags"] as? [String]) ?? []
+                let isPublic = (d["isPublic"] as? Bool) ?? true
+                
+                let creatorId = (d["creatorId"] as? String) ?? (d["userId"] as? String) ?? ""
+                let creatorName = (d["creatorDisplayName"] as? String) ?? (d["creatorName"] as? String) ?? "Unknown"
+                let creatorUsername = (d["creatorUsername"] as? String) ?? "unknown"
+                let creatorAvatar = (d["creatorProfileImage"] as? String) ?? (d["creatorAvatarURL"] as? String) ?? ""
+                let creatorVerified = (d["creatorVerified"] as? Bool) ?? false
+                
+                let creator = User(
+                    id: creatorId,
+                    username: creatorUsername,
+                    displayName: creatorName,
+                    email: "",
+                    profileImageURL: creatorAvatar,
+                    isVerified: creatorVerified,
+                    isCreator: true
+                )
+                
+                let video = Video(
+                    id: videoDoc.documentID,
+                    title: title,
+                    description: description,
+                    thumbnailURL: thumbnailURL,
+                    videoURL: videoURL,
+                    duration: duration,
+                    viewCount: viewCount,
+                    likeCount: likeCount,
+                    creator: creator,
+                    category: VideoCategory(rawValue: categoryRaw) ?? .other,
+                    tags: tags,
+                    isPublic: isPublic
+                )
+                
+                let titleLower = video.title.lowercased()
+                let hasBlockedTitle = blockedTitleSubstrings.contains { titleLower.contains($0) }
+                
+                if hasBlockedTitle {
+                    print("🚫 [FeaturedStore] Filtering out: '\(video.title)' by '\(video.creator.displayName)'")
+                } else {
+                    loadedVideos.append(StoredFeatured(from: video))
                 }
             } catch {
                 print("❌ Error loading video \(videoId): \(error)")

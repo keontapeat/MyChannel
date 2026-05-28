@@ -368,14 +368,16 @@ struct PerformanceScoreCard: View {
         var score = 100
         
         // FPS penalty
-        if fps < 60 { score -= Int((60 - fps) * 2) }
+        let fpsPenalty = (60 - fps) * 2
+        if fps < 60, fpsPenalty.isFinite { score -= Int(fpsPenalty) }
         
         // Memory penalty
         let memoryMB = memory / 1_000_000
         if memoryMB > 200 { score -= Int((memoryMB - 200) / 10) }
         
         // Cache penalty
-        if cacheHitRate < 0.8 { score -= Int((0.8 - cacheHitRate) * 50) }
+        let cachePenalty = (0.8 - cacheHitRate) * 50
+        if cacheHitRate < 0.8, cachePenalty.isFinite { score -= Int(cachePenalty) }
         
         return max(0, min(100, score))
     }

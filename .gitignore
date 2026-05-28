@@ -1,5 +1,7 @@
 # Xcode
 DerivedData/
+.build/
+derivedData-*/
 build/
 *.xcuserdatad/
 *.xcuserdata/

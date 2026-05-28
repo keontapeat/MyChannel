@@ -28,6 +28,11 @@ final class MatchVerificationService: ObservableObject {
     private let autoApproveConfidenceThreshold = 0.9 // 90%
     private let submissionWindowHours = 24.0
     
+    private func safeInt(_ value: Double, fallback: Int = 0) -> Int {
+        guard value.isFinite else { return fallback }
+        return Int(value.rounded())
+    }
+    
     private init() {
         print("✅ [MatchVerification] Service initialized")
     }
@@ -128,8 +133,8 @@ final class MatchVerificationService: ObservableObject {
         let submission2 = submissions[1]
         
         print("📊 [MatchVerification] Comparing submissions:")
-        print("   Player 1: Score \(submission1.selfReportedScore), AI: \(submission1.aiAnalysis.extractedScore ?? -1), Confidence: \(Int(submission1.aiAnalysis.confidence * 100))%")
-        print("   Player 2: Score \(submission2.selfReportedScore), AI: \(submission2.aiAnalysis.extractedScore ?? -1), Confidence: \(Int(submission2.aiAnalysis.confidence * 100))%")
+        print("   Player 1: Score \(submission1.selfReportedScore), AI: \(submission1.aiAnalysis.extractedScore ?? -1), Confidence: \(safeInt(submission1.aiAnalysis.confidence * 100))%")
+        print("   Player 2: Score \(submission2.selfReportedScore), AI: \(submission2.aiAnalysis.extractedScore ?? -1), Confidence: \(safeInt(submission2.aiAnalysis.confidence * 100))%")
         
         // Step 2: Check if can auto-approve
         let canAutoApprove = self.canAutoApprove(

@@ -80,6 +80,7 @@ struct ProfileView: View {
     @State private var aiChurnRisk: Double? = nil
     @State private var aiRetentionActions: [String] = []
     @State private var aiCreatorInsights: [String] = []
+    @State private var aiInsightsTask: Task<Void, Never>? = nil
     
     // Premium & Downloads Navigation
     @State private var showingDownloads = false
@@ -170,6 +171,7 @@ struct ProfileView: View {
                     // 🔥 FIX: Cancel in-flight tasks when leaving profile
                     loadTask?.cancel()
                     historyTask?.cancel()
+                    aiInsightsTask?.cancel()
                     print("🎥 [ProfileView] Profile page disappeared — tasks cancelled")
                 }
             )
@@ -498,7 +500,8 @@ struct ProfileView: View {
                         .padding(.bottom, 16)
                         
                         // Feature Cards (YouTube-style: clean, minimal, no emojis, neutral colors)
-                        VStack(spacing: 12) {
+                        // ⚡ PERF: LazyVStack defers init of off-screen NavigationLink destinations
+                        LazyVStack(spacing: 12) {
                             // 1. MyChannel University
                             YouTubeStyleFeatureCard(
                                 icon: "graduationcap.fill",
@@ -522,16 +525,6 @@ struct ProfileView: View {
                                 subtitle: "Medals, rankings & VS matches",
                                 destination: ChampionshipHubView()
                             )
-                            
-                            // 4. Thumbnail Creator - HIDDEN (can be re-enabled later)
-                            /*
-                            YouTubeStyleFeatureCard(
-                                icon: "photo.on.rectangle.angled",
-                                title: "Thumbnail Creator",
-                                subtitle: "AI-powered thumbnails",
-                                destination: ThumbnailCreatorView()
-                            )
-                            */
                             
                             // 5. Live Shopping
                             YouTubeStyleFeatureCard(
@@ -620,9 +613,6 @@ struct ProfileView: View {
                         )
                     )
                 )
-        }
-        .sheet(item: $selectedHighlight) { highlight in
-            StoryHighlightViewer(highlight: highlight)
         }
         .fullScreenCover(isPresented: $showingDownloads) {
             NavigationStack {
@@ -748,6 +738,7 @@ struct ProfileView: View {
         // 🔥 FIX: Cancel any in-flight load to prevent race conditions
         loadTask?.cancel()
         historyTask?.cancel()
+        aiInsightsTask?.cancel()
         
         // 🔥 FIX: Always reset error state on reload so error view clears
         hasError = false
@@ -891,9 +882,14 @@ struct ProfileView: View {
             if isViewingOwnProfile {
                 let snapshotUser = user
                 let snapshotVideos = userVideos
-                Task {
+                aiInsightsTask?.cancel()
+                aiInsightsTask = Task {
                     guard !Task.isCancelled else { return }
-                    await loadProfileAIInsights(userId: creatorId, snapshotUser: snapshotUser, snapshotVideos: snapshotVideos)
+                    await loadProfileAIInsights(
+                        userId: creatorId,
+                        snapshotUser: snapshotUser,
+                        snapshotVideos: snapshotVideos
+                    )
                 }
             }
         }
@@ -932,8 +928,11 @@ struct ProfileView: View {
                 category: topVideo.category.rawValue,
                 isShorts: topVideo.duration < 60
             ) {
-                aiViralScore = result.viral_probability
-                print("🤖 [ProfileAI] Viral score for \(topVideo.title): \(Int(result.viral_probability * 100))%")
+                await MainActor.run {
+                    aiViralScore = result.viral_probability
+                }
+                let safeViralPct = result.viral_probability.isFinite ? Int(result.viral_probability * 100) : 0
+                print("🤖 [ProfileAI] Viral score for \(topVideo.title): \(safeViralPct)%")
             }
         }
 
@@ -953,9 +952,12 @@ struct ProfileView: View {
             videosLast30Days: max(snapshotUser.videoCount, 1),
             isPremium: isPremium
         ) {
-            aiChurnRisk = result.churn_probability
-            aiRetentionActions = result.retention_actions
-            print("🤖 [ProfileAI] Churn risk: \(result.risk_level) (\(Int(result.churn_probability * 100))%)")
+            await MainActor.run {
+                aiChurnRisk = result.churn_probability
+                aiRetentionActions = result.retention_actions
+            }
+            let safeChurnPct = result.churn_probability.isFinite ? Int(result.churn_probability * 100) : 0
+            print("🤖 [ProfileAI] Churn risk: \(result.risk_level) (\(safeChurnPct)%)")
         }
 
         // 3. Creator analytics agent
@@ -963,7 +965,9 @@ struct ProfileView: View {
             creatorId: userId,
             timeRange: "30d"
         ) {
-            aiCreatorInsights = result.insights
+            await MainActor.run {
+                aiCreatorInsights = result.insights
+            }
             print("🤖 [ProfileAI] Creator insights loaded: \(result.insights.count) tips")
         }
     }
@@ -1000,6 +1004,7 @@ struct ProfileView: View {
             loadTask?.cancel()
             historyTask?.cancel()
             userChangeTask?.cancel()
+            aiInsightsTask?.cancel()
             user = User.defaultUser
             userVideos = []
             watchHistory = []
@@ -1017,6 +1022,7 @@ struct ProfileView: View {
         loadTask?.cancel()
         historyTask?.cancel()
         userChangeTask?.cancel()
+        aiInsightsTask?.cancel()
         
         userChangeTask = Task { @MainActor in
             // Small yield so any second fire in the same runloop cancels this before we start
@@ -1571,7 +1577,6 @@ private extension View {
         self
             .onAppear {
                 onAppearAction()
-                print("🎥 [ProfileView] Profile page appeared")
             }
             .onDisappear {
                 onDisappearAction()

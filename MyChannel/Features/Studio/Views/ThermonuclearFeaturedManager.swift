@@ -463,12 +463,61 @@ struct ThermonuclearFeaturedManager: View {
             
             let snapshot = try await query.getDocuments()
             allVideos = snapshot.documents.compactMap { doc in
-                try? doc.data(as: Video.self)
+                try? loadVideoFromDocument(doc)
             }
         } catch {
             print("❌ Error loading videos: \(error)")
         }
         #endif
+    }
+    
+    private func loadVideoFromDocument(_ doc: DocumentSnapshot) throws -> Video {
+        guard let d = doc.data() else {
+            throw NSError(domain: "FeaturedManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No data"])
+        }
+        
+        // Manually parse — Codable fails because Firestore stores flat creator fields, not a nested User object
+        let title = d["title"] as? String ?? ""
+        let description = d["description"] as? String ?? ""
+        let thumbnailURL = (d["thumbnailURL"] as? String) ?? (d["thumbnailUrl"] as? String) ?? ""
+        let videoURL = (d["videoURL"] as? String) ?? (d["videoUrl"] as? String) ?? ""
+        let duration = (d["duration"] as? Double) ?? 0
+        let viewCount = (d["viewCount"] as? Int) ?? 0
+        let likeCount = (d["likeCount"] as? Int) ?? 0
+        let categoryRaw = d["category"] as? String ?? ""
+        let tags = (d["tags"] as? [String]) ?? []
+        let isPublic = (d["isPublic"] as? Bool) ?? true
+        
+        let creatorId = (d["creatorId"] as? String) ?? (d["userId"] as? String) ?? ""
+        let creatorName = (d["creatorDisplayName"] as? String) ?? (d["creatorName"] as? String) ?? "Unknown"
+        let creatorUsername = (d["creatorUsername"] as? String) ?? "unknown"
+        let creatorAvatar = (d["creatorProfileImage"] as? String) ?? (d["creatorAvatarURL"] as? String) ?? ""
+        let creatorVerified = (d["creatorVerified"] as? Bool) ?? false
+        
+        let creator = User(
+            id: creatorId,
+            username: creatorUsername,
+            displayName: creatorName,
+            email: "",
+            profileImageURL: creatorAvatar,
+            isVerified: creatorVerified,
+            isCreator: true
+        )
+        
+        return Video(
+            id: doc.documentID,
+            title: title,
+            description: description,
+            thumbnailURL: thumbnailURL,
+            videoURL: videoURL,
+            duration: duration,
+            viewCount: viewCount,
+            likeCount: likeCount,
+            creator: creator,
+            category: VideoCategory(rawValue: categoryRaw) ?? .other,
+            tags: tags,
+            isPublic: isPublic
+        )
     }
     
     private func addVideo(_ video: Video) async {
@@ -1042,7 +1091,50 @@ class FeaturedManager: ObservableObject {
         #if canImport(FirebaseFirestore)
         let db = Firestore.firestore()
         let doc = try await db.collection("videos").document(videoId).getDocument()
-        return try? doc.data(as: Video.self)
+        guard let d = doc.data() else { return nil }
+        
+        // Manually parse — Codable fails because Firestore stores flat creator fields, not a nested User object
+        let title = d["title"] as? String ?? ""
+        let description = d["description"] as? String ?? ""
+        let thumbnailURL = (d["thumbnailURL"] as? String) ?? (d["thumbnailUrl"] as? String) ?? ""
+        let videoURL = (d["videoURL"] as? String) ?? (d["videoUrl"] as? String) ?? ""
+        let duration = (d["duration"] as? Double) ?? 0
+        let viewCount = (d["viewCount"] as? Int) ?? 0
+        let likeCount = (d["likeCount"] as? Int) ?? 0
+        let categoryRaw = d["category"] as? String ?? ""
+        let tags = (d["tags"] as? [String]) ?? []
+        let isPublic = (d["isPublic"] as? Bool) ?? true
+        
+        let creatorId = (d["creatorId"] as? String) ?? (d["userId"] as? String) ?? ""
+        let creatorName = (d["creatorDisplayName"] as? String) ?? (d["creatorName"] as? String) ?? "Unknown"
+        let creatorUsername = (d["creatorUsername"] as? String) ?? "unknown"
+        let creatorAvatar = (d["creatorProfileImage"] as? String) ?? (d["creatorAvatarURL"] as? String) ?? ""
+        let creatorVerified = (d["creatorVerified"] as? Bool) ?? false
+        
+        let creator = User(
+            id: creatorId,
+            username: creatorUsername,
+            displayName: creatorName,
+            email: "",
+            profileImageURL: creatorAvatar,
+            isVerified: creatorVerified,
+            isCreator: true
+        )
+        
+        return Video(
+            id: doc.documentID,
+            title: title,
+            description: description,
+            thumbnailURL: thumbnailURL,
+            videoURL: videoURL,
+            duration: duration,
+            viewCount: viewCount,
+            likeCount: likeCount,
+            creator: creator,
+            category: VideoCategory(rawValue: categoryRaw) ?? .other,
+            tags: tags,
+            isPublic: isPublic
+        )
         #else
         return nil
         #endif

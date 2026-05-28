@@ -24,6 +24,11 @@ final class GameplayVideoAnalysisService: ObservableObject {
     private let apiKey = AppSecrets.googleCloudAPIKey
     private let visionAPIEndpoint = "https://vision.googleapis.com/v1"
     
+    private func safeInt(_ value: Double, fallback: Int = 0) -> Int {
+        guard value.isFinite else { return fallback }
+        return Int(value.rounded())
+    }
+    
     private init() {
         print("✅ [VideoAnalysis] Service initialized")
     }
@@ -79,7 +84,7 @@ final class GameplayVideoAnalysisService: ObservableObject {
         print("✅ [VideoAnalysis] Analysis complete!")
         print("   Player 1: \(extractedScores.player1Score ?? -1)")
         print("   Player 2: \(extractedScores.player2Score ?? -1)")
-        print("   Confidence: \(Int(confidence * 100))%")
+        print("   Confidence: \(safeInt(confidence * 100))%")
         
         return result
     }

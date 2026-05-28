@@ -749,22 +749,48 @@ struct MediaGridPickerView: View {
         let opts = PHVideoRequestOptions()
         opts.deliveryMode = .highQualityFormat
         opts.isNetworkAccessAllowed = true
+        opts.version = .current
         
-        PHImageManager.default().requestAVAsset(forVideo: asset, options: opts) { avAsset, _, _ in
-            guard let avAsset = avAsset else { return }
-            if let urlAsset = avAsset as? AVURLAsset {
-                Task { @MainActor in onPick(urlAsset.url) }
+        PHImageManager.default().requestAVAsset(forVideo: asset, options: opts) { avAsset, _, info in
+            guard let avAsset = avAsset else {
+                let errorDesc = (info?[PHImageErrorKey] as? Error)?.localizedDescription ?? "Unknown error"
+                print("❌ [MediaGridPicker] Failed to load video asset: \(errorDesc)")
                 return
             }
-            let export = AVAssetExportSession(asset: avAsset, presetName: AVAssetExportPresetHighestQuality)
+            if let urlAsset = avAsset as? AVURLAsset {
+                // Copy to temp to avoid sandbox issues with Photos library URLs
+                let tempURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("picked-\(UUID().uuidString).mp4")
+                do {
+                    try FileManager.default.copyItem(at: urlAsset.url, to: tempURL)
+                    Task { @MainActor in onPick(tempURL) }
+                } catch {
+                    // Fallback: use original URL if copy fails
+                    print("⚠️ [MediaGridPicker] Copy failed, using original URL: \(error.localizedDescription)")
+                    Task { @MainActor in onPick(urlAsset.url) }
+                }
+                return
+            }
+            // Non-URL asset (slow-mo, composition, etc.) — export to temp file
+            guard let export = AVAssetExportSession(asset: avAsset, presetName: AVAssetExportPresetHighestQuality) else {
+                print("❌ [MediaGridPicker] Cannot create export session")
+                return
+            }
             let tempURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent("picked-\(UUID().uuidString).mp4")
-            export?.outputURL = tempURL
-            export?.outputFileType = .mp4
-            export?.exportAsynchronously {
+            export.outputURL = tempURL
+            export.outputFileType = .mp4
+            export.exportAsynchronously {
                 Task { @MainActor in
-                    if export?.status == .completed {
+                    switch export.status {
+                    case .completed:
                         onPick(tempURL)
+                    case .failed:
+                        print("❌ [MediaGridPicker] Export failed: \(export.error?.localizedDescription ?? "Unknown")")
+                    case .cancelled:
+                        print("⚠️ [MediaGridPicker] Export cancelled")
+                    default:
+                        break
                     }
                 }
             }
@@ -1122,11 +1148,16 @@ private struct VideoPreviewSheet: View {
             let vopts = PHVideoRequestOptions()
             vopts.deliveryMode = .highQualityFormat
             vopts.isNetworkAccessAllowed = true
+            vopts.version = .current
             PHImageManager.default().requestAVAsset(forVideo: asset, options: vopts) { avAsset, _, _ in
                 if let avAsset = avAsset {
                     Task { @MainActor in
                         if let urlAsset = avAsset as? AVURLAsset {
                             player = AVPlayer(url: urlAsset.url)
+                        } else {
+                            // Non-URL asset (slow-mo, etc.) — create player from composition
+                            let playerItem = AVPlayerItem(asset: avAsset)
+                            player = AVPlayer(playerItem: playerItem)
                         }
                     }
                 }
