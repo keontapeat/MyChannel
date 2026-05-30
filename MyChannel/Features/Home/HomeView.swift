@@ -4,106 +4,28 @@ import Combine
 import FirebaseFirestore
 #endif
 
-// MARK: - Preview-safe onReceive helper
-struct ConditionalOnReceiveModifier<P: Publisher>: ViewModifier where P.Failure == Never {
-    let publisher: P?
-    let action: (P.Output) -> Void
 
-    func body(content: Content) -> some View {
-        if let publisher {
-            content.onReceive(publisher, perform: action)
-        } else {
-            content
-        }
-    }
-}
-
-enum FeaturedItem: Identifiable, Equatable {
-    case video(Video)
-    case friend(AssetStory)
-
-    var id: String {
-        switch self {
-        case .video(let v): return "video-\(v.id)"
-        case .friend(let s): return "friend-\(s.id)"
-        }
-    }
-
-    static func == (lhs: FeaturedItem, rhs: FeaturedItem) -> Bool {
-        lhs.id == rhs.id
-    }
-}
-
-// MARK: - Centralized Full Screen Routing
-enum FullScreenRoute: Identifiable {
-    case video(Video)
-    case movie(FreeMovie)
-    case search
-    case stories(AssetStory)
-    case allMovies
-    case allLiveTV
-    case trending
-    case artistDetail(name: String, avatar: String, videos: [Video], totalViews: Int)
-    case artistMusicProfile(CatalogArtist)
-    case filmmakerDetail(name: String, films: [FreeMovie])
-    case channelDetail(name: String, avatar: String, subscribers: Int, totalViews: Int, videos: [Video])
-    case publicProfile(User)
-    case liveStream(FirestoreLiveStream)
-    case custom(String)
-
-    var id: String {
-        switch self {
-        case .video(let v): return "video-\(v.id)"
-        case .movie(let m): return "movie-\(m.id)"
-        case .search: return "search"
-        case .stories(let s): return "stories-\(s.id)"
-        case .allMovies: return "allMovies"
-        case .allLiveTV: return "allLiveTV"
-        case .trending: return "trending"
-        case .artistDetail(let name, _, _, _): return "artist-\(name)"
-        case .artistMusicProfile(let a): return "artistMusic-\(a.id)"
-        case .filmmakerDetail(let name, _): return "filmmaker-\(name)"
-        case .channelDetail(let name, _, _, _, _): return "channel-\(name)"
-        case .publicProfile(let user): return "profile-\(user.id)"
-        case .liveStream(let s): return "live-\(s.id)"
-        case .custom(let id): return id
-        }
-    }
-}
 
 // MARK: - HomeView
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState
     @ObservedObject private var featuredStore = FeaturedStore.shared
     private let globalPlayer = GlobalVideoPlayerManager.shared
-    @State private var miniActive = false
+    @StateObject private var viewModel = HomeViewModel()
 
-    @State private var scrollOffset: CGFloat = 0
-    @State private var isRefreshing: Bool = false
 
     // Route-driven presentation (fixes white screen when dismissing covers)
-    @State private var route: FullScreenRoute? = nil
     
     // Quick profile menu
-    @State private var showingQuickProfile = false
-    @State private var showingSettings = false
-    @State private var showingSwitchProfile = false
     
     // 🔥 Thermonuclear Featured Manager
-    @State private var showingFeaturedManager = false
 
-    @State private var featuredContent: [Video] = []
-    @State private var heroVideoIndex: Int = 0
-    @State private var showingStories: Bool = true
-    @State private var assetStories: [AssetStory] = []  // One per user (for bubble row)
-    @State private var allAssetStories: [AssetStory] = []  // All stories (for pager)
     @Namespace private var storiesNS
 
     // 🔥 YOUTUBE PARITY: Home filter chips
-    @State private var selectedHomeChip: HomeFilterChip = .all
 
     private var activeStoriesHeroId: String? {
-        if case let .stories(story) = route { return story.id }
+        if case let .stories(story) = viewModel.route { return story.id }
         return nil
     }
 
@@ -135,16 +57,16 @@ struct HomeView: View {
 
                         // 🔥 YOUTUBE PARITY: Filter chips bar
                         HomeFilterChipsBar(
-                            selected: $selectedHomeChip,
+                            selected: $viewModel.selectedHomeChip,
                             onChipTap: { chip in handleHomeChipTap(chip) }
                         )
                         .padding(.bottom, 8)
 
-                        if showingStories && (!assetStories.isEmpty || appState.isAuthenticated) {
+                        if viewModel.showingStories && (!viewModel.assetStories.isEmpty || appState.isAuthenticated) {
                             AssetBouncyStoriesRow(
-                                stories: assetStories,
+                                stories: viewModel.assetStories,
                                 onStoryTap: { story in
-                                    route = .stories(story)
+                                    viewModel.route = .stories(story)
                                 },
                                 onAddStory: {
                                     HapticManager.shared.impact(style: .medium)
@@ -158,12 +80,14 @@ struct HomeView: View {
                         }
 
                         MinimalHeroSection(
-                            featuredContent: featuredContent,
-                            selectedIndex: $heroVideoIndex,
+                            featuredContent: viewModel.featuredContent,
                             showLiveHeroPreviewInPreviews: true,
                             onPlayVideo: openVideo,
                             onAddToList: toggleWatchLater
                         )
+                        .offset(y: viewModel.scrollOffset < 0 ? -viewModel.scrollOffset * 0.25 : 0)
+                        .scaleEffect(viewModel.scrollOffset < 0 ? max(0.92, 1.0 + (viewModel.scrollOffset / 2500)) : 1.0)
+                        .opacity(viewModel.scrollOffset < 0 ? max(0.4, 1.0 + (viewModel.scrollOffset / 800)) : 1.0)
                         .padding(.bottom, 40)
 
                         // 🔥 AI-POWERED RECOMMENDATIONS (NEW!)
@@ -174,31 +98,34 @@ struct HomeView: View {
                         
                         MinimalContentSections(
                             onPlayVideo: { video in openVideo(video) },
-                            onSelectMovie: { movie in route = .movie(movie) },
-                            onSeeAllFreeMovies: { _ in route = .allMovies },
-                            onSeeAllLiveTV: { route = .allLiveTV },
-                            onSeeAllTrending: { route = .trending },
-                            onSeeAllMusic: { route = .custom("musicHub") },
-                            onSeeAllExplore: { route = .custom("exploreHub") },
-                            onSeeAllArtists: { route = .custom("topArtists") },
-                            onSeeAllFilmmakers: { route = .custom("topFilmmakers") },
-                            onSeeAllChannels: { route = .custom("topChannels") },
+                            onSelectMovie: { movie in viewModel.route = .movie(movie) },
+                            onSeeAllFreeMovies: { _ in viewModel.route = .allMovies },
+                            onSeeAllLiveTV: { viewModel.route = .allLiveTV },
+                            onSeeAllTrending: { viewModel.route = .trending },
+                            onSeeAllMusic: { viewModel.route = .custom("musicHub") },
+                            onSeeAllExplore: { viewModel.route = .custom("exploreHub") },
+                            onSeeAllArtists: { viewModel.route = .custom("topArtists") },
+                            onSeeAllFilmmakers: { viewModel.route = .custom("topFilmmakers") },
+                            onSeeAllChannels: { viewModel.route = .custom("topChannels") },
                             onOpenArtistDetail: { name, avatar, vids, total in
-                                route = .artistDetail(name: name, avatar: avatar, videos: vids, totalViews: total)
+                                viewModel.route = .artistDetail(name: name, avatar: avatar, videos: vids, totalViews: total)
                             },
                             onOpenArtistMusicProfile: { artist in
-                                route = .artistMusicProfile(artist)
+                                viewModel.route = .artistMusicProfile(artist)
                             },
                             onOpenFilmmakerDetail: { name, films in
-                                route = .filmmakerDetail(name: name, films: films)
+                                viewModel.route = .filmmakerDetail(name: name, films: films)
                             },
                             onOpenChannelDetail: { name, avatar, subs, total, vids in
-                                route = .channelDetail(name: name, avatar: avatar, subscribers: subs, totalViews: total, videos: vids)
+                                viewModel.route = .channelDetail(name: name, avatar: avatar, subscribers: subs, totalViews: total, videos: vids)
                             },
                             onSelectLiveStream: { stream in
-                                route = .liveStream(stream)
+                                viewModel.route = .liveStream(stream)
                             }
                         )
+                        
+                        // 🔥 REAL-TIME PAGINATED FIRESTORE FEED (Phase 102)
+                        feedSection
 
                         Color.clear.frame(height: 100)
                     }
@@ -209,16 +136,16 @@ struct HomeView: View {
                     let clamped = max(-2000, min(2000, offset))
                     // Simple low-pass filter for smoother header updates
                     let alpha: CGFloat = 0.2
-                    scrollOffset = scrollOffset + alpha * (clamped - scrollOffset)
+                    viewModel.scrollOffset = viewModel.scrollOffset + alpha * (clamped - viewModel.scrollOffset)
                 }
 
                 MinimalNavigationHeader(
-                    scrollOffset: scrollOffset,
-                    onSearchTap: { route = .search },
+                    scrollOffset: viewModel.scrollOffset,
+                    onSearchTap: { viewModel.route = .search },
                     onProfileTap: {
                         if appState.isAuthenticated {
                             // User is logged in → show quick profile menu
-                            showingQuickProfile = true
+                            viewModel.showingQuickProfile = true
                         } else {
                             // User is NOT logged in → show sign-in sheet
                             NotificationCenter.default.post(name: .presentSignInSheet, object: nil)
@@ -235,6 +162,9 @@ struct HomeView: View {
             setupContent()
             loadUserStories()
             loadWatchHistoryFromFirestore()
+            Task {
+                await viewModel.fetchFeedVideos(refresh: true)
+            }
         }
         .refreshable { await refreshContent() }
         .onChange(of: appState.isAuthenticated) { newValue in
@@ -244,7 +174,7 @@ struct HomeView: View {
             // 🔥 React to featured video changes (add/remove)
             setupContent()
         }
-        .sheet(isPresented: $presentStoryCreator) {
+        .sheet(isPresented: $viewModel.presentStoryCreator) {
             UltimateStoryCreatorView { story in
                 print("🏠 [HomeView] Story created callback received: \(story.id)")
                 // Notify stories changed so all views refresh
@@ -257,7 +187,7 @@ struct HomeView: View {
                     // Small delay to ensure database write completes
                     try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                     await MainActor.run {
-                        presentStoryCreator = false
+                        viewModel.presentStoryCreator = false
                         print("✅ [HomeView] Story creator dismissed, stories reloaded")
                     }
                 }
@@ -265,9 +195,9 @@ struct HomeView: View {
             .environmentObject(appState)
             .preferredColorScheme(.dark)
         }
-        .sheet(isPresented: $showingQuickProfile) {
+        .sheet(isPresented: $viewModel.showingQuickProfile) {
             if let user = appState.currentUser {
-                ProfileQuickMenu(user: user, isPresented: $showingQuickProfile)
+                ProfileQuickMenu(user: user, isPresented: $viewModel.showingQuickProfile)
                     .environmentObject(appState)
                     .environmentObject(AuthenticationManager.shared)
                     .uiKitSheet(
@@ -278,17 +208,17 @@ struct HomeView: View {
                     )
             }
         }
-        .sheet(isPresented: $showingSettings) {
+        .sheet(isPresented: $viewModel.showingSettings) {
             SafeProfileSettingsView()
                 .environmentObject(appState)
                 .environmentObject(AuthenticationManager.shared)
         }
-        .sheet(isPresented: $showingSwitchProfile) {
+        .sheet(isPresented: $viewModel.showingSwitchProfile) {
             ProfileSwitcherView()
                 .environmentObject(appState)
                 .environmentObject(AuthenticationManager.shared)
         }
-        .sheet(isPresented: $showingFeaturedManager) {
+        .sheet(isPresented: $viewModel.showingFeaturedManager) {
             ThermonuclearFeaturedManager()
                 .environmentObject(appState)
                 .background(
@@ -309,43 +239,43 @@ struct HomeView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenFullProfile"))) { notification in
             if let user = notification.object as? User {
-                route = .publicProfile(user)
+                viewModel.route = .publicProfile(user)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenSettings"))) { _ in
-            showingSettings = true
+            viewModel.showingSettings = true
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowSwitchProfile"))) { _ in
-            showingSwitchProfile = true
+            viewModel.showingSwitchProfile = true
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenVideoAnalytics"))) { notification in
             // 🔥 OPEN CREATOR STUDIO: Navigate to analytics for specific video
             if let video = notification.object as? Video {
                 // Navigate to Creator Studio with analytics tab selected
-                route = .custom("creatorStudioAnalytics_\(video.id)")
+                viewModel.route = .custom("creatorStudioAnalytics_\(video.id)")
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenCreatorStudioDashboard"))) { _ in
             // Open full Creator Studio dashboard with current user
-            route = .custom("creatorStudioDashboard")
+            viewModel.route = .custom("creatorStudioDashboard")
         }
-        .fullScreenCover(item: $route) { route in
+        .fullScreenCover(item: $viewModel.route) { route in
             switch route {
             case .video(let video):
                 VideoDetailView(video: video)
-                    .onDisappear { self.route = nil }
+                    .onDisappear { self.viewModel.route = nil }
 
             case .movie(let movie):
                 MovieDetailView(movie: movie)
-                    .onDisappear { self.route = nil }
+                    .onDisappear { self.viewModel.route = nil }
 
             case .search:
                 SearchView()
-                    .onDisappear { self.route = nil }
+                    .onDisappear { self.viewModel.route = nil }
 
             case .stories(let story):
                 // Instagram-style: group ALL stories by user, open at tapped user, auto-advance to next
-                let groups = UserStoryGroup.group(from: allAssetStories)
+                let groups = UserStoryGroup.group(from: viewModel.allAssetStories)
                 let sortedGroups = UserStoryGroup.sorted(groups)
                 let tappedStoryId = story.stableStoryId
                 let startIdx = sortedGroups.firstIndex(where: { group in
@@ -355,89 +285,89 @@ struct HomeView: View {
                     userGroups: sortedGroups,
                     initialUserIndex: startIdx
                 ) {
-                    self.route = nil
+                    self.viewModel.route = nil
                 }
-                .onDisappear { self.route = nil }
+                .onDisappear { self.viewModel.route = nil }
 
             case .allMovies:
                 MoviesView()
                     .environmentObject(appState)
-                    .onDisappear { self.route = nil }
+                    .onDisappear { self.viewModel.route = nil }
 
             case .allLiveTV:
                 LiveTVChannelsView()
                     .environmentObject(appState)
                     .background(Color(.systemBackground).ignoresSafeArea())
-                    .onDisappear { self.route = nil }
+                    .onDisappear { self.viewModel.route = nil }
 
             case .trending:
                 TrendingView()
                     .background(Color(.systemBackground).ignoresSafeArea())
-                    .onDisappear { self.route = nil }
+                    .onDisappear { self.viewModel.route = nil }
 
             case .artistDetail(let name, let avatar, let videos, let total):
                 ArtistDetailView(name: name, avatarURL: avatar, videos: videos, totalViews: total)
-                    .onDisappear { self.route = nil }
+                    .onDisappear { self.viewModel.route = nil }
 
             case .artistMusicProfile(let catalogArtist):
                 NavigationStack {
                     ArtistProfileView(artist: catalogArtist)
                 }
-                .onDisappear { self.route = nil }
+                .onDisappear { self.viewModel.route = nil }
 
             case .filmmakerDetail(let name, let films):
                 FilmmakerDetailView(name: name, films: films)
-                    .onDisappear { self.route = nil }
+                    .onDisappear { self.viewModel.route = nil }
 
             case .channelDetail(let name, let avatar, let subs, let total, let videos):
                 ChannelDetailView(name: name, avatarURL: avatar, subscribers: subs, totalViews: total, videos: videos)
-                    .onDisappear { self.route = nil }
+                    .onDisappear { self.viewModel.route = nil }
             
             case .publicProfile(let user):
                 PublicProfileView(user: user)
-                    .onDisappear { self.route = nil }
+                    .onDisappear { self.viewModel.route = nil }
 
             case .liveStream(let stream):
                 LiveViewerView(stream: stream)
-                    .onDisappear { self.route = nil }
+                    .onDisappear { self.viewModel.route = nil }
             
             case .custom(let id):
                 // Handle Creator Studio navigation
                 if id.starts(with: "creatorStudioAnalytics_") {
                     ComprehensiveCreatorStudioView()
                         .environmentObject(appState)
-                        .onDisappear { self.route = nil }
+                        .onDisappear { self.viewModel.route = nil }
                 } else if id == "creatorStudioDashboard" {
                     ComprehensiveCreatorStudioView()
                         .environmentObject(appState)
-                        .onDisappear { self.route = nil }
+                        .onDisappear { self.viewModel.route = nil }
                 } else if id == "musicHub" {
                     MusicHubView()
                         .environmentObject(appState)
-                        .onDisappear { self.route = nil }
+                        .onDisappear { self.viewModel.route = nil }
                         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("DismissMusicHub"))) { _ in
-                            self.route = nil
+                            self.viewModel.route = nil
                         }
                 } else if id == "exploreHub" {
                     ExploreHubView()
-                        .onDisappear { self.route = nil }
+                        .onDisappear { self.viewModel.route = nil }
                 } else if id == "topArtists" {
-                    TopArtistsListView(onDismiss: { self.route = nil })
+                    TopArtistsListView(onDismiss: { self.viewModel.route = nil })
                         .environmentObject(appState)
                         .background(Color(.systemBackground).ignoresSafeArea())
-                        .onDisappear { self.route = nil }
+                        .onDisappear { self.viewModel.route = nil }
                 } else if id == "topFilmmakers" {
-                    TopFilmmakersListView(onDismiss: { self.route = nil })
+                    TopFilmmakersListView(onDismiss: { self.viewModel.route = nil })
                         .background(Color(.systemBackground).ignoresSafeArea())
-                        .onDisappear { self.route = nil }
+                        .onDisappear { self.viewModel.route = nil }
                 } else if id == "topChannels" {
-                    TopChannelsListView(onDismiss: { self.route = nil })
+                    TopChannelsListView(onDismiss: { self.viewModel.route = nil })
                         .background(Color(.systemBackground).ignoresSafeArea())
-                        .onDisappear { self.route = nil }
+                        .onDisappear { self.viewModel.route = nil }
                 }
             }
         }
-        .onChange(of: route?.id) { newValue in
+        .onChange(of: viewModel.route?.id) { newValue in
             let shouldPause = newValue != nil
             NotificationCenter.default.post(
                 name: NSNotification.Name(shouldPause ? "LivePreviewsShouldPause" : "LivePreviewsShouldResume"),
@@ -448,9 +378,48 @@ struct HomeView: View {
         .environment(\.horizontalSizeClass, .compact)
         }
     }
+    
+    @ViewBuilder private var feedSection: some View {
+        LazyVStack(spacing: 24) {
+            if !viewModel.feedVideos.isEmpty {
+                HStack {
+                    Text("More Content For You")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 24)
+                
+                ForEach(viewModel.feedVideos) { video in
+                    MinimalVideoCard(
+                        video: video,
+                        action: {
+                            openVideo(video)
+                        },
+                        useLivePreview: true
+                    )
+                    .padding(.horizontal, 20)
+                    .onAppear {
+                        // Infinite scroll trigger
+                        if video.id == viewModel.feedVideos.last?.id {
+                            Task {
+                                await viewModel.fetchFeedVideos()
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if viewModel.isLoadingFeed {
+                ProgressView()
+                    .padding(.vertical, 32)
+            }
+        }
+        .padding(.bottom, 24)
+    }
 
     // MARK: - Setup Methods
-    @State private var presentStoryCreator: Bool = false
 
     private func setupContent() {
         // 🔥 FEATURED VIDEOS: Same intro as Featured Edit (1/3) so counts match; current user as creator for profile/subscribe
@@ -461,8 +430,8 @@ struct HomeView: View {
         // Show up to 10 featured videos (besides intro) so new pins appear immediately
         content.append(contentsOf: Array(ownerFeatured.filter { $0.id != intro.id }.prefix(10)))
         
-        featuredContent = content
-        heroVideoIndex = 0
+        viewModel.featuredContent = content
+        viewModel.heroVideoIndex = 0
         
         // ⚡ PRE-WARM: Touch the asset cache for every featured video so Firebase Storage
         // starts downloading before the hero card renders — no cold-start lag on autoplay.
@@ -470,7 +439,7 @@ struct HomeView: View {
             _ = LoopAssetCache.shared.asset(for: video.videoURL)
         }
         
-        print("📺 Featured content loaded: \(featuredContent.count) videos")
+        print("📺 Featured content loaded: \(viewModel.featuredContent.count) videos")
     }
     
     // 🔥 Shot By Keonta intro video - Streams from Firebase Storage
@@ -512,7 +481,7 @@ struct HomeView: View {
     }
 
     private func refreshContent() async {
-        isRefreshing = true
+        viewModel.isRefreshing = true
         
         // 1. Reload featured content
         setupContent()
@@ -533,16 +502,19 @@ struct HomeView: View {
             }
         }
         
-        // 4. Notify Continue Watching and other sections to refresh
+        // 4. Reload infinite feed
+        await viewModel.fetchFeedVideos(refresh: true)
+        
+        // 5. Notify Continue Watching and other sections to refresh
         NotificationCenter.default.post(name: .videoProgressUpdated, object: nil)
         
-        isRefreshing = false
+        viewModel.isRefreshing = false
     }
     
     private func loadUserStories() {
         // Clear existing stories first
-        assetStories = []
-        allAssetStories = []
+        viewModel.assetStories = []
+        viewModel.allAssetStories = []
         
         // Don't show stories for unauthenticated users - keep it clean like YouTube
         guard appState.isAuthenticated, let currentUser = appState.currentUser else {
@@ -561,7 +533,7 @@ struct HomeView: View {
                 print("📖 [HomeView] Found \(mine.count) own stories")
                 let mapped = mine.map { s -> AssetStory in
                     let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
-                    return AssetStory(media: media, username: currentUser.username, authorImageName: currentUser.profileImageURL ?? "", creatorId: currentUser.id, originalStoryId: s.id)
+                    return AssetStory(media: media, username: currentUser.username, authorImageName: currentUser.profileImageURL ?? "", creatorId: currentUser.id, originalStoryId: s.id, isCloseFriends: s.isCloseFriends)
                 }
                 collected.append(contentsOf: mapped)
             } else {
@@ -586,7 +558,7 @@ struct HomeView: View {
                     for s in filtered {
                         let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
                         let u = userMap[s.creatorId]
-                        collected.append(AssetStory(media: media, username: u?.username ?? s.creatorId, authorImageName: u?.profileImageURL ?? "", creatorId: s.creatorId, originalStoryId: s.id))
+                        collected.append(AssetStory(media: media, username: u?.username ?? s.creatorId, authorImageName: u?.profileImageURL ?? "", creatorId: s.creatorId, originalStoryId: s.id, isCloseFriends: s.isCloseFriends))
                     }
                 }
             } else {
@@ -612,17 +584,17 @@ struct HomeView: View {
                     for s in filtered {
                         let media: AssetMedia = (s.mediaType == .video) ? .video(s.mediaURL) : .image(s.mediaURL)
                         let u = userMap[s.creatorId]
-                        collected.append(AssetStory(media: media, username: u?.username ?? s.creatorId, authorImageName: u?.profileImageURL ?? "", creatorId: s.creatorId, originalStoryId: s.id))
+                        collected.append(AssetStory(media: media, username: u?.username ?? s.creatorId, authorImageName: u?.profileImageURL ?? "", creatorId: s.creatorId, originalStoryId: s.id, isCloseFriends: s.isCloseFriends))
                     }
                 }
             }
 
             collected = orderedStoriesForTray(collected, currentUserId: currentUser.id)
             // Store ALL stories (multiple per user) for the pager
-            self.allAssetStories = collected
+            self.viewModel.allAssetStories = collected
             // Store one-per-user for the bubble row (most recent first per user)
-            self.assetStories = uniqueStoriesPerUser(collected)
-            print("✅ [HomeView] loadUserStories complete — \(self.allAssetStories.count) total stories, \(self.assetStories.count) user bubbles")
+            self.viewModel.assetStories = uniqueStoriesPerUser(collected)
+            print("✅ [HomeView] loadUserStories complete — \(self.viewModel.allAssetStories.count) total stories, \(self.viewModel.assetStories.count) user bubbles")
         }
     }
 
@@ -696,7 +668,7 @@ struct HomeView: View {
 
     // MARK: - Action Methods
     private func showStoryCreator() {
-        presentStoryCreator = true
+        viewModel.presentStoryCreator = true
     }
 
     private func loadWatchHistoryFromFirestore() {
@@ -717,7 +689,7 @@ struct HomeView: View {
     }
 
     private func openVideo(_ video: Video) {
-        route = .video(video)
+        viewModel.route = .video(video)
     }
 
     // 🔥 YOUTUBE PARITY: Handle Home chip filter taps
@@ -726,15 +698,15 @@ struct HomeView: View {
         case .all:
             break // Default home view, no navigation
         case .music:
-            route = .custom("musicHub")
+            viewModel.route = .custom("musicHub")
         case .live:
-            route = .allLiveTV
+            viewModel.route = .allLiveTV
         case .gaming:
-            route = .custom("exploreHub")
+            viewModel.route = .custom("exploreHub")
         case .news, .mixes, .podcasts, .newToYou:
-            route = .trending // Surface curated content for now
+            viewModel.route = .trending // Surface curated content for now
         case .recentlyUploaded:
-            route = .trending
+            viewModel.route = .trending
         case .watched:
             NotificationCenter.default.post(name: .openFullHistory, object: nil)
         }
@@ -750,7 +722,7 @@ struct HomeView: View {
                 
                 Button {
                     HapticManager.shared.impact(style: .heavy)
-                    showingFeaturedManager = true
+                    viewModel.showingFeaturedManager = true
                 } label: {
                     UltraThermonuclearFABContent()
                 }
@@ -763,2125 +735,9 @@ struct HomeView: View {
     }
 }
 
-extension Video {
-    var posterCandidates: [URL] {
-        var urls: [URL] = []
-        var seen = Set<String>()
 
-        func add(_ s: String) {
-            if !s.isEmpty, seen.insert(s).inserted, let u = URL(string: s) {
-                urls.append(u)
-            }
-        }
 
-        // 1) Use provided thumbnail if present
-        add(thumbnailURL)
 
-        // 2) Prefer YouTube covers when applicable
-        if contentSource == .youtube {
-            let yid = externalID.flatMap { $0.isEmpty ? nil : $0 } ?? id
-            // Common JPG candidates
-            add("https://i.ytimg.com/vi/\(yid)/maxresdefault.jpg")
-            add("https://i.ytimg.com/vi/\(yid)/sddefault.jpg")
-            add("https://i.ytimg.com/vi/\(yid)/hqdefault.jpg")
-            add("https://img.youtube.com/vi/\(yid)/maxresdefault.jpg")
-            add("https://img.youtube.com/vi/\(yid)/sddefault.jpg")
-            add("https://img.youtube.com/vi/\(yid)/hqdefault.jpg")
-            // Frame indices
-            add("https://img.youtube.com/vi/\(yid)/0.jpg")
-            add("https://img.youtube.com/vi/\(yid)/1.jpg")
-            add("https://img.youtube.com/vi/\(yid)/2.jpg")
-            add("https://img.youtube.com/vi/\(yid)/3.jpg")
-            // WEBP variants
-            add("https://i.ytimg.com/vi_webp/\(yid)/maxresdefault.webp")
-            add("https://i.ytimg.com/vi_webp/\(yid)/sddefault.webp")
-            add("https://i.ytimg.com/vi_webp/\(yid)/hqdefault.webp")
-        }
 
-        // 3) Seeded fallback to guarantee an image
-        add("https://picsum.photos/seed/\(abs(id.hashValue))/400/225")
 
-        return urls
-    }
-}
-
-// MARK: - Minimal Content Sections
-struct MinimalContentSections: View {
-    let onPlayVideo: (Video) -> Void
-    let onSelectMovie: (FreeMovie) -> Void
-    let onSeeAllFreeMovies: ([FreeMovie]) -> Void
-    let onSeeAllLiveTV: () -> Void
-    let onSeeAllTrending: () -> Void
-    let onSeeAllMusic: () -> Void
-    let onSeeAllExplore: () -> Void
-    let onSeeAllArtists: () -> Void
-    let onSeeAllFilmmakers: () -> Void
-    let onSeeAllChannels: () -> Void
-    let onOpenArtistDetail: (String, String, [Video], Int) -> Void
-    let onOpenArtistMusicProfile: (CatalogArtist) -> Void
-    let onOpenFilmmakerDetail: (String, [FreeMovie]) -> Void
-    let onOpenChannelDetail: (String, String, Int, Int, [Video]) -> Void
-    var onSelectLiveStream: ((FirestoreLiveStream) -> Void)? = nil
-
-    @EnvironmentObject private var appState: AppState
-    @ObservedObject private var rankService = TopRankMLService.shared
-    @State private var blockbusterMovies: [FreeMovie] = []
-    @State private var loadingBlockbusters: Bool = false
-    @State private var friendChannelVideos: [Video] = []
-    @State private var liveChannelsAPI: [LiveTVChannel] = []
-    @State private var showLocalArtistsOnly: Bool = false
-    @State private var selectedLiveTVChannel: LiveTVChannel?
-    @State private var firestoreVideos: [Video] = []
-
-    private var friendVideoId: String { "friend_video_yt_71GJrAY54Ew" }
-    private var friendChannelID: String { "UCITAM_FKtyKEq40aHVXFTcQ" }
-
-    private func makeFriendTrendingVideo() -> Video {
-        let friendUser = User(
-            username: "scatz",
-            displayName: "Scatz",
-            email: "music@artist.com",
-            profileImageURL: "https://i.ytimg.com/vi/71GJrAY54Ew/hqdefault.jpg",
-            bannerImageURL: nil,
-            bio: "Artist",
-            subscriberCount: 21_300,
-            videoCount: 0,
-            isVerified: true,
-            isCreator: true
-        )
-        return Video(
-            id: friendVideoId,
-            title: "Scatz - Rebound ( Official Music Video ) Shot By @ImmortalVision",
-            description: "Official music video. Shot by @ImmortalVision.",
-            thumbnailURL: "https://i.ytimg.com/vi/71GJrAY54Ew/hqdefault.jpg",
-            videoURL: "https://www.youtube.com/watch?v=71GJrAY54Ew",
-            duration: 94,
-            viewCount: 5_000,
-            likeCount: 191,
-            commentCount: 12,
-            createdAt: Calendar.current.date(byAdding: .weekOfYear, value: -4, to: Date()) ?? Date(),
-            creator: friendUser,
-            category: .music,
-            tags: ["music","official","video","scatz","immortalvision"],
-            isPublic: true,
-            quality: [.quality720p],
-            aspectRatio: .landscape,
-            isLiveStream: false,
-            contentSource: .youtube,
-            externalID: "71GJrAY54Ew",
-            isVerified: true
-        )
-    }
-
-    // Custom: Shot By Keonta intro video (local bundle) so you can test full controls
-    private func keontaIntroVideo() -> Video {
-        let keontaUser = User(
-            username: "sbkeonta_",
-            displayName: "Shot By Keonta",
-            email: "keontapeat@mychannel.live",
-            profileImageURL: "https://i.pravatar.cc/200?u=sbkeonta_intro",
-            isVerified: true,
-            isCreator: true
-        )
-
-        // Resolve local video in app bundle; fallback to a demo MP4
-        let localPath = Bundle.main.path(forResource: "Shot By Keonta Intro 4k", ofType: "MP4")
-        let videoURL = localPath.map { URL(fileURLWithPath: $0).absoluteString } ?? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-
-        // 🔥 Use local thumbnail from Assets.xcassets (extracted from video at 2 seconds)
-        let poster = "asset://ShotByKeontaThumbnail"
-
-        // Monetization flag so ad preview and pre-roll show
-        let adBreaks = Video.AdBreaks(preRoll: true, midRoll: false, postRoll: false)
-        let monetization = Video.MonetizationSettings(isMonetized: true, adBreaks: adBreaks, sponsorSegments: [], merchandise: nil, donationEnabled: false, subscriptionTier: nil, totalRevenue: 0)
-
-        return Video(
-            title: "MyChannel Intro",
-            description: "Shot By Keonta intro (demo)",
-            thumbnailURL: poster,
-            videoURL: videoURL,
-            duration: 35,
-            viewCount: 0,
-            likeCount: 0,
-            creator: keontaUser,
-            category: .entertainment,
-            tags: ["intro", "keonta", "mychannel"],
-            isPublic: true,
-            quality: [.quality720p, .quality1080p, .quality2160p],
-            aspectRatio: .landscape,
-            isLiveStream: false,
-            contentSource: .userUploaded,
-            externalID: nil,
-            isVerified: true,
-            monetization: monetization,
-            isSponsored: false
-        )
-    }
-
-    private func extraTrendingVideos() -> [Video] {
-        var videos: [Video] = []
-        
-        // Baby Ju - Free Ty (Featured as #1 trending)
-        let babyJuCreator = User(
-            username: "babyju",
-            displayName: "Baby Ju",
-            email: "noreply@yt.com",
-            profileImageURL: "https://i.ytimg.com/vi/JSXmfgZzHqQ/hqdefault.jpg",
-            bannerImageURL: nil,
-            bio: "Artist",
-            subscriberCount: 2040,
-            videoCount: 0,
-            isVerified: true,
-            isCreator: true,
-            location: "CALIFORNIA"
-        )
-        let babyJuVideo = Video(
-            id: "yt_JSXmfgZzHqQ",
-            title: "Baby Ju - Free Ty (Official Video) #ShotByBigHornet",
-            description: "Official Music Video to \"Free Ty\" by Baby Ju off the \"Rock Em Baba\" tape. Shot by @BigHornet. Stream \"Free Ty\" on the \"Rock Em Baba\" EP",
-            thumbnailURL: "https://i.ytimg.com/vi/JSXmfgZzHqQ/hqdefault.jpg",
-            videoURL: "https://www.youtube.com/watch?v=JSXmfgZzHqQ",
-            duration: 184,
-            viewCount: 10_000_000,
-            likeCount: 572,
-            commentCount: 39,
-            createdAt: Date(),
-            creator: babyJuCreator,
-            category: .music,
-            tags: ["music", "baby ju", "free ty", "rock em baba", "shotbybighornet"],
-            isPublic: true,
-            quality: [.quality720p],
-            aspectRatio: .landscape,
-            isLiveStream: false,
-            contentSource: .youtube,
-            externalID: "JSXmfgZzHqQ",
-            isVerified: true
-        )
-        videos.append(babyJuVideo)
-        
-        // KTrip - Whatever (Featured as #2 trending)
-        let kTripCreator = User(
-            username: "ktrip",
-            displayName: "KTrip",
-            email: "noreply@yt.com",
-            profileImageURL: "https://i.ytimg.com/vi/xfdydb_3Ra0/hqdefault.jpg",
-            bannerImageURL: nil,
-            bio: "Artist",
-            subscriberCount: 5000,
-            videoCount: 0,
-            isVerified: true,
-            isCreator: true
-        )
-        let kTripVideo = Video(
-            id: "yt_xfdydb_3Ra0",
-            title: "KTrip - \"Whatever\" (Block Logic Exclusive - Official Music Video)",
-            description: "Official Music Video by KTrip",
-            thumbnailURL: "https://i.ytimg.com/vi/xfdydb_3Ra0/hqdefault.jpg",
-            videoURL: "https://www.youtube.com/watch?v=xfdydb_3Ra0",
-            duration: Double.random(in: 90...300),
-            viewCount: 8_000_000,
-            likeCount: Int.random(in: 100...50_000),
-            commentCount: Int.random(in: 10...10_000),
-            createdAt: Date(),
-            creator: kTripCreator,
-            category: .music,
-            tags: ["music", "ktrip", "whatever", "block logic"],
-            isPublic: true,
-            quality: [.quality720p],
-            aspectRatio: .landscape,
-            isLiveStream: false,
-            contentSource: .youtube,
-            externalID: "xfdydb_3Ra0",
-            isVerified: true
-        )
-        videos.append(kTripVideo)
-        
-        // Other videos
-        let friendUser = User(
-            username: "scatz",
-            displayName: "Scatz",
-            email: "music@artist.com",
-            profileImageURL: "https://i.ytimg.com/vi/71GJrAY54Ew/hqdefault.jpg",
-            bannerImageURL: nil,
-            bio: "Artist",
-            subscriberCount: 21_300,
-            videoCount: 0,
-            isVerified: true,
-            isCreator: true
-        )
-        let entries: [(id: String, title: String)] = [
-            ("96Zeze6gdEI", "YouTube Video 96Zeze6gdEI"),
-            ("l1gQVUGdMyw", "YouTube Video l1gQVUGdMyw"),
-            ("71GJrAY54Ew", "Scatz - Rebound (Official Music Video)")
-        ]
-        let otherVideos = entries.map { e in
-            Video(
-                id: "yt_\(e.id)",
-                title: e.title,
-                description: "Official video",
-                thumbnailURL: "https://i.ytimg.com/vi/\(e.id)/hqdefault.jpg",
-                videoURL: "https://www.youtube.com/watch?v=\(e.id)",
-                duration: Double.random(in: 90...300),
-                viewCount: Int.random(in: 3_000...2_000_000),
-                likeCount: Int.random(in: 100...50_000),
-                commentCount: Int.random(in: 10...10_000),
-                createdAt: Date(),
-                creator: friendUser,
-                category: .music,
-                tags: ["music","official","video","friend"],
-                isPublic: true,
-                quality: [.quality720p],
-                aspectRatio: .landscape,
-                isLiveStream: false,
-                contentSource: .youtube,
-                externalID: e.id,
-                isVerified: true
-            )
-        }
-        videos.append(contentsOf: otherVideos)
-        
-        return videos
-    }
-
-    // Curated Flint artists showcase to seed All/Trending so the app looks full and professional
-    private func flintShowcaseVideos() -> [Video] {
-        struct Entry { let artist: String; let slug: String; let title: String }
-        let items: [Entry] = [
-            .init(artist: "YN Jay", slug: "yn_jay", title: "YN Jay – Official Video"),
-            .init(artist: "RMC Mike", slug: "rmc_mike", title: "RMC Mike – Official Video"),
-            .init(artist: "Louie Ray", slug: "louie_ray", title: "Louie Ray – Official Video"),
-            .init(artist: "Babyface E", slug: "babyface_e", title: "Babyface E – Official Video"),
-            .init(artist: "YSR Gramz", slug: "ysr_gramz", title: "YSR Gramz – Official Video"),
-            .init(artist: "Scatz", slug: "scatz_flint", title: "Scatz – Official Music Video"),
-            .init(artist: "Baby Ghost", slug: "baby_ghost", title: "Baby Ghost – Official Video")
-        ]
-        return items.map { e in
-            let creator = User(
-                username: e.artist.replacingOccurrences(of: " ", with: "_").lowercased(),
-                displayName: e.artist,
-                email: "artist@music.com",
-                profileImageURL: "https://i.pravatar.cc/200?u=\(e.slug)",
-                isVerified: true,
-                isCreator: true
-            )
-            return Video(
-                title: e.title,
-                description: "\(e.artist) • Official Video",
-                thumbnailURL: "https://picsum.photos/seed/\(e.slug)/1280/720",
-                videoURL: "https://example.com/video/\(e.slug)",
-                duration: Double.random(in: 120.0...240.0),
-                viewCount: Int.random(in: 100_000...5_000_000),
-                likeCount: Int.random(in: 2_000...120_000),
-                commentCount: Int.random(in: 200...20_000),
-                createdAt: Date(),
-                creator: creator,
-                category: .music,
-                tags: ["flint","music","rap"],
-                isPublic: true,
-                quality: [.quality720p],
-                aspectRatio: .landscape,
-                isLiveStream: false,
-                contentSource: .userUploaded,
-                externalID: nil,
-                isVerified: true
-            )
-        }
-    }
-
-    private func detroitFlintArtistsTrending() -> [Video] {
-        func yt(_ id: String, _ title: String, _ artist: String, views: Int) -> Video {
-            Video(
-                id: "yt_\(id)",
-                title: title,
-                description: "\(artist) • Official Video",
-                thumbnailURL: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg",
-                videoURL: "https://www.youtube.com/watch?v=\(id)",
-                duration: Double.random(in: 120.0...240.0),
-                viewCount: views,
-                likeCount: Int(Double(views) * 0.06),
-                commentCount: Int(Double(views) * 0.01),
-                creator: User(username: artist.replacingOccurrences(of: " ", with: "_").lowercased(),
-                              displayName: artist,
-                              email: "artist@music.com",
-                              profileImageURL: "https://i.pravatar.cc/200?u=\(artist)",
-                              isVerified: true,
-                              isCreator: true),
-                category: .music,
-                tags: ["detroit","flint","music","rap"],
-                isPublic: true,
-                quality: [.quality720p],
-                aspectRatio: .landscape,
-                isLiveStream: false,
-                contentSource: .youtube,
-                externalID: id,
-                isVerified: true
-            )
-        }
-        return [
-            yt("qGQhX_iQZu4", "Tee Grizzley - First Day Out", "Tee Grizzley", views: 265_000_000),
-            yt("3Btk3asR_vc", "Sada Baby - Whole Lotta Choppas", "Sada Baby", views: 96_000_000),
-            yt("7bUr0vbJIUK", "Icewear Vezzo - Up The Scoe ft. Lil Durk", "Icewear Vezzo", views: 47_000_000),
-            yt("N8WcJ5d0-YI", "Babyface Ray - What The Business Is", "Babyface Ray", views: 20_000_000),
-            yt("kQ3JrQxv7CM", "Peezy - 2 Million Up", "Peezy", views: 56_000_000),
-            yt("w6B2Kp4eX1M", "Rebirth Island High Kill Gameplay", "Peezy", views: 1_650_000),
-            yt("q1Zk3Lm0TyU", "Top 10 Tips to Win More Gunfights", "Peezy", views: 1_050_000),
-            yt("m2N9rV3xQeE", "Warzone Movement Guide", "Peezy", views: 880_000)
-        ]
-    }
-
-    private func gamingCOD() -> [Video] {
-        func yt(_ id: String, _ title: String, views: Int) -> Video {
-            Video(
-                id: "yt_\(id)",
-                title: title,
-                description: "Call of Duty gameplay",
-                thumbnailURL: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg",
-                videoURL: "https://www.youtube.com/watch?v=\(id)",
-                duration: Double.random(in: 600.0...1800.0),
-                viewCount: views,
-                likeCount: Int(Double(views) * 0.05),
-                commentCount: Int(Double(views) * 0.007),
-                creator: User(username: "cod_channel", displayName: "COD Highlights", email: "cod@yt.com", profileImageURL: "https://i.pravatar.cc/200?u=cod", isVerified: true, isCreator: true),
-                category: .gaming,
-                tags: ["gaming","cod","modern warfare","warzone"],
-                isPublic: true,
-                quality: [.quality720p],
-                aspectRatio: .landscape,
-                isLiveStream: false,
-                contentSource: .youtube,
-                externalID: id,
-                isVerified: true
-            )
-        }
-        return [
-            yt("x9v2Q8l2dY4", "Warzone 2: 20 Kill Solo Win!", views: 2_400_000),
-            yt("b8r0Jk1aZsQ", "MW3 Ranked Play – Tactical Nuke!", views: 1_200_000),
-            yt("p7C1LkQ0vPY", "Best Kastov‑74u Class Setup (MWII)", views: 980_000),
-            yt("w6B2Kp4eX1M", "Rebirth Island High Kill Gameplay", views: 1_650_000),
-            yt("q1Zk3Lm0TyU", "Top 10 Tips to Win More Gunfights", views: 1_050_000),
-            yt("m2N9rV3xQeE", "Warzone Movement Guide", views: 880_000)
-        ]
-    }
-
-    @ObservedObject private var globalPlayer = GlobalVideoPlayerManager.shared
-
-    @ViewBuilder private var topSections: some View {
-        LiveNowSection { stream in
-            onSelectLiveStream?(stream)
-        }
-        .onAppear {
-            LiveStreamManager.shared.startListening()
-        }
-
-        ForYouSection(onPlayVideo: onPlayVideo, onSeeAllExplore: onSeeAllExplore)
-
-        if appState.isAuthenticated {
-            ContinueWatchingSection(onVideoTap: { video in
-                onPlayVideo(video)
-            })
-        }
-
-        MinimalSection(title: "Trending Now", seeAllAction: { onSeeAllTrending() }) {
-            TopTenCarousel(
-                videos: trendingVideos(),
-                preserveOrder: true,
-                onPlay: { v in onPlayVideo(v) }
-            )
-            .padding(.top, 4)
-        }
-
-        MinimalMusicSection(
-            onOpenArtistMusicProfile: onOpenArtistMusicProfile,
-            appState: _appState,
-            onSeeAll: { onSeeAllMusic() }
-        )
-    }
-
-    @ViewBuilder private var bottomSections: some View {
-        MinimalCategoriesSection(
-            onPlayVideo: onPlayVideo,
-            codVideos: gamingCOD(),
-            musicVideos: detroitFlintArtistsTrending(),
-            allVideos: categoriesAllVideos()
-        )
-
-        AILiveTVSection(
-            onSelectChannel: { channel in selectedLiveTVChannel = channel },
-            onSeeAll: { onSeeAllLiveTV() }
-        )
-
-        QuickTuneSection(liveChannelsAPI: liveChannelsAPI)
-
-        MinimalSection(title: "Movies", seeAllAction: { onSeeAllFreeMovies(homeBlockbusterMovies) }) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 16) {
-                    ForEach(Array(homeBlockbusterMovies.prefix(18))) { movie in
-                        MinimalMovieCard(movie: movie, action: { onSelectMovie(movie) })
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-        }
-
-        TopArtistsSection(
-            rankings: rankService.topArtists.isEmpty ? TopRankMLService.fallbackTopArtists : rankService.topArtists,
-            sourceVideos: detroitFlintArtistsTrending() + [makeFriendTrendingVideo()] + firestoreVideos,
-            onSelect: { name, avatar, vids, total in onOpenArtistDetail(name, avatar, vids, total) },
-            onSeeAll: onSeeAllArtists
-        )
-
-        TopIndieFilmmakersSection(
-            rankings: rankService.topFilmmakers.isEmpty ? TopRankMLService.fallbackTopFilmmakers : rankService.topFilmmakers,
-            onSeeAll: onSeeAllFilmmakers,
-            onSelect: { name, films in onOpenFilmmakerDetail(name, films) }
-        )
-
-        TopMyChannelsSection(
-            rankings: rankService.topChannels.isEmpty ? TopRankMLService.fallbackTopChannels : rankService.topChannels,
-            sourceVideos: detroitFlintArtistsTrending() + gamingCOD() + firestoreVideos,
-            onSelect: { name, avatar, subs, total, vids in onOpenChannelDetail(name, avatar, subs, total, vids) },
-            onSeeAll: onSeeAllChannels
-        )
-    }
-
-    private func trendingVideos() -> [Video] {
-        let base = friendChannelVideos.isEmpty ? [] : friendChannelVideos
-        let pinnedIDs = ["JSXmfgZzHqQ", "xfdydb_3Ra0", "96Zeze6gdEI", "l1gQVUGdMyw", "71GJrAY54Ew"]
-        let pinnedVideos: [Video] = pinnedIDs.compactMap { id in
-            extraTrendingVideos().first(where: { $0.externalID == id }) ??
-            detroitFlintArtistsTrending().first(where: { $0.externalID == id })
-        }
-        let merged = pinnedVideos + [makeFriendTrendingVideo()] + extraTrendingVideos() + flintShowcaseVideos() + base
-        var seen = Set<String>()
-        return merged.filter { v in
-            if seen.contains(v.id) { return false }
-            seen.insert(v.id)
-            return true
-        }
-    }
-
-    private func categoriesAllVideos() -> [Video] {
-        var vids = flintShowcaseVideos() + detroitFlintArtistsTrending() + gamingCOD() + firestoreVideos + SeedCatalogService.shared.seedVideos
-        vids.insert(makeFriendTrendingVideo(), at: 0)
-        return vids
-    }
-
-    private var homeBlockbusterMovies: [FreeMovie] {
-        let merged = blockbusterMovies + FreeMovie.sampleMovies.sorted { lhs, rhs in
-            if lhs.year != rhs.year { return lhs.year > rhs.year }
-            return lhs.imdbRating > rhs.imdbRating
-        }
-        var seen = Set<String>()
-        return merged.filter { movie in
-            let key = "\(movie.id)|\(movie.title.lowercased())"
-            guard movie.isAvailable, !movie.streamURL.isEmpty, !seen.contains(key) else { return false }
-            seen.insert(key)
-            return true
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 40) {
-            topSections
-            bottomSections
-        }
-        // Native PiP doesn't affect layout, so no need to disable animations
-        .task {
-            // ⚡ PERFORMANCE FIX: Load all in parallel instead of sequentially
-            await withTaskGroup(of: Void.self) { group in
-                group.addTask { await loadBlockbusters() }
-                group.addTask { await loadFriendChannelVideos() }
-                group.addTask { await loadLiveChannelsAPI() }
-                group.addTask {
-                    let vids = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 50)
-                    await MainActor.run { firestoreVideos = vids }
-                }
-            }
-            // Start real-time ML-powered rankings
-            rankService.startRealTimeRanking()
-        }
-        .fullScreenCover(item: $selectedLiveTVChannel) { channel in
-            LiveTVPlayerView(channel: channel)
-                .environmentObject(appState)
-                .background(Color.black)
-        }
-    }
-
-    // Loader for TMDB popular trailers powering the Home Free Movies row
-    private func loadBlockbusters() async {
-        guard blockbusterMovies.isEmpty else { return }
-        loadingBlockbusters = true
-        defer { loadingBlockbusters = false }
-        do {
-            guard !AppSecrets.tmdbAPIKey.isEmpty else {
-                print("[TMDB] API key missing. Showing sample movies.")
-                return
-            }
-
-            async let trailersPage1 = TMDBService.shared.fetchPopularWithTrailersUS(page: 1, limit: 30)
-            async let trailersPage2 = TMDBService.shared.fetchPopularWithTrailersUS(page: 2, limit: 30)
-            async let freePage1 = TMDBService.shared.fetchFreeWithAdsMoviesUS(page: 1, limit: 30)
-            async let freePage2 = TMDBService.shared.fetchFreeWithAdsMoviesUS(page: 2, limit: 30)
-            let items = try await trailersPage1 + trailersPage2 + freePage1 + freePage2
-            var chosen: [FreeMovie] = items.filter { $0.trailerURL != nil }
-
-            if chosen.isEmpty {
-                print("[TMDB] No trailer-attached items returned. Falling back to popular items without trailer filter.")
-                chosen = items
-            }
-
-            if chosen.isEmpty {
-                print("[TMDB] Popular items still empty. Falling back to free-with-ads providers list.")
-                let freeList = try await TMDBService.shared.fetchFreeWithAdsMoviesUS(page: 1, limit: 20)
-                chosen = freeList
-            }
-
-            var seen = Set<String>()
-            let boosted = chosen.filter { movie in
-                let key = "\(movie.id)|\(movie.title.lowercased())"
-                guard movie.isAvailable, !movie.streamURL.isEmpty, !seen.contains(key) else { return false }
-                seen.insert(key)
-                return true
-            }.sorted { lhs, rhs in
-                let boost: (FreeMovie) -> Int = { m in
-                    let t = m.title.lowercased()
-                    return (t.contains("smile 2") || t.contains("sinners") || t.contains("sonic") || t.contains("venom") || t.contains("deadpool") || t.contains("wick") || t.contains("spider") || t.contains("batman")) ? 1 : 0
-                }
-                if boost(lhs) != boost(rhs) { return boost(lhs) > boost(rhs) }
-                if lhs.year != rhs.year { return lhs.year > rhs.year }
-                return lhs.imdbRating > rhs.imdbRating
-            }
-
-            await MainActor.run {
-                self.blockbusterMovies = boosted
-            }
-        } catch {
-            print("[TMDB] Error loading blockbusters: \(error)")
-        }
-    }
-
-    private func loadFriendChannelVideos() async {
-        guard friendChannelVideos.isEmpty else { return }
-        do {
-            let items = try await YouTubeAPIService.shared.fetchChannelVideos(channelID: friendChannelID, maxResults: 24)
-            await MainActor.run {
-                self.friendChannelVideos = items
-            }
-        } catch {
-            print("[YouTube] Error loading friend channel: \(error)")
-        }
-    }
-
-    private func loadLiveChannelsAPI() async {
-        guard liveChannelsAPI.isEmpty else { return }
-        
-        // 🔥 FIRE: Preload the first channels for instant thumbnail playback
-        await LiveTVService.shared.preloadFireChannels(count: 6)
-        
-        let fetched = await IPTVOrgService.shared.fetchTopChannels(limit: 24, countries: ["US","GB","CA"], languages: ["eng"], categories: nil)
-        await MainActor.run {
-            self.liveChannelsAPI = fetched
-        }
-    }
-}
-
-// MARK: - Music Section (Artists Carousel)
-private struct MinimalMusicSection: View {
-    var onOpenArtistMusicProfile: (CatalogArtist) -> Void
-    @EnvironmentObject var appState: AppState
-    var onSeeAll: (() -> Void)? = nil
-    
-    // Artist name → Apple Music ID mapping for navigation
-    private static let artistAppleMusicIds: [String: Int] = [
-        "Lil Donny": 1857859662,
-        "MIA Ghost": 1582746406,
-        "Mia Ghost": 1582746406,
-        "Mia Getem": 1798000837,
-        "Bk Dumpp": 1709296525,
-        "Hotboy Curry": 1771099410,
-        "Ysr Loski": 1511351716,
-        "Luh Monti": 1656612386,
-        "Luh monti": 1656612386,
-        "Babyfxce E": 1573432856,
-        "3200 Tre": 1491631657,
-        "Ktrip": 1484873437,
-        "KTrip": 1484873437,
-        "Báby Ju": 1649723396,
-        "Baby Ju": 1649723396,
-        "Ftos Twan": 1527300992,
-        "FTOS Twan": 1527300992,
-        "Scatz": 904008025,
-        "Scatz Ripky": 904008025,
-        "Baby Ghost": 1507813989,
-        "Way P": 1524383650,
-        "Yn Jay": 1482962180,
-        "YN Jay": 1482962180,
-        "Krispylife Kidd": 1477569694,
-        "KrispyLife Kidd": 1477569694,
-        "Clean Up Man": 1538452293,
-        "Eightball Tank": 1492591865,
-        "Ysr Gramz": 1490787471,
-        "YSR Gramz": 1490787471,
-        "Babii Moe": 1507109510,
-        "Babii MOE": 1507109510,
-        "Six Ward Von": 1564317122,
-        "MIA Patman": 1548074075,
-        "Mia PatMan": 1548074075,
-        "Mia Pat Man": 1548074075,
-        "Lil Nook": 1763508797,
-        "lil nook": 1763508797,
-        "Jeff Skigh": 945119824,
-        "Homi Michel": 1514456557,
-        "BBDR Tay": 1501537814,
-        "PaidLife Zar": 1501538060,
-        "Paidlife Zar": 1501538060,
-        "Richvon23": 1531986560,
-        "RichVon23": 1531986560,
-        "Geeoutto": 1583072463,
-        "Mia Curt": 1576989709,
-        "Dee Grant": 1488384274,
-        "FTM Bear": 1483982707,
-        "Ftm Bear": 1483982707,
-        "Cliff Mac": 964080263,
-        "Obabe": 1496302013,
-        "Velly Beretta": 1174001237,
-        "King Cashes": 1498000463,
-        "King cashes": 1498000463,
-        "Detwan Love": 1155696158,
-        "Real JT": 1422427461,
-        "real jt": 1422427461,
-        "Realjt": 1422427461,
-        "Lil Lik": 1725106609,
-        "Lil lik": 1725106609,
-        "Stickz": 1676978658,
-        "MANNYKEA": 1828612897,
-        "Mannykea": 1828612897,
-        "Ot Love": 1836358576,
-        "OT Love": 1836358576,
-    ]
-    
-    private func catalogArtistFor(name: String, avatar: String) -> CatalogArtist {
-        let appleMusicId = Self.artistAppleMusicIds[name] ?? abs(name.hashValue % 9_000_000 + 1_000_000)
-        let artworkUrl: String?
-        if avatar.hasPrefix("http") {
-            artworkUrl = avatar
-        } else if let _ = UIImage(named: avatar) {
-            artworkUrl = "asset://\(avatar)"
-        } else {
-            artworkUrl = nil
-        }
-        return CatalogArtist(
-            id: appleMusicId,
-            name: name,
-            linkUrl: "https://music.apple.com/us/artist/\(appleMusicId)",
-            artworkUrl: artworkUrl
-        )
-    }
-
-    private var allArtists: [(name: String, avatar: String, views: Int, city: String?)] {
-        // 🎵 LOCAL ARTISTS WITH ASSETS - Using local images for fast loading!
-        let localArtists: [(String,String,Int,String?)] = [
-            ("Lil Donny", "LilDonnyAvatar", 290_000, nil),
-            ("Big Mgr Fat Dee", "BigMgrFatDeeAvatar", 285_000, nil),
-            ("Bk Dumpp", "BkDumppAvatar", 285_000, nil),
-            ("Super Shoddy", "SuperShoddyAvatar", 285_000, nil),
-            ("Mbk Keelan", "MbkKeelanAvatar", 285_000, nil),
-            ("Cw Timo", "CwTimoAvatar", 285_000, nil),
-            ("Fattyrichgang Dell", "FattyrichgangDellAvatar", 285_000, nil),
-            ("BagLife Tee", "BagLifeTeeAvatar", 285_000, nil),
-            ("Kai Edwards", "KaiEdwardsAvatar", 285_000, nil),
-            ("Mia PatMan", "MiaPatManAvatar", 285_000, nil),
-            ("Yung Sak Runner", "YungSakRunnerAvatar", 285_000, nil),
-            ("Don Perrion", "DonPerrionAvatar", 285_000, nil),
-            ("Way P", "WayPAvatar", 285_000, nil),
-            ("Ysr Driveway", "YsrDrivewayAvatar", 285_000, nil),
-            ("Ysr Gramz", "YsrGramzAvatar", 285_000, nil),
-            ("Krispylife Kidd", "KrispylifeKiddAvatar", 285_000, nil),
-            ("Babii Moe", "BabiiMoeAvatar", 285_000, nil),
-            ("Rich Dior", "RichDiorAvatar", 285_000, nil),
-            ("MBK BO Demon", "MBKBODemonAvatar", 285_000, nil),
-            ("MBK Uncle Ruckus", "MBKUncleRuckusAvatar", 285_000, nil),
-            ("Ktrip", "KtripAvatar", 285_000, nil),
-            ("Cliff King Mac", "CliffKingMacAvatar", 285_000, nil),
-            ("Mia Rerock", "MiaRerockAvatar", 285_000, nil),
-            ("Juscallmeep", "JuscallmeepAvatar", 285_000, nil),
-            ("Rlsg Kd", "RlsgKdAvatar", 285_000, nil),
-            ("Yn Jay", "YnJayAvatar", 285_000, nil),
-            ("YN Quee", "YNQueeAvatar", 285_000, nil),
-            ("Detwan Love", "DetwanLoveAvatar", 285_000, nil),
-            ("Savagelife Tank", "SavagelifeTankAvatar", 285_000, nil),
-            ("Mia Ghost", "MiaGhostAvatar", 285_000, nil),
-            ("2800 TBaby", "2800TBabyAvatar", 285_000, nil),
-            ("Luh Sportcoat", "LuhSportcoatAvatar", 285_000, nil),
-            ("Ftos Twan", "FtosTwanAvatar", 285_000, nil),
-            ("Hotboy Curry", "HotboyCurryAvatar", 285_000, nil),
-            ("Twyce Marshall", "TwyceMarshallAvatar", 275_000, nil),
-            ("Bae Shanicee", "BaeShaniceeAvatar", 200_000, nil),
-            ("Báby Ju", "BabyJuAvatar", 210_000, nil),
-            ("HTG Nook", "HTGNookAvatar", 215_600, "Flint, MI"),
-            ("Kleanup Man", "KleanupManAvatar", 200_800, "Detroit, MI"),
-            ("Scatz Ripky", "ScatzAvatar", 346_300, "Flint, MI"),
-            ("Faneto Rich", "FanetoRichAvatar", 250_000, "Buc Town"),
-            ("Cashpaid Jay", "CashpaidJayAvatar", 225_000, nil),
-            ("Benji Gram", "BenjiGramAvatar", 220_000, nil),
-            ("Mbk Cari", "MbkCariAvatar", 195_000, nil),
-            ("Luh Monti", "LuhMontiAvatar", 230_000, nil),
-            ("Mac Quall", "MacQuallAvatar", 205_000, nil),
-            ("Jeff Skigh", "JeffSkighAvatar", 200_000, nil),
-            ("Six Ward Von", "SixWardVonAvatar", 210_000, nil),
-            ("Barth Baby", "BarthBabyAvatar", 215_000, nil),
-            ("Baby Ghost", "BabyGhostAvatar", 220_000, nil)
-        ]
-        
-        let curated: [(String,String,Int,String?)] = OwnerProfile.instagramFriends.map { ($0.name, $0.avatar, Int.random(in: 50_000...350_000), nil) }
-        
-        // Improved deduplication: normalize names (remove @, spaces, punctuation) and check avatar assets
-        var seen = Set<String>()
-        var seenAvatars = Set<String>()
-        var ordered: [(String,String,Int,String?)] = []
-        
-        // Helper to normalize artist name for comparison
-        func normalize(_ name: String) -> String {
-            return name.lowercased()
-                .replacingOccurrences(of: "@", with: "")
-                .replacingOccurrences(of: ".", with: "")
-                .replacingOccurrences(of: "_", with: "")
-                .replacingOccurrences(of: " ", with: "")
-        }
-        
-        // Helper to extract asset name from avatar string
-        func extractAssetName(_ avatar: String) -> String? {
-            if avatar.hasPrefix("asset://") {
-                let components = avatar.components(separatedBy: "?")
-                if components.count > 0 {
-                    return components[0].replacingOccurrences(of: "asset://", with: "")
-                }
-            } else if !avatar.hasPrefix("http") {
-                // Local asset name (not a URL)
-                return avatar
-            }
-            return nil
-        }
-        
-        // Process local artists first (priority)
-        for item in localArtists {
-            let normalizedName = normalize(item.0)
-            let assetName = extractAssetName(item.1)
-            
-            // Skip if we've already seen this normalized name or the same asset
-            let shouldSkip = seen.contains(normalizedName) || (assetName != nil && seenAvatars.contains(assetName!))
-            if !shouldSkip {
-                seen.insert(normalizedName)
-                if let asset = assetName {
-                    seenAvatars.insert(asset)
-                }
-                ordered.append(item)
-            }
-        }
-        
-        // Then add curated artists (skip if duplicate)
-        for item in curated {
-            let normalizedName = normalize(item.0)
-            let assetName = extractAssetName(item.1)
-            
-            // Skip if duplicate name or asset
-            let shouldSkip = seen.contains(normalizedName) || (assetName != nil && seenAvatars.contains(assetName!))
-            if !shouldSkip {
-                seen.insert(normalizedName)
-                if let asset = assetName {
-                    seenAvatars.insert(asset)
-                }
-                ordered.append(item)
-            }
-        }
-        
-        return ordered
-    }
-
-    private var artists: [(name: String, avatar: String, views: Int, city: String?)] {
-        // Allow all artists - UI will show fallback if image doesn't exist
-        allArtists
-    }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text("Music")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.primary)
-                Spacer()
-                if let onSeeAll {
-                    Button("See all", action: onSeeAll)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.blue)
-                }
-            }
-            .padding(.horizontal, 20)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 16) {
-                    ForEach(Array(artists.enumerated()), id: \.offset) { _, a in
-                        Button {
-                            let artist = catalogArtistFor(name: a.name, avatar: a.avatar)
-                            onOpenArtistMusicProfile(artist)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 8) {
-                                // Check if it's a local asset or URL
-                                if a.avatar.hasPrefix("http") {
-                                    AppAsyncImage(url: URL(string: a.avatar)) { img in
-                                        img
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 120, height: 180)
-                                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    } placeholder: {
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .fill(Color(.systemGray6))
-                                            .frame(width: 120, height: 180)
-                                    }
-                                } else {
-                                    // Local asset image with fallback
-                                    Group {
-                                        if let uiImage = UIImage(named: a.avatar) {
-                                            Image(uiImage: uiImage)
-                                                .resizable()
-                                                .scaledToFill()
-                                                .frame(width: 120, height: 180)
-                                                .offset(y: a.avatar == "MbkCariAvatar" ? 15 : 0) // Shift Mbk Cari image down to show face
-                                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                        } else {
-                                            // Fallback placeholder if asset not found
-                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                .fill(
-                                                    LinearGradient(
-                                                        colors: [Color(.systemGray5), Color(.systemGray6)],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    )
-                                                )
-                                                .frame(width: 120, height: 180)
-                                                .overlay(
-                                                    Image(systemName: "person.circle.fill")
-                                                        .font(.system(size: 40))
-                                                        .foregroundColor(.secondary)
-                                                )
-                                        }
-                                    }
-                                }
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(a.name)
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.primary)
-                                        .lineLimit(1)
-                                        .frame(width: 120, alignment: .leading)
-                                    Text("\(format(a.views)) total views")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                        .frame(width: 120, alignment: .leading)
-                                }
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-        }
-    }
-
-    private func format(_ n: Int) -> String {
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n)/1_000_000) }
-        if n >= 1_000 { return String(format: "%.1fK", Double(n)/1_000) }
-        return "\(n)"
-    }
-}
-
-// MARK: - Minimal Section
-struct MinimalSection<Content: View>: View {
-    let title: String
-    let seeAllAction: (() -> Void)?
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 20, weight: .bold))
-                Spacer()
-
-                if let seeAllAction = seeAllAction {
-                    Button("See all", action: seeAllAction)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.blue)
-                }
-            }
-            .padding(.horizontal, 20)
-
-            content
-        }
-    }
-}
-
-// MARK: - 🔥 Quick Tune Section (Smart Loading)
-private struct QuickTuneSection: View {
-    let liveChannelsAPI: [LiveTVChannel]
-    
-    @StateObject private var loadingTracker = LiveChannelLoadingTracker.shared
-    
-    private var hasReadyChannels: Bool {
-        !loadingTracker.readyChannels.isEmpty
-    }
-    
-    private var isLoading: Bool {
-        !loadingTracker.isInitialLoadComplete && loadingTracker.readyChannels.isEmpty
-    }
-    
-    var body: some View {
-        // Only show section if we have ready channels OR still loading
-        if hasReadyChannels || isLoading {
-            MinimalSection(title: "Quick Tune", seeAllAction: nil) {
-                if isLoading {
-                    loadingView
-                } else {
-                    channelsScrollView
-                }
-            }
-            .animation(.easeOut(duration: 0.3), value: hasReadyChannels)
-        }
-    }
-    
-    private var loadingView: some View {
-        HStack(spacing: 12) {
-            ProgressView()
-                .scaleEffect(0.8)
-            Text("Loading channels...")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.vertical, 30)
-    }
-    
-    private var channelsScrollView: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 16) {
-                // MyChannel Live
-                NavigationLink(destination: LiveTVPlayerView(channel: myChannelLive)) {
-                    MinimalChannelCard(
-                        channel: myChannelLive,
-                        autoPreview: true,
-                        previewOverrideStreamURL: nil,
-                        previewOverridePosterURL: nil,
-                        allowPlaybackInPreviews: true
-                    )
-                }
-                .buttonStyle(PressableScaleStyle(scale: 0.96))
-                
-                // Other channels
-                ForEach(channels) { channel in
-                    NavigationLink(destination: LiveTVPlayerView(channel: channel)) {
-                        MinimalChannelCard(
-                            channel: channel,
-                            autoPreview: true,
-                            previewOverrideStreamURL: nil,
-                            previewOverridePosterURL: nil,
-                            allowPlaybackInPreviews: true
-                        )
-                    }
-                    .buttonStyle(PressableScaleStyle(scale: 0.96))
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-    
-    private var myChannelLive: LiveTVChannel {
-        LiveTVChannel(
-            id: "mychannel-live",
-            name: "MyChannel Live",
-            logoURL: "https://i.ytimg.com/vi/5qap5aO4i9A/hqdefault.jpg",
-            streamURL: "\(AppConfig.API.cloudRunBaseURL)/live/playlist",
-            category: .entertainment,
-            description: "Go Live playback",
-            isLive: true,
-            viewerCount: 0,
-            quality: "HD",
-            language: "English",
-            country: "US",
-            epgURL: nil,
-            previewFallbackURL: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
-        )
-    }
-    
-    private var channels: [LiveTVChannel] {
-        let source = liveChannelsAPI.isEmpty ? LiveTVChannel.sampleChannels : liveChannelsAPI
-        return Array(source.prefix(8))
-    }
-}
-
-// MARK: - Minimal Movie Card (stable)
-struct MinimalMovieCard: View {
-    let movie: FreeMovie
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                MultiSourceAsyncImage(
-                    urls: movie.posterCandidates,
-                    content: { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 120, height: 180)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    },
-                    placeholder: {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(.systemGray6))
-                            .frame(width: 120, height: 180)
-                            .overlay(
-                                VStack(spacing: 8) {
-                                    Image(systemName: "film.stack")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(.secondary)
-
-                                    Text(movie.title)
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(.primary)
-                                        .multilineTextAlignment(.center)
-                                        .lineLimit(2)
-                                        .padding(.horizontal, 8)
-                                }
-                            )
-                    }
-                )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(movie.title)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.primary)
-                        .lineLimit(2)
-
-                    HStack(spacing: 2) {
-                        ForEach(0..<5) { index in
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 8))
-                                .foregroundColor(
-                                    index < Int(movie.imdbRating / 2) ? .yellow : Color(.systemGray4)
-                                )
-                        }
-
-                        Text("\(movie.imdbRating, specifier: "%.1f")")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .frame(width: 120, alignment: .leading)
-            }
-        }
-        .buttonStyle(PressableScaleStyle(scale: 0.96))
-    }
-}
-
-// MARK: - Minimal Channel Card (stable) 🔥
-struct MinimalChannelCard: View {
-    let channel: LiveTVChannel
-    var autoPreview: Bool = false
-    var previewOverrideStreamURL: String? = nil
-    var previewOverridePosterURL: String? = nil
-    var allowPlaybackInPreviews: Bool = false
-    @State private var showPreview: Bool = false
-    @State private var streamReady: Bool = false
-    @State private var streamFailed: Bool = false
-
-    var body: some View {
-        // 🔥 Only show channel when video is actually playing - no placeholder!
-        if !streamFailed {
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack {
-                    // 🔥 Live video thumbnail - only shows when playing
-                    LiveChannelThumbnailView(
-                        streamURL: previewOverrideStreamURL ?? channel.streamURL,
-                        posterURL: previewOverridePosterURL ?? channel.logoURL,
-                        fallbackStreamURL: channel.previewFallbackURL,
-                        allowPlaybackInPreviews: allowPlaybackInPreviews,
-                        channelCategory: channel.category,
-                        channelName: channel.name,
-                        channelId: channel.id,
-                        onStreamFailed: {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                streamFailed = true
-                            }
-                        },
-                        onStreamReady: {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                streamReady = true
-                            }
-                        }
-                    )
-                    .frame(width: 160, height: 90)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(channel.category.color.opacity(0.3), lineWidth: 1)
-                    )
-                    .shadow(color: channel.category.color.opacity(0.2), radius: 8, x: 0, y: 4)
-                    // 🔥 Ensure touches pass through to NavigationLink
-                    .allowsHitTesting(false)
-
-                    // 🔥 LIVE badge with pulse animation
-                    if channel.isLive {
-                        VStack {
-                            HStack {
-                                LiveBadge()
-                                Spacer()
-                            }
-                            Spacer()
-                        }
-                        .padding(8)
-                        .allowsHitTesting(false)
-                    }
-                    
-                    // Category badge bottom right
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Text(channel.category.displayName)
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(
-                                    Capsule()
-                                        .fill(channel.category.color.opacity(0.9))
-                                )
-                        }
-                    }
-                    .padding(6)
-                    .allowsHitTesting(false)
-                }
-                .onAppear {
-                    // 🔥 Always show preview immediately - no delay
-                    showPreview = true
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(channel.name)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 6, height: 6)
-                        Text("\(formatViewerCount(channel.viewerCount)) watching")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .frame(width: 160, alignment: .leading)
-            }
-            .contentShape(Rectangle())
-        }
-    }
-
-    private func formatViewerCount(_ count: Int) -> String {
-        if count >= 1_000_000 {
-            return String(format: "%.1fM", Double(count) / 1_000_000.0)
-        } else if count >= 1_000 {
-            return String(format: "%.1fK", Double(count) / 1_000.0)
-        } else {
-            return "\(count)"
-        }
-    }
-}
-
-// 🔥 Animated LIVE badge
-private struct LiveBadge: View {
-    @State private var isPulsing = false
-    
-    var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(.white)
-                .frame(width: 5, height: 5)
-                .scaleEffect(isPulsing ? 1.3 : 1.0)
-                .animation(
-                    .easeInOut(duration: 0.8)
-                    .repeatForever(autoreverses: true),
-                    value: isPulsing
-                )
-            Text("LIVE")
-                .font(.system(size: 9, weight: .black))
-                .foregroundColor(.white)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [Color.red, Color.red.opacity(0.8)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .shadow(color: .red.opacity(0.5), radius: 4, x: 0, y: 2)
-        )
-        .onAppear { isPulsing = true }
-    }
-}
-
-// MARK: - Content Filter
-enum ContentFilter: String, CaseIterable {
-    case all = "all"
-    case trending = "trending"
-    case movies = "movies"
-    case liveTV = "live_tv"
-    case gaming = "gaming"
-    case music = "music"
-    case education = "education"
-
-    var displayName: String {
-        switch self {
-        case .all: return "Home"
-        case .trending: return "Trending"
-        case .movies: return "Movies"
-        case .liveTV: return "Live TV"
-        case .gaming: return "Gaming"
-        case .music: return "Music"
-        case .education: return "Education"
-        }
-    }
-}
-
-// MARK: - Sleek Categories Section
-private struct MinimalCategoriesSection: View {
-    let onPlayVideo: (Video) -> Void
-    let codVideos: [Video]
-    let musicVideos: [Video]
-    let allVideos: [Video]
-
-    @State private var selection: Category = .all
-
-    enum Category: String, CaseIterable {
-        case all = "All"
-        case music = "Music"
-        case gaming = "Gaming"
-        case sports = "Sports"
-        case news = "News"
-        case tech = "Tech"
-    }
-
-    var current: [Video] {
-        switch selection {
-        case .all:
-            return allVideos.shuffled()
-        case .music:
-            return musicVideos.shuffled()
-        case .gaming:
-            return codVideos.shuffled()
-        case .sports:
-            return allVideos.filter { $0.category == .sports || $0.tags.contains("sports") }.shuffled()
-        case .news:
-            return allVideos.filter { $0.category == .news || $0.tags.contains("news") }.shuffled()
-        case .tech:
-            return allVideos.filter { $0.category == .technology || $0.tags.contains("tech") }.shuffled()
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Categories")
-                    .font(.system(size: 20, weight: .bold))
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-
-            // Chips
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(Category.allCases, id: \.self) { cat in
-                        Button {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                                selection = cat
-                            }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Text(cat.rawValue)
-                                    .font(.system(size: 13, weight: .semibold))
-                            }
-                            .foregroundColor(selection == cat ? .white : .primary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                Capsule()
-                                    .fill(selection == cat ? AppTheme.Colors.primary : Color(.systemGray6))
-                            )
-                        }
-                        .buttonStyle(PressableScaleButtonStyle(scale: 0.97))
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-
-            // Carousel
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
-                    ForEach(Array(current.prefix(18).enumerated()), id: \.offset) { index, video in
-                        MinimalVideoCard(
-                            video: video,
-                            action: { onPlayVideo(video) },
-                            useLivePreview: index < 3
-                        )
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-        }
-    }
-}
-
-// MARK: - Top Artists Section (ML-Powered Real-Time Rankings)
-private struct TopArtistsSection: View {
-    let rankings: [TopRankedUser]
-    let sourceVideos: [Video]
-    var onSelect: (String, String, [Video], Int) -> Void = { _,_,_,_  in }
-    var onSeeAll: () -> Void = {}
-
-    private var orderedRankings: [TopRankedUser] {
-        prioritizedRankings(
-            rankings,
-            pinnedNames: ["HTG Nook", "Scatz Ripky", "Kleanup Man"]
-        )
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Top Artists")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.primary)
-                
-                Spacer()
-                
-                Button {
-                    HapticManager.shared.impact(style: .light)
-                    onSeeAll()
-                } label: {
-                    Text("See all")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.primary)
-                }
-            }
-            .padding(.top, 4)
-            .padding(.horizontal, 20)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
-                    ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, a in
-                        Button {
-                            let vids = sourceVideos.filter { $0.creator.displayName == a.name }
-                            onSelect(a.name, a.avatar, vids, a.totalViews)
-                        } label: {
-                            RankCardView(user: a, index: idx)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-                .padding(.horizontal, 16)
-                .background(AppTheme.Colors.background)
-            }
-        }
-    }
-}
-
-// MARK: - Top Indie Filmmakers Section (ML-Powered Real-Time Rankings)
-private struct TopIndieFilmmakersSection: View {
-    let rankings: [TopRankedUser]
-    var onSeeAll: () -> Void = {}
-    var onSelect: (String, [FreeMovie]) -> Void = { _,_ in }
-
-    private var orderedRankings: [TopRankedUser] {
-        prioritizedRankings(
-            rankings,
-            pinnedNames: ["Tee Cee", "Merch Hd", "Pros KT"]
-        )
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Top Indie Filmmakers")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.primary)
-                
-                Spacer()
-                
-                Button {
-                    HapticManager.shared.impact(style: .light)
-                    onSeeAll()
-                } label: {
-                    Text("See all")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.primary)
-                }
-            }
-            .padding(.top, 4)
-            .padding(.horizontal, 20)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
-                    ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, f in
-                        Button {
-                            onSelect(f.name, Array(FreeMovie.sampleMovies.shuffled().prefix(Int.random(in: 6...10))))
-                        } label: {
-                            RankCardView(user: f, index: idx, subtitle: "\(f.videoCount) films • Score \(Int(f.overallScore))")
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-                .padding(.horizontal, 16)
-                .background(AppTheme.Colors.background)
-            }
-        }
-    }
-}
-
-// MARK: - Top MyChannels Section (ML-Powered Real-Time Rankings)
-private struct TopMyChannelsSection: View {
-    let rankings: [TopRankedUser]
-    let sourceVideos: [Video]
-    var onSelect: (String, String, Int, Int, [Video]) -> Void = { _,_,_,_,_ in }
-    var onSeeAll: () -> Void = {}
-
-    private var orderedRankings: [TopRankedUser] {
-        prioritizedRankings(
-            rankings,
-            pinnedNames: ["Ktrip", "Baby Ju", "Baby Juu", "Mbk Cari"]
-        )
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Top MyChannels")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.primary)
-                
-                Spacer()
-                
-                Button {
-                    HapticManager.shared.impact(style: .light)
-                    onSeeAll()
-                } label: {
-                    Text("See all")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.primary)
-                }
-            }
-            .padding(.top, 4)
-            .padding(.horizontal, 20)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
-                    ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, channel in
-                        Button {
-                            HapticManager.shared.impact(style: .medium)
-                            let vids = sourceVideos.filter { $0.creator.displayName.lowercased().contains(channel.name.lowercased()) }
-                            onSelect(channel.name, channel.avatar, channel.subscribers, channel.totalViews, vids)
-                        } label: {
-                            RankCardView(user: channel, index: idx, subtitle: "\(TopRankMLService.formatCount(channel.subscribers)) subs")
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-                .padding(.horizontal, 16)
-                .background(AppTheme.Colors.background)
-            }
-        }
-    }
-}
-
-private func prioritizedRankings(_ rankings: [TopRankedUser], pinnedNames: [String]) -> [TopRankedUser] {
-    func normalize(_ value: String) -> String {
-        value.lowercased()
-            .replacingOccurrences(of: "_c", with: "")
-            .replacingOccurrences(of: "_", with: " ")
-            .replacingOccurrences(of: "-", with: " ")
-            .replacingOccurrences(of: "  ", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    var remaining = rankings
-    var ordered: [TopRankedUser] = []
-
-    for pinnedName in pinnedNames {
-        let normalizedPinned = normalize(pinnedName)
-        if let index = remaining.firstIndex(where: { normalize($0.name) == normalizedPinned }) {
-            ordered.append(remaining.remove(at: index))
-        }
-    }
-
-    ordered.append(contentsOf: remaining)
-    return ordered
-}
-
-// MARK: - See All List Views (ML-Powered — Top Artists / Filmmakers / Channels)
-
-private struct TopArtistsListView: View {
-    let onDismiss: () -> Void
-    @EnvironmentObject private var appState: AppState
-    @ObservedObject private var rankService = TopRankMLService.shared
-
-    private var orderedRankings: [TopRankedUser] {
-        prioritizedRankings(
-            rankService.topArtists,
-            pinnedNames: ["Yung Sak Runner"]
-        )
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, artist in
-                    NavigationLink {
-                        ArtistPageView(
-                            artist: Artist(
-                                id: artist.id,
-                                name: artist.name,
-                                slug: artist.name.lowercased().replacingOccurrences(of: " ", with: "-"),
-                                avatarURL: URL(string: artist.avatar),
-                                monthlyListeners: artist.totalViews
-                            ),
-                            topSongs: [],
-                            albums: [],
-                            singles: [],
-                            similarArtists: []
-                        )
-                    } label: {
-                        RankListRow(user: artist, index: idx)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-            .listStyle(.plain)
-            .navigationTitle("Top Artists")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        HapticManager.shared.impact(style: .light)
-                        onDismiss()
-                    }
-                    .foregroundColor(AppTheme.Colors.primary)
-                }
-            }
-        }
-    }
-}
-
-private struct TopFilmmakersListView: View {
-    let onDismiss: () -> Void
-    @ObservedObject private var rankService = TopRankMLService.shared
-
-    private var orderedRankings: [TopRankedUser] {
-        prioritizedRankings(
-            rankService.topFilmmakers,
-            pinnedNames: ["Shot By Keonta", "Tee Cee", "Merch Hd"]
-        )
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, filmmaker in
-                    NavigationLink {
-                        FilmmakerDetailView(
-                            name: filmmaker.name,
-                            films: Array(FreeMovie.sampleMovies.shuffled().prefix(filmmaker.videoCount > 0 ? filmmaker.videoCount : 8))
-                        )
-                    } label: {
-                        RankListRow(
-                            user: filmmaker,
-                            index: idx,
-                            subtitle: "\(filmmaker.videoCount) films • Score \(Int(filmmaker.overallScore))"
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-            .listStyle(.plain)
-            .navigationTitle("Top Indie Filmmakers")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        HapticManager.shared.impact(style: .light)
-                        onDismiss()
-                    }
-                    .foregroundColor(AppTheme.Colors.primary)
-                }
-            }
-        }
-    }
-}
-
-private struct TopChannelsListView: View {
-    let onDismiss: () -> Void
-    @ObservedObject private var rankService = TopRankMLService.shared
-
-    private var orderedRankings: [TopRankedUser] {
-        prioritizedRankings(
-            rankService.topChannels,
-            pinnedNames: ["Ktrip", "Baby Juu", "Mbk Cari"]
-        )
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, channel in
-                    NavigationLink {
-                        ChannelDetailView(
-                            name: channel.name,
-                            avatarURL: channel.avatar,
-                            subscribers: channel.subscribers,
-                            totalViews: channel.totalViews,
-                            videos: []
-                        )
-                    } label: {
-                        RankListRow(
-                            user: channel,
-                            index: idx,
-                            subtitle: "\(TopRankMLService.formatCount(channel.subscribers)) subs"
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-            .listStyle(.plain)
-            .navigationTitle("Top MyChannels")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        HapticManager.shared.impact(style: .light)
-                        onDismiss()
-                    }
-                    .foregroundColor(AppTheme.Colors.primary)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Reusable Row for See All Lists
-
-private struct RankListRow: View {
-    let user: TopRankedUser
-    let index: Int
-    var subtitle: String? = nil
-
-    private var displayName: String {
-        user.name
-            .replacingOccurrences(of: "_c", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var displaySubtitle: String {
-        subtitle ?? "\(TopRankMLService.formatCount(user.totalViews)) total views"
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // Rank badge
-            HStack(spacing: 2) {
-                Text("#\(index + 1)")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
-                if user.rankChange > 0 {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.green)
-                } else if user.rankChange < 0 {
-                    Image(systemName: "arrow.down")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.red)
-                }
-            }
-            .frame(width: 36, height: 28)
-            .background(Capsule().fill(AppTheme.Colors.primary))
-
-            // Avatar
-            if user.avatar.hasPrefix("asset://") {
-                let assetName = String(user.avatar.dropFirst(8))
-                if let img = UIImage(named: assetName) {
-                    Image(uiImage: img)
-                        .resizable().scaledToFill()
-                        .frame(width: 44, height: 44)
-                        .clipShape(Circle())
-                } else {
-                    defaultAvatar
-                }
-            } else {
-                AppAsyncImage(url: URL(string: user.avatar)) { img in
-                    img.resizable().scaledToFill()
-                } placeholder: { Color.gray.opacity(0.3) }
-                .frame(width: 44, height: 44)
-                .clipShape(Circle())
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(displayName)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.primary)
-                        .lineLimit(1)
-                    if user.isVerified {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 12))
-                            .foregroundColor(.blue)
-                    }
-                }
-                Text(displaySubtitle)
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-            }
-            Spacer()
-
-            // Score indicator
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("\(Int(user.overallScore))")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.primary)
-                Text("score")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding(.vertical, 4)
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: user.rank)
-    }
-
-    private var defaultAvatar: some View {
-        ZStack {
-            Circle().fill(Color(.systemGray5))
-            Image(systemName: "person.circle.fill")
-                .resizable().scaledToFit()
-                .foregroundColor(.secondary)
-                .padding(10)
-        }
-        .frame(width: 44, height: 44)
-    }
-}
-
-// MARK: - Scale Button Style
-private struct HomeScaleButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
-    }
-}
-
-// MARK: - Preview
-// MARK: - For You Section
-struct ForYouSection: View {
-    let onPlayVideo: (Video) -> Void
-    let onSeeAllExplore: () -> Void
-    
-    @EnvironmentObject private var appState: AppState
-    @StateObject private var personalizedService = PersonalizedFeedService.shared
-    @State private var forYouVideos: [Video] = []
-    @State private var isLoading = false
-    
-    /// Last-resort view-level filter — blocks videos from rendering regardless of data source
-    private var safeForYouVideos: [Video] {
-        forYouVideos.filter { video in
-            let t = video.title.lowercased()
-            if t.contains("cooking with kya") { return false }
-            if t.contains("screen recording 2025") { return false }
-            let d = video.creator.displayName.lowercased()
-            if d == "shot by keonta" { return false }
-            let u = video.creator.username.lowercased()
-            if u == "sbkeonta_" || u == "shotbykeonta" || u == "keontapeat" { return false }
-            return true
-        }
-    }
-    
-    var body: some View {
-        if !safeForYouVideos.isEmpty || appState.isAuthenticated {
-            MinimalSection(
-                title: "For You",
-                seeAllAction: onSeeAllExplore
-            ) {
-                if isLoading {
-                    ProgressView("Loading personalized feed...")
-                        .frame(height: 101)
-                        .padding(.horizontal, 20)
-                } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 16) {
-                            ForEach(Array(safeForYouVideos.prefix(8).enumerated()), id: \.element.id) { index, video in
-                                MinimalVideoCard(
-                                    video: video,
-                                    action: { onPlayVideo(video) },
-                                    useLivePreview: index < 3
-                                )
-                                .optimizeUIPerformance()
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                    }
-                }
-            }
-            .onAppear {
-                if let uid = appState.currentUser?.id, !uid.isEmpty {
-                    Task { await loadForYou(userId: uid) }
-                }
-            }
-        }
-    }
-    
-    private func loadForYou(userId: String) async {
-        isLoading = true
-        print("🔍 [ForYou] Loading feed for userId: '\(userId)'")
-
-        /// Filter out the current user's own uploaded videos from the feed.
-        /// Uses multiple signals — creatorId, display name, username, AND specific titles.
-        let ownerDisplayNames: Set<String> = ["shot by keonta"]
-        let ownerUsernames: Set<String> = ["sbkeonta_", "shotbykeonta", "keontapeat"]
-        let blockedTitleSubstrings = ["cooking with kya", "screen recording 2025"]
-        func excludeOwn(_ videos: [Video]) -> [Video] {
-            videos.filter { video in
-                let titleLower = video.title.lowercased()
-                let hasBlockedTitle = blockedTitleSubstrings.contains { titleLower.contains($0) }
-                
-                let shouldExclude = video.creatorId == userId ||
-                                  ownerDisplayNames.contains(video.creator.displayName.lowercased()) ||
-                                  ownerUsernames.contains(video.creator.username.lowercased()) ||
-                                  hasBlockedTitle
-                
-                if shouldExclude {
-                    print("🚫 [ForYou] Filtering out: '\(video.title)' by '\(video.creator.displayName)' (@\(video.creator.username)) [creatorId: \(video.creatorId)]")
-                }
-                
-                return !shouldExclude
-            }
-        }
-
-        // 🤖 AI RECOMMENDATIONS: Try Cloud Run agent first
-        if let recResponse = try? await RealMLAgentsService.shared.getRecommendations(
-            userId: userId,
-            watchedVideos: [],
-            likedVideos: [],
-            preferredCategories: [],
-            count: 20
-        ), !recResponse.recommendations.isEmpty {
-            let videoIds = recResponse.recommendations.map { $0.video_id }
-            print("🤖 [HomeView] AI recommendations: \(videoIds.count) videos (personalization: \(Int(recResponse.personalization_score * 100))%)")
-            let recVideos = (try? await VideoFirestoreService.shared.fetchMultipleVideos(videoIds: Array(videoIds.prefix(20)))) ?? []
-            let filtered = excludeOwn(recVideos)
-            print("🤖 [ForYou] AI recommendations: \(recVideos.count) → \(filtered.count) after filtering")
-            if !filtered.isEmpty {
-                await MainActor.run {
-                    forYouVideos = filtered
-                    isLoading = false
-                }
-                return
-            }
-        }
-
-        // 🚀 Fallback: Use fair discovery engine for new creators
-        let fairFeedVideos = await NewUserDiscoveryEngine.shared.generateFairFeed(
-            limit: 20,
-            userId: userId,
-            includeNewCreators: true
-        )
-
-        let filteredFair = excludeOwn(fairFeedVideos)
-        print("🚀 [ForYou] Fair discovery: \(fairFeedVideos.count) → \(filteredFair.count) after filtering")
-        if !filteredFair.isEmpty {
-            forYouVideos = filteredFair
-            isLoading = false
-            print("✅ [HomeView] Loaded \(filteredFair.count) videos with new creator discovery")
-            return
-        }
-        
-        // Final fallback: Use home feed that includes uploaded videos
-        let rawFeed = await personalizedService.generateHomeFeed(limit: 12)
-        var feed = excludeOwn(rawFeed)
-        print("📱 [ForYou] Final fallback: \(rawFeed.count) → \(feed.count) after filtering")
-        
-        // Add featured video "Juicy Booty Banger" at the beginning (fake video - thumbnail only)
-        // IMPORTANT: Make sure the image in Assets.xcassets is named exactly "JuicyBootyBangerThumbnail" (case-sensitive)
-        let assetName = "JuicyBootyBangerThumbnail"
-        let thumbnailURL: String
-        if UIImage(named: assetName) != nil {
-            thumbnailURL = "asset://\(assetName)"
-            print("✅ Found asset: \(assetName)")
-        } else {
-            // Fallback to placeholder if asset not found
-            thumbnailURL = "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
-            print("⚠️ Asset '\(assetName)' not found in Assets.xcassets - using placeholder")
-        }
-        
-        let featuredVideo = Video(
-            id: "featured_juicy_booty_banger",
-            title: "Juicy Booty Banger",
-            description: "Content that gets people's attention",
-            thumbnailURL: thumbnailURL,
-            videoURL: "", // No actual video - just showing thumbnail
-            duration: 180,
-            viewCount: 5_000_000, // High view count to ensure it's at the top
-            likeCount: 250_000,
-            creator: User(
-                username: "featured",
-                displayName: "Featured",
-                email: "noreply@mychannel.com",
-                profileImageURL: nil,
-                subscriberCount: 1_000_000,
-                isVerified: true,
-                isCreator: true
-            ),
-            category: .entertainment,
-            tags: ["featured", "viral", "trending"],
-            isPublic: true,
-            quality: [.quality720p],
-            aspectRatio: .landscape,
-            isLiveStream: false,
-            contentSource: .userUploaded,
-            externalID: nil,
-            isVerified: true
-        )
-        
-        // Prepend featured video to the feed
-        feed.insert(featuredVideo, at: 0)
-        
-        await MainActor.run {
-            forYouVideos = feed
-            isLoading = false
-        }
-    }
-}
-
-// MARK: - Ultra-Thermonuclear FAB Content 🔥💥
-struct UltraThermonuclearFABContent: View {
-    @State private var isPulsing = false
-    @State private var rotationAngle: Double = 0
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            // 🔥 PULSING STAR ICON
-            ZStack {
-                // Outer glow pulse
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [.yellow.opacity(0.6), .orange.opacity(0.3), .clear],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 40
-                        )
-                    )
-                    .frame(width: 80, height: 80)
-                    .scaleEffect(isPulsing ? 1.3 : 1.0)
-                    .opacity(isPulsing ? 0.0 : 1.0)
-                
-                // Main button
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.yellow, .orange, .red],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 56, height: 56)
-                    .shadow(color: .yellow.opacity(0.6), radius: 20, x: 0, y: 4)
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.8), .clear],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: 2
-                            )
-                    )
-                
-                // Rotating highlight particles
-                ForEach(0..<4) { index in
-                    Image(systemName: "star")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.white)
-                        .offset(x: 20)
-                        .rotationEffect(.degrees(Double(index) * 90 + rotationAngle))
-                }
-                
-                // Star icon
-                Image(systemName: "star.fill")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
-                    .scaleEffect(isPulsing ? 1.1 : 1.0)
-            }
-            
-            // Text
-            Text("Manage Featured")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(.white)
-                .padding(.trailing, 16)
-                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
-        }
-        .padding(.leading, 4)
-        .background(
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [.yellow, .orange],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .shadow(color: .yellow.opacity(0.5), radius: 20, x: 0, y: 4)
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            LinearGradient(
-                                colors: [.white.opacity(0.6), .clear],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 1.5
-                        )
-                )
-        )
-        .onAppear {
-            // Continuous pulse animation
-            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                isPulsing = true
-            }
-            
-            // Continuous rotation for highlight particles
-            withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: false)) {
-                rotationAngle = 360
-            }
-        }
-    }
-}
-
-#Preview("HomeView") {
-    HomeView()
-        .environmentObject(AppState())
-        .preferredColorScheme(.light)
-}
-import UIKit
+// ⚡ All section/card components extracted to HomeViewComponents.swift

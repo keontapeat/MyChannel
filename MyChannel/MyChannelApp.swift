@@ -42,6 +42,9 @@ struct MyChannelApp: App {
         let initStartTime = Date()
         print("🚀 MyChannelApp init started...")
         
+        // Register Background Tasks
+        BackgroundFetchService.shared.register()
+        
         // 🔥 PERFORMANCE: Only critical synchronous operations in init
         setupAppearance()
         configureAudioSession()
@@ -51,6 +54,8 @@ struct MyChannelApp: App {
         
         // 🔥 DEFERRED: Move all heavy operations to background
         Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s delay
+            
             // Clear cache in background
             let cacheVersion = "thumbnail_cache_v2.1"
             if UserDefaults.standard.string(forKey: "thumbnail_cache_version") != cacheVersion {
@@ -140,6 +145,8 @@ struct MyChannelApp: App {
                             }
                         case .background:
                             LiveTVManager.shared.onAppEnteredBackground()
+                            // Schedule next background refresh
+                            BackgroundFetchService.shared.scheduleAppRefresh()
                         default:
                             break
                         }

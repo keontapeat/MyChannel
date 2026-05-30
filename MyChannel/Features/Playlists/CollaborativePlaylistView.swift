@@ -1137,6 +1137,3 @@ struct SharePlaylistSheet: View {
     }
 }
 
-#Preview {
-    CollaborativePlaylistsView()
-}

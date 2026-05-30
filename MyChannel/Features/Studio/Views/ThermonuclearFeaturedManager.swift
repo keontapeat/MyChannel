@@ -72,7 +72,10 @@ struct ThermonuclearFeaturedManager: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    addButton
+                    HStack(spacing: 8) {
+                        EditButton()
+                        addButton
+                    }
                 }
             }
             .sheet(isPresented: $showingVideoSelector) {
@@ -123,7 +126,7 @@ struct ThermonuclearFeaturedManager: View {
                 Button("Remove a featured video first", role: .destructive) { }
                 Button("Cancel", role: .cancel) { }
             } message: {
-                Text("You already have 20 featured videos. Remove one before adding another.")
+                Text("You can only have up to 5 featured videos (plus your intro). Remove one before adding another.")
             }
         }
     }
@@ -141,7 +144,7 @@ struct ThermonuclearFeaturedManager: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.primary)
                     
-                    Text("Pin up to 20 videos on your Home feed")
+                    Text("Pin up to 5 videos on your Home feed")
                         .font(.system(size: 13, weight: .regular))
                         .foregroundColor(.secondary)
                 }
@@ -167,16 +170,17 @@ struct ThermonuclearFeaturedManager: View {
     private var statsBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
+                let customCount = manager.featuredVideos.filter { $0.id != FeaturedStore.ownerIntroVideoId }.count
                 statCard(
                     title: "FEATURED",
-                    value: "\(manager.featuredVideos.count)/20",
+                    value: "\(customCount)/5",
                     subtitle: "Live on Home",
                     icon: "star.fill"
                 )
                 
                 statCard(
                     title: "SLOTS OPEN",
-                    value: "\(max(0, 20 - manager.featuredVideos.count))",
+                    value: "\(max(0, 5 - customCount))",
                     subtitle: "Ready to pin",
                     icon: "plus.circle"
                 )
@@ -223,30 +227,38 @@ struct ThermonuclearFeaturedManager: View {
         )
     }
     
-    // MARK: - Featured Videos List (DRAG TO REORDER! 🔥)
+    // MARK: - Featured Videos List
     private var featuredVideosList: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                ForEach(manager.featuredVideos) { video in
-                    FeaturedVideoRow(
-                        video: video,
-                        position: (manager.featuredVideos.firstIndex(where: { $0.id == video.id }) ?? 0) + 1,
-                        total: manager.featuredVideos.count
-                    ) {
-                        await manager.removeFeaturedVideo(video)
-                    } onMove: { from, to in
-                        await manager.reorderVideos(from: from, to: to)
-                    }
-                    .transition(.asymmetric(
-                        insertion: .scale(scale: 0.8).combined(with: .opacity),
-                        removal: .scale(scale: 0.8).combined(with: .opacity)
-                    ))
+        List {
+            ForEach(manager.featuredVideos) { video in
+                FeaturedVideoRow(
+                    video: video,
+                    position: (manager.featuredVideos.firstIndex(where: { $0.id == video.id }) ?? 0) + 1,
+                    total: manager.featuredVideos.count
+                ) {
+                    await manager.removeFeaturedVideo(video)
+                } onMove: { from, to in
+                    await manager.reorderVideos(from: from, to: to)
+                }
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+            }
+            .onMove { indices, newOffset in
+                Task {
+                    await manager.reorderVideosSwiftUI(fromOffsets: indices, toOffset: newOffset)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: manager.featuredVideos)
+            .onDelete { indices in
+                for index in indices {
+                    let video = manager.featuredVideos[index]
+                    Task { await manager.removeFeaturedVideo(video) }
+                }
+            }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .padding(.top, 10)
     }
     
     // MARK: - Add Button
@@ -621,166 +633,116 @@ struct FeaturedVideoRow: View {
     @State private var isSwiping = false
     
     var body: some View {
-        ZStack(alignment: .trailing) {
-            // Delete background (revealed on swipe)
-            HStack {
-                Spacer()
-                VStack(spacing: 4) {
-                    Image(systemName: "trash.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.white)
-                    Text("Remove")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-                .frame(width: 80)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.red.opacity(0.9))
-            )
-            
-            // Main content
-            HStack(spacing: 12) {
-                // Position badge
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(AppTheme.Colors.surface.opacity(0.9))
-                        .frame(width: 36, height: 36)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1)
-                        )
-                    
-                    Text("\(position)")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                }
-                
-                // Thumbnail with drag indicator
-                ZStack(alignment: .topTrailing) {
-                    Group {
-                        if video.thumbnailURL.hasPrefix("asset://"),
-                           let assetName = video.thumbnailURL.split(separator: "/").last.map(String.init),
-                           !assetName.isEmpty {
-                            Image(assetName)
-                                .resizable()
-                                .scaledToFill()
-                        } else if !video.thumbnailURL.isEmpty, let url = URL(string: video.thumbnailURL) {
-                            AppAsyncImage(url: url) { img in
-                                img.resizable().scaledToFill()
-                            } placeholder: {
-                                Color(.systemGray5)
-                            }
-                        } else {
-                            Color(.systemGray5)
-                                .overlay(
-                                    Image(systemName: "play.rectangle")
-                                        .font(.system(size: 20, weight: .light))
-                                        .foregroundColor(.secondary)
-                                )
-                        }
-                    }
-                    .frame(width: 120, height: 68)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    
-                    // Drag handle
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(5)
-                        .background(Circle().fill(Color.black.opacity(0.5)))
-                        .padding(4)
-                }
-                
-                // Info
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.primary)
-                        
-                        Text(video.title)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .lineLimit(2)
-                    }
-                    
-                    HStack(spacing: 8) {
-                        Label(video.formattedViewCount, systemImage: "eye.fill")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        
-                        Text("•")
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        
-                        Text(video.formattedDuration)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                }
-                
-                Spacer()
-                
-                // Quick remove button
-                Button {
-                    isRemoving = true
-                    Task {
-                        await onRemove()
-                        isRemoving = false
-                    }
-                } label: {
-                    if isRemoving {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                    } else {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 28, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                }
-                .disabled(isRemoving)
-            }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.Colors.surface)
+        HStack(spacing: 12) {
+            // Position badge
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(AppTheme.Colors.surface.opacity(0.9))
+                    .frame(width: 36, height: 36)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1)
                     )
-            )
-            .offset(x: offset)
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        let translation = value.translation.width
-                        // Only allow left swipe
-                        if translation < 0 {
-                            offset = translation
-                            isSwiping = true
+                
+                Text("\(position)")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+            }
+            
+            // Thumbnail with drag indicator
+            ZStack(alignment: .topTrailing) {
+                Group {
+                    if video.thumbnailURL.hasPrefix("asset://"),
+                       let assetName = video.thumbnailURL.split(separator: "/").last.map(String.init),
+                       !assetName.isEmpty {
+                        Image(assetName)
+                            .resizable()
+                            .scaledToFill()
+                    } else if !video.thumbnailURL.isEmpty, let url = URL(string: video.thumbnailURL) {
+                        AppAsyncImage(url: url) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            Color(.systemGray5)
                         }
+                    } else {
+                        Color(.systemGray5)
+                            .overlay(
+                                Image(systemName: "play.rectangle")
+                                    .font(.system(size: 20, weight: .light))
+                                    .foregroundColor(.secondary)
+                            )
                     }
-                    .onEnded { value in
-                        let translation = value.translation.width
-                        
-                        // If swiped far enough, trigger delete
-                        if translation < -100 {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                offset = -80
-                            }
-                        } else {
-                            // Snap back
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                offset = 0
-                            }
-                        }
-                        
-                        isSwiping = false
-                    }
-            )
+                }
+                .frame(width: 120, height: 68)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                
+                // Drag handle
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(5)
+                    .background(Circle().fill(Color.black.opacity(0.5)))
+                    .padding(4)
+            }
+            
+            // Info
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                    
+                    Text(video.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(2)
+                }
+                
+                HStack(spacing: 8) {
+                    Label(video.formattedViewCount, systemImage: "eye.fill")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    
+                    Text("•")
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    
+                    Text(video.formattedDuration)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+            }
+            
+            Spacer()
+            
+            // Quick remove button
+            Button {
+                isRemoving = true
+                Task {
+                    await onRemove()
+                    isRemoving = false
+                }
+            } label: {
+                if isRemoving {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                } else {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+            }
+            .disabled(isRemoving)
+            .buttonStyle(.plain)
         }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppTheme.Colors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1)
+                )
+        )
         .scaleEffect(isPressed ? 0.98 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
     }
@@ -888,10 +850,17 @@ class FeaturedManager: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private let maxFeatured = 20
+    private let maxFeatured = 6
     
     var canAddMore: Bool {
-        featuredVideos.count < maxFeatured
+        featuredVideos.filter { $0.id != FeaturedStore.ownerIntroVideoId }.count < 5
+    }
+    
+    func reorderVideosSwiftUI(fromOffsets: IndexSet, toOffset: Int) async {
+        featuredVideos.move(fromOffsets: fromOffsets, toOffset: toOffset)
+        await updatePriorities()
+        FeaturedStore.shared.syncFromFirestore()
+        print("✅ Reordered videos via SwiftUI")
     }
     
     var totalViews: String {

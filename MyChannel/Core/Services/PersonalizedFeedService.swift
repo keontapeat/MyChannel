@@ -126,7 +126,11 @@ final class PersonalizedFeedService: ObservableObject {
             if candidates.isEmpty { candidates = Array(fetched.shuffled().prefix(limit)) }
         }
 
-        // 4. Score and rank
+        // 4. Score and rank — apply RealUserRankingGate so real uploads
+        //    naturally surface above seed content as the platform grows.
+        //    Seed data is NEVER deleted; it just earns a lower multiplier.
+        await RealUserRankingGate.shared.refreshIfNeeded()
+
         let scored = candidates.map { vid -> (Video, Double) in
             var score = 0.0
             if likedCategories.contains(vid.category) { score += 0.3 }
@@ -134,6 +138,8 @@ final class PersonalizedFeedService: ObservableObject {
             score += min(Double(vid.viewCount) / 1_000_000, 0.2) // popularity
             let daysSince = Date().timeIntervalSince(vid.createdAt) / (24 * 3600)
             score += max(0, 0.1 - daysSince / 30.0) // recency
+            // 🏆 Fair ranking: real user uploads rise, seed content falls back
+            score = RealUserRankingGate.shared.adjustedScore(rawScore: score, for: vid)
             return (vid, score)
         }
 
@@ -180,27 +186,34 @@ final class PersonalizedFeedService: ObservableObject {
         if remainingSlots > 0 {
             videos.append(contentsOf: SeedCatalogService.shared.seedVideos.shuffled().prefix(remainingSlots))
         }
-        
+
         // 🔥 FINAL SAFETY FILTER: Block owner videos at source
         let ownerDisplayNames: Set<String> = ["shot by keonta"]
         let ownerUsernames: Set<String> = ["sbkeonta_", "shotbykeonta", "keontapeat"]
         let blockedTitleSubstrings = ["cooking with kya", "screen recording 2025"]
-        
+
         videos = videos.filter { video in
             let titleLower = video.title.lowercased()
             let hasBlockedTitle = blockedTitleSubstrings.contains { titleLower.contains($0) }
-            
             let shouldExclude = ownerDisplayNames.contains(video.creator.displayName.lowercased()) ||
                               ownerUsernames.contains(video.creator.username.lowercased()) ||
                               hasBlockedTitle
-            
             if shouldExclude {
                 print("🚫 [PersonalizedFeedService] Filtering out: '\(video.title)' by '\(video.creator.displayName)'")
             }
-            
             return !shouldExclude
         }
-        
+
+        // 🏆 FAIR RANKING: refresh real-user count, then re-sort so real uploads
+        //    naturally rise above seed content as the platform grows.
+        //    Seed/friend content stays — it just earns a lower score multiplier.
+        await RealUserRankingGate.shared.refreshIfNeeded()
+        videos = RealUserRankingGate.shared.ranked(videos)
+
+        print("🏆 [PersonalizedFeedService] Phase: \(RealUserRankingGate.shared.phaseName) | " +
+              "Real users: \(RealUserRankingGate.shared.realUserCount) | " +
+              "Seed multiplier: \(RealUserRankingGate.shared.seedContentMultiplier)")
+
         return Array(videos.prefix(limit))
     }
 }

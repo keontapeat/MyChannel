@@ -55,6 +55,12 @@ class NativePiPController: NSObject, ObservableObject {
             
             controller.delegate = self
             controller.canStartPictureInPictureAutomaticallyFromInline = true
+            
+            // 🔥 Phase 31: Enable custom skipping controls and synchronize state
+            if #available(iOS 15.0, *) {
+                controller.requiresLinearPlayback = false
+            }
+            
             pipController = controller
             
             // 🔥 PERF: Cache initial state

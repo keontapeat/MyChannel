@@ -11,7 +11,7 @@
 import Foundation
 import FirebaseStorage
 
-class ObjectStorageOrchestrator {
+actor ObjectStorageOrchestrator {
     static let shared = ObjectStorageOrchestrator()
     
     // STORAGE PROVIDERS
@@ -27,8 +27,6 @@ class ObjectStorageOrchestrator {
     private var errorCount: [Provider: Int] = [:]
     
     private let session = URLSession.configured
-    
-    private let storageQueue = DispatchQueue(label: "com.mychannel.storage", qos: .utility, attributes: .concurrent)
     
     private init() {
         print(" [Storage] Multi-cloud orchestrator initialized")
@@ -113,7 +111,7 @@ class ObjectStorageOrchestrator {
                         return (provider, url)
                     } catch {
                         print(" [Storage] Upload to \(provider) failed: \(error)")
-                        self.incrementError(provider: provider)
+                        await self.incrementError(provider: provider)
                         return (provider, nil)
                     }
                 }
@@ -123,7 +121,7 @@ class ObjectStorageOrchestrator {
                 if let url = url {
                     urls[provider] = url
                     successfulProviders.append(provider)
-                    incrementUpload(provider: provider, bytes: Int64(file.count))
+                    await incrementUpload(provider: provider, bytes: Int64(file.count))
                 }
             }
         }
@@ -187,7 +185,7 @@ class ObjectStorageOrchestrator {
                 return data
             } catch {
                 print(" [Storage] \(preferred) failed, trying fallback...")
-                incrementError(provider: preferred)
+                await incrementError(provider: preferred)
             }
         }
         
@@ -204,7 +202,7 @@ class ObjectStorageOrchestrator {
                     return data
                 } catch {
                     print(" [Storage] \(provider) failed")
-                    incrementError(provider: provider)
+                    await incrementError(provider: provider)
                     continue
                 }
             }
@@ -257,7 +255,7 @@ class ObjectStorageOrchestrator {
 
     // MARK: - PUBLIC URLs
 
-    func getPublicURL(path: String, preferredProvider: Provider = .googleCloud) -> String {
+    nonisolated func getPublicURL(path: String, preferredProvider: Provider = .googleCloud) -> String {
         switch preferredProvider {
         case .googleCloud:
             return "https://storage.googleapis.com/mychannel-videos/\(path)"
@@ -270,7 +268,7 @@ class ObjectStorageOrchestrator {
         }
     }
 
-    func getCDNURL(path: String) -> String {
+    nonisolated func getCDNURL(path: String) -> String {
         return "https://cdn.mychannel.com/\(path)"
     }
 
@@ -339,16 +337,12 @@ class ObjectStorageOrchestrator {
     // MARK: - STATISTICS
 
     private func incrementUpload(provider: Provider, bytes: Int64) {
-        storageQueue.async(flags: .barrier) { [weak self] in
-            self?.uploadCount[provider, default: 0] += 1
-            self?.uploadBytes[provider, default: 0] += bytes
-        }
+        uploadCount[provider, default: 0] += 1
+        uploadBytes[provider, default: 0] += bytes
     }
 
     private func incrementError(provider: Provider) {
-        storageQueue.async(flags: .barrier) { [weak self] in
-            self?.errorCount[provider, default: 0] += 1
-        }
+        errorCount[provider, default: 0] += 1
     }
 
     struct StorageStats {
@@ -366,29 +360,25 @@ class ObjectStorageOrchestrator {
     }
 
     func getStats() -> StorageStats {
-        return storageQueue.sync {
-            let totalUploads = uploadCount.values.reduce(0, +)
-            let totalBytes = uploadBytes.values.reduce(0, +)
-            let totalErrors = errorCount.values.reduce(0, +)
-            var providerStats: [Provider: StorageStats.ProviderStats] = [:]
-            for provider in [Provider.googleCloud, .firebase, .backblaze, .wasabi] {
-                let uploads = uploadCount[provider, default: 0]
-                let bytes = uploadBytes[provider, default: 0]
-                let errors = errorCount[provider, default: 0]
-                let total = uploads + errors
-                let successRate = total > 0 ? Double(uploads) / Double(total) * 100 : 0
-                providerStats[provider] = StorageStats.ProviderStats(uploads: uploads, bytes: bytes, errors: errors, successRate: successRate)
-            }
-            return StorageStats(totalUploads: totalUploads, totalBytes: totalBytes, totalErrors: totalErrors, providerStats: providerStats)
+        let totalUploads = uploadCount.values.reduce(0, +)
+        let totalBytes = uploadBytes.values.reduce(0, +)
+        let totalErrors = errorCount.values.reduce(0, +)
+        var providerStats: [Provider: StorageStats.ProviderStats] = [:]
+        for provider in [Provider.googleCloud, .firebase, .backblaze, .wasabi] {
+            let uploads = uploadCount[provider, default: 0]
+            let bytes = uploadBytes[provider, default: 0]
+            let errors = errorCount[provider, default: 0]
+            let total = uploads + errors
+            let successRate = total > 0 ? Double(uploads) / Double(total) * 100 : 0
+            providerStats[provider] = StorageStats.ProviderStats(uploads: uploads, bytes: bytes, errors: errors, successRate: successRate)
         }
+        return StorageStats(totalUploads: totalUploads, totalBytes: totalBytes, totalErrors: totalErrors, providerStats: providerStats)
     }
 
     func resetStats() {
-        storageQueue.async(flags: .barrier) { [weak self] in
-            self?.uploadCount.removeAll()
-            self?.uploadBytes.removeAll()
-            self?.errorCount.removeAll()
-        }
+        uploadCount.removeAll()
+        uploadBytes.removeAll()
+        errorCount.removeAll()
     }
 
     // MARK: - ERRORS
@@ -462,7 +452,7 @@ class ObjectStorageOrchestrator {
         }
     }
 
-    private func publicProviderURL(for provider: Provider, path: String) -> URL {
+    nonisolated private func publicProviderURL(for provider: Provider, path: String) -> URL {
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
         switch provider {
         case .googleCloud:

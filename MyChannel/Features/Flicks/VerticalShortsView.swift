@@ -196,10 +196,12 @@ struct ShortVideoView: View {
                                     Text(video.creator.displayName)
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundColor(.white)
+                                        .lineLimit(1)
                                     
                                     Text("@\(video.creator.username)")
                                         .font(.system(size: 14))
                                         .foregroundColor(.white.opacity(0.8))
+                                        .lineLimit(1)
                                 }
                                 
                                 Spacer()
@@ -209,10 +211,13 @@ struct ShortVideoView: View {
                                 }
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.white)
+                                .lineLimit(1)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 6)
                                 .background(AppTheme.Colors.primary)
                                 .cornerRadius(16)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .layoutPriority(1)
                             }
                             
                             // Video title/description

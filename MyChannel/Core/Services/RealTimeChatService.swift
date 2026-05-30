@@ -158,6 +158,7 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
             self.chatUsers.removeAll()
             self.messageQueue.removeAll()
         }
+        await LiveChatFirestoreService.shared.stopListening()
     }
     
     func sendMessage(_ message: LiveChatMessage) async throws {
@@ -314,8 +315,11 @@ class RealTimeChatService: LiveChatServiceProtocol, ObservableObject {
     }
     
     private func startListening() {
-        Task {
-            await listenForMessages()
+        guard let streamId = currentStreamId else { return }
+        Task { @MainActor in
+            LiveChatFirestoreService.shared.listenForMessages(streamId: streamId) { [weak self] newMessages in
+                self?.messages = newMessages
+            }
         }
     }
     

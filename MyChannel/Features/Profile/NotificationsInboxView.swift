@@ -61,6 +61,7 @@ struct NotificationsInboxView: View {
         case .mention: return "at"
         case .system: return "gear"
         case .milestone: return "flag.fill"
+        case .storyReply: return "arrowshape.turn.up.left.fill"
         }
     }
 }

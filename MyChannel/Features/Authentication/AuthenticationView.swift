@@ -605,13 +605,13 @@ struct SignUpView: View {
                                 .foregroundColor(agreeToTerms ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
                             
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("I agree to the Terms of Service and Privacy Policy")
+                                Text("I agree to the Terms of Service (EULA) and Privacy Policy")
                                     .font(.system(size: 14))
                                     .foregroundColor(AppTheme.Colors.textSecondary)
                                     .multilineTextAlignment(.leading)
                                 
                                 HStack {
-                                    Button("Terms of Service") { showingTerms = true }
+                                    Button("Terms of Service (EULA)") { showingTerms = true }
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(AppTheme.Colors.primary)
                                     

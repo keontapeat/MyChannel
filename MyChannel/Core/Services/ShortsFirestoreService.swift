@@ -1,6 +1,7 @@
 import Foundation
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
+import FirebaseStorage
 #endif
 
 @MainActor
@@ -91,12 +92,34 @@ final class ShortsFirestoreService: ObservableObject {
                 let d = doc.data()
                 let creator = await resolveCreator(from: d)
                 
+                var videoURL = d["videoUrl"] as? String ?? (d["videoURL"] as? String ?? "")
+                var thumbnailURL = d["thumbnailUrl"] as? String ?? (d["thumbnailURL"] as? String ?? "")
+                
+                // 🔥 Auto-refresh expired Firebase Storage URLs
+                if videoURL.contains("firebasestorage.googleapis.com") {
+                    do {
+                        let ref = try Storage.storage().reference(forURL: videoURL)
+                        videoURL = try await ref.downloadURL().absoluteString
+                    } catch {
+                        print("⚠️ [ShortsFirestore] Failed to refresh video URL: \(error)")
+                    }
+                }
+                
+                if thumbnailURL.contains("firebasestorage.googleapis.com") {
+                    do {
+                        let ref = try Storage.storage().reference(forURL: thumbnailURL)
+                        thumbnailURL = try await ref.downloadURL().absoluteString
+                    } catch {
+                        print("⚠️ [ShortsFirestore] Failed to refresh thumbnail URL: \(error)")
+                    }
+                }
+                
                 let video = Video(
                     id: doc.documentID,
                     title: d["title"] as? String ?? "",
                     description: d["description"] as? String ?? "",
-                    thumbnailURL: d["thumbnailUrl"] as? String ?? (d["thumbnailURL"] as? String ?? ""),
-                    videoURL: d["videoUrl"] as? String ?? (d["videoURL"] as? String ?? ""),
+                    thumbnailURL: thumbnailURL,
+                    videoURL: videoURL,
                     duration: (d["duration"] as? Double) ?? 0,
                     viewCount: (d["viewCount"] as? Int) ?? 0,
                     likeCount: (d["likeCount"] as? Int) ?? 0,

@@ -12,16 +12,19 @@ struct EarningsDashboardView: View {
     @StateObject private var service = CreatorEconomyService.shared
     @State private var earnings: CreatorEarnings? = nil
     @State private var isLoading = false
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: 24) {
                 header
                 totals
                 breakdown
                 payoutCard
             }
             .padding()
+            .frame(maxWidth: horizontalSizeClass == .regular ? 900 : .infinity)
+            .frame(maxWidth: .infinity)
         }
         .task { await load() }
         .navigationTitle("Earnings")
@@ -67,7 +70,11 @@ struct EarningsDashboardView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Revenue Breakdown").font(.headline)
             GroupBox {
-                VStack(spacing: 10) {
+                let columns = horizontalSizeClass == .regular
+                    ? [GridItem(.flexible()), GridItem(.flexible())]
+                    : [GridItem(.flexible())]
+                
+                LazyVGrid(columns: columns, spacing: 16) {
                     row("Ads", earnings?.revenueBreakdown.adRevenue ?? 0)
                     row("Tips", earnings?.revenueBreakdown.tipRevenue ?? 0)
                     row("Memberships", earnings?.revenueBreakdown.membershipRevenue ?? 0)

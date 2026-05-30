@@ -17,7 +17,7 @@ struct UploadView: View {
     @StateObject private var uploadManager = VideoUploadManager()
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
-    @StateObject private var globalPlayer = GlobalVideoPlayerManager.shared // 🔥 FIX: Access global player to hide mini player
+    @EnvironmentObject private var globalPlayer: GlobalVideoPlayerManager // 🔥 FIX: Access global player to hide mini player
     
     @State private var uploadStep: UploadStep = .selectMedia
     @State private var creationMode: CreationMode = .video
@@ -59,6 +59,7 @@ struct UploadView: View {
     @State private var isLoadingAISuggestions = false
     @State private var aiTitleSuggestion: String? = nil
     @State private var aiDescriptionSuggestion: String? = nil
+    @State private var isGeneratingChapters = false
     
     enum UploadStep {
         case selectMedia
@@ -154,13 +155,16 @@ struct UploadView: View {
         }
     }
     
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    
     private var mainContent: some View {
         ZStack {
             backgroundGradient
                 .ignoresSafeArea()
             
             content
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .frame(maxWidth: horizontalSizeClass == .regular ? 800 : .infinity, maxHeight: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity)
         }
         .navigationTitle("Create")
         .navigationBarTitleDisplayMode(.inline)
@@ -754,26 +758,49 @@ struct UploadView: View {
                         maxLength: 500
                     )
 
-                    // AI Title/Description Optimizer
+                    // AI Title/Description & Chapters Optimizer
                     VStack(alignment: .leading, spacing: 8) {
-                        Button {
-                            Task { await fetchAITitleSuggestions() }
-                        } label: {
-                            HStack(spacing: 6) {
-                                if isLoadingAISuggestions {
-                                    ProgressView().scaleEffect(0.8).tint(.white)
+                        HStack(spacing: 8) {
+                            Button {
+                                Task { await fetchAITitleSuggestions() }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    if isLoadingAISuggestions {
+                                        ProgressView().scaleEffect(0.8).tint(.white)
+                                    }
+                                    Text(isLoadingAISuggestions ? "Optimizing..." : "AI Optimize Info")
+                                        .font(.system(size: 14, weight: .semibold))
                                 }
-                                Text(isLoadingAISuggestions ? "Optimizing..." : "AI Optimize Title & Description")
-                                    .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .background(AppTheme.Colors.textPrimary)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(AppTheme.Colors.textPrimary)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .disabled(isLoadingAISuggestions || uploadManager.title.isEmpty)
+                            .opacity((isLoadingAISuggestions || uploadManager.title.isEmpty) ? 0.5 : 1.0)
+                            
+                            Button {
+                                Task { await generateSmartChapters() }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    if isGeneratingChapters {
+                                        ProgressView().scaleEffect(0.8).tint(.white)
+                                    } else {
+                                        Image(systemName: "list.bullet.rectangle.portrait")
+                                    }
+                                    Text(isGeneratingChapters ? "Generating..." : "Smart Chapters")
+                                        .font(.system(size: 14, weight: .semibold))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .background(AppTheme.Colors.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .disabled(isGeneratingChapters || uploadManager.videoDuration == 0)
+                            .opacity((isGeneratingChapters || uploadManager.videoDuration == 0) ? 0.5 : 1.0)
                         }
-                        .disabled(isLoadingAISuggestions || uploadManager.title.isEmpty)
-                        .opacity((isLoadingAISuggestions || uploadManager.title.isEmpty) ? 0.5 : 1.0)
 
                         if let suggestion = aiTitleSuggestion {
                             VStack(alignment: .leading, spacing: 4) {
@@ -942,6 +969,50 @@ struct UploadView: View {
                     }
                     .pickerStyle(.menu)
                 }
+                
+                detailCard(title: "Auto-Dub & Localization") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Reach a global audience with AI-generated audio dubs.")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        
+                        Toggle(isOn: $uploadManager.enableAutoDub) {
+                            Text("Enable Auto-Dubbing")
+                                .font(.system(size: 15, weight: .medium))
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
+                        
+                        if uploadManager.enableAutoDub {
+                            Text("Select target languages:")
+                                .font(.system(size: 14, weight: .medium))
+                            
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(["es", "fr", "de", "hi", "pt", "ja", "zh", "ar", "ru", "ko"], id: \.self) { lang in
+                                        Button(action: {
+                                            if uploadManager.autoDubLanguages.contains(lang) {
+                                                uploadManager.autoDubLanguages.removeAll { $0 == lang }
+                                            } else {
+                                                uploadManager.autoDubLanguages.append(lang)
+                                            }
+                                        }) {
+                                            Text(lang.uppercased())
+                                                .font(.caption)
+                                                .fontWeight(.bold)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(uploadManager.autoDubLanguages.contains(lang) ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+                                                .foregroundColor(uploadManager.autoDubLanguages.contains(lang) ? .white : AppTheme.Colors.textPrimary)
+                                                .cornerRadius(12)
+                                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(uploadManager.autoDubLanguages.contains(lang) ? AppTheme.Colors.primary : AppTheme.Colors.divider, lineWidth: 1))
+                                        }
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                    }
+                }
 
                 detailCard(title: "Location & Thumbnail") {
                     ProfessionalInputField(
@@ -1082,6 +1153,38 @@ struct UploadView: View {
         if let d = descRes?.description ?? descRes?.optimized_description, !d.isEmpty {
             aiDescriptionSuggestion = d
             print("🤖 [DescriptionWriter] Suggestion ready")
+        }
+    }
+    
+    private func generateSmartChapters() async {
+        isGeneratingChapters = true
+        defer { isGeneratingChapters = false }
+        
+        let title = uploadManager.title.isEmpty ? "My Video" : uploadManager.title
+        let duration = uploadManager.videoDuration
+        let formattedDur = formattedTime(duration)
+        
+        let prompt = """
+        Generate YouTube-style smart chapters for a video titled '\(title)' with a total duration of \(formattedDur).
+        Provide only the timestamps and chapter titles, starting with '0:00 Intro'.
+        Format strictly as:
+        0:00 Chapter Title
+        1:30 Next Chapter
+        ...
+        Make them realistic for a video of this length.
+        """
+        
+        do {
+            let response = try await VertexAIService.shared.generateWithGemini(prompt)
+            guard !Task.isCancelled else { return }
+            
+            // Append chapters to description
+            let newChapters = "\n\nChapters:\n" + response.trimmingCharacters(in: .whitespacesAndNewlines)
+            uploadManager.description += newChapters
+            print("🤖 [SmartChapters] Chapters generated and appended to description.")
+            HapticManager.shared.notification(type: .success)
+        } catch {
+            print("🚨 [SmartChapters] Error: \(error)")
         }
     }
 
@@ -1586,855 +1689,24 @@ struct UploadView: View {
     }
 }
 
-struct EditingToolCard: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
-    
-    @State private var isPressed = false
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(isPressed ? color.opacity(0.15) : AppTheme.Colors.cardBackground)
-                        .frame(width: 56, height: 56)
-                        .overlay(
-                            Circle()
-                                .stroke(isPressed ? color.opacity(0.4) : AppTheme.Colors.divider.opacity(0.2), lineWidth: 1.5)
-                        )
-                    Image(systemName: icon)
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(isPressed ? color : AppTheme.Colors.textSecondary)
-                        .scaleEffect(isPressed ? 1.05 : 1.0)
-                }
-                .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isPressed)
-                
-                VStack(spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .lineLimit(1)
-                    Text(subtitle)
-                        .font(.system(size: 12))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: 160, alignment: .top)
-            .padding(.vertical, 18)
-            .padding(.horizontal, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(isPressed ? AppTheme.Colors.cardBackground.opacity(0.8) : AppTheme.Colors.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(AppTheme.Colors.divider.opacity(isPressed ? 0.4 : 0.2), lineWidth: 1)
-                    )
-            )
-            .shadow(
-                color: .black.opacity(isPressed ? 0.1 : 0.04),
-                radius: isPressed ? 10 : 6,
-                x: 0,
-                y: isPressed ? 6 : 3
-            )
-            .scaleEffect(isPressed ? 0.98 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isPressed)
-        }
-        .buttonStyle(.plain)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                        HapticManager.shared.impact(style: .light)
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
-    }
-}
 
 // 🔥 NUCLEAR CREATION MODE BAR
-struct UploadCreationModeBar: View {
-    @Binding var selected: UploadView.CreationMode
-    let onTap: (UploadView.CreationMode) -> Void
-    
-    @Environment(\.horizontalSizeClass) private var hSizeClass
-    @Environment(\.sizeCategory) private var sizeCategory
-    @Namespace private var ns
-    
-    private var isPad: Bool { hSizeClass == .regular }
-    private var isCompactWidth: Bool {
-        ((UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.width ?? 390) < 360
-    }
-    private var showLabels: Bool {
-        return isPad || (!isCompactWidth && sizeCategory <= .large)
-    }
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(UploadView.CreationMode.allCases) { mode in
-                NuclearModeButton(
-                    ns: ns,
-                    mode: mode,
-                    isSelected: selected == mode,
-                    showLabels: showLabels,
-                    isExpanded: false,
-                    onTap: {
-                        HapticManager.shared.impact(style: .medium)
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                            selected = mode
-                        }
-                        onTap(mode)
-                    }
-                )
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 28)
-                    .fill(.ultraThinMaterial)
-                
-                RoundedRectangle(cornerRadius: 28)
-                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
-            }
-            .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
-        )
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: selected)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Creation mode")
-    }
-}
 
 // 🔥 NUCLEAR MODE BUTTON
-private struct NuclearModeButton: View {
-    let ns: Namespace.ID
-    let mode: UploadView.CreationMode
-    let isSelected: Bool
-    let showLabels: Bool
-    let isExpanded: Bool
-    let onTap: () -> Void
-    
-    @State private var isPressed = false
-    
-    var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                if isSelected {
-                    Capsule()
-                        .fill(AppTheme.Colors.textPrimary)
-                        .matchedGeometryEffect(id: "selector", in: ns)
-                        .frame(height: 44)
-                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-                }
-                
-                VStack(spacing: 4) {
-                    Image(systemName: mode.icon)
-                        .font(.system(size: 16, weight: .bold))
-                        .symbolRenderingMode(.hierarchical)
-                    
-                    if showLabels {
-                        Text(mode.title)
-                            .font(.system(size: 11, weight: .bold))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                }
-                .padding(.horizontal, showLabels ? 14 : 12)
-                .frame(height: 44)
-                .frame(minWidth: showLabels ? 0 : 44)
-                .foregroundColor(isSelected ? .white : .white.opacity(0.8))
-                .scaleEffect(isPressed ? 0.92 : 1.0)
-            }
-        }
-        .buttonStyle(.plain)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    isPressed = false
-                }
-        )
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-        .accessibilityLabel(mode.title)
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
-}
 
-private struct UploadQualitySettingsView: View {
-    @Binding var selected: UploadView.VideoQuality
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(UploadView.VideoQuality.allCases) { quality in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(quality.title).font(.headline)
-                            Text(quality.description).font(.caption).foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        if selected == quality {
-                            Image(systemName: "checkmark").foregroundColor(AppTheme.Colors.primary)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { selected = quality }
-                }
-            }
-            .navigationTitle("Upload Quality")
-        }
-    }
-}
 
-struct ProfessionalInputField: View {
-    let title: String
-    @Binding var text: String
-    let placeholder: String
-    let icon: String
-    let isRequired: Bool
-    let maxLength: Int
-    
-    @FocusState private var isFocused: Bool
-    
-    init(title: String, text: Binding<String>, placeholder: String, icon: String, isRequired: Bool = false, maxLength: Int = 1000) {
-        self.title = title
-        self._text = text
-        self.placeholder = placeholder
-        self.icon = icon
-        self.isRequired = isRequired
-        self.maxLength = maxLength
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title).font(.system(size: 16, weight: .semibold)).foregroundColor(AppTheme.Colors.textPrimary)
-                if isRequired { Text("*").font(.system(size: 16, weight: .semibold)).foregroundColor(.red) }
-                Spacer()
-                Text("\(text.count)/\(maxLength)").font(.system(size: 12)).foregroundColor(text.count > maxLength ? .red : AppTheme.Colors.textTertiary)
-            }
-            
-            HStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 16)).foregroundColor(isFocused ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary).frame(width: 20)
-                TextField(placeholder, text: $text)
-                    .font(.system(size: 16))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .focused($isFocused)
-                    .onChange(of: text) { newValue in
-                        if newValue.count > maxLength { text = String(newValue.prefix(maxLength)) }
-                    }
-            }
-            .padding(16)
-            .background(AppTheme.Colors.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isFocused ? AppTheme.Colors.primary : AppTheme.Colors.divider.opacity(0.3), lineWidth: isFocused ? 2 : 1))
-            .animation(.easeInOut(duration: 0.2), value: isFocused)
-        }
-    }
-}
 
-struct ProfessionalTextEditor: View {
-    let title: String
-    @Binding var text: String
-    let placeholder: String
-    let icon: String
-    let maxLength: Int
-    
-    @FocusState private var isFocused: Bool
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title).font(.system(size: 16, weight: .semibold)).foregroundColor(AppTheme.Colors.textPrimary)
-                Spacer()
-                Text("\(text.count)/\(maxLength)").font(.system(size: 12)).foregroundColor(text.count > maxLength ? .red : AppTheme.Colors.textTertiary)
-            }
-            
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 12) {
-                    Image(systemName: icon).font(.system(size: 16)).foregroundColor(isFocused ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary).frame(width: 20)
-                    Text("Description").font(.system(size: 16, weight: .medium)).foregroundColor(AppTheme.Colors.textSecondary)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                
-                ZStack(alignment: .topLeading) {
-                    UIKitMultilineTextView(
-                        text: $text,
-                        placeholder: placeholder,
-                        font: .systemFont(ofSize: 16),
-                        textColor: UIColor(AppTheme.Colors.textPrimary),
-                        placeholderColor: UIColor(AppTheme.Colors.textTertiary),
-                        isFirstResponder: isFocused,
-                        maxLength: maxLength,
-                        onFocusChanged: { focused in
-                            isFocused = focused
-                        }
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 4)
-                }
-                .frame(height: 100)
-            }
-            .background(AppTheme.Colors.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isFocused ? AppTheme.Colors.primary : AppTheme.Colors.divider.opacity(0.2), lineWidth: isFocused ? 2 : 1))
-            .animation(.easeInOut(duration: 0.2), value: isFocused)
-        }
-    }
-}
 
-struct ProfessionalPicker<T: CaseIterable & Hashable & RawRepresentable>: View where T.RawValue == String, T: CustomStringConvertible {
-    let title: String
-    @Binding var selection: T
-    let icon: String
-    let options: [T]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-            
-            Menu {
-                ForEach(options, id: \.self) { option in
-                    Button {
-                        selection = option
-                        HapticManager.shared.impact(style: .light)
-                    } label: {
-                        HStack {
-                            Text(option.description)
-                            Spacer()
-                            if option == selection {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: icon)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                    
-                    Text(selection.description)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textTertiary)
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(AppTheme.Colors.background)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(AppTheme.Colors.divider.opacity(0.4), lineWidth: 1)
-                )
-            }
-            .contentShape(Rectangle())
-        }
-    }
-}
 
 // YouTube-style professional tag input
-struct ProfessionalTagInput: View {
-    let title: String
-    @Binding var selectedTags: Set<String>
-    let icon: String
-    
-    @State private var inputText = ""
-    @FocusState private var isInputFocused: Bool
-    private let suggestedTags = ["Tutorial", "Educational", "Fun", "Music", "Gaming", "Tech", "Lifestyle", "Comedy"]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header row
-            HStack {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                
-                Text(title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                Spacer()
-                
-                Text("\(selectedTags.count)/10")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(selectedTags.count >= 10 ? .red : AppTheme.Colors.textTertiary)
-            }
-            
-            // Input field
-            HStack(spacing: 10) {
-                TextField("Add tags", text: $inputText)
-                    .font(.system(size: 14))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .focused($isInputFocused)
-                    .onSubmit { addTag() }
-                    .submitLabel(.done)
-                
-                if !inputText.isEmpty {
-                    Button(action: { inputText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-                    }
-                }
-                
-                Button(action: addTag) {
-                    Text("Add")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(canAddTag ? AppTheme.Colors.textPrimary : AppTheme.Colors.textTertiary)
-                }
-                .disabled(!canAddTag)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(AppTheme.Colors.background)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isInputFocused ? AppTheme.Colors.textPrimary.opacity(0.4) : AppTheme.Colors.divider.opacity(0.4), lineWidth: 1)
-                    )
-            )
-            .animation(.easeInOut(duration: 0.15), value: isInputFocused)
-            
-            // Selected tags
-            if !selectedTags.isEmpty {
-                FlowLayout(spacing: 6) {
-                    ForEach(Array(selectedTags).sorted(), id: \.self) { tag in
-                        YouTubeStyleTagChip(tag: tag, isSelected: true) {
-                            _ = withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedTags.remove(tag)
-                            }
-                            HapticManager.shared.impact(style: .light)
-                        }
-                    }
-                }
-            }
-            
-            // Suggested tags
-            if !availableSuggestedTags.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Suggested")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textTertiary)
-                    
-                    FlowLayout(spacing: 6) {
-                        ForEach(availableSuggestedTags.prefix(8), id: \.self) { tag in
-                            YouTubeStyleTagChip(tag: tag, isSelected: false) {
-                                if selectedTags.count < 10 {
-                                    _ = withAnimation(.easeInOut(duration: 0.2)) {
-                                        selectedTags.insert(tag)
-                                    }
-                                    HapticManager.shared.impact(style: .light)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    private var canAddTag: Bool {
-        let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !trimmed.isEmpty && !selectedTags.contains(trimmed) && selectedTags.count < 10
-    }
-    
-    private var availableSuggestedTags: [String] {
-        suggestedTags.filter { !selectedTags.contains($0) }
-    }
-    
-    private func addTag() {
-        let tag = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !tag.isEmpty && !selectedTags.contains(tag) && selectedTags.count < 10 {
-            _ = withAnimation(.easeInOut(duration: 0.2)) {
-                selectedTags.insert(tag)
-            }
-            inputText = ""
-            HapticManager.shared.impact(style: .light)
-        }
-    }
-}
 
 // Clean tag chip - YouTube style
-struct YouTubeStyleTagChip: View {
-    let tag: String
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Text(tag)
-                    .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
-                
-                Image(systemName: isSelected ? "xmark" : "plus")
-                    .font(.system(size: 10, weight: .bold))
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(isSelected ? AppTheme.Colors.textPrimary : AppTheme.Colors.background)
-            )
-            .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
-            .overlay(
-                Capsule()
-                    .stroke(isSelected ? Color.clear : AppTheme.Colors.divider.opacity(0.5), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-}
 
 // FlowLayout is now in Core/Components/FlowLayout.swift (shared component)
 
 // Old ProfessionalTagChip replaced by YouTubeStyleTagChip above
 
-struct ProfessionalToggleRow: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    @Binding var isOn: Bool
-    let isPremium: Bool
-    
-    init(title: String, subtitle: String, icon: String, isOn: Binding<Bool>, isPremium: Bool = false) {
-        self.title = title
-        self.subtitle = subtitle
-        self.icon = icon
-        self._isOn = isOn
-        self.isPremium = isPremium
-    }
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                Circle().fill(isOn ? AppTheme.Colors.primary.opacity(0.1) : AppTheme.Colors.surface).frame(width: 40, height: 40)
-                Image(systemName: icon).font(.system(size: 18, weight: .medium)).foregroundColor(isOn ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(title).font(.system(size: 16, weight: .semibold)).foregroundColor(AppTheme.Colors.textPrimary)
-                    if isPremium {
-                        Text("PRO")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(AppTheme.Colors.primary)
-                            .clipShape(Capsule())
-                    }
-                }
-                Text(subtitle).font(.system(size: 14)).foregroundColor(AppTheme.Colors.textSecondary)
-            }
-            Spacer()
-            Toggle("", isOn: $isOn).toggleStyle(SwitchToggleStyle(tint: AppTheme.Colors.primary))
-        }
-        .padding(16)
-        .background(AppTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1))
-    }
-}
 
-struct ProfessionalButtonStyle: ButtonStyle {
-    enum Style { case primary, secondary }
-    let style: Style
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
 
-// MARK: - New YouTube Parity Components
 
-// MARK: - Visibility Picker (Disabled - using simple toggle instead)
-/*
-struct ProfessionalVisibilityPicker: View {
-    let title: String
-    @Binding var selection: VideoUploadManager.VideoVisibility
-    let icon: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .foregroundColor(AppTheme.Colors.primary)
-                    .font(.system(size: 16, weight: .medium))
-                
-                Text(title)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-            }
-            
-            VStack(spacing: 8) {
-                ForEach(VideoUploadManager.VideoVisibility.allCases) { visibility in
-                    Button {
-                        selection = visibility
-                        HapticManager.shared.impact(style: .light)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: visibility.icon)
-                                .foregroundColor(selection == visibility ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                                .font(.system(size: 16))
-                                .frame(width: 20)
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(visibility.rawValue)
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                
-                                Text(visibility.description)
-                                    .font(.system(size: 13))
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                            }
-                            
-                            Spacer()
-                            
-                            if selection == visibility {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(AppTheme.Colors.primary)
-                                    .font(.system(size: 18))
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(selection == visibility ? AppTheme.Colors.primary.opacity(0.1) : AppTheme.Colors.cardBackground)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(selection == visibility ? AppTheme.Colors.primary : AppTheme.Colors.divider, lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-}
-*/
-
-struct ProfessionalDatePicker: View {
-    let title: String
-    @Binding var date: Date
-    let icon: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .foregroundColor(AppTheme.Colors.primary)
-                    .font(.system(size: 16, weight: .medium))
-                
-                Text(title)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-            }
-            
-            DatePicker("", selection: $date, in: Date()...)
-                .datePickerStyle(.compact)
-                .labelsHidden()
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(AppTheme.Colors.cardBackground)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(AppTheme.Colors.divider, lineWidth: 1)
-                )
-        }
-    }
-}
-
-struct ThumbnailSelectionView: View {
-    let autoThumbnail: UIImage?
-    @Binding var customThumbnails: [UIImage]
-    @Binding var selectedIndex: Int
-    @State private var showingImagePicker = false
-    
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                // Auto-generated thumbnail
-                if let autoThumbnail = autoThumbnail {
-                    ThumbnailOption(
-                        image: autoThumbnail,
-                        isSelected: selectedIndex == 0,
-                        label: "Auto"
-                    ) {
-                        selectedIndex = 0
-                    }
-                }
-                
-                // Custom thumbnails
-                ForEach(customThumbnails.indices, id: \.self) { index in
-                    ThumbnailOption(
-                        image: customThumbnails[index],
-                        isSelected: selectedIndex == index + 1,
-                        label: nil
-                    ) {
-                        selectedIndex = index + 1
-                    }
-                }
-                
-                // Add custom thumbnail button
-                Button {
-                    showingImagePicker = true
-                } label: {
-                    VStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(AppTheme.Colors.cardBackground)
-                            .frame(width: 120, height: 68)
-                            .overlay(
-                                Image(systemName: "plus")
-                                    .font(.system(size: 24, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.primary)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(AppTheme.Colors.divider, style: StrokeStyle(lineWidth: 1, dash: [5]))
-                            )
-                        
-                        Text("Custom")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 20)
-        }
-        .sheet(isPresented: $showingImagePicker) {
-            ImagePickerWrapper { image in
-                if let image = image {
-                    customThumbnails.append(image)
-                    selectedIndex = customThumbnails.count // Select the newly added thumbnail
-                }
-            }
-        }
-    }
-}
-
-// MARK: - ImagePicker Wrapper
-struct ImagePickerWrapper: UIViewControllerRepresentable {
-    let onImageSelected: (UIImage?) -> Void
-    @Environment(\.dismiss) private var dismiss
-    
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.delegate = context.coordinator
-        picker.sourceType = .photoLibrary
-        return picker
-    }
-    
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: ImagePickerWrapper
-        
-        init(_ parent: ImagePickerWrapper) {
-            self.parent = parent
-        }
-        
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.onImageSelected(image)
-            } else {
-                parent.onImageSelected(nil)
-            }
-            parent.dismiss()
-        }
-        
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.onImageSelected(nil)
-            parent.dismiss()
-        }
-    }
-}
-
-struct ThumbnailOption: View {
-    let image: UIImage
-    let isSelected: Bool
-    let label: String?
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(16/9, contentMode: .fill)
-                    .frame(width: 120, height: 68)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.divider, lineWidth: isSelected ? 3 : 1)
-                    )
-                    .overlay(
-                        Group {
-                            if isSelected {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(AppTheme.Colors.primary)
-                                    .background(Color.white)
-                                    .clipShape(Circle())
-                                    .font(.system(size: 20))
-                            }
-                        },
-                        alignment: .topTrailing
-                    )
-                
-                if let label = label {
-                    Text(label)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-#Preview("UploadView") {
-    UploadView()
-        .environmentObject(AppState())
-        .preferredColorScheme(.light)
-}
+// ⚡ YouTube parity components extracted to UploadViewComponents.swift

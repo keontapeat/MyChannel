@@ -768,7 +768,8 @@ struct EnhancedStory: Identifiable, Codable {
             username: creatorUsername,
             authorImageName: creatorAvatarURL,
             creatorId: creatorId,
-            originalStoryId: id
+            originalStoryId: id,
+            isCloseFriends: !isPublic
         )
     }
 }

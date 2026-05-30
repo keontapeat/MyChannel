@@ -399,6 +399,7 @@ final class SmartDownloadEngine: ObservableObject {
         case .ultra: bytesPerSecond = 1_200_000
         case .max: bytesPerSecond = 2_500_000
         case .adaptive: bytesPerSecond = 250_000
+        default: bytesPerSecond = 300_000
         }
         
         return Int64(video.duration) * bytesPerSecond

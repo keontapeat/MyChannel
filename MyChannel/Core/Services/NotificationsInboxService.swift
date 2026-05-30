@@ -21,7 +21,7 @@ struct NotificationItem: Codable, Identifiable {
     let isRead: Bool
     let createdAt: Date
     let groupedCount: Int
-    enum NotificationType: String, Codable { case newVideo, liveStart, comment, like, subscriber, mention, system, milestone }
+    enum NotificationType: String, Codable { case newVideo, liveStart, comment, like, subscriber, mention, system, milestone, storyReply }
 }
 
 @MainActor

@@ -30,6 +30,10 @@ struct ModernVideoPlayerView: View {
     @State private var canSkipAd: Bool = false
     @State private var adTimer: Timer? = nil
     
+    // Double tap ripple state
+    @State private var showSeekRipple = false
+    @State private var seekRippleForward = true
+    
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -39,24 +43,46 @@ struct ModernVideoPlayerView: View {
                 // Video Player
                 if let player = playerViewModel.player {
                     // The same AVPlayer feeds both the in-app mini player and native PiP bubble
-                    RawPlayerLayerView(player: player, videoGravity: .resizeAspect)
-                        .aspectRatio(16/9, contentMode: .fit)
-                        .clipped()
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                showControls.toggle()
-                            }
+                    ZStack {
+                        RawPlayerLayerView(player: player, videoGravity: .resizeAspect)
+                            .aspectRatio(16/9, contentMode: .fit)
+                            .clipped()
+                        
+                        // Double Tap to Seek Zones
+                        HStack(spacing: 0) {
+                            // Left Zone (Rewind)
+                            Color.white.opacity(0.001)
+                                .onTapGesture(count: 2) {
+                                    HapticManager.shared.impact(style: .medium)
+                                    playerViewModel.seekBackward(10)
+                                    showDoubleTapIndicator(forward: false)
+                                }
+                                .onTapGesture(count: 1) {
+                                    withAnimation(.easeInOut(duration: 0.3)) { showControls.toggle() }
+                                }
+                            
+                            // Right Zone (Forward)
+                            Color.white.opacity(0.001)
+                                .onTapGesture(count: 2) {
+                                    HapticManager.shared.impact(style: .medium)
+                                    playerViewModel.seekForward(10)
+                                    showDoubleTapIndicator(forward: true)
+                                }
+                                .onTapGesture(count: 1) {
+                                    withAnimation(.easeInOut(duration: 0.3)) { showControls.toggle() }
+                                }
                         }
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    handlePlayerGesture(value, in: geometry)
-                                }
-                                .onEnded { _ in
-                                    dragAmount = .zero
-                                    hideIndicators()
-                                }
-                        )
+                    }
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                handlePlayerGesture(value, in: geometry)
+                            }
+                            .onEnded { _ in
+                                dragAmount = .zero
+                                hideIndicators()
+                            }
+                    )
                 } else {
                     // Loading placeholder
                     ModernLoadingView()
@@ -156,6 +182,36 @@ struct ModernVideoPlayerView: View {
                         .padding(.horizontal, 16)
                         .padding(.bottom, 16)
                     }
+                }
+                
+                // Seek Ripple Overlay
+                if showSeekRipple {
+                    HStack {
+                        if seekRippleForward { Spacer() }
+                        
+                        ZStack {
+                            Circle()
+                                .fill(Color.white.opacity(0.2))
+                                .frame(width: 150, height: 150)
+                            
+                            VStack(spacing: 8) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: seekRippleForward ? "play.fill" : "backward.fill")
+                                    Image(systemName: seekRippleForward ? "play.fill" : "backward.fill")
+                                    Image(systemName: seekRippleForward ? "play.fill" : "backward.fill")
+                                }
+                                .font(.system(size: 20))
+                                
+                                Text("10 seconds")
+                                    .font(.system(size: 14, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 40)
+                        
+                        if !seekRippleForward { Spacer() }
+                    }
+                    .allowsHitTesting(false)
                 }
             }
         }
@@ -269,6 +325,19 @@ struct ModernVideoPlayerView: View {
         dragAmount = translation
     }
     
+    private func showDoubleTapIndicator(forward: Bool) {
+        seekRippleForward = forward
+        withAnimation(.easeIn(duration: 0.1)) {
+            showSeekRipple = true
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            withAnimation(.easeOut(duration: 0.3)) {
+                showSeekRipple = false
+            }
+        }
+    }
+    
     private func hideIndicators() {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -344,6 +413,8 @@ struct ModernPlayerControlsView: View {
                         .background(Color.black.opacity(0.3))
                         .clipShape(Circle())
                 }
+                .accessibilityLabel(Text("Dismiss Video"))
+                .accessibilityAddTraits(.isButton)
                 
                 Spacer()
                 
@@ -361,6 +432,12 @@ struct ModernPlayerControlsView: View {
                 Spacer()
                 
                 HStack(spacing: 12) {
+                    // 🔥 Phase 13: Core Media Ecosystem - AirPlay Integration
+                    AirPlayView()
+                        .frame(width: 44, height: 44)
+                        .background(Color.black.opacity(0.3))
+                        .clipShape(Circle())
+                        
                     Button(action: {
                         // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP
                         GlobalVideoPlayerManager.shared.registerLocalPlayer(video: video, player: viewModel.player)
@@ -403,6 +480,8 @@ struct ModernPlayerControlsView: View {
                     .foregroundColor(.white)
                     .shadow(color: .black.opacity(0.5), radius: 10, x: 0, y: 5)
             }
+            .accessibilityLabel(Text(viewModel.isPlaying ? "Pause" : "Play"))
+            .accessibilityAddTraits(.isButton)
             .scaleEffect(viewModel.isPlaying ? 0.8 : 1.0)
             .opacity(viewModel.isPlaying ? 0.3 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: viewModel.isPlaying)
@@ -444,6 +523,8 @@ struct ModernPlayerControlsView: View {
                             .font(.title2)
                             .foregroundColor(.white)
                     }
+                    .accessibilityLabel(Text("Seek Backward 10 Seconds"))
+                    .accessibilityAddTraits(.isButton)
                     
                     Button(action: {
                         viewModel.togglePlayPause()
@@ -521,6 +602,8 @@ struct ModernPlayerControlsView: View {
                             .font(.title3)
                             .foregroundColor(.white)
                     }
+                    .accessibilityLabel(Text("Toggle Fullscreen"))
+                    .accessibilityAddTraits(.isButton)
                 }
             }
             .padding(.horizontal, 20)
@@ -587,6 +670,19 @@ struct ModernProgressBar: View {
                     .frame(width: isDragging ? 16 : 12, height: isDragging ? 16 : 12)
                     .offset(x: geometry.size.width * displayProgress - (isDragging ? 8 : 6))
                     .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Playback Progress"))
+            .accessibilityValue(Text("\(Int(displayProgress * 100)) percent"))
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    onSeek(min(1.0, progress + 0.1))
+                case .decrement:
+                    onSeek(max(0.0, progress - 0.1))
+                @unknown default:
+                    break
+                }
             }
             .gesture(
                 DragGesture()

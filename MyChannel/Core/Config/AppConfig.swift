@@ -146,7 +146,7 @@ struct AppConfig {
         static let enableOfflineDownload = true
         // 🔥 FIX 2.1(b): Hide subscription purchase UI until IAPs are submitted & approved
         // Flip to `true` once App Store Connect IAPs are approved by App Review.
-        static let enableSubscriptions = false
+        static let enableSubscriptions = true
         // 🔥 FIX 3.1.1: Hide ALL external payment features (Stripe tips, Super Thanks,
         // fan funding, creator payouts) until proper IAP integration is complete.
         // These bypass Apple IAP and violate Guideline 3.1.1.
@@ -257,6 +257,7 @@ struct AppConfig {
         static let enableFeedAutopilot = false             // Phase 112
         static let enableAISearchV3 = false                // Phase 113
         static let enableCreatorGrowthCopilotV2 = false    // Phase 114
+        static let enableCreatorCopilot = false             // Phase 114 (alias)
         static let enableAutoLocalizationStudio = false    // Phase 115
 
         // Wave 24 — Resilience, Governance & Future Bets (116–120)

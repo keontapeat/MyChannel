@@ -23,6 +23,7 @@ struct Story: Identifiable, Codable, Equatable {
     let isViewed: Bool
     let thumbnail: String?
     let isLive: Bool
+    let isCloseFriends: Bool
     
     // Story content array for multi-slide stories
     let content: [StoryContent]
@@ -50,6 +51,7 @@ struct Story: Identifiable, Codable, Equatable {
         isViewed: Bool = false,
         thumbnail: String? = nil,
         isLive: Bool = false,
+        isCloseFriends: Bool = false,
         content: [StoryContent] = [],
         backgroundColor: String? = nil,
         textColor: String? = nil,
@@ -72,6 +74,7 @@ struct Story: Identifiable, Codable, Equatable {
         self.isViewed = isViewed
         self.thumbnail = thumbnail
         self.isLive = isLive
+        self.isCloseFriends = isCloseFriends
         self.content = content.isEmpty ? [StoryContent(id: id, url: mediaURL, type: mediaType, duration: duration, text: text, backgroundColor: backgroundColor)] : content
         self.backgroundColor = backgroundColor
         self.textColor = textColor
@@ -96,6 +99,7 @@ struct Story: Identifiable, Codable, Equatable {
         case isViewed
         case thumbnail
         case isLive
+        case isCloseFriends
         case content
         case backgroundColor
         case textColor

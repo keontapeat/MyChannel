@@ -2,9 +2,12 @@ import Foundation
 import FirebaseFirestore
 import FirebaseAuth
 import Combine
+import AVFoundation
+import FirebaseAuth
+import Combine
 
 @MainActor
-class DownloadManager: ObservableObject {
+class DownloadManager: NSObject, ObservableObject {
     static let shared = DownloadManager()
     
     @Published var downloads: [DownloadedVideo] = []
@@ -14,7 +17,18 @@ class DownloadManager: ObservableObject {
     
     private let db = Firestore.firestore()
     private let fileManager = FileManager.default
-    private var downloadTasks: [String: URLSessionDownloadTask] = [:]
+    
+    // Phase 9: Premium Offline Engine - Background Downloading
+    private lazy var backgroundSession: AVAssetDownloadURLSession = {
+        let configuration = URLSessionConfiguration.background(withIdentifier: "com.mychannel.backgroundDownloads")
+        // Enforce background resilience
+        configuration.isDiscretionary = false
+        configuration.sessionSendsLaunchEvents = true
+        return AVAssetDownloadURLSession(configuration: configuration, assetDownloadDelegate: self, delegateQueue: .main)
+    }()
+    
+    private var downloadTasks: [String: AVAggregateAssetDownloadTask] = [:]
+    private var standardDownloadTasks: [String: URLSessionDownloadTask] = [:]
     private var cancellables = Set<AnyCancellable>()
     
     private var downloadsDirectory: URL {
@@ -29,7 +43,8 @@ class DownloadManager: ObservableObject {
         return downloadsDir
     }
     
-    private init() {
+    private override init() {
+        super.init()
         loadDownloads()
     }
     
@@ -70,67 +85,14 @@ class DownloadManager: ObservableObject {
         
         let destinationURL = downloadsDirectory.appendingPathComponent("\(videoId).mp4")
         
-        let configuration = URLSessionConfiguration.default
-        let session = URLSession(configuration: configuration, delegate: nil, delegateQueue: nil)
-        
         activeDownloads[videoId] = 0.0
         
-        let task = session.downloadTask(with: url) { [weak self] tempURL, response, error in
-            guard let self = self else { return }
-            
-            Task { @MainActor in
-                if let error = error {
-                    self.activeDownloads.removeValue(forKey: videoId)
-                    self.error = "Download failed: \(error.localizedDescription)"
-                    return
-                }
-                
-                guard let tempURL = tempURL else {
-                    self.activeDownloads.removeValue(forKey: videoId)
-                    self.error = "Download failed: No file received"
-                    return
-                }
-                
-                do {
-                    if self.fileManager.fileExists(atPath: destinationURL.path) {
-                        try self.fileManager.removeItem(at: destinationURL)
-                    }
-                    
-                    try self.fileManager.moveItem(at: tempURL, to: destinationURL)
-                    
-                    let attributes = try self.fileManager.attributesOfItem(atPath: destinationURL.path)
-                    let fileSize = attributes[.size] as? Int64 ?? 0
-                    
-                    let downloadedVideo = DownloadedVideo(
-                        videoId: videoId,
-                        title: title,
-                        channelName: channelName,
-                        channelId: channelId,
-                        thumbnailUrl: thumbnailUrl,
-                        duration: duration,
-                        viewCount: viewCount,
-                        localFilePath: destinationURL.path,
-                        downloadDate: Date(),
-                        fileSize: fileSize,
-                        quality: quality,
-                        isWatched: false
-                    )
-                    
-                    try await self.saveDownloadToFirestore(downloadedVideo)
-                    
-                    await self.trackDownloadWithML(videoId: videoId, quality: quality.rawValue)
-                    
-                    self.activeDownloads.removeValue(forKey: videoId)
-                    self.loadDownloads()
-                    
-                } catch {
-                    self.activeDownloads.removeValue(forKey: videoId)
-                    self.error = "Failed to save download: \(error.localizedDescription)"
-                }
-            }
-        }
+        // Premium Offline Engine: Background Download Task
+        let configuration = URLSessionConfiguration.background(withIdentifier: "com.mychannel.background.\(videoId)")
+        let session = URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
         
-        downloadTasks[videoId] = task
+        let task = session.downloadTask(with: url)
+        standardDownloadTasks[videoId] = task
         task.resume()
     }
     
@@ -233,6 +195,8 @@ class DownloadManager: ObservableObject {
     }
     
     func cancelDownload(videoId: String) {
+        standardDownloadTasks[videoId]?.cancel()
+        standardDownloadTasks.removeValue(forKey: videoId)
         downloadTasks[videoId]?.cancel()
         downloadTasks.removeValue(forKey: videoId)
         activeDownloads.removeValue(forKey: videoId)
@@ -251,6 +215,48 @@ class DownloadManager: ObservableObject {
         formatter.allowedUnits = [.useMB, .useGB]
         formatter.countStyle = .file
         return formatter.string(fromByteCount: getTotalStorageUsed())
+    }
+}
+
+// MARK: - Background Download Delegate
+extension DownloadManager: URLSessionDownloadDelegate, AVAssetDownloadDelegate {
+    
+    nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+        // Extract videoId from session identifier
+        if let identifier = session.configuration.identifier, let videoId = identifier.components(separatedBy: ".").last {
+            Task { @MainActor in
+                self.activeDownloads[videoId] = progress
+            }
+        }
+    }
+    
+    nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        if let identifier = session.configuration.identifier, let videoId = identifier.components(separatedBy: ".").last {
+            Task { @MainActor in
+                // Standard file moving and saving logic from before
+                let destinationURL = self.downloadsDirectory.appendingPathComponent("\(videoId).mp4")
+                do {
+                    if self.fileManager.fileExists(atPath: destinationURL.path) {
+                        try self.fileManager.removeItem(at: destinationURL)
+                    }
+                    try self.fileManager.moveItem(at: location, to: destinationURL)
+                    self.activeDownloads.removeValue(forKey: videoId)
+                    self.loadDownloads()
+                } catch {
+                    self.error = "Failed to finalize download: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+    
+    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error = error, let identifier = session.configuration.identifier, let videoId = identifier.components(separatedBy: ".").last {
+            Task { @MainActor in
+                self.activeDownloads.removeValue(forKey: videoId)
+                self.error = "Background download failed: \(error.localizedDescription)"
+            }
+        }
     }
 }
 

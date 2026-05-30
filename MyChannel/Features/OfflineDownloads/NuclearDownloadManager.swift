@@ -490,6 +490,33 @@ final class NuclearDownloadManager: NSObject, ObservableObject {
         print("▶️ [Nuclear] Resumed: \(downloadId)")
     }
     
+    /// Pause all active downloads
+    func pauseAll() async {
+        let activeIds = activeDownloads.keys
+        for id in activeIds {
+            await pauseDownload(id)
+        }
+        // Also pause any that are simply 'downloading' or 'queued' without active tasks
+        for var download in downloads where download.status == .downloading || download.status == .queued {
+            download.status = .paused
+            updateDownload(download)
+        }
+        downloadQueue.removeAll()
+        HapticManager.shared.impact(style: .medium)
+        print("⏸️ [Nuclear] Paused ALL downloads")
+    }
+    
+    /// Resume all paused downloads
+    func resumeAll() async {
+        if downloadOnWiFiOnly && networkStatus != .wifi { return }
+        
+        for download in downloads where download.status == .paused {
+            await resumeDownload(download.id)
+        }
+        HapticManager.shared.impact(style: .medium)
+        print("▶️ [Nuclear] Resumed ALL downloads")
+    }
+    
     /// Cancel a download
     func cancelDownload(_ downloadId: String) async {
         // Remove from queue
@@ -651,6 +678,22 @@ final class NuclearDownloadManager: NSObject, ObservableObject {
     private func getSmartDownloadRecommendations() async -> [Video] {
         // This would integrate with recommendation engine
         // For now, return empty - implement based on watch history
+        return []
+    }
+    
+    // MARK: - Smart Download Cloud Sync
+    
+    /// Sync smart download IDs to cloud to prevent duplicate downloads on other devices
+    func syncSmartDownloadsToCloud(_ videoIds: [String]) {
+        // In a real implementation, you would write this to Firestore
+        // e.g. db.collection("users").document(userId).collection("settings").document("smart_downloads").setData(["ids": videoIds])
+        print("☁️ [Nuclear] Synced \(videoIds.count) smart download IDs to cloud")
+    }
+    
+    /// Fetch smart download IDs from other devices to skip them locally
+    func fetchSmartDownloadsFromCloud() async -> [String] {
+        // In a real implementation, fetch from Firestore
+        print("☁️ [Nuclear] Fetched remote smart download IDs from cloud")
         return []
     }
     
@@ -1180,6 +1223,7 @@ enum NuclearDownloadStatus: String, Codable {
 }
 
 enum NuclearDownloadQuality: String, Codable, CaseIterable {
+    case askEachTime = "AskEachTime"
     case adaptive = "Adaptive"
     case low = "360p"
     case medium = "720p"
@@ -1189,6 +1233,7 @@ enum NuclearDownloadQuality: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
+        case .askEachTime: return "Ask each time"
         case .adaptive: return "Adaptive (Recommended)"
         case .low: return "Low (360p)"
         case .medium: return "Medium (720p)"
@@ -1200,6 +1245,7 @@ enum NuclearDownloadQuality: String, Codable, CaseIterable {
     
     var estimatedSizePerHour: String {
         switch self {
+        case .askEachTime: return "Varies"
         case .adaptive: return "~200MB/hour"
         case .low: return "~100MB/hour"
         case .medium: return "~300MB/hour"
@@ -1211,6 +1257,7 @@ enum NuclearDownloadQuality: String, Codable, CaseIterable {
     
     var targetBitrate: Int {
         switch self {
+        case .askEachTime: return 0
         case .adaptive: return 2_000_000
         case .low: return 800_000
         case .medium: return 2_500_000

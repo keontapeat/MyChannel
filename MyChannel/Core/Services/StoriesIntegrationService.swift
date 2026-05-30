@@ -167,7 +167,8 @@ extension AssetStory {
             username: enhancedStory.creatorUsername,
             authorImageName: enhancedStory.creatorAvatarURL,
             creatorId: enhancedStory.creatorId,
-            originalStoryId: enhancedStory.id
+            originalStoryId: enhancedStory.id,
+            isCloseFriends: !enhancedStory.isPublic
         )
     }
 }

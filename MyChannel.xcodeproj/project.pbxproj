@@ -20,6 +20,8 @@
 		0541DE762E470D3F001B3F9E /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 0541DE752E470D3F001B3F9E /* FirebaseStorage */; };
 		054581AC2E59637D00F067AA /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 054581AB2E59637D00F067AA /* GoogleSignIn */; };
 		054581AE2E59637D00F067AA /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 054581AD2E59637D00F067AA /* GoogleSignInSwift */; };
+		057348442FC9244000E47AD1 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = 46B28C45B6BC58FBAD5B4C67 /* SwiftProtobuf */; };
+		05737A362FC93B4600E47AD1 /* JOSESwift in Frameworks */ = {isa = PBXBuildFile; productRef = 6B4161FD8B9817B5086972C3 /* JOSESwift */; };
 		05AF7A652FB978A9006D2031 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
 		05AF7A682FB97907006D2031 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A672FB97907006D2031 /* Nuke */; };
 		05AF7A6A2FB97907006D2031 /* NukeExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A692FB97907006D2031 /* NukeExtensions */; };
@@ -37,7 +39,7 @@
 		05AF7A8F2FB98AEF006D2031 /* TUSKit in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A8E2FB98AEF006D2031 /* TUSKit */; };
 		05AF7A922FB98B1D006D2031 /* GSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A912FB98B1D006D2031 /* GSPlayer */; };
 		05E845A52F9B05AF007F7218 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 05E845A42F9B05AF007F7218 /* FirebaseAppCheck */; };
-		13FC3476772D3650D8BB2067 /* JOSESwift in Frameworks */ = {isa = PBXBuildFile; productRef = 6B4161FD8B9817B5086972C3 /* JOSESwift */; };
+		09298A69C4F8B319F3A881E1 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F84281F4B13DD13656A7479F /* Supabase */; };
 		15D4FA1AB8525BEDC303178A /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 1D45B6F95725FBCFB630D724 /* Algorithms */; };
 		1C5B861EC89248BA8D7470FF /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = E5BE666A0BCB4CA5E87B7666 /* Alamofire */; };
 		210AD8E695E2F0E42D8E505A /* IOSSecuritySuite in Frameworks */ = {isa = PBXBuildFile; productRef = D5D0CD39996115F7A7D8A495 /* IOSSecuritySuite */; };
@@ -46,6 +48,7 @@
 		27D59FC7967572BDEA331230 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = 71106B566EA016B89EBD8451 /* PostHog */; };
 		315408449D135998753DFFB3 /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = 59B5E8E1147CE8F04511254C /* Down */; };
 		381AD48C7DB612878DB75796 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		3DBACE91F60B12616002C611 /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = F0B493095AF3F4CCE0A09635 /* LiveKit */; };
 		3ED26F604DBFD1521C7D13B8 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
 		41D9841A2023BB03468C46E9 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
 		436EC755C120E8B4D8DCEF94 /* CryptoSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D8FB5314192BCA2E52B0E6C6 /* CryptoSwift */; };
@@ -57,13 +60,12 @@
 		646F4E50EEF16144907C3664 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = DC51A64C0631455E28CFAB74 /* ZIPFoundation */; };
 		6ACF824EF11DFADF7FAE32AB /* StripeApplePay in Frameworks */ = {isa = PBXBuildFile; productRef = 1A04FE423CF6BBB0D44BA465 /* StripeApplePay */; };
 		79E1DD85508BF0EAA7D716F5 /* SkeletonView in Frameworks */ = {isa = PBXBuildFile; productRef = B7908F18FF9533C2D9F13DD5 /* SkeletonView */; };
-		8643958663CD09CF3F0384CC /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = 46B28C45B6BC58FBAD5B4C67 /* SwiftProtobuf */; };
+		7B0C898C5340F58CA5BE92B6 /* GoogleGenerativeAI in Frameworks */ = {isa = PBXBuildFile; productRef = 9527345E385F43A686B7548D /* GoogleGenerativeAI */; };
 		9377F6DCD9BE671CDB23BE06 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
 		95CD0A7EB52B6C8098E371B5 /* OpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 742D41F31D900887EBA83C85 /* OpenAI */; };
 		9B07CB02BA2E614327873FC6 /* SwiftUIIntrospect in Frameworks */ = {isa = PBXBuildFile; productRef = 1138BD2B9AE8417CB089490B /* SwiftUIIntrospect */; };
 		9B0B7A87B9C269DEF94ADAAE /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = D203EE5EDD7DB9A07F96D3B2 /* RevenueCat */; };
 		9C9024285D28CFCCC71EF01D /* DGCharts in Frameworks */ = {isa = PBXBuildFile; productRef = 04C142D5A727AF1BD0852309 /* DGCharts */; };
-		AF9CD66B8313001B528C44C5 /* HaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = 15CF5B74EE600C3258BA3517 /* HaishinKit */; };
 		B26334F888019C70F5039C78 /* AsyncAlgorithms in Frameworks */ = {isa = PBXBuildFile; productRef = AFD72B644DA6FF9DDB6EB5FB /* AsyncAlgorithms */; };
 		B7C52A4B567934ABA7894DA9 /* RealmSwift in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 12F17EB4FE2DED84D709CC50 /* RealmSwift */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		C3705B294F29C3A2299AC4D8 /* Valet in Frameworks */ = {isa = PBXBuildFile; productRef = 3F8C2E2673CEF2DD70097D88 /* Valet */; };
@@ -126,6 +128,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				05737A362FC93B4600E47AD1 /* JOSESwift in Frameworks */,
+				057348442FC9244000E47AD1 /* SwiftProtobuf in Frameworks */,
 				0541DE722E470D3F001B3F9E /* FirebaseMessaging in Frameworks */,
 				05AF7A922FB98B1D006D2031 /* GSPlayer in Frameworks */,
 				05AF7A862FB98760006D2031 /* Cache in Frameworks */,
@@ -164,7 +168,6 @@
 				27D59FC7967572BDEA331230 /* PostHog in Frameworks */,
 				2623A70D6C5B39B2AF566F04 /* ConfettiSwiftUI in Frameworks */,
 				57A42010762A0C6F8AA1E01F /* Sentry in Frameworks */,
-				AF9CD66B8313001B528C44C5 /* HaishinKit in Frameworks */,
 				9B0B7A87B9C269DEF94ADAAE /* RevenueCat in Frameworks */,
 				E64B595CC85E845F9108F677 /* StripePayments in Frameworks */,
 				6ACF824EF11DFADF7FAE32AB /* StripeApplePay in Frameworks */,
@@ -179,7 +182,6 @@
 				9B07CB02BA2E614327873FC6 /* SwiftUIIntrospect in Frameworks */,
 				FADE48C84CD671EEEFB09A98 /* KeychainSwift in Frameworks */,
 				9C9024285D28CFCCC71EF01D /* DGCharts in Frameworks */,
-				8643958663CD09CF3F0384CC /* SwiftProtobuf in Frameworks */,
 				646F4E50EEF16144907C3664 /* ZIPFoundation in Frameworks */,
 				D051D9AB9705EADB133DB6E3 /* SwiftSoup in Frameworks */,
 				315408449D135998753DFFB3 /* Down in Frameworks */,
@@ -191,9 +193,11 @@
 				1C5B861EC89248BA8D7470FF /* Alamofire in Frameworks */,
 				47C882EFC55557E288C902B4 /* Logging in Frameworks */,
 				54E00F785B50768172BEC403 /* SwiftyBeaver in Frameworks */,
-				13FC3476772D3650D8BB2067 /* JOSESwift in Frameworks */,
 				C3705B294F29C3A2299AC4D8 /* Valet in Frameworks */,
 				DBA0A1999C93C212FD0D848B /* X509 in Frameworks */,
+				3DBACE91F60B12616002C611 /* LiveKit in Frameworks */,
+				09298A69C4F8B319F3A881E1 /* Supabase in Frameworks */,
+				7B0C898C5340F58CA5BE92B6 /* GoogleGenerativeAI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -234,8 +238,8 @@
 				055B9AC02E1F0BB6004E6282 /* Sources */,
 				055B9AC12E1F0BB6004E6282 /* Frameworks */,
 				055B9AC22E1F0BB6004E6282 /* Resources */,
-				05C0FFEE2E700000000000 /* [Firebase] Crashlytics */,
 				082C3990DF0A24659F2A727B /* Embed Frameworks */,
+				05C0FFEE2E700000000000 /* [Firebase] Crashlytics */,
 			);
 			buildRules = (
 			);
@@ -280,7 +284,6 @@
 				71106B566EA016B89EBD8451 /* PostHog */,
 				4169AB0A9E33890E9F1EA9C1 /* ConfettiSwiftUI */,
 				C815E7446626DA03227418C7 /* Sentry */,
-				15CF5B74EE600C3258BA3517 /* HaishinKit */,
 				D203EE5EDD7DB9A07F96D3B2 /* RevenueCat */,
 				26335CC42FFBE77B65A8B8A0 /* StripePayments */,
 				1A04FE423CF6BBB0D44BA465 /* StripeApplePay */,
@@ -306,6 +309,9 @@
 				6B4161FD8B9817B5086972C3 /* JOSESwift */,
 				3F8C2E2673CEF2DD70097D88 /* Valet */,
 				EBC819EC114223C357F4CEA8 /* X509 */,
+				F0B493095AF3F4CCE0A09635 /* LiveKit */,
+				F84281F4B13DD13656A7479F /* Supabase */,
+				9527345E385F43A686B7548D /* GoogleGenerativeAI */,
 			);
 			productName = MyChannel;
 			productReference = 055B9AC42E1F0BB6004E6282 /* MyChannel.app */;
@@ -353,7 +359,6 @@
 				05AF7A9B2FB98F85006D2031 /* XCRemoteSwiftPackageReference "posthog-ios" */,
 				05AF7A9C2FB98FEB006D2031 /* XCRemoteSwiftPackageReference "ConfettiSwiftUI" */,
 				05AF7A9E2FB992D7006D2031 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
-				9BB9E9D4FE6942104A84470A /* XCRemoteSwiftPackageReference "HaishinKit" */,
 				76E7C8F74E61AFA70AE80D72 /* XCRemoteSwiftPackageReference "purchases-ios" */,
 				23A6E9F54EF0496A218CF886 /* XCRemoteSwiftPackageReference "stripe-ios" */,
 				936076757C5737B2FD07F036 /* XCRemoteSwiftPackageReference "swift-algorithms" */,
@@ -380,6 +385,9 @@
 				A4A08EA5F91E5C704EB667BA /* XCRemoteSwiftPackageReference "JOSESwift" */,
 				E43494CBB279037B498829E8 /* XCRemoteSwiftPackageReference "Valet" */,
 				589EE864CC9805BD29BBC554 /* XCRemoteSwiftPackageReference "swift-certificates" */,
+				57B7B4C17825D224C65EE026 /* XCRemoteSwiftPackageReference "client-sdk-swift" */,
+				1D2ED545390C93FFA5223753 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				929B7C198E3E7A0149519709 /* XCRemoteSwiftPackageReference "generative-ai-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 055B9AC52E1F0BB6004E6282 /* Products */;
@@ -405,7 +413,7 @@
 		05C0FFEE2E700000000000 /* [Firebase] Crashlytics */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
+			buildActionMask = 8;
 			files = (
 			);
 			inputFileListPaths = (
@@ -424,7 +432,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"";
+			shellScript = "if [ \"$CONFIGURATION\" = \"Release\" ]; then\n\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\nfi";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -472,9 +480,10 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COMPILER_INDEX_STORE_ENABLE = NO;
 				COPY_PHASE_STRIP = NO;
-				DEAD_CODE_STRIPPING = YES;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEAD_CODE_STRIPPING = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 8KPXZ859S7;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -493,7 +502,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -501,6 +510,7 @@
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_COMPILATION_MODE = incremental;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -538,6 +548,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COMPILER_INDEX_STORE_ENABLE = NO;
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
@@ -553,7 +564,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -574,9 +585,9 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
+				DEAD_CODE_STRIPPING = NO;
 				DEVELOPMENT_TEAM = 8KPXZ859S7;
-				ENABLE_PREVIEWS = YES;
+				ENABLE_PREVIEWS = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MyChannel/Info.plist;
@@ -600,6 +611,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannelApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -646,6 +658,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = "-ObjC";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTMDB_KEY_PRESENT";
 				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannelApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -825,6 +838,14 @@
 				minimumVersion = 0.11.0;
 			};
 		};
+		1D2ED545390C93FFA5223753 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
 		23A6E9F54EF0496A218CF886 /* XCRemoteSwiftPackageReference "stripe-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/stripe/stripe-ios";
@@ -871,6 +892,14 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 1.0.0;
+			};
+		};
+		57B7B4C17825D224C65EE026 /* XCRemoteSwiftPackageReference "client-sdk-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/livekit/client-sdk-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.14.1;
 			};
 		};
 		589EE864CC9805BD29BBC554 /* XCRemoteSwiftPackageReference "swift-certificates" */ = {
@@ -921,6 +950,14 @@
 				minimumVersion = 5.0.0;
 			};
 		};
+		929B7C198E3E7A0149519709 /* XCRemoteSwiftPackageReference "generative-ai-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/generative-ai-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.5.4;
+			};
+		};
 		936076757C5737B2FD07F036 /* XCRemoteSwiftPackageReference "swift-algorithms" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-algorithms";
@@ -935,14 +972,6 @@
 			requirement = {
 				branch = main;
 				kind = branch;
-			};
-		};
-		9BB9E9D4FE6942104A84470A /* XCRemoteSwiftPackageReference "HaishinKit" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/shogo4405/HaishinKit.swift";
-			requirement = {
-				kind = upToNextMinorVersion;
-				minimumVersion = 1.9.0;
 			};
 		};
 		A4A08EA5F91E5C704EB667BA /* XCRemoteSwiftPackageReference "JOSESwift" */ = {
@@ -1191,11 +1220,6 @@
 			package = 05AF7A9A2FB98F57006D2031 /* XCRemoteSwiftPackageReference "realm-swift" */;
 			productName = RealmSwift;
 		};
-		15CF5B74EE600C3258BA3517 /* HaishinKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 9BB9E9D4FE6942104A84470A /* XCRemoteSwiftPackageReference "HaishinKit" */;
-			productName = HaishinKit;
-		};
 		1A04FE423CF6BBB0D44BA465 /* StripeApplePay */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 23A6E9F54EF0496A218CF886 /* XCRemoteSwiftPackageReference "stripe-ios" */;
@@ -1271,6 +1295,11 @@
 			package = C749A76E2BFAE8C97B104AC7 /* XCRemoteSwiftPackageReference "SwiftyBeaver" */;
 			productName = SwiftyBeaver;
 		};
+		9527345E385F43A686B7548D /* GoogleGenerativeAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 929B7C198E3E7A0149519709 /* XCRemoteSwiftPackageReference "generative-ai-swift" */;
+			productName = GoogleGenerativeAI;
+		};
 		9FDE08448B66311716EC91A3 /* KeychainSwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = C3C0711B5BB388141DBA2BF3 /* XCRemoteSwiftPackageReference "keychain-swift" */;
@@ -1335,6 +1364,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 589EE864CC9805BD29BBC554 /* XCRemoteSwiftPackageReference "swift-certificates" */;
 			productName = X509;
+		};
+		F0B493095AF3F4CCE0A09635 /* LiveKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57B7B4C17825D224C65EE026 /* XCRemoteSwiftPackageReference "client-sdk-swift" */;
+			productName = LiveKit;
+		};
+		F84281F4B13DD13656A7479F /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1D2ED545390C93FFA5223753 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

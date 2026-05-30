@@ -12,7 +12,9 @@ import Sidebar from '@/components/layout/Sidebar';
 import TopNav from '@/components/layout/TopNav';
 import Header from '@/components/layout/Header';
 import Hero from '@/components/layout/Hero';
-import CategoryTabs from '@/components/layout/CategoryTabs';
+import FilterChips from '@/components/layout/FilterChips';
+import StoriesRow from '@/components/video/StoriesRow';
+import { MinimalContentSections } from '@/components/layout/HorizontalSections';
 import VideoCard from '@/components/video/VideoCard';
 import { VideoGridSkeleton } from '@/components/skeletons/VideoSkeleton';
 import { useVideos, useTrendingVideos } from '@/hooks/useVideos';
@@ -389,7 +391,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[rgb(var(--color-background))]">
+    <div className="min-h-screen bg-white">
       {/* Skip Navigation Link (Accessibility) */}
       <a 
         href="#main-content" 
@@ -431,10 +433,10 @@ export default function HomePage() {
       />
 
       {/* Category Tabs - Sticky below header */}
-      <div className={`transition-all duration-200 ${isSidebarCollapsed ? 'pl-16' : 'pl-56'}`}>
-        <CategoryTabs
-          activeCategory={selectedCategory}
-          onCategoryChange={handleCategoryChange}
+      <div className={`transition-all duration-200 pt-4 pb-2 ${isSidebarCollapsed ? 'pl-16' : 'pl-56'}`}>
+        <FilterChips
+          selected={selectedCategory}
+          onChipTap={handleCategoryChange}
         />
       </div>
 
@@ -449,10 +451,10 @@ export default function HomePage() {
         <div className="min-h-[calc(100vh-3.5rem)] px-6 py-6">
           {/* Auth Banner - Premium Subtle Design */}
           {showAuthBanner && (
-            <div className="mb-6 p-6 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-xl max-w-[1800px] mx-auto fade-in">
+            <div className="mb-6 p-6 bg-gray-50 border border-gray-200 rounded-xl max-w-[1800px] mx-auto fade-in">
               <button
                 onClick={() => setShowAuthBanner(false)}
-                className="float-right text-[rgb(var(--color-text-secondary))] hover:text-[rgb(var(--color-text-primary))] text-2xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition-all"
+                className="float-right text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-all"
               >
                 ×
               </button>
@@ -461,10 +463,10 @@ export default function HomePage() {
                   MC
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-[rgb(var(--color-text-primary))] mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
                     Sign in to enjoy more features
                   </h3>
-                  <p className="text-sm text-[rgb(var(--color-text-secondary))] mb-4">
+                  <p className="text-sm text-gray-500 mb-4">
                     Like videos, comment, subscribe and create your own content
                   </p>
                   <div className="flex gap-3">
@@ -480,20 +482,34 @@ export default function HomePage() {
             </div>
           )}
 
-                {/* Video Grid - YouTube Premium Layout with Infinite Scroll */}
+          {/* Stories Row */}
+          <div className="max-w-[1800px] mx-auto mb-8">
+             <h2 className="text-xl font-bold text-gray-900 mb-4">Stories</h2>
+             <StoriesRow />
+          </div>
+
+          {/* iOS Parity: Horizontal Sections */}
+          <div className="max-w-[1800px] mx-auto mb-8">
+             <MinimalContentSections />
+          </div>
+
+          {/* Divider */}
+          <div className="max-w-[1800px] mx-auto border-t border-gray-200 my-8"></div>
+
+          {/* Video Grid - YouTube Premium Layout with Infinite Scroll */}
                 <div className="max-w-[1800px] mx-auto">
                   {isLoading ? (
                     <VideoGridSkeleton count={24} />
                   ) : videos.length === 0 ? (
                     // Empty state when no videos found
                     <div className="py-20 text-center">
-                      <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-[rgb(var(--color-surface))] flex items-center justify-center">
-                        <Video size={40} className="text-[rgb(var(--color-text-secondary))]" />
+                      <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-100 flex items-center justify-center">
+                        <Video size={40} className="text-gray-400" />
                       </div>
-                      <h3 className="text-xl font-semibold text-[rgb(var(--color-text-primary))] mb-2">
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
                         No videos yet
                       </h3>
-                      <p className="text-[rgb(var(--color-text-secondary))] mb-6">
+                      <p className="text-gray-500 mb-6">
                         {selectedCategory === 'All' 
                           ? 'Be the first to upload a video!' 
                           : `No ${selectedCategory.toLowerCase()} videos found. Try a different category.`}
@@ -537,7 +553,7 @@ export default function HomePage() {
                       )}
                       
                       {!hasMore && videos.length > 0 && (
-                        <div className="py-8 text-center text-[rgb(var(--color-text-secondary))] text-sm">
+                        <div className="py-8 text-center text-gray-500 text-sm">
                           You've reached the end! 🎉
                         </div>
                       )}

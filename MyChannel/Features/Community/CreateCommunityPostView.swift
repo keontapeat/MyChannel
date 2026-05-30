@@ -1,25 +1,31 @@
-//
-//  CreateCommunityPostView.swift
-//  MyChannel
-//
-//  Created by AI Assistant on 7/9/25.
-//
-
 import SwiftUI
 
 struct CreateCommunityPostView: View {
     let creator: User
     @Environment(\.dismiss) private var dismiss
     
+    // Core state
     @State private var selectedPostType: PostType = .text
+    @State private var postTitle = ""
     @State private var postContent = ""
     @State private var selectedImages: [String] = []
     @State private var videoURL = ""
+    
+    // Poll state
     @State private var pollQuestion = ""
     @State private var pollOptions: [String] = ["", ""]
-    @State private var pollEndDate = Date().addingTimeInterval(24 * 60 * 60) // 1 day
+    @State private var pollEndDate = Date().addingTimeInterval(24 * 60 * 60)
     @State private var allowMultipleChoices = false
+    
+    // Tags
     @State private var tags = ""
+    
+    // New Settings state
+    @State private var audience = "Public"
+    @State private var isScheduled = false
+    @State private var allowComments = true
+    @State private var enableMonetization = false
+    
     @State private var isSubmitting = false
     
     var isFormValid: Bool {
@@ -36,54 +42,99 @@ struct CreateCommunityPostView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Creator Header
-                    creatorHeader
-                    
-                    // Post Type Selector
-                    postTypeSelector
-                    
-                    // Content Input
-                    contentInputSection
-                    
-                    // Media Section
-                    if selectedPostType == .image {
-                        imageSection
-                    } else if selectedPostType == .video {
-                        videoSection
-                    } else if selectedPostType == .poll {
-                        pollSection
-                    }
-                    
-                    // Tags Section
-                    tagsSection
-                }
-                .padding()
-            }
-            .navigationTitle("New Post")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
+        ZStack(alignment: .bottom) {
+            Color(.systemBackground).ignoresSafeArea() // Light mode optimized
+            
+            VStack(spacing: 0) {
+                // Top Custom Navigation Bar
+                topNavigationBar
                 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Post") {
-                        createPost()
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Creator Header
+                        creatorHeader
+                        
+                        // What do you want to create?
+                        postTypeSelector
+                        
+                        // Input Card
+                        contentInputCard
+                        
+                        // Settings Toggles
+                        settingsList
+                        
+                        // Extra spacing for bottom bar
+                        Spacer().frame(height: 100)
                     }
-                    .disabled(!isFormValid || isSubmitting)
-                    .fontWeight(.semibold)
+                    .padding(.vertical, 20)
                 }
             }
+            
+            // Sticky Bottom Bar
+            bottomActionBar
         }
+        .navigationBarHidden(true)
     }
     
-    private var creatorHeader: some View {
+    // MARK: - Top Navigation Bar
+    private var topNavigationBar: some View {
         HStack {
+            Button(action: { dismiss() }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                    Text("Drafts")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundColor(.primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color(.systemGray6))
+                .clipShape(Capsule())
+            }
+            
+            Spacer()
+            
+            VStack(spacing: 2) {
+                Text("Create Post")
+                    .font(.system(size: 16, weight: .bold))
+                Text("Post to Community")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(.secondary)
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "cloud")
+                        .font(.system(size: 10))
+                    Text("Draft saved just now")
+                        .font(.system(size: 10))
+                }
+                .foregroundColor(AppTheme.Colors.primary)
+                .padding(.top, 2)
+            }
+            
+            Spacer()
+            
+            Button(action: createPost) {
+                Text("Publish")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(AppTheme.Colors.primary)
+                    .clipShape(Capsule())
+            }
+            .disabled(!isFormValid || isSubmitting)
+            .opacity(!isFormValid ? 0.5 : 1.0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(.systemBackground))
+        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+    
+    // MARK: - Creator Header
+    private var creatorHeader: some View {
+        HStack(spacing: 12) {
             AsyncImage(url: URL(string: creator.profileImageURL ?? "")) { image in
                 image
                     .resizable()
@@ -92,286 +143,312 @@ struct CreateCommunityPostView: View {
                 Circle()
                     .fill(Color(.systemGray5))
             }
-            .frame(width: 50, height: 50)
+            .frame(width: 44, height: 44)
             .clipShape(Circle())
             
-            VStack(alignment: .leading) {
-                HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
                     Text(creator.displayName)
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                        .font(.system(size: 16, weight: .bold))
                     
                     if creator.isVerified {
                         Image(systemName: "checkmark.seal.fill")
                             .foregroundColor(.blue)
-                            .font(.caption)
+                            .font(.system(size: 12))
                     }
                 }
                 
-                Text("Posting to Community")
-                    .font(.caption)
+                Text("Posting to MyChannel Community")
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
             }
             
             Spacer()
+            
+            Image(systemName: "chevron.down")
+                .foregroundColor(.secondary)
+                .font(.system(size: 14, weight: .semibold))
+                .padding(8)
+                .background(Color(.systemGray6))
+                .clipShape(Circle())
         }
+        .padding(.horizontal, 16)
     }
     
+    // MARK: - Post Type Selector
     private var postTypeSelector: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Post Type")
-                .font(.headline)
-                .fontWeight(.semibold)
+            Text("What do you want to create?")
+                .font(.system(size: 16, weight: .bold))
+                .padding(.horizontal, 16)
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(PostType.allCases, id: \.self) { type in
-                        Button(action: { selectedPostType = type }) {
-                            VStack(spacing: 8) {
-                                Image(systemName: type.iconName)
-                                    .font(.title2)
-                                    .foregroundColor(selectedPostType == type ? .white : type.color)
-                                
-                                Text(type.displayName)
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(selectedPostType == type ? .white : .primary)
+                HStack(spacing: 10) {
+                    // We map the first 5 PostTypes to match the mockup
+                    let typesToShow: [PostType] = [.text, .image, .video, .poll, .announcement]
+                    
+                    ForEach(typesToShow, id: \.self) { type in
+                        let isActive = selectedPostType == type
+                        
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selectedPostType = type
                             }
-                            .frame(width: 80, height: 80)
-                            .background(selectedPostType == type ? type.color : Color(.systemGray6))
-                            .cornerRadius(12)
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: type.iconName)
+                                    .font(.system(size: 14, weight: isActive ? .bold : .medium))
+                                Text(type.displayName)
+                                    .font(.system(size: 14, weight: isActive ? .bold : .semibold))
+                            }
+                            .foregroundColor(isActive ? AppTheme.Colors.primary : .primary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(
+                                Capsule()
+                                    .fill(isActive ? AppTheme.Colors.primary.opacity(0.1) : Color(.systemGray6))
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(isActive ? AppTheme.Colors.primary : Color.clear, lineWidth: 1.5)
+                            )
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, -16)
         }
     }
     
-    private var contentInputSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(selectedPostType == .poll ? "Poll Description" : "What's on your mind?")
-                .font(.headline)
-                .fontWeight(.semibold)
+    // MARK: - Content Input Card
+    private var contentInputCard: some View {
+        VStack(spacing: 0) {
+            // Title Input
+            HStack {
+                TextField("Add a title (optional)", text: $postTitle)
+                    .font(.system(size: 15))
+                Spacer()
+                Text("\(postTitle.count)/100")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+            .padding(16)
             
-            TextField("Share something with your community...", text: $postContent, axis: .vertical)
-                .textFieldStyle(.plain)
-                .padding()
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
-                .lineLimit(5...10)
-        }
-    }
-    
-    private var imageSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Images")
-                .font(.headline)
-                .fontWeight(.semibold)
+            Divider()
             
-            if selectedImages.isEmpty {
-                Button(action: addImages) {
-                    VStack(spacing: 12) {
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 40))
-                            .foregroundColor(.blue)
-                        
-                        Text("Add Images")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        
-                        Text("You can add up to 10 images")
-                            .font(.caption)
+            // Body Input
+            ZStack(alignment: .topLeading) {
+                if postContent.isEmpty {
+                    Text("What's on your mind?")
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                }
+                TextEditor(text: $postContent)
+                    .frame(minHeight: 120)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+            }
+            
+            HStack {
+                Spacer()
+                Text("\(postContent.count)/5000")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+            
+            // Add Media Button
+            Button(action: addImages) {
+                HStack(spacing: 12) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 20))
+                        .foregroundColor(.secondary)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Add media")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.primary)
+                        Text("Images or videos up to 10GB")
+                            .font(.system(size: 12))
                             .foregroundColor(.secondary)
                     }
-                    .frame(height: 120)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.blue, style: StrokeStyle(lineWidth: 2, dash: [8]))
-                    )
-                }
-                .buttonStyle(.plain)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(selectedImages, id: \.self) { imageURL in
-                            ZStack(alignment: .topTrailing) {
-                                AsyncImage(url: URL(string: imageURL)) { image in
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Rectangle()
-                                        .fill(Color(.systemGray5))
-                                }
-                                .frame(width: 100, height: 100)
-                                .cornerRadius(8)
-                                .clipped()
-                                
-                                Button(action: { removeImage(imageURL) }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundColor(.red)
-                                        .background(Color.white)
-                                        .clipShape(Circle())
-                                }
-                                .offset(x: 8, y: -8)
-                            }
-                        }
-                        
-                        if selectedImages.count < 10 {
-                            Button(action: addImages) {
-                                VStack {
-                                    Image(systemName: "plus")
-                                        .font(.title2)
-                                        .foregroundColor(.blue)
-                                }
-                                .frame(width: 100, height: 100)
-                                .background(Color.blue.opacity(0.1))
-                                .cornerRadius(8)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.blue, style: StrokeStyle(lineWidth: 2, dash: [4]))
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-                .padding(.horizontal, -16)
-            }
-        }
-    }
-    
-    private var videoSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Video")
-                .font(.headline)
-                .fontWeight(.semibold)
-            
-            TextField("Video URL", text: $videoURL)
-                .textFieldStyle(.roundedBorder)
-            
-            if !videoURL.isEmpty {
-                Rectangle()
-                    .fill(Color(.systemGray5))
-                    .frame(height: 200)
-                    .cornerRadius(12)
-                    .overlay(
-                        VStack {
-                            Image(systemName: "play.circle.fill")
-                                .font(.system(size: 50))
-                                .foregroundColor(.blue)
-                            Text("Video Preview")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    )
-            }
-        }
-    }
-    
-    private var pollSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Poll Settings")
-                .font(.headline)
-                .fontWeight(.semibold)
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Question")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                
-                TextField("Ask your community a question...", text: $pollQuestion)
-                    .textFieldStyle(.roundedBorder)
-            }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Options")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                
-                ForEach(pollOptions.indices, id: \.self) { index in
-                    HStack {
-                        TextField("Option \(index + 1)", text: $pollOptions[index])
-                            .textFieldStyle(.roundedBorder)
-                        
-                        if pollOptions.count > 2 {
-                            Button(action: { removePollOption(at: index) }) {
-                                Image(systemName: "minus.circle.fill")
-                                    .foregroundColor(.red)
-                            }
-                        }
-                    }
-                }
-                
-                if pollOptions.count < 6 {
-                    Button(action: addPollOption) {
-                        HStack {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundColor(.blue)
-                            Text("Add Option")
-                                .fontWeight(.medium)
-                        }
-                    }
-                }
-            }
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Toggle("Allow multiple choices", isOn: $allowMultipleChoices)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Poll Duration")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
                     
-                    DatePicker("End Date", selection: $pollEndDate, in: Date()...)
-                        .datePickerStyle(.compact)
+                    Spacer()
+                    
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .padding(8)
+                        .background(Color(.systemGray5))
+                        .clipShape(Circle())
                 }
+                .padding(16)
+                .background(Color(.systemGray6).opacity(0.5))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(.systemGray4), style: StrokeStyle(lineWidth: 1, dash: [4]))
+                )
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+            
+            Divider()
+            
+            // Bottom Toolbar
+            HStack(spacing: 20) {
+                toolbarButton(icon: "face.smiling", title: "Emoji")
+                toolbarButton(icon: "gift", title: "GIF")
+                toolbarButton(icon: "chart.bar", title: "Poll")
+                toolbarButton(icon: "calendar", title: "Schedule")
+                toolbarButton(icon: "mappin.and.ellipse", title: "Location")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .background(Color(.systemBackground))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color(.systemGray5), lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+    }
+    
+    private func toolbarButton(icon: String, title: String) -> some View {
+        Button(action: {}) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .foregroundColor(.secondary)
+        }
+    }
+    
+    // MARK: - Settings Toggles
+    private var settingsList: some View {
+        VStack(spacing: 0) {
+            settingsRow(icon: "globe", title: "Audience", subtitle: "Anyone can view this post") {
+                HStack(spacing: 4) {
+                    Text("Public")
+                        .font(.system(size: 14, weight: .medium))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(AppTheme.Colors.primary, lineWidth: 1)
+                )
+                .foregroundColor(AppTheme.Colors.primary)
+            }
+            
+            settingsRow(icon: "calendar", title: "Schedule", subtitle: "Post now") {
+                Toggle("", isOn: $isScheduled)
+                    .labelsHidden()
+                    .tint(AppTheme.Colors.primary)
+            }
+            
+            settingsRow(icon: "bubble.left", title: "Allow comments", subtitle: "Let others comment on this post") {
+                Toggle("", isOn: $allowComments)
+                    .labelsHidden()
+                    .tint(AppTheme.Colors.primary)
+            }
+            
+            settingsRow(icon: "dollarsign.shield", title: "Monetization", subtitle: "Earn from this post") {
+                Toggle("", isOn: $enableMonetization)
+                    .labelsHidden()
+                    .tint(AppTheme.Colors.primary)
             }
         }
+        .background(Color(.systemBackground))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color(.systemGray5), lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
     }
     
-    private var tagsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Tags (Optional)")
-                .font(.headline)
-                .fontWeight(.semibold)
+    private func settingsRow<Content: View>(icon: String, title: String, subtitle: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 16) {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                    .foregroundColor(.secondary)
+                    .frame(width: 24)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(subtitle)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                content()
+            }
+            .padding(16)
             
-            TextField("Add tags separated by commas", text: $tags)
-                .textFieldStyle(.roundedBorder)
-            
-            Text("Help people discover your post with relevant tags")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            Divider()
+                .padding(.leading, 56)
         }
     }
     
-    // MARK: - Actions
+    // MARK: - Sticky Bottom Bar
+    private var bottomActionBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+            
+            HStack {
+                HStack(spacing: 8) {
+                    Image(systemName: "cloud")
+                        .font(.system(size: 20))
+                        .foregroundColor(AppTheme.Colors.primary)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Draft saved")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Your post will be saved automatically")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                Button(action: createPost) {
+                    Text("Publish")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 14)
+                        .background(AppTheme.Colors.primary)
+                        .clipShape(Capsule())
+                }
+                .disabled(!isFormValid || isSubmitting)
+                .opacity(!isFormValid ? 0.5 : 1.0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 24) // accommodate home indicator
+        }
+        .background(Color(.systemBackground).opacity(0.98))
+    }
+    
+    // MARK: - Logic Methods
     private func addImages() {
-        // TODO: Implement PHPickerViewController for real image selection + Firebase Storage upload
-        // Image picker integration should be added here
-    }
-    
-    private func removeImage(_ imageURL: String) {
-        selectedImages.removeAll { $0 == imageURL }
-    }
-    
-    private func addPollOption() {
-        if pollOptions.count < 6 {
-            pollOptions.append("")
-        }
-    }
-    
-    private func removePollOption(at index: Int) {
-        if pollOptions.count > 2 {
-            pollOptions.remove(at: index)
-        }
+        // Placeholder
     }
     
     private func createPost() {
@@ -379,36 +456,17 @@ struct CreateCommunityPostView: View {
         
         let tagArray = tags.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         
-        let poll: Poll? = {
-            guard selectedPostType == .poll else { return nil }
-            let options = pollOptions.compactMap { option in
-                let trimmed = option.trimmingCharacters(in: .whitespacesAndNewlines)
-                return trimmed.isEmpty ? nil : CommunityPollOption(text: trimmed)
-            }
-            return Poll(
-                question: pollQuestion,
-                options: options,
-                endsAt: pollEndDate,
-                allowMultipleChoices: allowMultipleChoices
-            )
-        }()
+        let poll: Poll? = nil // Ignoring for now as per updated UI
         
-        let newPost = CommunityPost(
-            creatorId: creator.id,
-            content: postContent,
-            imageURLs: selectedPostType == .image ? selectedImages : [],
-            videoURL: selectedPostType == .video ? videoURL : nil,
-            postType: selectedPostType,
-            poll: poll,
-            tags: tagArray
-        )
+        // Use postTitle + postContent for the final content string or update the model
+        let finalContent = postTitle.isEmpty ? postContent : "**\(postTitle)**\n\n\(postContent)"
         
         Task {
             let imageURL = selectedPostType == .image ? selectedImages.first : nil
             let _ = await CommunityPostService.shared.createPost(
                 creatorId: creator.id,
                 type: selectedPostType,
-                content: postContent,
+                content: finalContent,
                 imageURL: imageURL,
                 poll: poll
             )

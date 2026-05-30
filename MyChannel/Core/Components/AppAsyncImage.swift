@@ -70,9 +70,10 @@ fileprivate final class ThermonuclearImageLoader {
                 let (data, response) = try await session.data(for: request)
                 guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else { return nil }
                 
-                // 🔥 Parse on background thread
-                let image = await Task.detached(priority: .userInitiated) {
-                    UIImage(data: data)
+                // 🔥 Parse and DECODE on background thread
+                let image = await Task.detached(priority: .userInitiated) { () -> UIImage? in
+                    guard let raw = UIImage(data: data) else { return nil }
+                    return raw.preparingForDisplay() ?? raw
                 }.value
                 
                 if let image = image {

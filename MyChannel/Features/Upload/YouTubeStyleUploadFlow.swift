@@ -38,6 +38,12 @@ struct YouTubeStyleUploadFlow: View {
     @State private var selectedThumbnailIndex = 0
     @State private var generatedThumbnails: [UIImage] = []
     
+    // AI & A/B Testing
+    @State private var isGeneratingMetadata = false
+    @State private var isABTestingEnabled = false
+    @State private var videoThumbnailB: UIImage?
+    @State private var selectedThumbnailIndexB: Int?
+    
     // Photos library recent videos
     @State private var recentVideos: [RecentVideo] = []
     @State private var isLoadingVideos = true
@@ -467,9 +473,27 @@ struct YouTubeStyleUploadFlow: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Title")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.primary)
+                    HStack {
+                        Text("Title")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Button(action: generateAIMetadata) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "sparkles")
+                                Text("Generate with AI")
+                            }
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(
+                                LinearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .clipShape(Capsule())
+                        }
+                        .disabled(isGeneratingMetadata)
+                    }
                     
                     TextField("Add a title that describes your video", text: $videoTitle)
                         .font(.system(size: 16))
@@ -586,6 +610,25 @@ struct YouTubeStyleUploadFlow: View {
                 .foregroundColor(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
+            // A/B Testing Toggle
+            Toggle(isOn: $isABTestingEnabled.animation()) {
+                VStack(alignment: .leading) {
+                    Text("Test and Compare (A/B Test)")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Upload up to 3 thumbnails and we'll automatically select the winning one based on CTR.")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .tint(.purple)
+            .padding(.bottom, 8)
+            
+            // Thumbnail A
+            Text(isABTestingEnabled ? "Thumbnail A" : "Primary Thumbnail")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
             // Generated Thumbnails
             if !generatedThumbnails.isEmpty {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
@@ -610,6 +653,39 @@ struct YouTubeStyleUploadFlow: View {
                 }
             }
             
+            if isABTestingEnabled {
+                Text("Thumbnail B (Challenger)")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 16)
+                
+                if !generatedThumbnails.isEmpty {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
+                        ForEach(Array(generatedThumbnails.enumerated()), id: \.offset) { index, thumbnail in
+                            Button(action: {
+                                selectedThumbnailIndexB = index
+                                videoThumbnailB = thumbnail
+                            }) {
+                                Image(uiImage: thumbnail)
+                                    .resizable()
+                                    .aspectRatio(16/9, contentMode: .fill)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(
+                                                selectedThumbnailIndexB == index ? Color.purple : Color.clear,
+                                                lineWidth: 3
+                                            )
+                                    )
+                                    .opacity(selectedThumbnailIndex == index ? 0.3 : 1.0)
+                            }
+                            .disabled(selectedThumbnailIndex == index)
+                        }
+                    }
+                }
+            }
+            
             // Custom Thumbnail Upload
             Button(action: {
                 // Upload custom thumbnail
@@ -617,15 +693,15 @@ struct YouTubeStyleUploadFlow: View {
                 VStack(spacing: 12) {
                     Image(systemName: "photo.badge.plus")
                         .font(.system(size: 32))
-                        .foregroundColor(.red)
+                        .foregroundColor(isABTestingEnabled ? .purple : .red)
                     
                     Text("Upload Custom Thumbnail")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.red)
+                        .foregroundColor(isABTestingEnabled ? .purple : .red)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 120)
-                .background(Color.red.opacity(0.1))
+                .background((isABTestingEnabled ? Color.purple : Color.red).opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             
@@ -1211,289 +1287,26 @@ struct YouTubeStyleUploadFlow: View {
             }
         }
     }
-}
-
-// MARK: - Supporting Types and Views
-
-enum CreateContentMode: String, CaseIterable, Hashable {
-    case video, flicks, live, post
-    var title: String {
-        switch self {
-        case .video:  return "Video"
-        case .flicks: return "Flicks"
-        case .live:   return "Live"
-        case .post:   return "Post"
-        }
-    }
-}
-
-enum UploadStep: Int, CaseIterable {
-    case contentSelection = 0
-    case videoPreview = 1
-    case videoDetails = 2
-    case thumbnailSelection = 3
-    case publishing = 4
-    case completed = 5
     
-    var title: String {
-        switch self {
-        case .contentSelection: return "Create"
-        case .videoPreview: return "Edit Your Video"
-        case .videoDetails: return "Video Details"
-        case .thumbnailSelection: return "Choose Thumbnail"
-        case .publishing: return "Publishing"
-        case .completed: return "Success!"
-        }
-    }
-    
-    var subtitle: String {
-        switch self {
-        case .contentSelection: return ""
-        case .videoPreview: return "Preview and adjust your video"
-        case .videoDetails: return "Add title, description, and settings"
-        case .thumbnailSelection: return "Pick the perfect thumbnail"
-        case .publishing: return "Your video is being processed"
-        case .completed: return ""
-        }
-    }
-    
-    var canSkip: Bool {
-        switch self {
-        case .videoDetails, .thumbnailSelection: return true
-        default: return false
-        }
-    }
-    
-    var nextButtonTitle: String {
-        switch self {
-        case .videoPreview: return "Continue"
-        case .videoDetails: return "Next"
-        case .thumbnailSelection: return "Publish"
-        default: return "Next"
-        }
-    }
-}
-
-struct VisibilityOptionCard: View {
-    let visibility: VideoVisibility
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: visibilityIcon)
-                    .font(.system(size: 18))
-                    .foregroundColor(.red)
-                    .frame(width: 24)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(visibilityTitle)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.primary)
-                    
-                    Text(visibilityDescription)
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(.red)
-                } else {
-                    Circle()
-                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                        .frame(width: 20, height: 20)
-                }
-            }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.red.opacity(0.05) : Color(.systemGray6))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.red.opacity(0.3) : Color.clear, lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-    
-    private var visibilityIcon: String {
-        switch visibility {
-        case .publicVideo: return "globe"
-        case .unlisted: return "link"
-        case .privateVideo: return "lock"
-        }
-    }
-    
-    private var visibilityTitle: String {
-        switch visibility {
-        case .publicVideo: return "Public"
-        case .unlisted: return "Unlisted"
-        case .privateVideo: return "Private"
-        }
-    }
-    
-    private var visibilityDescription: String {
-        switch visibility {
-        case .publicVideo: return "Anyone can search for and view"
-        case .unlisted: return "Anyone with the link can view"
-        case .privateVideo: return "Only you can view"
-        }
-    }
-}
-
-struct TabIndicator: View {
-    let icon: String
-    let title: String
-    let isSelected: Bool
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundColor(isSelected ? .red : .gray)
-            
-            Text(title)
-                .font(.system(size: 12))
-                .foregroundColor(isSelected ? .red : .gray)
-        }
-    }
-}
-
-struct UploadFlowTagChip: View {
-    let tag: String
-    let onRemove: () -> Void
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(tag)
-                .font(.system(size: 12))
-                .foregroundColor(.primary)
-            
-            Button(action: onRemove) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color(.systemGray5))
-        .clipShape(Capsule())
-    }
-}
-
-// MARK: - Recent Video Model
-
-struct RecentVideo: Identifiable {
-    let id: String
-    let asset: PHAsset
-    let thumbnail: UIImage?
-    let duration: TimeInterval
-    let creationDate: Date
-    
-    var formattedDuration: String {
-        let totalSeconds = Int(duration)
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
-        }
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-    
-    var formattedDate: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: creationDate, relativeTo: Date())
-    }
-}
-
-// MARK: - Recent Video Cell
-
-struct RecentVideoCell: View {
-    let video: RecentVideo
-    
-    var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            // Thumbnail
-            if let thumbnail = video.thumbnail {
-                Image(uiImage: thumbnail)
-                    .resizable()
-                    .aspectRatio(9/16, contentMode: .fill)
-                    .clipped()
-            } else {
-                Rectangle()
-                    .fill(Color(.systemGray5))
-                    .aspectRatio(9/16, contentMode: .fill)
-                    .overlay(
-                        Image(systemName: "video.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(.gray)
-                    )
-            }
-            
-            // Duration badge
-            Text(video.formattedDuration)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(Color.black.opacity(0.75))
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-                .padding(6)
-        }
-        .contentShape(Rectangle())
-    }
-}
-
-struct CameraRecorderView: UIViewControllerRepresentable {
-    let onVideoRecorded: (URL) -> Void
-    @Environment(\.dismiss) private var dismiss
-    
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.sourceType = .camera
-        picker.mediaTypes = ["public.movie"]
-        picker.videoQuality = .typeHigh
-        picker.videoMaximumDuration = 600
-        picker.delegate = context.coordinator
-        return picker
-    }
-    
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: CameraRecorderView
+    // MARK: - AI Generation
+    private func generateAIMetadata() {
+        isGeneratingMetadata = true
+        HapticManager.shared.impact(style: .medium)
         
-        init(_ parent: CameraRecorderView) {
-            self.parent = parent
-        }
-        
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let videoURL = info[.mediaURL] as? URL {
-                parent.onVideoRecorded(videoURL)
+        Task {
+            // Mock AI processing delay
+            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+            
+            await MainActor.run {
+                self.videoTitle = "🔥 Incredible Day in the Life | Behind the Scenes"
+                self.videoDescription = "Join me as I show you exactly how my days go! Don't forget to like and subscribe if you enjoy the behind the scenes look!\n\n#vlog #dayinthelife #creator"
+                self.videoTags = ["vlog", "dayinthelife", "creator", "behindthescenes"]
+                self.isGeneratingMetadata = false
+                HapticManager.shared.notification(type: .success)
             }
-            parent.dismiss()
-        }
-        
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
         }
     }
 }
 
-#Preview {
-    YouTubeStyleUploadFlow()
-        .environmentObject(AppState())
-}
+
+// ⚡ Supporting types + components extracted to UploadFlowComponents.swift

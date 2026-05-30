@@ -9,9 +9,24 @@ struct VideoDetailUpNextBar: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial)
-                .frame(width: 56, height: 32)
-                .overlay(Text("Up next").font(.caption2))
+            AppAsyncImage(url: URL(string: next.thumbnailURL)) { image in
+                image.resizable().aspectRatio(contentMode: .fill)
+            } placeholder: {
+                RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial)
+            }
+            .frame(width: 56, height: 32)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                Text("Next")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(Color.black.opacity(0.7))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .padding(2),
+                alignment: .bottomTrailing
+            )
             Text(next.title)
                 .font(.caption)
                 .lineLimit(1)

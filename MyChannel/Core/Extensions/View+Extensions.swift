@@ -14,6 +14,16 @@ extension View {
             .scaleEffect(1.0)
             .animation(.spring(response: 0.2, dampingFraction: 0.8), value: UUID())
     }
+    
+    /// Safely applies presentationBackgroundInteraction for iOS 16.4+
+    @ViewBuilder
+    func safePresentationBackgroundInteraction() -> some View {
+        if #available(iOS 16.4, *) {
+            self.presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.6)))
+        } else {
+            self
+        }
+    }
 }
 
 // MARK: - Profile Scroll Offset Preference Key

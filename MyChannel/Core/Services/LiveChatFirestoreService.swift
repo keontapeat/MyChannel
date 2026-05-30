@@ -18,6 +18,7 @@ final class LiveChatFirestoreService {
 
     #if canImport(FirebaseFirestore)
     private var db: Firestore { Firestore.firestore() }
+    private var listener: ListenerRegistration?
     #endif
 
     struct ChatDoc: Codable {
@@ -93,6 +94,46 @@ final class LiveChatFirestoreService {
         }
         #else
         return []
+        #endif
+    }
+    
+    func listenForMessages(streamId: String, onUpdate: @escaping ([LiveChatMessage]) -> Void) {
+        #if canImport(FirebaseFirestore)
+        listener?.remove()
+        listener = db.collection("live").document(streamId).collection("messages")
+            .order(by: "createdAt", descending: true)
+            .limit(to: 50)
+            .addSnapshotListener { snapshot, error in
+                guard let documents = snapshot?.documents else { return }
+                let items: [LiveChatMessage] = documents.compactMap { doc in
+                    let d = doc.data()
+                    return LiveChatMessage(
+                        id: doc.documentID,
+                        streamId: streamId,
+                        userId: (d["userId"] as? String) ?? "",
+                        username: (d["username"] as? String) ?? "User",
+                        userAvatarURL: d["avatarUrl"] as? String,
+                        content: (d["content"] as? String) ?? "",
+                        messageType: MessageType(rawValue: (d["type"] as? String) ?? "regular") ?? .regular,
+                        timestamp: (d["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
+                        isHighlighted: (d["highlighted"] as? Bool) ?? false,
+                        isPinned: (d["pinned"] as? Bool) ?? false,
+                        isModerated: (d["moderated"] as? Bool) ?? false,
+                        badges: [],
+                        emotes: [],
+                        superChatAmount: d["superChatAmount"] as? Double,
+                        replyToMessageId: d["replyTo"] as? String
+                    )
+                }.reversed()
+                onUpdate(items)
+            }
+        #endif
+    }
+    
+    func stopListening() {
+        #if canImport(FirebaseFirestore)
+        listener?.remove()
+        listener = nil
         #endif
     }
 }

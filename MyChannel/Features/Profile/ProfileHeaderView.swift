@@ -7,6 +7,8 @@ struct ProfileHeaderView: View {
     @Binding var isFollowing: Bool
     @Binding var showingEditProfile: Bool
     @Binding var showingSettings: Bool
+    @Binding var showingReportUserSheet: Bool
+    @Binding var showingBlockUserAlert: Bool
 
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var authManager: AuthenticationManager
@@ -95,6 +97,38 @@ struct ProfileHeaderView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 50)
+            } else {
+                // YOUTUBE PARITY: More options button for public profiles
+                HStack {
+                    Spacer()
+                    
+                    Menu {
+                        Button(role: .destructive) {
+                            showingReportUserSheet = true
+                            HapticManager.shared.impact(style: .light)
+                        } label: {
+                            Label("Report User", systemImage: "flag.fill")
+                        }
+                        
+                        Button(role: .destructive) {
+                            showingBlockUserAlert = true
+                            HapticManager.shared.impact(style: .medium)
+                        } label: {
+                            Label("Block User", systemImage: "nosign")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                            .padding(14)
+                            .background(.black.opacity(0.55))
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 4)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 50)
             }
 
             // Main profile info
@@ -121,6 +155,10 @@ struct ProfileHeaderView: View {
                                 .font(.title3)
                                 .foregroundColor(.blue)
                                 .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                        }
+                        
+                        if user.subscriberCount > 10000 {
+                            FanBadgeView(type: .topFan)
                         }
                         
                         Spacer()  // 🔥 FIX: Push content to center
@@ -223,11 +261,11 @@ struct ProfileHeaderView: View {
             if let saved = getSelectedDefaultBanner(for: user.id) {
                 return saved
             }
-            if let videoDefault = DefaultProfileBanner.defaults.first(where: { $0.kind == .video }) {
+            if let videoDefault = DefaultProfileBanner.all.first(where: { $0.kind == .video }) {
                 setSelectedDefaultBannerID(videoDefault.id, for: user.id)
                 return videoDefault
             }
-            return DefaultProfileBanner.defaults.first!
+            return DefaultProfileBanner.all.first!
         }()
 
         if selected.kind == .video, let url = URL(string: selected.assetURL) {
@@ -534,95 +572,12 @@ private func setSelectedDefaultBannerID(_ id: String, for userID: String) {
 
 private func getSelectedDefaultBanner(for userID: String) -> DefaultProfileBanner? {
     if let id = getSelectedDefaultBannerID(for: userID) {
-        return DefaultProfileBanner.defaults.first(where: { $0.id == id })
+        return DefaultProfileBanner.all.first(where: { $0.id == id })
     }
     return nil
 }
 
-private struct DefaultProfileBanner: Identifiable, Hashable {
-    enum Kind { case image, video }
-    let id: String
-    let title: String
-    let subtitle: String
-    let kind: Kind
-    let assetURL: String
-    let previewURL: String?
 
-    static let defaults: [DefaultProfileBanner] = [
-        DefaultProfileBanner(
-            id: "b1",
-            title: "Golden Hour Mountains",
-            subtitle: "Warm cinematic tones",
-            kind: .image,
-            assetURL: "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1600&q=80",
-            previewURL: nil
-        ),
-        DefaultProfileBanner(
-            id: "b2",
-            title: "Ocean Sunset",
-            subtitle: "Soft gradients and waves",
-            kind: .image,
-            assetURL: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1600&q=80",
-            previewURL: nil
-        ),
-        DefaultProfileBanner(
-            id: "b3",
-            title: "City Lights",
-            subtitle: "Modern urban vibe",
-            kind: .image,
-            assetURL: "https://images.unsplash.com/photo-1499346030926-9a72daac6c63?w=1600&q=80",
-            previewURL: nil
-        ),
-        DefaultProfileBanner(
-            id: "b4",
-            title: "Cinematic Nature",
-            subtitle: "Subtle motion video",
-            kind: .video,
-            assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-            previewURL: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1600&q=80"
-        ),
-        DefaultProfileBanner(
-            id: "b5",
-            title: "Abstract Flow",
-            subtitle: "Minimal gradient waves",
-            kind: .image,
-            assetURL: "https://images.unsplash.com/photo-1557683316-973673baf926?w=1600&q=80",
-            previewURL: nil
-        ),
-        DefaultProfileBanner(
-            id: "b6",
-            title: "Sintel Trailer",
-            subtitle: "Cinematic video banner",
-            kind: .video,
-            assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-            previewURL: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1600&q=80"
-        ),
-        DefaultProfileBanner(
-            id: "b7",
-            title: "Joyrides",
-            subtitle: "Dynamic city motion",
-            kind: .video,
-            assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
-            previewURL: "https://images.unsplash.com/photo-1493238792000-8113da705763?w=1600&q=80"
-        ),
-        DefaultProfileBanner(
-            id: "b8",
-            title: "Escapes",
-            subtitle: "Travel cinematic",
-            kind: .video,
-            assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-            previewURL: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1600&q=80"
-        ),
-        DefaultProfileBanner(
-            id: "b9",
-            title: "Elephant Dream",
-            subtitle: "Moody animation",
-            kind: .video,
-            assetURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-            previewURL: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1600&q=80"
-        )
-    ]
-}
 
 // MARK: - Profile Video Content Mode
 private enum ProfileVideoBannerContentMode {
@@ -648,7 +603,9 @@ private func convertBannerContentMode(_ userMode: UserBannerContentMode) -> Prof
             scrollOffset: 0,
             isFollowing: .constant(false),
             showingEditProfile: .constant(false),
-            showingSettings: .constant(false)
+            showingSettings: .constant(false),
+            showingReportUserSheet: .constant(false),
+            showingBlockUserAlert: .constant(false)
         )
         .environmentObject({
             let appState = AppState()

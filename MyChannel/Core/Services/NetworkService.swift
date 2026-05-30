@@ -30,6 +30,7 @@ class NetworkService: ObservableObject {
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
     private var cancellables = Set<AnyCancellable>()
+    private var inFlightRequests: [String: Task<Any, Error>] = [:]
     
     // MARK: - Initialization
     private init() {
@@ -37,6 +38,12 @@ class NetworkService: ObservableObject {
         configuration.timeoutIntervalForRequest = AppConfig.API.timeout
         configuration.timeoutIntervalForResource = AppConfig.API.timeout * 2
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        
+        // HTTP/2 and Network Optimizations
+        configuration.httpMaximumConnectionsPerHost = 100 // High limit, HTTP/2 uses multiplexing anyway
+        configuration.multipathServiceType = .handover // Seamless transition between Wi-Fi and Cellular
+        configuration.waitsForConnectivity = true // Wait for network instead of immediately failing
+        configuration.shouldUseExtendedBackgroundIdleMode = true // Keep sockets alive longer in background
         
         if AppConfig.Security.enableSSLPinning, !spkiPins.isEmpty {
             self.session = URLSession(configuration: configuration, delegate: SSLPinningDelegate(pins: spkiPins, allowInDebug: AppConfig.isDebug), delegateQueue: nil)
@@ -95,81 +102,135 @@ class NetworkService: ObservableObject {
         responseType: T.Type
     ) async throws -> T {
         
-        guard let url = URL(string: AppConfig.API.baseURL + endpoint.path) else {
-            throw NetworkError.invalidURL
+        let requestKey = "\(method.rawValue)-\(endpoint.path)"
+        
+        // Coalesce identical in-flight GET requests
+        if method == .GET, let existingTask = inFlightRequests[requestKey] {
+            if let result = try await existingTask.value as? T {
+                return result
+            }
         }
         
-        var request = URLRequest(url: url)
-        request.httpMethod = method.rawValue
-        request.httpBody = body
-        
-        // Default headers
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("MyChannel iOS \(AppConfig.appVersion)", forHTTPHeaderField: "User-Agent")
-        
-        // Add auth header if available
-        if let token = await getAuthToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
-        // Add Supabase headers
-        request.setValue(AppConfig.API.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        
-        // Add custom headers
-        for (key, value) in headers {
-            request.setValue(value, forHTTPHeaderField: key)
-        }
-        
-        // Log request in development
-        if AppConfig.Features.enableNetworkLogging {
-            logRequest(request)
-        }
-        
-        do {
-            let (data, response) = try await session.data(for: request)
+        let task = Task<Any, Error> { [weak self] in
+            guard let self = self else { throw NetworkError.invalidURL }
             
-            // Log response in development
+            guard let url = URL(string: AppConfig.API.baseURL + endpoint.path) else {
+                throw NetworkError.invalidURL
+            }
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = method.rawValue
+            request.httpBody = body
+            
+            // Default headers
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue("MyChannel iOS \(AppConfig.appVersion)", forHTTPHeaderField: "User-Agent")
+            
+            // Add auth header if available
+            if let token = await self.getAuthToken() {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+            
+            // Add Supabase headers
+            request.setValue(AppConfig.API.supabaseAnonKey, forHTTPHeaderField: "apikey")
+            
+            // Add custom headers
+            for (key, value) in headers {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
+            
+            // Log request in development
             if AppConfig.Features.enableNetworkLogging {
-                logResponse(response, data: data)
+                self.logRequest(request)
             }
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw NetworkError.invalidResponse
-            }
+            // Exponential Backoff Retry Logic
+            let maxRetries = 3
+            var currentAttempt = 0
+            var lastError: Error?
             
-            // Check status code
-            switch httpResponse.statusCode {
-            case 200...299:
-                // Success - decode response
+            while currentAttempt <= maxRetries {
                 do {
-                    let decodedResponse = try decoder.decode(T.self, from: data)
-                    return decodedResponse
+                    let (data, response) = try await self.session.data(for: request)
+                    
+                    // Log response in development
+                    if AppConfig.Features.enableNetworkLogging {
+                        self.logResponse(response, data: data)
+                    }
+                    
+                    guard let httpResponse = response as? HTTPURLResponse else {
+                        throw NetworkError.invalidResponse
+                    }
+                    
+                    // Check status code
+                    switch httpResponse.statusCode {
+                    case 200...299:
+                        // Success - decode response
+                        do {
+                            let decodedResponse = try self.decoder.decode(T.self, from: data)
+                            return decodedResponse
+                        } catch {
+                            throw NetworkError.decodingError(error)
+                        }
+                        
+                    case 401:
+                        throw NetworkError.unauthorized
+                    case 403:
+                        throw NetworkError.forbidden
+                    case 404:
+                        throw NetworkError.notFound
+                    case 429:
+                        throw NetworkError.rateLimited
+                    case 500...599:
+                        throw NetworkError.serverError(httpResponse.statusCode)
+                    default:
+                        throw NetworkError.httpError(httpResponse.statusCode)
+                    }
+                    
                 } catch {
-                    throw NetworkError.decodingError(error)
+                    lastError = error
+                    
+                    // Determine if we should retry
+                    var isRetryable = false
+                    if case .rateLimited = error as? NetworkError { isRetryable = true }
+                    if let urlError = error as? URLError, urlError.code == .timedOut || urlError.code == .notConnectedToInternet { isRetryable = true }
+                    if (error as? NetworkError)?.errorDescription?.contains("Server error") == true { isRetryable = true }
+                    
+                    if isRetryable && currentAttempt < maxRetries {
+                        currentAttempt += 1
+                        let delay = pow(2.0, Double(currentAttempt)) * 0.5 // 1s, 2s, 4s
+                        print("⚠️ [NetworkService] Request failed. Retrying attempt \(currentAttempt) in \(delay)s...")
+                        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        continue
+                    }
+                    
+                    if error is NetworkError {
+                        throw error
+                    } else {
+                        throw NetworkError.networkError(error)
+                    }
                 }
-                
-            case 401:
-                throw NetworkError.unauthorized
-            case 403:
-                throw NetworkError.forbidden
-            case 404:
-                throw NetworkError.notFound
-            case 429:
-                throw NetworkError.rateLimited
-            case 500...599:
-                throw NetworkError.serverError(httpResponse.statusCode)
-            default:
-                throw NetworkError.httpError(httpResponse.statusCode)
             }
             
-        } catch {
-            if error is NetworkError {
-                throw error
-            } else {
-                throw NetworkError.networkError(error)
+            throw lastError ?? NetworkError.invalidResponse
+        }
+        
+        if method == .GET {
+            inFlightRequests[requestKey] = task
+        }
+        
+        defer {
+            if method == .GET {
+                inFlightRequests.removeValue(forKey: requestKey)
             }
         }
+        
+        guard let result = try await task.value as? T else {
+            throw NetworkError.invalidResponse
+        }
+        
+        return result
     }
     
     // MARK: - Convenience Methods
@@ -527,43 +588,7 @@ public struct MessageResponse: Codable {
     let timestamp: Date?
 }
 
-// MARK: - Mock Network Service for Development
-#if DEBUG
-class MockNetworkService: NetworkService {
-    override func request<T: Codable>(
-        endpoint: APIEndpoint,
-        method: HTTPMethod = .GET,
-        body: Data? = nil,
-        headers: [String: String] = [:],
-        responseType: T.Type
-    ) async throws -> T {
-        
-        // Simulate network delay
-        try await Task.sleep(nanoseconds: UInt64.random(in: 500_000_000...2_000_000_000))
-        
-        // Mock responses based on endpoint
-        switch endpoint {
-        case .videos:
-            if let videos = [Video]() as? T {
-                return videos
-            }
-        case .userProfile:
-            if let user = User.sampleUsers.first as? T {
-                return user
-            }
-        case .trending:
-            if let trending = [Video]() as? T {
-                return trending
-            }
-        default:
-            break
-        }
-        
-        // Default mock response
-        throw NetworkError.notFound
-    }
-}
-#endif
+
 
 #Preview("Network Service Status") {
     VStack(spacing: 20) {

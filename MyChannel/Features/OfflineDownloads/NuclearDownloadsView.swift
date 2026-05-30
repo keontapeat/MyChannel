@@ -242,6 +242,13 @@ struct NuclearDownloadsView: View {
     private var downloadsContent: some View {
         ScrollView {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                // Expiration Warning
+                if hasExpiringDownloads {
+                    expirationWarningBanner
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                }
+
                 // Storage Info
                 storageInfoCard
                     .padding(.horizontal, 16)
@@ -256,7 +263,21 @@ struct NuclearDownloadsView: View {
                                 .padding(.horizontal, 16)
                         }
                     } header: {
-                        sectionHeader("Downloading", count: activeDownloads.count)
+                        HStack {
+                            sectionHeader("Downloading", count: activeDownloads.count)
+                            Spacer()
+                            if activeDownloads.count > 1 {
+                                Button {
+                                    Task { await downloadManager.pauseAll() }
+                                } label: { Image(systemName: "pause.circle.fill").foregroundColor(.orange) }
+                                
+                                Button {
+                                    Task { await downloadManager.resumeAll() }
+                                } label: { Image(systemName: "play.circle.fill").foregroundColor(.green) }
+                                .padding(.trailing, 16)
+                            }
+                        }
+                        .background(AppTheme.Colors.background)
                     }
                 }
                 
@@ -371,6 +392,32 @@ struct NuclearDownloadsView: View {
         return AppTheme.Colors.primary
     }
     
+    // MARK: - Expiration Banner
+    
+    private var hasExpiringDownloads: Bool {
+        return completedDownloads.contains {
+            if let exp = $0.expiresAt {
+                return exp.timeIntervalSinceNow < (5 * 24 * 60 * 60) // Less than 5 days
+            }
+            return false
+        }
+    }
+    
+    private var expirationWarningBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.yellow)
+            Text("Connect to the internet soon or some downloads will be removed.")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.primary)
+            Spacer()
+        }
+        .padding(12)
+        .background(Color.yellow.opacity(0.15))
+        .cornerRadius(8)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.yellow.opacity(0.3), lineWidth: 1))
+    }
+    
     // MARK: - Section Header
     
     private func sectionHeader(_ title: String, count: Int) -> some View {
@@ -383,11 +430,11 @@ struct NuclearDownloadsView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(AppTheme.Colors.textSecondary)
             
-            Spacer()
+            
+            // Note: Spacer is handled by the caller if they need to add buttons
         }
-        .padding(.horizontal, 16)
+        .padding(.leading, 16)
         .padding(.vertical, 12)
-        .background(AppTheme.Colors.background)
     }
     
     // MARK: - Smart Downloads Prompt

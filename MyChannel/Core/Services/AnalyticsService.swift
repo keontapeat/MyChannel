@@ -41,10 +41,28 @@ struct FunnelStep: Codable, Identifiable {
 @MainActor
 final class AnalyticsService: ObservableObject {
     static let shared = AnalyticsService()
-    private init() {}
     @Published private(set) var currentSession: AnalyticsSession?
     @Published private(set) var recentEvents: [AnalyticsEvent] = []
     private var eventBuffer: [AnalyticsEvent] = []
+    private var batchTimer: Timer?
+    private let maxBufferSize = 50
+
+    private init() {
+        startBatchTimer()
+    }
+    
+    deinit {
+        batchTimer?.invalidate()
+    }
+    
+    private func startBatchTimer() {
+        // Flush telemetry events to the server every 60 seconds
+        batchTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+            Task {
+                try? await self?.flush()
+            }
+        }
+    }
 
     func startSession(userId: String?) {
         let session = AnalyticsSession(id: UUID().uuidString, startedAt: Date(), endedAt: nil, eventCount: 0, screenViews: 0, userId: userId)
@@ -67,6 +85,11 @@ final class AnalyticsService: ObservableObject {
         eventBuffer.append(event)
         recentEvents.append(event)
         if recentEvents.count > 200 { recentEvents = Array(recentEvents.suffix(100)) }
+        
+        // Force flush if buffer hits max capacity to avoid memory bloat
+        if eventBuffer.count >= maxBufferSize {
+            Task { try? await flush() }
+        }
     }
 
     func trackScreen(_ screenName: String) {
@@ -118,6 +141,14 @@ final class AnalyticsService: ObservableObject {
 
     func trackScreenView(_ screenName: String) async {
         trackScreen(screenName)
+    }
+
+    func trackWatchTimeTelemetry(videoId: String, position: TimeInterval, bitrate: Int) async {
+        track(name: "video_telemetry", params: [
+            "video_id": videoId,
+            "position": String(position),
+            "bitrate_kbps": String(bitrate)
+        ])
     }
 
     func flush() async throws {

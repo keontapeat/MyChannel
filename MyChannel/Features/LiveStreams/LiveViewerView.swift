@@ -11,12 +11,14 @@ import SwiftUI
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+import MapKit
 
 struct LiveViewerView: View {
     let stream: FirestoreLiveStream
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var liveManager = LiveStreamManager.shared
+    @StateObject private var locationEngine = LiveLocationEngine.shared
 
     @State private var chatMessages: [(id: String, username: String, content: String, avatar: String)] = []
     @State private var chatText = ""
@@ -60,6 +62,7 @@ struct LiveViewerView: View {
             }
             startChatListener()
             startStreamStatusListener()
+            locationEngine.listenToStreamerLocation(streamId: stream.id)
         }
         .onDisappear {
             stopTimer()
@@ -67,6 +70,7 @@ struct LiveViewerView: View {
                 await liveManager.leaveAsViewer(streamId: stream.id)
             }
             stopListeners()
+            locationEngine.stopListening()
         }
     }
 
@@ -156,6 +160,27 @@ struct LiveViewerView: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .padding(.horizontal, 32)
+            }
+            
+            // IRL Mini Map Overlay
+            if let coordinate = locationEngine.streamerLocation {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Map(position: .constant(.region(MKCoordinateRegion(center: coordinate, span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01))))) {
+                            Marker(stream.creatorName, coordinate: coordinate)
+                                .tint(.red)
+                        }
+                        .frame(width: 120, height: 120)
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        )
+                        .padding(12)
+                    }
+                }
             }
         }
         .frame(height: 280)

@@ -67,7 +67,7 @@ struct GovernanceTransparencyReport: Codable, Identifiable {
 @MainActor
 final class PlatformGovernanceService: ObservableObject {
     static let shared = PlatformGovernanceService()
-    private init() {}
+    init() {}
 
     @Published private(set) var proposals: [GovernanceProposal] = []
     @Published private(set) var councilMembers: [TrustCouncilMember] = []

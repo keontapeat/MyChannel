@@ -22,7 +22,7 @@ class PerformanceOptimizer: ObservableObject {
     @Published var performanceMetrics = OptimizerMetrics()
     
     private var cancellables = Set<AnyCancellable>()
-    private let memoryPressureMonitor = MemoryPressureMonitor()
+    private let memoryPressureMonitor = SystemMemoryMonitor()
     private let batteryMonitor = BatteryOptimizer()
     
     private init() {
@@ -136,8 +136,8 @@ class PerformanceOptimizer: ObservableObject {
     }
 }
 
-// MARK: - Memory Pressure Monitor
-class MemoryPressureMonitor: ObservableObject {
+// MARK: - System Memory Monitor
+class SystemMemoryMonitor: ObservableObject {
     @Published var memoryPressure: MemoryPressure = .normal
     
     private var source: DispatchSourceMemoryPressure?

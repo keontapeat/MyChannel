@@ -55,6 +55,7 @@ final class FeaturedStore: ObservableObject {
     // MARK: - Firestore Sync (Real-time listener for featured_videos collection)
     func startFirestoreListener() {
         #if canImport(FirebaseFirestore)
+        if activeListener != nil { return } // Already listening
         isLoading = true
         
         // Listen to the featured_videos collection (same as ThermonuclearFeaturedManager uses)
@@ -162,28 +163,23 @@ final class FeaturedStore: ObservableObject {
             }
         }
         
-        // Merge: keep local entries that haven't been confirmed by Firestore yet
-        // (prevents wiping freshly added items when the server snapshot is stale or
-        //  Firestore reads are blocked by App Check/permissions).
-        let remoteIds = Set(loadedVideos.map { $0.id })
-        let unconfirmedLocals = featured.filter { !remoteIds.contains($0.id) }
-        if loadedVideos.isEmpty && !unconfirmedLocals.isEmpty {
-            // Don't overwrite local state with an empty remote snapshot.
-            print("✅ FeaturedStore remote returned 0 — preserving \(unconfirmedLocals.count) local entries")
-        } else {
-            featured = unconfirmedLocals + loadedVideos
-            persist()
-        }
+        // Use Firestore as the source of truth, removing deleted items correctly
+        featured = loadedVideos
+        persist()
+        
         isLoading = false
         hasSyncedFromFirestore = true
 
-        print("✅ FeaturedStore synced \(loadedVideos.count) videos from Firestore (local kept: \(unconfirmedLocals.count))")
+        print("✅ FeaturedStore synced \(loadedVideos.count) videos from Firestore")
         #endif
     }
     
     // MARK: - Legacy sync method (for backward compatibility)
     func syncFromFirestore() {
-        startFirestoreListener()
+        // Listener is already active, no need to duplicate listeners
+        if activeListener == nil {
+            startFirestoreListener()
+        }
     }
     
     private func updateFromFirestore(snap: Any?) async {

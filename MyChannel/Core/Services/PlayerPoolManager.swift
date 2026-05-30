@@ -111,6 +111,39 @@ class PlayerPoolManager {
         }
     }
     
+    // 🔥 Phase 20: Heavy-Duty Video Pre-fetching
+    func preloadNextVideoBytes(urlString: String) {
+        guard assetCache[urlString] == nil else { return }
+        guard let url = URL(string: urlString) else { return }
+        print("⚡ [Phase 20] Aggressively pre-fetching next video into RAM: \(urlString)")
+        
+        Task {
+            let asset = AVURLAsset(url: url)
+            asset.resourceLoader.preloadsEligibleContentKeys = true
+            let item = AVPlayerItem(asset: asset)
+            // Pre-buffer approximately 2MB / first few seconds
+            item.preferredForwardBufferDuration = 5.0
+            
+            // Use a background player just to trigger the buffering
+            let prefetchPlayer = AVPlayer(playerItem: item)
+            prefetchPlayer.isMuted = true
+            prefetchPlayer.preroll(atRate: 1.0) { success in
+                print("⚡ [Phase 20] Pre-fetch \(success ? "completed" : "failed") for: \(urlString)")
+            }
+            
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
+                self.assetCache[urlString] = asset
+                self.itemCache[urlString] = item // Cache the primed item!
+                
+                if self.assetCache.count > self.maxAssetCacheSize {
+                    let oldestKey = self.assetCache.keys.first!
+                    self.assetCache.removeValue(forKey: oldestKey)
+                }
+            }
+        }
+    }
+    
     /// 🔥 INSTANT: Get pre-loaded asset
     func getPreloadedAsset(for videoURL: String) -> AVURLAsset? {
         return assetCache[videoURL]

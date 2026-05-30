@@ -8,14 +8,16 @@ struct AssetStory: Identifiable, Equatable {
     let authorImageName: String
     var creatorId: String = ""
     var originalStoryId: String? = nil
+    var isCloseFriends: Bool = false
 
-    init(id: String = UUID().uuidString, media: AssetMedia, username: String, authorImageName: String, creatorId: String = "", originalStoryId: String? = nil) {
+    init(id: String = UUID().uuidString, media: AssetMedia, username: String, authorImageName: String, creatorId: String = "", originalStoryId: String? = nil, isCloseFriends: Bool = false) {
         self.id = originalStoryId ?? id
         self.media = media
         self.username = username
         self.authorImageName = authorImageName
         self.creatorId = creatorId
         self.originalStoryId = originalStoryId
+        self.isCloseFriends = isCloseFriends
     }
 }
 
@@ -30,6 +32,10 @@ struct UserStoryGroup: Identifiable {
     var isSeen: Bool {
         let seen = StorySeenTracker.shared.seenStoryIds
         return !stories.isEmpty && stories.allSatisfy { seen.contains($0.stableStoryId) }
+    }
+    
+    var hasCloseFriends: Bool {
+        stories.contains { $0.isCloseFriends }
     }
     
     static func group(from stories: [AssetStory]) -> [UserStoryGroup] {
@@ -100,13 +106,15 @@ struct AssetBouncyStoryBubble: View {
     let onTap: (AssetStory) -> Void
     let ns: Namespace.ID?
     let activeHeroId: String?
+    let isCurrentUser: Bool
 
-    init(story: AssetStory, isSeen: Bool = false, onTap: @escaping (AssetStory) -> Void, ns: Namespace.ID? = nil, activeHeroId: String? = nil) {
+    init(story: AssetStory, isSeen: Bool = false, onTap: @escaping (AssetStory) -> Void, ns: Namespace.ID? = nil, activeHeroId: String? = nil, isCurrentUser: Bool = false) {
         self.story = story
         self.isSeen = isSeen
         self.onTap = onTap
         self.ns = ns
         self.activeHeroId = activeHeroId
+        self.isCurrentUser = isCurrentUser
     }
 
     // Instagram gradient ring colors
@@ -114,6 +122,12 @@ struct AssetBouncyStoryBubble: View {
         if isSeen {
             return LinearGradient(
                 colors: [Color(.systemGray4), Color(.systemGray3)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        } else if story.isCloseFriends {
+            return LinearGradient(
+                colors: [Color.green, Color.mint],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -151,8 +165,8 @@ struct AssetBouncyStoryBubble: View {
                 .opacity(activeHeroId == story.id ? 0 : 1)
                 .modifier(HeroMatch(ns: ns, id: story.id))
 
-                Text(story.username)
-                    .font(.system(size: 12, weight: .semibold))
+                Text(isCurrentUser ? "Your story" : story.username)
+                    .font(.system(size: 12, weight: .regular))
                     .foregroundColor(.primary)
                     .lineLimit(1)
                     .frame(width: 80)
@@ -294,39 +308,14 @@ struct AssetBouncyStoriesRow: View {
     @ViewBuilder
     private var leadingStoryButton: some View {
         if let currentUserGroup, let representative = currentUserGroup.stories.first {
-            Button(action: {
-                HapticManager.shared.impact(style: .medium)
-                onStoryTap(representative)
-            }) {
-                VStack(spacing: 8) {
-                    ZStack(alignment: .bottomTrailing) {
-                        AssetBouncyStoryBubble(
-                            story: representative,
-                            isSeen: currentUserGroup.isSeen,
-                            onTap: onStoryTap,
-                            ns: ns,
-                            activeHeroId: activeHeroId
-                        )
-
-                        Circle()
-                            .fill(AppTheme.Colors.primary)
-                            .frame(width: 26, height: 26)
-                            .overlay(
-                                Image(systemName: "plus")
-                                    .font(.system(size: 13, weight: .black))
-                                    .foregroundColor(.white)
-                            )
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white, lineWidth: 2)
-                            )
-                            .offset(x: 4, y: 0)
-                    }
-                }
-                .frame(width: 88, height: 124)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            AssetBouncyStoryBubble(
+                story: representative,
+                isSeen: currentUserGroup.isSeen,
+                onTap: onStoryTap,
+                ns: ns,
+                activeHeroId: activeHeroId,
+                isCurrentUser: true
+            )
             .accessibilityLabel("Your story")
         } else {
             addStoryButton
@@ -342,38 +331,38 @@ struct AssetBouncyStoriesRow: View {
                 ZStack(alignment: .bottomTrailing) {
                     Circle()
                         .fill(AppTheme.Colors.surface)
-                        .frame(width: 78, height: 78)
-                        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                        .frame(width: 74, height: 74)
                         .overlay(
                             ProfileAvatarView(
                                 urlString: getUserProfileImageURL(),
-                                size: 72
+                                size: 68
                             )
                             .clipShape(Circle())
                         )
                         .overlay(
                             Circle()
-                                .stroke(AppTheme.Colors.divider, lineWidth: 1.5)
+                                .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
                         )
 
                     Circle()
-                        .fill(AppTheme.Colors.primary)
-                        .frame(width: 26, height: 26)
+                        .fill(Color.blue)
+                        .frame(width: 24, height: 24)
                         .overlay(
                             Image(systemName: "plus")
-                                .font(.system(size: 13, weight: .black))
+                                .font(.system(size: 14, weight: .bold))
                                 .foregroundColor(.white)
                         )
                         .overlay(
                             Circle()
-                                .stroke(Color.white, lineWidth: 2)
+                                .stroke(Color(.systemBackground), lineWidth: 3)
                         )
-                        .offset(x: 6, y: 6)
+                        .offset(x: 2, y: 2)
                 }
+                .frame(width: 80, height: 80)
 
-                Text("Create story")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+                Text("Your story")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(.secondary)
                     .frame(width: 80)
             }
             .frame(width: 88, height: 124)

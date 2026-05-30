@@ -411,25 +411,30 @@ class SmartUserSeederService: ObservableObject {
     
     // MARK: - Get Mixed Users for Rankings
     func getMixedUsersForRankings(limit: Int = 20) async -> [User] {
-        var allUsers: [User] = []
-        
-        // 1. Get real users from Firestore
+        // 1. Refresh the real-user count so multipliers are current.
+        await RealUserRankingGate.shared.refreshIfNeeded()
+
+        // 2. Get real users from Firestore.
         let realUsers = await fetchRealUsers()
-        allUsers.append(contentsOf: realUsers)
-        
-        // 2. Add seeded users (converted to User models)
-        let seededAsUsers = seededUsers.map { $0.toUser() }
-        allUsers.append(contentsOf: seededAsUsers)
-        
-        // 3. Sort by a mix of engagement and priority
-        allUsers.sort { user1, user2 in
-            let score1 = Double(user1.subscriberCount) + Double(user1.totalViews ?? 0) * 0.1
-            let score2 = Double(user2.subscriberCount) + Double(user2.totalViews ?? 0) * 0.1
-            return score1 > score2
-        }
-        
-        // 4. Return top N
-        return Array(allUsers.prefix(limit))
+
+        // 3. Sort seeded users through the ranking gate so real profiles
+        //    rise naturally as the platform grows. Friends (priority 10 /
+        //    .imported) are treated as real — never penalized.
+        let rankedSeeded = RealUserRankingGate.shared.ranked(seededUsers)
+
+        // 4. Real users always come first; seed profiles fill remaining slots.
+        var allUsers: [User] = realUsers.map { $0 }
+        allUsers.append(contentsOf: rankedSeeded.map { $0.toUser() })
+
+        // 5. De-duplicate by id and return top N.
+        var seen = Set<String>()
+        let deduped = allUsers.filter { seen.insert($0.id).inserted }
+
+        print("🏆 [SmartUserSeeder] Rankings — Phase: \(RealUserRankingGate.shared.phaseName) " +
+              "| Real: \(realUsers.count) | Seed: \(rankedSeeded.count) " +
+              "| Seed multiplier: \(RealUserRankingGate.shared.seedContentMultiplier)")
+
+        return Array(deduped.prefix(limit))
     }
     
     private func fetchRealUsers() async -> [User] {

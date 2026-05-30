@@ -65,7 +65,7 @@ struct CollectiveDeal: Codable, Identifiable {
 @MainActor
 final class CreatorGuildsService: ObservableObject {
     static let shared = CreatorGuildsService()
-    private init() {}
+    init() {}
 
     @Published private(set) var guilds: [CreatorGuild] = []
     @Published private(set) var members: [GuildMember] = []

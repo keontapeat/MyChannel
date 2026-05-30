@@ -1,0 +1,68 @@
+// ================================================
+// MyChannel - GOD LEVEL DEBUG SPEED
+// ================================================
+// Every setting here is calibrated for maximum
+// incremental build speed on Apple Silicon/Intel.
+
+// ---- COMPILER INDEX ----
+// Disabling the index store during builds = massive win
+COMPILER_INDEX_STORE_ENABLE = NO
+CLANG_ENABLE_MODULE_DEBUGGING = NO
+
+// ---- MODULE CACHE ----
+// Skip revalidating the clang module cache on every build
+CLANG_ENABLE_MODULE_DEBUGINFO = NO
+CLANG_MODULES_VALIDATE_SYSTEM_HEADERS = NO
+
+// ---- DEBUG INFO ----
+// dwarf = fast. dwarf-with-dsym = slow (generates dSYM).
+// Never need dSYM when developing locally.
+DEBUG_INFORMATION_FORMAT = dwarf
+
+// ---- DEAD CODE STRIPPING ----
+// Off in Debug = linker does less work
+DEAD_CODE_STRIPPING = NO
+
+// ---- SWIFT COMPILER ----
+// -Onone = no optimization (already set in pbxproj)
+// incremental = only recompile changed files
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+SWIFT_COMPILATION_MODE = incremental
+
+// ---- SWIFT TIMING DIAGNOSTICS ----
+// Shows a WARNING in Xcode for any function/expression
+// that takes longer than 200ms to type-check.
+// Helps identify the NEXT bottleneck after every fix.
+OTHER_SWIFT_FLAGS = -Xfrontend -warn-long-function-bodies=200 -Xfrontend -warn-long-expression-type-checking=200
+
+// ---- WHOLE MODULE OPTIMIZATION ----
+// Never in debug — it recompiles EVERYTHING on any change
+// (wholemodule is Release-only)
+
+// ---- PREVIEWS ----
+// SwiftUI previews add a ton of build overhead
+ENABLE_PREVIEWS = NO
+
+// ---- STRIP SETTINGS ----
+COPY_PHASE_STRIP = NO
+STRIP_INSTALLED_PRODUCT = NO
+STRIP_STYLE = debugging
+
+// ---- LINKER ----
+// Reduce linker work in debug
+LD_GENERATE_MAP_FILE = NO
+
+// ---- ASSETS ----
+// Don't optimize asset catalogs in debug
+ASSETCATALOG_COMPILER_OPTIMIZATION = time
+
+// ---- ONLY BUILD FOR ACTIVE ARCH ----
+// Only build arm64 (your device/sim), not x86_64 too
+ONLY_ACTIVE_ARCH = YES
+
+// ---- DISABLE DOCUMENTATION WARNINGS ----
+// Saves time processing doc comments
+CLANG_WARN_DOCUMENTATION_COMMENTS = NO
+
+// ---- DISABLE TESTABILITY IN RELEASE ----
+ENABLE_TESTABILITY = YES

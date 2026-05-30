@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseFirestore
 
 // MARK: - PublicProfileView
 // Presents any user's channel using the same layout as your own ProfileView.
@@ -12,6 +13,10 @@ struct PublicProfileView: View {
     @State private var isFollowing: Bool = false
     @State private var showingEditProfile: Bool = false
     @State private var showingSettings: Bool = false
+    @State private var showingReportUserSheet: Bool = false
+    @State private var showingBlockUserAlert: Bool = false
+    @State private var showingReportAlert: Bool = false
+    @State private var selectedReportReason: String = "spam"
 
     @State private var userVideos: [Video] = []
     @State private var watchHistory: [Video] = []
@@ -41,7 +46,9 @@ struct PublicProfileView: View {
                     scrollOffset: scrollOffset,
                     isFollowing: $isFollowing,
                     showingEditProfile: $showingEditProfile,
-                    showingSettings: $showingSettings
+                    showingSettings: $showingSettings,
+                    showingReportUserSheet: $showingReportUserSheet,
+                    showingBlockUserAlert: $showingBlockUserAlert
                 )
 
                 StoryHighlightsTray(creatorId: editableUser.id) { highlight in
@@ -104,6 +111,24 @@ struct PublicProfileView: View {
         }
         .sheet(item: $selectedHighlight) { highlight in
             StoryHighlightViewer(highlight: highlight)
+        }
+        .confirmationDialog("Report User", isPresented: $showingReportUserSheet, titleVisibility: .visible) {
+            Button("Spam or misleading") { selectedReportReason = "spam"; showingReportAlert = true }
+            Button("Abusive or harmful content") { selectedReportReason = "abusive"; showingReportAlert = true }
+            Button("Inappropriate profile") { selectedReportReason = "inappropriate"; showingReportAlert = true }
+            Button("Cancel", role: .cancel) { }
+        }
+        .alert("Report this user?", isPresented: $showingReportAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Report", role: .destructive) { Task { await reportUser() } }
+        } message: {
+            Text("This will send a report to our moderation team for review.")
+        }
+        .alert("Block \(user.displayName)?", isPresented: $showingBlockUserAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Block", role: .destructive) { Task { await blockUser() } }
+        } message: {
+            Text("You will no longer see content from this user, and they won't be able to interact with you.")
         }
         .onAppear { Task { await load() } }
     }
@@ -180,6 +205,67 @@ struct PublicProfileView: View {
             videoCount: videos.count,
             totalViews: videos.reduce(0) { $0 + $1.viewCount }
         )
+    }
+
+    // MARK: - Moderation Actions
+    private func reportUser() async {
+        guard let currentUserId = AuthenticationManager.shared.currentUser?.id else { return }
+        let db = Firestore.firestore()
+        let reportRef = db.collection("reports").document()
+        
+        let reportData: [String: Any] = [
+            "id": reportRef.documentID,
+            "reporterId": currentUserId,
+            "reportedUserId": user.id,
+            "reason": selectedReportReason,
+            "timestamp": FieldValue.serverTimestamp(),
+            "status": "pending",
+            "type": "user_report"
+        ]
+        
+        do {
+            try await reportRef.setData(reportData)
+            await MainActor.run {
+                NotificationManager.shared.showSuccess("User reported to moderation.")
+            }
+        } catch {
+            print("Failed to report user: \(error)")
+        }
+    }
+    
+    private func blockUser() async {
+        guard let currentUserId = AuthenticationManager.shared.currentUser?.id else { return }
+        let db = Firestore.firestore()
+        let blockedUserId = user.id
+        
+        let blockData: [String: Any] = [
+            "blockerId": currentUserId,
+            "blockedUserId": blockedUserId,
+            "blockedUserDisplayName": user.displayName,
+            "blockedUserUsername": user.username,
+            "reason": "user_initiated_profile_block",
+            "timestamp": FieldValue.serverTimestamp()
+        ]
+        
+        do {
+            try await db.collection("users").document(currentUserId)
+                .collection("blockedUsers").document(blockedUserId)
+                .setData(blockData)
+            
+            // Send local notification so feeds can filter out this user's videos
+            NotificationCenter.default.post(
+                name: NSNotification.Name("UserBlocked"),
+                object: nil,
+                userInfo: ["blockedUserId": blockedUserId]
+            )
+            
+            await MainActor.run {
+                NotificationManager.shared.showSuccess("@\(user.username) has been blocked.")
+                dismiss() // Return to feed
+            }
+        } catch {
+            print("Failed to block user: \(error)")
+        }
     }
 }
 

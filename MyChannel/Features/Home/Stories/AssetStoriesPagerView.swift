@@ -562,28 +562,32 @@ struct AssetStoriesPagerView: View {
 
     private var header: some View {
         HStack {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 storyAvatar(for: currentGroup)
-                    .frame(width: 34, height: 34)
+                    .frame(width: 32, height: 32)
                     .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
                     .onTapGesture {
                         Task {
                             await openCurrentProfile()
                         }
                     }
-                Text(currentGroup?.username ?? "")
-                    .foregroundStyle(.white)
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
-                    .onTapGesture {
-                        Task {
-                            await openCurrentProfile()
-                        }
+                HStack(spacing: 4) {
+                    Text(currentGroup?.username ?? "")
+                        .foregroundStyle(.white)
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1)
+                    Text("14h")
+                        .foregroundStyle(.white.opacity(0.7))
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .onTapGesture {
+                    Task {
+                        await openCurrentProfile()
                     }
+                }
             }
             Spacer()
-            HStack(spacing: 10) {
+            HStack(spacing: 16) {
                 if currentStory?.creatorId == appState.currentUser?.id {
                     Button {
                         pause()
@@ -593,10 +597,9 @@ struct AssetStoriesPagerView: View {
                         }
                     } label: {
                         Image(systemName: "chart.bar.xaxis")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(.white)
-                            .padding(10)
-                            .background(Color.black.opacity(0.35), in: Circle())
+                            .shadow(color: .black.opacity(0.3), radius: 2)
                     }
                 }
 
@@ -606,10 +609,9 @@ struct AssetStoriesPagerView: View {
                     showStoryOptions = true
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(.white)
-                        .padding(10)
-                        .background(Color.black.opacity(0.35), in: Circle())
+                        .shadow(color: .black.opacity(0.3), radius: 2)
                 }
                 .confirmationDialog("", isPresented: $showStoryOptions, titleVisibility: .hidden) {
                     let isOwner = currentStory?.creatorId == appState.currentUser?.id
@@ -647,26 +649,25 @@ struct AssetStoriesPagerView: View {
                     HapticManager.shared.impact(style: .light)
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(.white)
-                        .padding(10)
-                        .background(Color.black.opacity(0.35), in: Circle())
+                        .shadow(color: .black.opacity(0.3), radius: 2)
                 }
             }
         }
     }
 
     private var bottomActions: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 16) {
             HStack {
                 Text("Send message")
-                    .foregroundStyle(.white.opacity(0.85))
-                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white)
+                    .font(.system(size: 14, weight: .regular))
                 Spacer()
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 14)
-            .background(Color.white.opacity(0.12), in: Capsule())
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .background(Capsule().stroke(Color.white.opacity(0.4), lineWidth: 1))
             .contentShape(Capsule())
             .onTapGesture {
                 pause()
@@ -679,10 +680,9 @@ struct AssetStoriesPagerView: View {
                 }
             } label: {
                 Image(systemName: showHeart ? "heart.fill" : "heart")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 24, weight: .regular))
                     .foregroundStyle(showHeart ? .red : .white)
-                    .padding(10)
-                    .background(Color.black.opacity(0.35), in: Circle())
+                    .shadow(color: .black.opacity(0.3), radius: 2)
             }
 
             Button {
@@ -690,12 +690,10 @@ struct AssetStoriesPagerView: View {
                 pause()
                 showingShareSheet = true
             } label: {
-                Image(systemName: "paperplane.fill")
-                    .rotationEffect(.degrees(45))
-                    .font(.system(size: 18, weight: .bold))
+                Image(systemName: "paperplane")
+                    .font(.system(size: 24, weight: .regular))
                     .foregroundStyle(.white)
-                    .padding(10)
-                    .background(Color.black.opacity(0.35), in: Circle())
+                    .shadow(color: .black.opacity(0.3), radius: 2)
             }
         }
     }

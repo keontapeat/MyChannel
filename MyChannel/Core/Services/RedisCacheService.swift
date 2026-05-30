@@ -8,13 +8,12 @@
 
 import Foundation
 
-final class RedisCacheService: @unchecked Sendable {
+actor RedisCacheService {
     static let shared = RedisCacheService()
     
     // 🔥 CACHE LAYERS
     private var l1Cache: [String: CacheEntry] = [:] // Local memory (1ms)
     private let l1MaxSize = 100 // Max 100 entries in L1
-    private let cacheQueue = DispatchQueue(label: "com.mychannel.cache", qos: .userInitiated, attributes: .concurrent)
     
     // L2: Google Memorystore Redis (5ms) - Using your $200K credits!
     // L3: Firestore (50ms) - Fallback
@@ -37,12 +36,12 @@ final class RedisCacheService: @unchecked Sendable {
         let startTime = Date()
         
         // 🔥 L1: Check local memory (fastest!)
-        let l1Result: T? = cacheQueue.sync {
+        let l1Result: T? = {
             guard let entry = l1Cache[key], !entry.isExpired else {
                 return nil
             }
             return entry.value as? T
-        }
+        }()
         
         if let value = l1Result {
             let latency = Date().timeIntervalSince(startTime) * 1000
@@ -80,15 +79,11 @@ final class RedisCacheService: @unchecked Sendable {
             createdAt: Date()
         )
         
-        cacheQueue.async(flags: .barrier) { [weak self] in
-            guard let self = self else { return }
-            
-            self.l1Cache[key] = entry
-            
-            // Enforce size limit
-            if self.l1Cache.count > self.l1MaxSize {
-                self.evictOldestEntry()
-            }
+        l1Cache[key] = entry
+        
+        // Enforce size limit
+        if l1Cache.count > l1MaxSize {
+            evictOldestEntry()
         }
         
         // 🚀 L2: Store in Redis
@@ -99,20 +94,16 @@ final class RedisCacheService: @unchecked Sendable {
     
     /// Delete from cache
     func delete(_ key: String) async {
-        cacheQueue.async(flags: .barrier) { [weak self] in
-            self?.l1Cache.removeValue(forKey: key)
-        }
+        l1Cache.removeValue(forKey: key)
         await deleteFromRedis(key)
         print("🗑️ [Cache] Deleted: \(key)")
     }
     
     /// Clear all cache
     func clearAll() async {
-        cacheQueue.async(flags: .barrier) { [weak self] in
-            self?.l1Cache.removeAll()
-            self?.hits = 0
-            self?.misses = 0
-        }
+        l1Cache.removeAll()
+        hits = 0
+        misses = 0
         await clearRedis()
         print("🧹 [Cache] Cleared all caches")
     }
@@ -363,18 +354,14 @@ final class RedisCacheService: @unchecked Sendable {
     
     /// Remove expired entries
     func cleanupExpired() {
-        cacheQueue.async(flags: .barrier) { [weak self] in
-            guard let self = self else { return }
-            
-            let expiredKeys = self.l1Cache.filter { $0.value.isExpired }.map { $0.key }
-            
-            for key in expiredKeys {
-                self.l1Cache.removeValue(forKey: key)
-            }
-            
-            if !expiredKeys.isEmpty {
-                print("🧹 [Cache] Cleaned up \(expiredKeys.count) expired entries")
-            }
+        let expiredKeys = l1Cache.filter { $0.value.isExpired }.map { $0.key }
+        
+        for key in expiredKeys {
+            l1Cache.removeValue(forKey: key)
+        }
+        
+        if !expiredKeys.isEmpty {
+            print("🧹 [Cache] Cleaned up \(expiredKeys.count) expired entries")
         }
     }
     

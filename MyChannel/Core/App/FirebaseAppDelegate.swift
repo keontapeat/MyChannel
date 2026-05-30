@@ -68,6 +68,7 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
         
         // Initialize enhanced Firebase services
         Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s delay
             // Fetch remote config early
             await RemoteConfigManager.shared.fetchAndActivate()
             
@@ -83,22 +84,26 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
         
         // ChannelBoost install log (non-blocking)
         Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s delay
             let locale = Locale.current.identifier
             await ChannelBoostService.shared.logInstall(platform: "ios", locale: locale, source: "app", campaign: nil, referral: nil)
         }
         
         // 💰 Initialize Google Mobile Ads SDK for REAL ad revenue!
         Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s delay
             AdMobManager.shared.initialize()
         }
         
         // 🛡️ Start Platform Monitor Service — 24/7 fraud + content scanning
         Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s delay
             PlatformMonitorService.shared.start()
         }
         
         // 🤖 Start AGI Agent Scheduler — all agents improving the app daily
         Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_500_000_000) // 2.5s delay
             let manager = AGIAgentManager.shared
             // Auto-start scheduler if agents are already deployed
             let liveCount = manager.agents.filter { $0.status == .live && $0.isEnabled }.count

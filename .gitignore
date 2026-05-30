@@ -2,6 +2,8 @@
 DerivedData/
 .build/
 derivedData-*/
+.derivedData-*/
+.derivedData*
 build/
 *.xcuserdatad/
 *.xcuserdata/
@@ -44,3 +46,9 @@ services/dist/
 *.avi
 *.MKV
 *.mkv
+
+# Temporary log and scripts
+*.log
+remove_*.py
+remove_*.rb
+remove_duplicates.rb

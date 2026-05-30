@@ -38,7 +38,7 @@ class AdvancedAnalyticsService: ObservableObject {
     // Enhanced audience analytics (YouTube parity)
     @Published var audienceDemographics: AudienceDemographics?
     @Published var trafficSources: [TrafficSource] = []
-    @Published var retentionCurves: [RetentionCurve] = []
+    @Published var retentionCurves: [AnalyticsRetentionCurve] = []
     @Published var geographicData: [GeographicMetric] = []
     @Published var deviceAnalytics: [DeviceMetric] = []
     
@@ -891,15 +891,15 @@ struct TrafficSource: Codable, Identifiable {
     }
 }
 
-struct RetentionCurve: Codable, Identifiable {
+struct AnalyticsRetentionCurve: Codable, Identifiable {
     let id = UUID()
     let videoId: String
-    let timePoints: [RetentionPoint]
+    let timePoints: [AnalyticsRetentionPoint]
     let averageViewDuration: TimeInterval
     let audienceRetentionPercentage: Double
 }
 
-struct RetentionPoint: Codable {
+struct AnalyticsRetentionPoint: Codable {
     let timeSeconds: Int
     let retentionPercentage: Double
 }

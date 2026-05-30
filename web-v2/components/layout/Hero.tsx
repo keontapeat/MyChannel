@@ -111,67 +111,27 @@ const Hero = ({
   return (
     <section
       ref={heroRef}
-      className="relative min-h-[600px] md:min-h-[700px] lg:min-h-[800px] flex items-center justify-center overflow-hidden"
+      className="relative min-h-[500px] flex items-center overflow-hidden bg-gradient-to-br from-gray-50 via-white to-red-50 border-b border-gray-200"
       aria-label="Hero section"
     >
-      {/* Background Video/Image */}
-      <div className="absolute inset-0 z-0">
-        {backgroundVideo && !isMobile ? (
-          <>
-            <video
-              ref={videoRef}
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
-                isVideoLoaded ? 'opacity-100' : 'opacity-0'
-              }`}
-              autoPlay
-              muted
-              loop
-              playsInline
-              onLoadedData={handleVideoLoad}
-              aria-hidden="true"
-            >
-              <source src={backgroundVideo} type="video/mp4" />
-            </video>
-            {!isVideoLoaded && (
-              <img
-                src={backgroundImage}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover"
-                loading="eager"
-                aria-hidden="true"
-              />
-            )}
-          </>
-        ) : (
-          <img
-            src={backgroundImage}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover"
-            loading="eager"
-            aria-hidden="true"
-          />
-        )}
-        
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/80" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/50 to-transparent" />
-      </div>
+      {/* Subtle background decoration */}
+      <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-red-50/60 to-transparent pointer-events-none" />
 
       {/* Content */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-32">
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
         <div
           className={`max-w-4xl transition-all duration-600 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5'}`}
         >
           {/* Title */}
           <h1
-            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight animate-fade-in-up"
+            className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-gray-900 mb-4 leading-tight animate-fade-in-up"
           >
             {title}
           </h1>
 
           {/* Subtitle */}
           <p
-            className="text-lg sm:text-xl md:text-2xl text-white/90 mb-8 max-w-2xl leading-relaxed animate-fade-in-up"
+            className="text-lg sm:text-xl text-gray-600 mb-8 max-w-2xl leading-relaxed animate-fade-in-up"
             style={{ animationDelay: '0.1s' }}
           >
             {subtitle}
@@ -184,7 +144,7 @@ const Hero = ({
           >
             <Link
               href={ctaPrimary.href}
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-[rgb(var(--color-primary))] hover:bg-[rgb(var(--color-primary-hover))] text-white font-semibold rounded-full transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[rgb(var(--color-primary))] focus:ring-opacity-50"
+              className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-full transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
               aria-label={ctaPrimary.text}
             >
               {ctaPrimary.text}
@@ -194,7 +154,7 @@ const Hero = ({
             {ctaSecondary && (
               <Link
                 href={ctaSecondary.href}
-                className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white font-semibold rounded-full border-2 border-white/30 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-white/50"
+                className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-white hover:bg-gray-50 text-gray-800 font-semibold rounded-full border border-gray-300 transition-all duration-200 shadow-sm"
                 aria-label={ctaSecondary.text}
               >
                 <Play size={20} aria-hidden="true" />
@@ -214,19 +174,19 @@ const Hero = ({
               {stats.map((stat, index) => (
                 <div
                   key={index}
-                  className="flex items-center gap-4 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20"
+                  className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 shadow-sm"
                   role="listitem"
                 >
                   {stat.icon && (
-                    <div className="text-white/90" aria-hidden="true">
+                    <div className="text-red-600" aria-hidden="true">
                       {stat.icon}
                     </div>
                   )}
                   <div>
-                    <div className="text-2xl md:text-3xl font-bold text-white mb-1">
+                    <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">
                       {stat.value}
                     </div>
-                    <div className="text-sm md:text-base text-white/80">
+                    <div className="text-sm text-gray-500">
                       {stat.label}
                     </div>
                   </div>
@@ -278,13 +238,7 @@ const Hero = ({
         </div>
       </div>
 
-      {/* Scroll Indicator */}
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10 animate-bounce">
-        <div className="w-6 h-10 border-2 border-white/50 rounded-full flex items-start justify-center p-2">
-          <div className="w-1 h-3 bg-white/50 rounded-full" />
-        </div>
-        <span className="sr-only">Scroll down</span>
-      </div>
+      {/* Scroll Indicator removed for clean light theme */}
     </section>
   );
 };

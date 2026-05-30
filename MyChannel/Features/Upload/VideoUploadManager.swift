@@ -19,6 +19,7 @@ import FirebaseFirestore
 class VideoUploadManager: ObservableObject {
     @Published var uploadProgress: Double = 0.0
     @Published var isUploading: Bool = false
+    @Published var isCompressing: Bool = false // 🔥 Phase 10
     @Published var uploadError: String?
     @Published var uploadedVideo: Video?
     
@@ -63,6 +64,10 @@ class VideoUploadManager: ObservableObject {
     // Pending auxiliary media (captions/dubs) to upload alongside video
     @Published var pendingCaptions: [(url: URL, lang: String)] = []
     @Published var pendingDubs: [(url: URL, lang: String)] = []
+    
+    // Auto-Dub features
+    @Published var enableAutoDub: Bool = false
+    @Published var autoDubLanguages: [String] = []
     
     // 🔥 NUCLEAR FIX #1: Upload cancellation support
     private var uploadTask: Task<Video, Error>?
@@ -164,18 +169,66 @@ class VideoUploadManager: ObservableObject {
         }
     }
     
-    // MARK: - Upload Process
-    func uploadVideo() async {
-        guard let videoData = videoData ?? (videoURL.flatMap { try? Data(contentsOf: $0) }),
-              !title.isEmpty else {
-            uploadError = "Please select a video and provide a title"
-            return
+    // MARK: - Phase 10: Advanced Media Transcoding Engine
+    private func compressVideo(url: URL) async throws -> URL {
+        print("🗜️ [CompressionEngine] Starting on-device transcoding for: \(url.lastPathComponent)")
+        let asset = AVAsset(url: url)
+        
+        // Use HEVC (H.265) for maximum compression, fallback to H.264
+        let preset = AVAssetExportPresetHEVCHighestQuality
+        
+        guard let exportSession = AVAssetExportSession(asset: asset, presetName: preset) else {
+            throw UploadError.exportFailed
         }
         
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("compressed_\(UUID().uuidString)")
+            .appendingPathExtension("mp4")
+            
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mp4
+        exportSession.shouldOptimizeForNetworkUse = true
+        
+        await exportSession.export()
+        
+        if exportSession.status == .completed {
+            let originalSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+            let newSize = (try? FileManager.default.attributesOfItem(atPath: outputURL.path)[.size] as? Int64) ?? 0
+            let savedMB = Double(originalSize - newSize) / 1_000_000.0
+            print("✅ [CompressionEngine] Transcoding complete! Saved \(String(format: "%.1f", savedMB)) MB of bandwidth.")
+            return outputURL
+        } else {
+            print("⚠️ [CompressionEngine] Transcoding failed. Falling back to original.")
+            return url
+        }
+    }
+    
+    // MARK: - Upload Process
+    func uploadVideo() async {
         isUploading = true
         uploadProgress = 0.0
         uploadError = nil
         isCancelling = false
+        
+        // 🔥 Phase 10: Run compression before upload starts
+        if let currentURL = videoURL {
+            isCompressing = true
+            do {
+                let compressedURL = try await compressVideo(url: currentURL)
+                self.videoURL = compressedURL
+                self.videoData = try? Data(contentsOf: compressedURL)
+            } catch {
+                print("Compression failed, proceeding with original file")
+            }
+            isCompressing = false
+        }
+        
+        guard let videoData = videoData ?? (videoURL.flatMap { try? Data(contentsOf: $0) }),
+              !title.isEmpty else {
+            uploadError = "Please select a video and provide a title"
+            isUploading = false
+            return
+        }
         
         // 🔥 NUCLEAR FIX #1: Create cancellable upload task
         uploadTask = Task {
@@ -402,6 +455,23 @@ class VideoUploadManager: ObservableObject {
                 Task {
                     _ = try? await VideoPlaybackReadinessService.shared.checkReadiness(videoId: uploadedVideo.id, userBandwidth: nil)
                 }
+                
+                // 🔥 PHASE 115: Auto-Dub Generation
+                if self.enableAutoDub && !self.autoDubLanguages.isEmpty {
+                    Task {
+                        do {
+                            print("🌍 [VideoUploadManager] Starting Auto-Dub for languages: \(self.autoDubLanguages)")
+                            try await AutoLocalizationStudioService.shared.generateDubbing(
+                                videoId: uploadedVideo.id,
+                                sourceLocale: self.language,
+                                targetLocales: self.autoDubLanguages
+                            )
+                            print("✅ [VideoUploadManager] Auto-Dub generation queued successfully.")
+                        } catch {
+                            print("⚠️ [VideoUploadManager] Auto-Dub failed: \(error)")
+                        }
+                    }
+                }
             }
             // Upload captions/dubs if any were attached
             if let uploadedVideo {
@@ -518,8 +588,13 @@ class VideoUploadManager: ObservableObject {
                 "videoId": videoId
             ]
             
-            // Start upload task
-            let uploadTask = videoRef.putData(data, metadata: storageMetadata)
+            // Start upload task (OS Background Safe using putFile instead of putData)
+            let uploadTask: StorageUploadTask
+            if let videoURL = self.videoURL {
+                uploadTask = videoRef.putFile(from: videoURL, metadata: storageMetadata)
+            } else {
+                uploadTask = videoRef.putData(data, metadata: storageMetadata)
+            }
             
             // Observe progress
             let progressObserver = uploadTask.observe(.progress) { [weak self] snapshot in
@@ -699,10 +774,13 @@ class VideoUploadManager: ObservableObject {
         license = .standard
         language = "en"
         uploadProgress = 0.0
+        isCompressing = false
         videoDuration = 0
         videoDimensions = .zero
         fileSizeMB = 0
         thumbnailTime = 1.0
+        enableAutoDub = false
+        autoDubLanguages.removeAll()
     }
     
     // MARK: - Video Editing (Basic)
