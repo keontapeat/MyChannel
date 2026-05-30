@@ -8,150 +8,99 @@
 import SwiftUI
 
 struct SplashView: View {
-    @State private var phase: SplashPhase = .initial
-    @State private var particles: [SplashParticle] = []
+    @State private var logoScale: CGFloat = 0.8
+    @State private var logoOpacity: Double = 0.0
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var showProgress: Bool = false
+    @State private var progress: Double = 0.0
     
     var onComplete: (() -> Void)?
     
-    enum SplashPhase {
-        case initial
-        case popIn
-        case explode
-        case settle
-        case fadeOut
-    }
-    
-    struct SplashParticle: Identifiable {
-        let id = UUID()
-        var xOffset: CGFloat
-        var yOffset: CGFloat
-        var scale: CGFloat
-        var opacity: Double
-        var color: Color
-    }
-    
     var body: some View {
         ZStack {
-            // Premium Blur Background
+            // Clean white background
             AppTheme.Colors.background
                 .ignoresSafeArea()
-            
-            // Background morphing blob (Lottie-style background element)
-            Circle()
-                .fill(
-                    LinearGradient(
-                        gradient: Gradient(colors: [AppTheme.Colors.primary.opacity(0.3), Color.blue.opacity(0.1)]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: phase == .explode ? 600 : 0, height: phase == .explode ? 600 : 0)
-                .opacity(phase == .explode ? 1.0 : (phase == .settle ? 0.3 : 0.0))
-                .blur(radius: 40)
-                .animation(.spring(response: 1.2, dampingFraction: 0.6), value: phase)
-            
-            // Exploding Particles
-            ForEach(particles) { particle in
-                Circle()
-                    .fill(particle.color)
-                    .frame(width: 8, height: 8)
-                    .offset(x: particle.xOffset, y: particle.yOffset)
-                    .scaleEffect(particle.scale)
-                    .opacity(particle.opacity)
-            }
             
             VStack(spacing: 0) {
                 Spacer()
                 
-                // Main Logo
+                // YouTube-style animated logo
                 Image("MyChannel")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 120, height: 120)
-                    .scaleEffect(logoScale)
+                    .scaleEffect(logoScale * pulseScale)
                     .opacity(logoOpacity)
-                    .rotation3DEffect(
-                        .degrees(phase == .popIn ? 360 : 0),
-                        axis: (x: 0.0, y: 1.0, z: 0.0),
-                        perspective: 0.5
-                    )
+                    .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: pulseScale)
                 
                 Spacer()
+                
+                // Simple loading indicator (YouTube style)
+                if showProgress {
+                    VStack(spacing: 20) {
+                        // Clean progress bar
+                        ZStack(alignment: .leading) {
+                            Rectangle()
+                                .fill(AppTheme.Colors.divider)
+                                .frame(width: 200, height: 3)
+                                .cornerRadius(1.5)
+                            
+                            Rectangle()
+                                .fill(AppTheme.Colors.primary)
+                                .frame(width: 200 * progress, height: 3)
+                                .cornerRadius(1.5)
+                                .animation(.easeOut(duration: 0.3), value: progress)
+                        }
+                        .transition(.opacity)
+                    }
+                    .padding(.bottom, 60)
+                }
             }
         }
         .onAppear {
-            startAdvancedAnimation()
+            startAnimation()
         }
     }
     
-    private var logoScale: CGFloat {
-        switch phase {
-        case .initial: return 0.0
-        case .popIn: return 1.4
-        case .explode: return 0.8
-        case .settle: return 1.0
-        case .fadeOut: return 10.0 // Zoom through effect
-        }
-    }
-    
-    private var logoOpacity: Double {
-        switch phase {
-        case .initial: return 0.0
-        case .popIn, .explode, .settle: return 1.0
-        case .fadeOut: return 0.0
-        }
-    }
-    
-    private func startAdvancedAnimation() {
-        // Generate particles
-        for _ in 0..<20 {
-            particles.append(SplashParticle(
-                xOffset: 0,
-                yOffset: 0,
-                scale: 0.1,
-                opacity: 0.0,
-                color: [.red, .white, .black, .gray].randomElement() ?? .red
-            ))
+    private func startAnimation() {
+        // Logo fade in with bounce
+        withAnimation(.spring(response: 1.2, dampingFraction: 0.7, blendDuration: 0)) {
+            logoScale = 1.0
+            logoOpacity = 1.0
         }
         
+        // Start pulse effect
         Task { @MainActor in
-            // 1. Pop In
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.5)) {
-                phase = .popIn
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                pulseScale = 1.1
             }
-            try? await Task.sleep(nanoseconds: 600_000_000)
+        }
+        
+        // Show loading after 1.5s
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            withAnimation(.easeInOut(duration: 0.4)) {
+                showProgress = true
+            }
             
-            // 2. Explode Particles & Background
-            HapticManager.shared.impact(style: .heavy)
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.4)) {
-                phase = .explode
-                for i in 0..<particles.count {
-                    let angle = Double.random(in: 0...(2 * .pi))
-                    let distance = CGFloat.random(in: 100...250)
-                    particles[i].xOffset = cos(angle) * distance
-                    particles[i].yOffset = sin(angle) * distance
-                    particles[i].scale = CGFloat.random(in: 0.5...2.0)
-                    particles[i].opacity = 1.0
+            animateProgress()
+        }
+    }
+    
+    private func animateProgress() {
+        Task { @MainActor in
+            let progressSteps: [Double] = [0.3, 0.6, 0.85, 1.0]
+            for (i, targetProgress) in progressSteps.enumerated() {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    progress = targetProgress
+                }
+                if i < progressSteps.count - 1 {
+                    try? await Task.sleep(nanoseconds: 400_000_000)
                 }
             }
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            
-            // 3. Settle
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
-                phase = .settle
-                for i in 0..<particles.count {
-                    particles[i].scale = 0.0
-                    particles[i].opacity = 0.0
-                }
-            }
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            
-            // 4. Fade Out / Zoom Through
-            withAnimation(.easeIn(duration: 0.4)) {
-                phase = .fadeOut
-            }
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            
+            try? await Task.sleep(nanoseconds: 500_000_000)
             onComplete?()
         }
     }
