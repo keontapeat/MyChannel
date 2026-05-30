@@ -1,5 +1,5 @@
 // ================================================
-// MyChannel - GOD LEVEL DEBUG SPEED
+// MyChannel - ULTRA LIGHTNING DEBUG SPEED ⚡⚡⚡
 // ================================================
 // Every setting here is calibrated for maximum
 // incremental build speed on Apple Silicon/Intel.
@@ -53,8 +53,9 @@ STRIP_STYLE = debugging
 LD_GENERATE_MAP_FILE = NO
 
 // ---- ASSETS ----
-// Don't optimize asset catalogs in debug
+// Only compile resources for active slice (huge win on big asset catalogs)
 ASSETCATALOG_COMPILER_OPTIMIZATION = time
+BUILD_ACTIVE_RESOURCES_ONLY = YES
 
 // ---- ONLY BUILD FOR ACTIVE ARCH ----
 // Only build arm64 (your device/sim), not x86_64 too
@@ -66,3 +67,19 @@ CLANG_WARN_DOCUMENTATION_COMMENTS = NO
 
 // ---- DISABLE TESTABILITY IN RELEASE ----
 ENABLE_TESTABILITY = YES
+
+// ---- METAL ----
+// Skip Metal debug source embedding (massive saving if using Metal shaders)
+MTL_ENABLE_DEBUG_INFO = NO
+
+// ---- STATIC ANALYZER ----
+// Off during dev — catch issues in CI, not every local build
+RUN_CLANG_STATIC_ANALYZER = NO
+
+// ---- STRING CATALOG ----
+// Skip symbol generation for String Catalogs in debug
+STRING_CATALOG_GENERATE_SYMBOLS = NO
+
+// ---- LOCALIZATION ----
+// Skip localization validation — dev iteration only
+VALIDATE_STRINGS_FILES_WHILE_BUILDING = NO

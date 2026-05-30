@@ -35,47 +35,50 @@ struct FeaturedHeroCard: View {
     var body: some View {
         let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
 
-        ZStack {
-            // MARK: Media Layer
+        GeometryReader { geo in
             ZStack {
-                // 1) Static poster (always rendered as base layer)
-                posterImage
+                // MARK: Media Layer
+                ZStack {
+                    // 1) Static poster (always rendered as base layer)
+                    posterImage
 
-                // 2) Video preview — only on the ACTIVE card, pick the right player
-                if isActive && !isPreview {
-                    if isDirectPlayable {
-                        // Firebase Storage / local file → native AVPlayer loop
-                        MutedLoopVideoPlayer(videoURL: video.videoURL, isActive: isActive)
-                            .transition(.opacity)
-                            .allowsHitTesting(false)
-                    } else if isYouTubeContent && (!isPreview || allowLiveInPreview) {
-                        // YouTube / live → web-based thumbnail preview
-                        VideoLiveThumbnailView(video: video, cornerRadius: 16)
-                            .transition(.opacity)
-                            .allowsHitTesting(false)
+                    // 2) Video preview — only on the ACTIVE card, pick the right player
+                    if isActive && !isPreview {
+                        if isDirectPlayable {
+                            // Firebase Storage / local file → native AVPlayer loop
+                            MutedLoopVideoPlayer(videoURL: video.videoURL, isActive: isActive)
+                                .transition(.opacity)
+                                .allowsHitTesting(false)
+                        } else if isYouTubeContent && (!isPreview || allowLiveInPreview) {
+                            // YouTube / live → web-based thumbnail preview
+                            VideoLiveThumbnailView(video: video, cornerRadius: 16)
+                                .transition(.opacity)
+                                .allowsHitTesting(false)
+                        }
                     }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                LinearGradient(
-                    colors: [Color.black.opacity(0.35), .clear, Color.black.opacity(0.55)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                .frame(width: geo.size.width, height: geo.size.height)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            )
+                .overlay(
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.35), .clear, Color.black.opacity(0.55)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                )
 
-            // Overlayed content
-            VStack(spacing: 12) {
-                topBadges
-                Spacer()
-                bottomContent
+                // Overlayed content
+                VStack(spacing: 12) {
+                    topBadges
+                    Spacer()
+                    bottomContent
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
             }
+            .scaleEffect(isPressed ? 0.98 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
         }
-        .scaleEffect(isPressed ? 0.98 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
     }
 
     // MARK: - Poster Image

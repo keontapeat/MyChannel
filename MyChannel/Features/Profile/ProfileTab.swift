@@ -11,7 +11,6 @@ import SwiftUI
 // 🔥 YOUTUBE PARITY: Channel tabs match YouTube's official order:
 // Home · Videos · Flicks · Live · Playlists · Posts (community) · Downloads · About
 enum ProfileTab: String, CaseIterable, Identifiable {
-    case home = "home"
     case videos = "videos"
     case shorts = "shorts"
     case live = "live"
@@ -24,7 +23,6 @@ enum ProfileTab: String, CaseIterable, Identifiable {
     
     var title: String {
         switch self {
-        case .home: return "Home"
         case .videos: return "Videos"
         case .shorts: return "Flicks"
         case .live: return "Live"
@@ -37,7 +35,6 @@ enum ProfileTab: String, CaseIterable, Identifiable {
     
     var iconName: String {
         switch self {
-        case .home: return "house"
         case .videos: return "play.rectangle"
         case .shorts: return "play.rectangle.on.rectangle"
         case .live: return "dot.radiowaves.left.and.right"
@@ -50,7 +47,6 @@ enum ProfileTab: String, CaseIterable, Identifiable {
     
     var accessibilityLabel: String {
         switch self {
-        case .home: return "Home tab"
         case .videos: return "Videos tab"
         case .shorts: return "Flicks tab"
         case .live: return "Live tab"

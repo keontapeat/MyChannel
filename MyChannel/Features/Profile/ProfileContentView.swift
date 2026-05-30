@@ -109,8 +109,7 @@ struct ProfileContentView: View {
     var body: some View {
         LazyVStack(spacing: 0) {
             switch selectedTab {
-            case .home:
-                ProfileChannelHomeView(videos: videos, user: user)
+
             case .videos:
                 ProfileVideosView(
                     videos: videos,

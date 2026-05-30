@@ -132,8 +132,6 @@ private struct UIKitProfileTabRow: UIViewRepresentable {
         
         private func tabCount(for tab: ProfileTab) -> Int? {
             switch tab {
-            case .home:
-                return nil
             case .videos:
                 return parent.user.videoCount > 0 ? parent.user.videoCount : nil
             case .shorts:
@@ -299,8 +297,6 @@ struct ProfileTabButton: View {
     
     private func getTabCount(for tab: ProfileTab) -> Int? {
         switch tab {
-        case .home:
-            return nil
         case .videos:
             return user.videoCount > 0 ? user.videoCount : nil
         case .shorts:
