@@ -109,6 +109,7 @@ struct MinimalHeroSection: View {
                 } else {
                     // Show actual featured videos
                     featuredCarouselView
+                        .padding(.horizontal, 20)
                 }
             }
         }

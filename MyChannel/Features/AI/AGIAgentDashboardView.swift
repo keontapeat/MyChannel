@@ -8,6 +8,19 @@
 
 import SwiftUI
 import UIKit
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
+
+// MARK: - Combined Log Event Model
+struct CombinedLogEvent: Identifiable {
+    let id: String
+    let timestamp: Date
+    let source: String
+    let title: String
+    let detail: String
+    let success: Bool
+}
 
 // MARK: - CIA Ops Dashboard
 
@@ -20,16 +33,27 @@ struct AGIAgentDashboardView: View {
     @State private var searchText = ""
     @State private var isDeployingAll = false
     @State private var pulseAnimation = false
-
+    
+    // Playground States
+    @State private var playgroundSelectedAgentId = "agent-007-dynamic-pricing"
+    @State private var playgroundInputText = ""
+    @State private var playgroundOutputText = ""
+    @State private var isSimulatingRun = false
+    
+    // Live Feed Combined logs states
+    @State private var combinedEvents: [CombinedLogEvent] = []
+    @State private var isLoadingLogs = false
+ 
     enum DashboardTab: String, CaseIterable {
         case ops = "OPS"
         case agents = "AGENTS"
+        case playground = "PLAYGROUND"
         case feed = "LIVE FEED"
         case patents = "PATENTS"
     }
-
+ 
     var stats: AGIAgentStats { agentManager.getAgentStats() }
-
+ 
     var filteredAgents: [AGIAgentConfig] {
         var agents = agentManager.agents
         if let category = selectedCategory {
@@ -43,13 +67,14 @@ struct AGIAgentDashboardView: View {
         }
         return agents.sorted { $0.priority < $1.priority }
     }
-
+ 
     var body: some View {
         VStack(spacing: 0) {
             tabBar
             switch selectedTab {
             case .ops: opsCenter
             case .agents: agentsPanel
+            case .playground: playgroundPanel
             case .feed: liveFeedPanel
             case .patents: patentsPanel
             }
@@ -67,9 +92,9 @@ struct AGIAgentDashboardView: View {
             }
         }
     }
-
+ 
     // MARK: - Tab Bar
-
+ 
     private var tabBar: some View {
         HStack(spacing: 0) {
             ForEach(DashboardTab.allCases, id: \.self) { tab in
@@ -77,7 +102,7 @@ struct AGIAgentDashboardView: View {
                     selectedTab = tab
                 } label: {
                     Text(tab.rawValue)
-                        .font(.system(size: 12, weight: .black, design: .monospaced))
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
                         .foregroundColor(selectedTab == tab ? .black : .secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
@@ -113,24 +138,71 @@ struct AGIAgentDashboardView: View {
                 colors: [Color(red: 0.03, green: 0.1, blue: 0.03), Color(red: 0.0, green: 0.12, blue: 0.04)],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
-            VStack(spacing: 6) {
+            VStack(spacing: 12) {
                 HStack(spacing: 6) {
                     Circle()
                         .fill(Color.green)
                         .frame(width: 8, height: 8)
                         .scaleEffect(pulseAnimation ? 1.5 : 1.0)
-                    Text("ESTIMATED REVENUE IMPACT")
+                    Text("EXECUTIVE OPS SUMMARY")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundColor(.green.opacity(0.8))
                 }
+                
                 Text("+$\(Int(stats.estimatedRevenue))M ARR")
-                    .font(.system(size: 44, weight: .black))
+                    .font(.system(size: 40, weight: .black))
                     .foregroundColor(.green)
+                
                 Text("\(stats.live) of \(stats.total) agents operational")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.green.opacity(0.6))
+                
+                Divider()
+                    .background(Color.green.opacity(0.2))
+                    .padding(.horizontal, 20)
+                
+                HStack(spacing: 20) {
+                    VStack(spacing: 2) {
+                        let spend = Double(agentManager.totalRunsToday) * 0.015
+                        Text(String(format: "$%.2f", spend))
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                        Text("EST. API SPEND")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    VStack(spacing: 2) {
+                        let ratio = stats.estimatedRevenue > 0 ? (stats.estimatedRevenue * 1000000.0) / max(1.0, Double(agentManager.totalRunsToday) * 0.015 * 365.0) : 0.0
+                        Text(String(format: "%.0f:1", ratio))
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(.cyan)
+                        Text("EFFICIENCY RATIO")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("CEO BRIEFING:")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundColor(.green)
+                    
+                    let briefing = agentManager.isSchedulerRunning 
+                        ? "Autonomous AGI army active. Net efficiency is high. Anti-Cheat and Revenue agents running optimally."
+                        : "CRITICAL: Platform scheduler is OFFLINE. Autonomous money-making pipelines are idle."
+                    
+                    Text(briefing)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.8))
+                        .multilineTextAlignment(.leading)
+                }
+                .padding(8)
+                .background(Color.black.opacity(0.4))
+                .cornerRadius(8)
+                .padding(.horizontal, 16)
             }
-            .padding(.vertical, 24)
+            .padding(.vertical, 20)
         }
         .cornerRadius(16)
     }
@@ -820,15 +892,275 @@ struct AGIAgentDashboardView: View {
                 .frame(maxWidth: .infinity)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 4) {
-                        ForEach(agentManager.activityLog) { activity in
-                            FeedRow(activity: activity)
-                                .padding(.horizontal, 16)
+                    LazyVStack(spacing: 8) {
+                        if isLoadingLogs {
+                            HStack {
+                                Spacer()
+                                ProgressView()
+                                Text("Fetching unified audit trail...")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
+                            .padding(.top, 24)
+                        } else if combinedEvents.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "clock")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.secondary)
+                                Text("No logged events found.")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.top, 24)
+                        } else {
+                            ForEach(combinedEvents) { event in
+                                CombinedFeedRow(event: event)
+                                    .padding(.horizontal, 16)
+                            }
                         }
                     }
                     .padding(.vertical, 12)
                 }
+                .refreshable {
+                    fetchLogs()
+                }
+                .onAppear {
+                    fetchLogs()
+                }
             }
+        }
+    }
+    
+    private func fetchLogs() {
+        #if canImport(FirebaseFirestore)
+        isLoadingLogs = true
+        let db = Firestore.firestore()
+        
+        Task {
+            var localEvents: [CombinedLogEvent] = []
+            
+            // 1. Fetch AI Agent Logs
+            do {
+                let agentSnap = try await db.collection("platformAgentLogs")
+                    .order(by: "timestamp", descending: true)
+                    .limit(to: 20)
+                    .getDocuments()
+                for doc in agentSnap.documents {
+                    let d = doc.data()
+                    let timestamp = (d["timestamp"] as? Timestamp)?.dateValue() ?? Date()
+                    let name = d["agentName"] as? String ?? "Unknown Agent"
+                    let output = d["output"] as? String ?? ""
+                    let success = d["success"] as? Bool ?? true
+                    localEvents.append(CombinedLogEvent(
+                        id: doc.documentID,
+                        timestamp: timestamp,
+                        source: "🤖 AI",
+                        title: name,
+                        detail: output,
+                        success: success
+                    ))
+                }
+            } catch {
+                print("⚠️ [AGIDashboard] Error loading agent logs: \(error)")
+            }
+            
+            // 2. Fetch Moderator Action Logs
+            do {
+                let modSnap = try await db.collection("moderatorActionsLog")
+                    .order(by: "timestamp", descending: true)
+                    .limit(to: 20)
+                    .getDocuments()
+                for doc in modSnap.documents {
+                    let d = doc.data()
+                    let timestamp = (d["timestamp"] as? Timestamp)?.dateValue() ?? Date()
+                    let name = d["username"] as? String ?? "User"
+                    let actionType = d["actionType"] as? String ?? "Decision"
+                    let tag = d["violationTag"] as? String ?? ""
+                    let tagText = tag.isEmpty ? "" : " [\(tag)]"
+                    let msg = d["ownerMessage"] as? String ?? ""
+                    localEvents.append(CombinedLogEvent(
+                        id: doc.documentID,
+                        timestamp: timestamp,
+                        source: "⚖️ MOD",
+                        title: "Moderator Action on \(name)",
+                        detail: "\(actionType.uppercased())\(tagText): \(msg)",
+                        success: true
+                    ))
+                }
+            } catch {
+                print("⚠️ [AGIDashboard] Error loading mod logs: \(error)")
+            }
+            
+            let sorted = localEvents.sorted { $0.timestamp > $1.timestamp }
+            await MainActor.run {
+                combinedEvents = sorted
+                isLoadingLogs = false
+            }
+        }
+        #else
+        // Fallback for offline/local mockup
+        combinedEvents = agentManager.activityLog.map {
+            CombinedLogEvent(
+                id: $0.id.uuidString,
+                timestamp: $0.timestamp,
+                source: "🤖 AI",
+                title: $0.agentName,
+                detail: $0.output,
+                success: $0.success
+            )
+        }
+        #endif
+    }
+}
+
+struct CombinedFeedRow: View {
+    let event: CombinedLogEvent
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            // Source Badge
+            Text(event.source)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(event.source.contains("AI") ? Color.purple : Color.orange)
+                .cornerRadius(4)
+                .frame(width: 50)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(event.title)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(event.timestamp, style: .time)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                
+                Text(event.detail)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+            }
+        }
+        .padding(10)
+        .background(Color(.systemGray6))
+        .cornerRadius(8)
+    }
+}
+
+extension AGIAgentDashboardView {
+    var playgroundPanel: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Header
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("AGENT RUN SIMULATOR")
+                        .font(.system(size: 14, weight: .black, design: .monospaced))
+                        .foregroundColor(.green)
+                    Text("Select any agent and simulate its decision logic in real-time.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 4)
+                
+                // Agent Picker Card
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("TARGET AGENT")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    
+                    Picker("Select Agent", selection: $playgroundSelectedAgentId) {
+                        ForEach(agentManager.agents) { agent in
+                            Text(agent.name).tag(agent.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(.green)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                }
+                
+                // Input Prompt Card
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("TEST INPUT QUERY")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    
+                    TextEditor(text: $playgroundInputText)
+                        .frame(height: 100)
+                        .padding(8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                        .font(.system(size: 13))
+                }
+                
+                // Simulate button
+                Button {
+                    Task {
+                        isSimulatingRun = true
+                        playgroundOutputText = "Initializing simulation...\nRunning agent pipeline..."
+                        do {
+                            let result = try await agentManager.callAgent(playgroundSelectedAgentId, query: playgroundInputText)
+                            await MainActor.run {
+                                playgroundOutputText = result
+                                isSimulatingRun = false
+                            }
+                        } catch {
+                            await MainActor.run {
+                                playgroundOutputText = "Simulation Failed: \(error.localizedDescription)"
+                                isSimulatingRun = false
+                            }
+                        }
+                    }
+                } label: {
+                    HStack {
+                        if isSimulatingRun {
+                            ProgressView().tint(.black).scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "play.fill")
+                        }
+                        Text(isSimulatingRun ? "RUNNING SIMULATION..." : "SIMULATE AGENT RUN")
+                            .font(.system(size: 13, weight: .black, design: .monospaced))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(isSimulatingRun ? Color.gray : Color.green)
+                    .foregroundColor(.black)
+                    .cornerRadius(10)
+                }
+                .disabled(isSimulatingRun || playgroundInputText.isEmpty)
+                
+                // Output response card
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("DIAGNOSTIC AGENT OUTPUT")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    
+                    ScrollView {
+                        Text(playgroundOutputText.isEmpty ? "No output yet. Enter input and click simulate." : playgroundOutputText)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(playgroundOutputText.isEmpty ? .secondary : .primary)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(height: 160)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color(.systemGray4), lineWidth: 1)
+                    )
+                }
+            }
+            .padding(16)
         }
     }
 }

@@ -8,6 +8,9 @@
 
 import Foundation
 import Combine
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 // MARK: - Agent Activity Log Entry
 struct AgentActivity: Identifiable {
@@ -203,6 +206,22 @@ class AGIAgentManager: ObservableObject {
         if success { totalRunsToday += 1 }
         let successes = activityLog.filter { $0.success }.count
         successRatePercent = activityLog.isEmpty ? 100 : Double(successes) / Double(activityLog.count) * 100
+        
+        // Write to Firestore audit logs
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        let logData: [String: Any] = [
+            "agentId": agentId,
+            "agentName": name,
+            "timestamp": Timestamp(date: Date()),
+            "output": String(output.prefix(300)),
+            "success": success,
+            "latencyMs": latencyMs
+        ]
+        Task {
+            try? await db.collection("platformAgentLogs").addDocument(data: logData)
+        }
+        #endif
     }
     
     // MARK: - Real AI Calls

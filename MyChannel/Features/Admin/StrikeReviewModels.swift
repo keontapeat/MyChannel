@@ -176,13 +176,13 @@ struct StrikeCase: Identifiable, Codable {
     var bannedLinkedAccounts: Int?
 }
 
-enum StrikeAction {
-    case giveChance
-    case issueStrike
-    case suspend
-    case shadowban
-    case ban
-    case clearStrikes
+enum StrikeAction: String, Codable {
+    case giveChance = "giveChance"
+    case issueStrike = "issueStrike"
+    case suspend = "suspend"
+    case shadowban = "shadowban"
+    case ban = "ban"
+    case clearStrikes = "clearStrikes"
 
     func confirmationMessage(username: String) -> String {
         switch self {
@@ -192,6 +192,26 @@ enum StrikeAction {
         case .shadowban:     return "Shadowban \(username)? They won't know they are banned, but no one will see their content."
         case .ban:           return "Permanently ban \(username)? This cannot be undone."
         case .clearStrikes:  return "Clear all strikes for \(username) and give them a fresh start?"
+        }
+    }
+}
+
+enum GuidelineViolationTag: String, CaseIterable, Codable {
+    case hateSpeech = "hateSpeech"
+    case violence = "violence"
+    case nudity = "nudity"
+    case harassment = "harassment"
+    case copyright = "copyright"
+    case spam = "spam"
+    
+    var label: String {
+        switch self {
+        case .hateSpeech: return "Hate Speech"
+        case .violence: return "Violence / Harmful Content"
+        case .nudity: return "Nudity / Sexual Content"
+        case .harassment: return "Harassment / Cyberbullying"
+        case .copyright: return "Copyright / DMCA Violation"
+        case .spam: return "Spam / Scam / Deceptive Practices"
         }
     }
 }
@@ -240,7 +260,7 @@ class StrikeViewModel: ObservableObject {
 
     // MARK: - Apply Owner Decision
 
-    func applyDecision(caseId: String, action: StrikeAction, ownerMessage: String?, suspendDays: Int = 7) async {
+    func applyDecision(caseId: String, action: StrikeAction, ownerMessage: String?, suspendDays: Int = 7, violationTag: GuidelineViolationTag? = nil) async {
         let ref = db.collection("strikeCases").document(caseId)
         guard let strikeCase = cases.first(where: { $0.id == caseId }) else { return }
 
@@ -263,6 +283,10 @@ class StrikeViewModel: ObservableObject {
             ]
             try? await db.collection("userNotifications").addDocument(data: notification)
         }
+
+        // Write to audit trail
+        let actionReason = ownerMessage ?? "No explanation provided"
+        await logModeratorAction(userId: strikeCase.userId, username: strikeCase.username, action: action, tag: violationTag, reason: actionReason)
 
         do {
             switch action {
@@ -338,6 +362,25 @@ class StrikeViewModel: ObservableObject {
             print("✅ [StrikeVM] Decision applied: \(action) for \(strikeCase.username)")
         } catch {
             print("❌ [StrikeVM] Failed to apply decision: \(error)")
+        }
+    }
+
+    func logModeratorAction(userId: String, username: String, action: StrikeAction, tag: GuidelineViolationTag?, reason: String) async {
+        let moderatorId = Auth.auth().currentUser?.uid ?? "unknown_moderator"
+        let logData: [String: Any] = [
+            "moderatorId": moderatorId,
+            "userId": userId,
+            "username": username,
+            "actionType": action.rawValue,
+            "violationTag": tag?.rawValue ?? "",
+            "ownerMessage": reason,
+            "timestamp": Timestamp(date: Date())
+        ]
+        do {
+            try await db.collection("moderatorActionsLog").addDocument(data: logData)
+            print("📝 [StrikeVM] Moderator action logged to Firestore successfully")
+        } catch {
+            print("❌ [StrikeVM] Failed to write audit log: \(error)")
         }
     }
 

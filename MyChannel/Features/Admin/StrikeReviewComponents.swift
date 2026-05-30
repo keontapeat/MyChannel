@@ -197,6 +197,8 @@ struct StrikeCaseReviewSheet: View {
     @State private var suspendDays: Int = 7
     @State private var isSubmitting = false
     @State private var showConfirmation = false
+    @State private var showTagPicker = false
+    @State private var selectedTag: GuidelineViolationTag? = nil
     @State private var userVideos: [UserVideo] = []
     @State private var loadingVideos = true
     @State private var profileImageURL: URL? = nil
@@ -292,6 +294,39 @@ struct StrikeCaseReviewSheet: View {
                 if let action = selectedAction {
                     Text(action.confirmationMessage(username: strikeCase.username))
                 }
+            }
+            .sheet(isPresented: $showTagPicker) {
+                NavigationStack {
+                    List(GuidelineViolationTag.allCases, id: \.self) { tag in
+                        Button {
+                            selectedTag = tag
+                            selectedAction = .issueStrike
+                            showTagPicker = false
+                            // Delay slightly to let the sheet dismiss before showing the alert
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                showConfirmation = true
+                            }
+                        } label: {
+                            HStack {
+                                Text(tag.label)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .navigationTitle("Select Guideline Violation")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showTagPicker = false }
+                        }
+                    }
+                }
+                .presentationDetents([.medium])
             }
             .overlay {
                 if isSubmitting {
@@ -1049,8 +1084,7 @@ struct StrikeCaseReviewSheet: View {
                     icon: "bolt.fill",
                     color: strikeCase.strikeCount >= 2 ? .red : .orange
                 ) {
-                    selectedAction = .issueStrike
-                    showConfirmation = true
+                    showTagPicker = true
                 }
             }
 
@@ -1118,7 +1152,8 @@ struct StrikeCaseReviewSheet: View {
                 caseId: strikeCase.id,
                 action: action,
                 ownerMessage: ownerMessage.isEmpty ? nil : ownerMessage,
-                suspendDays: suspendDays
+                suspendDays: suspendDays,
+                violationTag: selectedTag
             )
             await MainActor.run {
                 isSubmitting = false

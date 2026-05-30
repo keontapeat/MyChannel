@@ -55,17 +55,23 @@ struct LiveStreamsCommandCenterView: View {
 private struct LiveStreamCard: View {
     let stream: LiveStreamMonitorService.LiveStreamMetrics
     
+    @State private var isTogglingSlow = false
+    @State private var isTogglingSubOnly = false
+    @State private var isTerminating = false
+    @State private var showKillConfirm = false
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Circle().fill(stream.isHealthy ? Color.green : Color.orange).frame(width: 8, height: 8)
                 Text(stream.creatorName)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                 Spacer()
                 Text(stream.statusColor.uppercased())
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .foregroundColor(stream.isHealthy ? .green : .orange)
             }
+            
             HStack(spacing: 16) {
                 Label("\(stream.viewerCount)", systemImage: "eye.fill")
                     .font(.system(size: 11, design: .monospaced))
@@ -75,10 +81,105 @@ private struct LiveStreamCard: View {
                     .font(.system(size: 11, design: .monospaced))
             }
             .foregroundColor(.secondary)
+            
+            Divider()
+            
+            HStack(spacing: 12) {
+                // Slow mode toggle
+                HStack(spacing: 6) {
+                    if isTogglingSlow {
+                        ProgressView().scaleEffect(0.7).frame(width: 14, height: 14)
+                    } else {
+                        Image(systemName: "timer")
+                            .font(.system(size: 12))
+                            .foregroundColor(stream.isSlowModeEnabled ? .orange : .secondary)
+                    }
+                    Toggle("Slow", isOn: Binding(
+                        get: { stream.isSlowModeEnabled },
+                        set: { newValue in
+                            Task {
+                                isTogglingSlow = true
+                                try? await LiveStreamMonitorService.shared.toggleSlowMode(streamId: stream.streamId, enabled: newValue)
+                                isTogglingSlow = false
+                            }
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(SwitchToggleStyle(tint: .orange))
+                    .scaleEffect(0.8)
+                    Text("Slow")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                // Sub-only toggle
+                HStack(spacing: 6) {
+                    if isTogglingSubOnly {
+                        ProgressView().scaleEffect(0.7).frame(width: 14, height: 14)
+                    } else {
+                        Image(systemName: "person.2.badge.key.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(stream.isSubscriberOnlyEnabled ? .purple : .secondary)
+                    }
+                    Toggle("Sub-Only", isOn: Binding(
+                        get: { stream.isSubscriberOnlyEnabled },
+                        set: { newValue in
+                            Task {
+                                isTogglingSubOnly = true
+                                try? await LiveStreamMonitorService.shared.toggleSubscriberOnlyChat(streamId: stream.streamId, enabled: newValue)
+                                isTogglingSubOnly = false
+                            }
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(SwitchToggleStyle(tint: .purple))
+                    .scaleEffect(0.8)
+                    Text("Sub-Only")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                // Kill stream button
+                Button(role: .destructive) {
+                    showKillConfirm = true
+                } label: {
+                    HStack(spacing: 4) {
+                        if isTerminating {
+                            ProgressView().tint(.white).scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "xmark.octagon.fill")
+                        }
+                        Text("KILL")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.red)
+                    .cornerRadius(6)
+                }
+                .disabled(isTerminating)
+            }
         }
         .padding(12)
         .background(Color(.systemBackground))
         .cornerRadius(10)
         .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 1)
+        .alert("Terminate Stream?", isPresented: $showKillConfirm) {
+            Button("Kill Stream", role: .destructive) {
+                Task {
+                    isTerminating = true
+                    try? await LiveStreamMonitorService.shared.terminateStream(streamId: stream.streamId)
+                    isTerminating = false
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to shut down \(stream.creatorName)'s live stream immediately? This action is logged and cannot be undone.")
+        }
     }
 }
