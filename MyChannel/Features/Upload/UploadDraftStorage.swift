@@ -51,6 +51,36 @@ final class UploadDraftStorage: ObservableObject {
     
     private init() {
         load()
+        purgeExpiredDrafts()
+    }
+    
+    /// Purges drafts and files older than 14 days to prevent storage leak
+    func purgeExpiredDrafts() {
+        let expirationInterval: TimeInterval = 14 * 24 * 60 * 60 // 14 days
+        let cutoffDate = Date().addingTimeInterval(-expirationInterval)
+        
+        let expired = drafts.filter { $0.createdAt < cutoffDate }
+        if !expired.isEmpty {
+            print("🧹 [UploadDraftStorage] Purging \(expired.count) expired drafts older than 14 days.")
+            for draft in expired {
+                delete(draft)
+            }
+        }
+        
+        // Also cleanup orphaned files in drafts directory older than 14 days
+        if let dir = try? ensureDraftsDirectory(),
+           let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.creationDateKey]) {
+            let activePaths = Set(drafts.map { $0.localVideoPath })
+            for fileURL in files {
+                if !activePaths.contains(fileURL.path) {
+                    let attrs = try? fileURL.resourceValues(forKeys: [.creationDateKey])
+                    if let creationDate = attrs?.creationDate, creationDate < cutoffDate {
+                        print("🧹 [UploadDraftStorage] Purging orphaned draft file: \(fileURL.lastPathComponent)")
+                        try? FileManager.default.removeItem(at: fileURL)
+                    }
+                }
+            }
+        }
     }
     
     func saveDraft(from manager: VideoUploadManager) async throws -> UploadDraft {
