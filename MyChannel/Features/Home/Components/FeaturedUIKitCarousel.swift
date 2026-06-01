@@ -74,7 +74,6 @@ struct FeaturedUIKitCarousel: UIViewRepresentable {
                     onPlay: { self.parent.onPlayVideo(video) },
                     onAddToList: { self.parent.onAddToList(video) }
                 )
-                .padding(.horizontal, 20)
             }
             .margins(.all, 0)
             return cell
@@ -114,3 +113,4 @@ struct FeaturedUIKitCarousel: UIViewRepresentable {
         }
     }
 }
+ 

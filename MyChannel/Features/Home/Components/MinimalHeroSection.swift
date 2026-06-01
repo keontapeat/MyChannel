@@ -22,7 +22,6 @@ struct MinimalHeroSection: View {
     @EnvironmentObject private var appState: AppState
     @State private var showingFeaturedManager = false
     @State private var isUserInteracting = false
-    @State private var autoScrollTimer: Timer?
     
     private var isCompact: Bool { horizontalSizeClass == .compact }
     
@@ -30,20 +29,6 @@ struct MinimalHeroSection: View {
         guard let email = appState.currentUser?.email else { return false }
         return email.lowercased() == "keontapeat@mychannel.live" || 
                email.lowercased() == "keontapeat@gmail.com"
-    }
-
-    private func startTimer() {
-        autoScrollTimer?.invalidate()
-        autoScrollTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
-            guard !isUserInteracting, featuredContent.count > 1 else { return }
-            let nextIndex = (selectedIndex + 1) % featuredContent.count
-            selectedIndex = nextIndex
-        }
-    }
-
-    private func stopTimer() {
-        autoScrollTimer?.invalidate()
-        autoScrollTimer = nil
     }
 
     var body: some View {
@@ -165,6 +150,8 @@ struct MinimalHeroSection: View {
     }
     
     // MARK: - Featured Carousel View
+    // ⚠️ CRITICAL: All featured videos MUST maintain 16:9 aspect ratio
+    // This ensures consistent card dimensions across all videos
     @ViewBuilder
     private var featuredCarouselView: some View {
         FeaturedUIKitCarousel(
@@ -178,6 +165,8 @@ struct MinimalHeroSection: View {
                 isUserInteracting = interacting
             }
         )
+        // 🎯 ENFORCED: 16:9 aspect ratio for ALL featured videos
+        // This guarantees uniform card height/width regardless of source video dimensions
         .aspectRatio(16/9, contentMode: .fit)
         .background(
             GeometryReader { geo in
@@ -205,12 +194,6 @@ struct MinimalHeroSection: View {
                 }
                 .padding(.bottom, 12)
             }
-        }
-        .onAppear {
-            startTimer()
-        }
-        .onDisappear {
-            stopTimer()
         }
     }
 }

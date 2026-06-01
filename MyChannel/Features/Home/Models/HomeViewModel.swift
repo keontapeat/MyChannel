@@ -16,6 +16,21 @@ class HomeViewModel: ObservableObject {
     @Published var showingSettings = false
     @Published var showingSwitchProfile = false
     @Published var showingFeaturedManager = false
+    @Published var showingEditProfile = false
+
+    // Pending action to run AFTER the quick profile sheet finishes dismissing.
+    // This avoids the old `Task.sleep` + NotificationCenter round-trip and the
+    // racy "present a sheet while another is still dismissing" problem.
+    @Published var pendingQuickProfileAction: QuickProfileAction? = nil
+
+    enum QuickProfileAction {
+        case creatorStudio
+        case viewChannel
+        case settings
+        case switchProfile
+        case editProfile
+        case analytics
+    }
     
     // Featured content
     @Published var featuredContent: [Video] = []

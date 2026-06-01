@@ -195,17 +195,38 @@ struct HomeView: View {
             .environmentObject(appState)
             .preferredColorScheme(.dark)
         }
-        .sheet(isPresented: $viewModel.showingQuickProfile) {
+        .sheet(isPresented: $viewModel.showingQuickProfile, onDismiss: {
+            handlePendingQuickProfileAction()
+        }) {
             if let user = appState.currentUser {
-                ProfileQuickMenu(user: user, isPresented: $viewModel.showingQuickProfile)
-                    .environmentObject(appState)
-                    .environmentObject(AuthenticationManager.shared)
-                    .uiKitSheet(
-                        detents: [.medium(), .large()],
-                        showGrabber: true,
-                        cornerRadius: 20,
-                        scrollingExpandsToLargeDetent: true
-                    )
+                ProfileQuickMenu(
+                    user: user,
+                    isPresented: $viewModel.showingQuickProfile,
+                    onSelectAction: { action in
+                        // Queue the action and close the sheet. The action runs in
+                        // onDismiss above, once this sheet has fully dismissed — no
+                        // sleep hacks, no "present while dismissing" glitches.
+                        viewModel.pendingQuickProfileAction = action
+                        viewModel.showingQuickProfile = false
+                    }
+                )
+                .environmentObject(appState)
+                .environmentObject(AuthenticationManager.shared)
+                .uiKitSheet(
+                    detents: [.large()],
+                    showGrabber: true,
+                    cornerRadius: 20,
+                    scrollingExpandsToLargeDetent: true
+                )
+            }
+        }
+        .sheet(isPresented: $viewModel.showingEditProfile) {
+            if let user = appState.currentUser {
+                NavigationStack {
+                    EditProfileView(user: .constant(user))
+                }
+                .environmentObject(appState)
+                .environmentObject(AuthenticationManager.shared)
             }
         }
         .sheet(isPresented: $viewModel.showingSettings) {
@@ -420,6 +441,28 @@ struct HomeView: View {
     }
 
     // MARK: - Setup Methods
+
+    private func handlePendingQuickProfileAction() {
+        guard let action = viewModel.pendingQuickProfileAction else { return }
+        viewModel.pendingQuickProfileAction = nil
+
+        guard let user = appState.currentUser else { return }
+
+        switch action {
+        case .creatorStudio:
+            viewModel.route = .custom("creatorStudioDashboard")
+        case .viewChannel:
+            viewModel.route = .publicProfile(user)
+        case .analytics:
+            viewModel.route = .custom("creatorStudioAnalytics_\(user.id)")
+        case .settings:
+            viewModel.showingSettings = true
+        case .switchProfile:
+            viewModel.showingSwitchProfile = true
+        case .editProfile:
+            viewModel.showingEditProfile = true
+        }
+    }
 
     private func setupContent() {
         // 🔥 FEATURED VIDEOS: Same intro as Featured Edit (1/3) so counts match; current user as creator for profile/subscribe
