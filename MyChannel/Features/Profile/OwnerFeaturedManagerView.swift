@@ -105,6 +105,7 @@ struct OwnerFeaturedManagerView: View {
                         videoURL: url,
                         title: "Owner Upload",
                         description: "Added from camera roll",
+                        category: .entertainment,
                         thumbnail: nil
                     ) {
                         store.add(video)
@@ -113,7 +114,7 @@ struct OwnerFeaturedManagerView: View {
             }
         }
         .fullScreenCover(isPresented: $showingAdminView) {
-            FeaturedVideoAdminView()
+            FeatureSlotAdminView()
         }
     }
 }

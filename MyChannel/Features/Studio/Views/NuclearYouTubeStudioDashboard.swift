@@ -645,17 +645,30 @@ class NuclearStudioViewModel: ObservableObject {
     
     private func loadVideos(creatorId: String) async {
         let videos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: creatorId, limit: 1)
+        // Pull a wider set to compute a real channel average for comparison.
+        let recentVideos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: creatorId, limit: 30)
         
         await MainActor.run {
             self.latestVideo = videos.first
             
             if let video = videos.first {
-                // Calculate comparison with typical first 24 hours
-                let avgFirst24HourViews = 100 // Placeholder
-                if video.viewCount > avgFirst24HourViews {
-                    self.latestVideoComparison = "🔥 Performing \(Int(Double(video.viewCount) / Double(avgFirst24HourViews) * 100 - 100))% better than your typical video"
+                // Compare against the channel's REAL average views per video
+                // (excluding this one) instead of a hardcoded placeholder.
+                let others = recentVideos.filter { $0.id != video.id }
+                let avgViews = others.isEmpty
+                    ? 0
+                    : others.reduce(0) { $0 + $1.viewCount } / others.count
+
+                if avgViews > 0 && video.viewCount > avgViews {
+                    let pct = Int((Double(video.viewCount) / Double(avgViews) - 1.0) * 100)
+                    self.latestVideoComparison = "🔥 Performing \(pct)% better than your channel average"
+                } else if avgViews > 0 && video.viewCount < avgViews {
+                    let pct = Int((1.0 - Double(video.viewCount) / Double(avgViews)) * 100)
+                    self.latestVideoComparison = "📈 \(pct)% below your channel average — keep promoting!"
+                } else if video.viewCount > 0 {
+                    self.latestVideoComparison = "📊 \(video.viewCount) view\(video.viewCount == 1 ? "" : "s") so far"
                 } else {
-                    self.latestVideoComparison = "📈 Keep promoting to boost views!"
+                    self.latestVideoComparison = "📈 Share this video to start getting views!"
                 }
             }
         }
@@ -668,33 +681,36 @@ class NuclearStudioViewModel: ObservableObject {
         
         // Compute real totals from actual video data
         let realTotalViews = allVideos.reduce(0) { $0 + $1.viewCount }
-        let realTotalLikes = allVideos.reduce(0) { $0 + $1.likeCount }
-        let realTotalComments = allVideos.reduce(0) { $0 + $1.commentCount }
         // Estimate watch time: avg 30% of video duration * view count
         let realWatchTimeSeconds = allVideos.reduce(0.0) { $0 + ($1.duration * 0.3 * Double($1.viewCount)) }
         
         // Get real subscriber count from user's Firestore data
         let realSubscribers = AppState.shared.currentUser?.subscriberCount ?? 0
+
+        // 📊 REAL daily traffic (no more Double.random charts)
+        let dailySeries = await RealtimeViewTracker.shared.fetchDailyViews(creatorId: creatorId, days: 28)
+        let viewsTodayReal = await RealtimeViewTracker.shared.fetchViewsToday(creatorId: creatorId)
+        let watchingNowReal = await RealtimeViewTracker.shared.fetchWatchingNow(creatorId: creatorId)
+
+        // Period-over-period change from the real daily series:
+        // compare the most recent 14 days vs the prior 14 days.
+        let last14 = dailySeries.suffix(14).reduce(0) { $0 + $1.views }
+        let prev14 = dailySeries.prefix(max(0, dailySeries.count - 14)).suffix(14).reduce(0) { $0 + $1.views }
+        let periodViewsChange: Double = prev14 > 0
+            ? (Double(last14 - prev14) / Double(prev14)) * 100.0
+            : (last14 > 0 ? 100.0 : 0.0)
         
-        print("📊 [NuclearStudio] Real analytics: \(allVideos.count) videos, \(realTotalViews) views, \(realSubscribers) subscribers")
+        print("📊 [NuclearStudio] Real analytics: \(allVideos.count) videos, \(realTotalViews) views, \(realSubscribers) subscribers, \(viewsTodayReal) today, \(watchingNowReal) watching now")
         
         await MainActor.run {
             self.totalViews = realTotalViews
             self.totalWatchTimeHours = realWatchTimeSeconds / 3600.0
             self.totalSubscribers = realSubscribers
             
-            // Compute change percentages based on video count (0% if no data)
-            if allVideos.isEmpty {
-                self.viewsChange = 0
-                self.watchTimeChange = 0
-                self.subscribersChange = 0
-            } else {
-                // Use engagement rate as a proxy for growth
-                let engagementRate = realTotalViews > 0 ? Double(realTotalLikes + realTotalComments) / Double(realTotalViews) * 100 : 0
-                self.viewsChange = engagementRate
-                self.watchTimeChange = engagementRate * 0.8
-                self.subscribersChange = 0
-            }
+            // Real period-over-period change derived from daily buckets
+            self.viewsChange = periodViewsChange
+            self.watchTimeChange = periodViewsChange // watch time tracks views closely
+            // subscribersChange is set by loadSubscribers() from real subscription dates
             
             // Generate real summary
             if allVideos.isEmpty {
@@ -705,12 +721,17 @@ class NuclearStudioViewModel: ObservableObject {
                 self.analyticsSummary = "You have \(allVideos.count) video\(allVideos.count == 1 ? "" : "s") uploaded. Share them to start getting views!"
             }
             
-            // Generate chart data from real totals
-            self.viewsData = generateChartData(total: realTotalViews)
+            // 🔥 Chart now reflects REAL per-day views from Firestore.
+            // Fall back to a flat series only if no daily data exists yet.
+            if dailySeries.contains(where: { $0.views > 0 }) {
+                self.viewsData = dailySeries.map { ChartDataPoint(date: $0.date, value: $0.views) }
+            } else {
+                self.viewsData = dailySeries.map { ChartDataPoint(date: $0.date, value: 0) }
+            }
             
-            // Real-time stats: use 0 for current viewers (no live tracking yet), real views for today
-            self.currentViewers = 0
-            self.viewsToday = realTotalViews
+            // 🔴 Real-time stats: accurate live presence + real views recorded today
+            self.currentViewers = watchingNowReal
+            self.viewsToday = viewsTodayReal
         }
     }
     
@@ -789,45 +810,71 @@ class NuclearStudioViewModel: ObservableObject {
         do {
             let db = Firestore.firestore()
             
-            // Get real subscriber count from user document
+            // Get real total subscriber count from user document
             let userDoc = try await db.collection("users").document(creatorId).getDocument()
-            let subscriberCount = (userDoc.data()?["subscriberCount"] as? Int) ?? 0
+            let totalSubs = (userDoc.data()?["subscriberCount"] as? Int) ?? 0
             
             // Try to fetch recent subscribers from subscriptions collection
             var subscribers: [RecentSubscriber] = []
             let subsSnap = try await db.collection("subscriptions")
                 .whereField("channelId", isEqualTo: creatorId)
                 .order(by: "subscribedAt", descending: true)
-                .limit(to: 10)
+                .limit(to: 50)
                 .getDocuments()
             
+            // 📊 Count subscribers gained in the last 28 days vs the prior 28 days
+            // so the "+N subscribers / Last 28 days" figure is truthful.
+            let now = Date()
+            let window: TimeInterval = 28 * 24 * 3600
+            let last28Start = now.addingTimeInterval(-window)
+            let prev28Start = now.addingTimeInterval(-2 * window)
+            var gainedLast28 = 0
+            var gainedPrev28 = 0
+
             for doc in subsSnap.documents {
                 let d = doc.data()
                 let subscriberId = d["subscriberId"] as? String ?? d["userId"] as? String ?? ""
-                
-                // Fetch subscriber user info
-                var displayName = "Subscriber"
-                var avatarURL = ""
-                if !subscriberId.isEmpty {
-                    if let subUserDoc = try? await db.collection("users").document(subscriberId).getDocument(),
-                       let subData = subUserDoc.data() {
-                        displayName = subData["displayName"] as? String ?? subData["username"] as? String ?? "Subscriber"
-                        avatarURL = subData["profileImageURL"] as? String ?? subData["profileImageUrl"] as? String ?? ""
-                    }
+                let subbedAt = (d["subscribedAt"] as? Timestamp)?.dateValue() ?? Date.distantPast
+
+                if subbedAt >= last28Start {
+                    gainedLast28 += 1
+                } else if subbedAt >= prev28Start {
+                    gainedPrev28 += 1
                 }
-                
-                subscribers.append(RecentSubscriber(
-                    id: doc.documentID,
-                    displayName: displayName,
-                    avatarURL: avatarURL,
-                    subscribedAt: (d["subscribedAt"] as? Timestamp)?.dateValue() ?? Date()
-                ))
+
+                // Build the recent-subscribers strip (first 10)
+                if subscribers.count < 10 {
+                    var displayName = "Subscriber"
+                    var avatarURL = ""
+                    if !subscriberId.isEmpty {
+                        if let subUserDoc = try? await db.collection("users").document(subscriberId).getDocument(),
+                           let subData = subUserDoc.data() {
+                            displayName = subData["displayName"] as? String ?? subData["username"] as? String ?? "Subscriber"
+                            avatarURL = subData["profileImageURL"] as? String ?? subData["profileImageUrl"] as? String ?? ""
+                        }
+                    }
+                    subscribers.append(RecentSubscriber(
+                        id: doc.documentID,
+                        displayName: displayName,
+                        avatarURL: avatarURL,
+                        subscribedAt: subbedAt
+                    ))
+                }
             }
+
+            // If the subscriptions collection has no docs yet, fall back to total
+            // so a brand-new channel still shows its true subscriber count.
+            let recentGain = subsSnap.documents.isEmpty ? totalSubs : gainedLast28
+            let subsChange: Double = gainedPrev28 > 0
+                ? (Double(gainedLast28 - gainedPrev28) / Double(gainedPrev28)) * 100.0
+                : (gainedLast28 > 0 ? 100.0 : 0.0)
             
             await MainActor.run {
-                self.newSubscribersCount = subscriberCount
+                self.totalSubscribers = totalSubs
+                self.newSubscribersCount = recentGain
+                self.subscribersChange = subsChange
                 self.recentSubscribers = subscribers
-                print("👥 [NuclearStudio] Loaded \(subscriberCount) subscribers, \(subscribers.count) recent from Firestore")
+                print("👥 [NuclearStudio] \(totalSubs) total subs, +\(recentGain) in 28d (\(subscribers.count) recent) from Firestore")
             }
         } catch {
             print("⚠️ [NuclearStudio] Failed to load subscribers from Firestore: \(error)")
@@ -848,22 +895,78 @@ class NuclearStudioViewModel: ObservableObject {
     }
     
     private func loadIdeas() async {
-        await MainActor.run {
-            self.contentIdeas = [
-                ContentIdea(id: "1", title: "Trending: AI Tools for Creators", description: "This topic is trending in your niche with 45% search increase", trendScore: 0.89),
-                ContentIdea(id: "2", title: "How to Edit Videos Faster", description: "Your audience frequently searches for this topic", trendScore: 0.76),
-                ContentIdea(id: "3", title: "Behind the Scenes", description: "Personal content performs 2x better for engagement", trendScore: 0.68)
+        // Try real trending topics from the platform's trending service first so
+        // ideas reflect what's actually rising on MyChannel, not static text.
+        var ideas: [ContentIdea] = []
+        let topics = await EnhancedTrendingService.shared.currentTopicTitles(limit: 3)
+        if !topics.isEmpty {
+            ideas = topics.enumerated().map { idx, title in
+                ContentIdea(
+                    id: "trend-\(idx)",
+                    title: "Trending: \(title)",
+                    description: "Rising on MyChannel right now — make a video while it's hot.",
+                    trendScore: max(0.5, 0.9 - Double(idx) * 0.1)
+                )
+            }
+        }
+
+        // Fall back to evergreen creator best-practices (clearly generic tips,
+        // not fabricated channel-specific stats).
+        if ideas.isEmpty {
+            ideas = [
+                ContentIdea(id: "tip-1", title: "Hook viewers in the first 5 seconds", description: "Strong intros lift retention and watch time.", trendScore: 0.8),
+                ContentIdea(id: "tip-2", title: "Post consistently", description: "A regular schedule trains the algorithm and your audience.", trendScore: 0.72),
+                ContentIdea(id: "tip-3", title: "Reply to early comments", description: "Engagement in the first hour boosts reach.", trendScore: 0.66)
             ]
         }
+
+        await MainActor.run { self.contentIdeas = ideas }
     }
     
     private func loadNews() async {
-        await MainActor.run {
-            self.creatorNews = [
-                CreatorNews(id: "1", title: "New monetization features available", description: "Enable Super Thanks on your videos to earn more", date: Date(), imageURL: nil),
-                CreatorNews(id: "2", title: "Shorts fund distribution", description: "Check if you're eligible for this month's bonus", date: Date().addingTimeInterval(-86400), imageURL: nil)
-            ]
+        var items: [CreatorNews] = []
+
+        #if canImport(FirebaseFirestore)
+        // Pull real platform announcements from `creator_news` if present.
+        do {
+            let db = Firestore.firestore()
+            let snap = try await db.collection("creator_news")
+                .order(by: "publishedAt", descending: true)
+                .limit(to: 5)
+                .getDocuments()
+            items = snap.documents.compactMap { doc in
+                let d = doc.data()
+                guard let title = d["title"] as? String else { return nil }
+                return CreatorNews(
+                    id: doc.documentID,
+                    title: title,
+                    description: d["description"] as? String ?? d["body"] as? String ?? "",
+                    date: (d["publishedAt"] as? Timestamp)?.dateValue() ?? Date(),
+                    imageURL: d["imageURL"] as? String
+                )
+            }
+        } catch {
+            print("ℹ️ [NuclearStudio] No creator_news collection yet: \(error.localizedDescription)")
         }
+        #endif
+
+        // Honest fallback that respects the monetization feature gate so we never
+        // promise payouts that aren't enabled in this build.
+        if items.isEmpty {
+            if AppConfig.Features.enableCreatorMonetization {
+                items = [
+                    CreatorNews(id: "n1", title: "Track your earnings in real time", description: "Your revenue updates live in the Earnings tab.", date: Date(), imageURL: nil),
+                    CreatorNews(id: "n2", title: "Grow with analytics", description: "Check which videos drive the most watch time.", date: Date().addingTimeInterval(-86400), imageURL: nil)
+                ]
+            } else {
+                items = [
+                    CreatorNews(id: "n1", title: "Welcome to Creator Studio", description: "Upload, manage, and track your videos all in one place.", date: Date(), imageURL: nil),
+                    CreatorNews(id: "n2", title: "Monetization coming soon", description: "Creator payouts are being finalized and will roll out in an update.", date: Date().addingTimeInterval(-86400), imageURL: nil)
+                ]
+            }
+        }
+
+        await MainActor.run { self.creatorNews = items }
     }
     
     private func startPulseAnimation() {
@@ -891,20 +994,6 @@ class NuclearStudioViewModel: ObservableObject {
                 await self?.refresh()
             }
         }
-    }
-    
-    private func generateChartData(total: Int) -> [ChartDataPoint] {
-        var points: [ChartDataPoint] = []
-        let days = 28
-        
-        for i in 0..<days {
-            let date = Calendar.current.date(byAdding: .day, value: -days + i, to: Date()) ?? Date()
-            let baseValue = Double(total) / Double(days)
-            let variance = Double.random(in: 0.5...1.5)
-            points.append(ChartDataPoint(date: date, value: Int(baseValue * variance)))
-        }
-        
-        return points
     }
     
     private func formatNumber(_ number: Int) -> String {

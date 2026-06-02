@@ -8,6 +8,7 @@ struct MovieDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
+    @StateObject private var library = MovieLibraryService.shared
     @State private var showPlayer = false
     @State private var showTrailerPlayer = false
     @State private var video: Video?
@@ -16,6 +17,7 @@ struct MovieDetailView: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var headerOpacity: Double = 0
     @State private var showFullOverview = false
+    @State private var resumeProgress: Double = 0
     
     private let headerHeight: CGFloat = 400
     private let posterWidth: CGFloat = 110
@@ -47,10 +49,13 @@ struct MovieDetailView: View {
         .preferredColorScheme(.dark)
         .ignoresSafeArea(edges: .top)
         .onAppear(perform: setupVideo)
+        .task { await loadResumeAndList() }
         .fullScreenCover(isPresented: $showPlayer) {
             if let video {
                 // Use the immersive fullscreen that reuses the Global player
                 ImmersiveFullscreenPlayerView(video: video) {
+                    // Capture resume progress before tearing the player down.
+                    recordProgressFromPlayer()
                     // Stop audio and fully dismiss fullscreen
                     GlobalVideoPlayerManager.shared.closePlayer()
                     GlobalVideoPlayerManager.shared.showingFullscreen = false
@@ -291,15 +296,10 @@ struct MovieDetailView: View {
     
     // MARK: - Floating Watchlist Button
     private var floatingWatchlistButton: some View {
-        Button(action: { 
-            withAnimation(AppTheme.AnimationPresets.bouncy) {
-                isWatchlisted.toggle()
-            }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        }) {
-            Image(systemName: isWatchlisted ? "heart.fill" : "heart")
+        Button(action: { toggleWatchlist() }) {
+            Image(systemName: isWatchlisted ? "checkmark" : "plus")
                 .font(.system(size: 18, weight: .bold))
-                .foregroundColor(isWatchlisted ? .red : .white)
+                .foregroundColor(isWatchlisted ? AppTheme.Colors.primary : .white)
                 .frame(width: 44, height: 44)
                 .background(.ultraThinMaterial, in: Circle())
                 .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
@@ -355,22 +355,39 @@ struct MovieDetailView: View {
     private var primaryPlayButton: some View {
         Button(action: playAction) {
             let isDirect = MoviePlaybackResolver.directPlayableURL(for: movie) != nil
-            let title = isDirect ? "Play Now" : "Play Trailer"
+            let title: String = {
+                if !isDirect { return "Play Trailer" }
+                return resumeProgress > 0.05 ? "Resume" : "Play Now"
+            }()
             let icon = "play.fill"
-            Label(title, systemImage: icon)
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.black)
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(
-                    LinearGradient(
-                        colors: [.white, .white.opacity(0.9)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                )
-                .shadow(color: .white.opacity(0.3), radius: 12, x: 0, y: 4)
+            VStack(spacing: 0) {
+                Label(title, systemImage: icon)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                if resumeProgress > 0.05 && isDirect {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.black.opacity(0.15))
+                            Capsule().fill(Color.black.opacity(0.55))
+                                .frame(width: geo.size.width * CGFloat(min(1, resumeProgress)))
+                        }
+                    }
+                    .frame(height: 3)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 5)
+                }
+            }
+            .background(
+                LinearGradient(
+                    colors: [.white, .white.opacity(0.9)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .shadow(color: .white.opacity(0.3), radius: 12, x: 0, y: 4)
         }
         .buttonStyle(PressableScaleStyle(scale: 0.96))
     }
@@ -579,6 +596,27 @@ struct MovieDetailView: View {
             video = MoviePlaybackResolver.videoIfDirect(from: movie, creator: User.defaultUser)
         }
     }
+
+    private func loadResumeAndList() async {
+        isWatchlisted = library.isInMyList(movie.id)
+        guard let userId = appState.currentUser?.id else { return }
+        let videoID = MoviePlaybackResolver.stableVideoID(for: movie)
+        if let wp = try? await WatchProgressService.shared.fetchProgress(userId: userId, videoId: videoID) {
+            await MainActor.run {
+                if wp.completionPct > 0.05 && wp.completionPct < 0.95 {
+                    resumeProgress = wp.completionPct
+                }
+            }
+        }
+    }
+
+    private func toggleWatchlist() {
+        let nowSaved = library.toggleMyList(movie, userId: appState.currentUser?.id)
+        withAnimation(AppTheme.AnimationPresets.bouncy) {
+            isWatchlisted = nowSaved
+        }
+        HapticManager.shared.impact(style: .light)
+    }
     
     // MARK: - Action Methods
     private func playAction() {
@@ -591,6 +629,8 @@ struct MovieDetailView: View {
             Task {
                 await GlobalVideoPlayerManager.shared.adoptExternalPlayerManager(vm, video: directVideo, showFullscreen: true)
             }
+            // Firebase: log that the user started this movie (history + analytics).
+            appState.addToHistory(video: directVideo, progress: resumeProgress, position: 0)
             showPlayer = true
         } else {
             // Prefer in-app trailer playback
@@ -603,6 +643,30 @@ struct MovieDetailView: View {
             }
         }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    }
+
+    /// Persist the current playback position to Firebase so Continue Watching
+    /// and resume work across devices. Called when the fullscreen player closes.
+    private func recordProgressFromPlayer() {
+        let gpm = GlobalVideoPlayerManager.shared
+        guard let video, gpm.currentVideo?.id == video.id else { return }
+        let position = gpm.currentTime
+        let duration = gpm.duration > 0 ? gpm.duration : video.duration
+        guard duration > 0, position > 1 else { return }
+
+        let progress = min(1.0, position / duration)
+        resumeProgress = (progress > 0.05 && progress < 0.95) ? progress : 0
+        appState.updateHistoryProgress(contentId: video.id, progress: progress, position: position)
+
+        guard let userId = appState.currentUser?.id else { return }
+        Task {
+            try? await WatchProgressService.shared.saveProgress(
+                userId: userId,
+                videoId: video.id,
+                position: position,
+                duration: duration
+            )
+        }
     }
     
     private func shareAction() {

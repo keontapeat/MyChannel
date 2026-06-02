@@ -17120,7 +17120,7 @@ app.post('/v1/shorts/create', async (req, res) => {
     }
 
     const now = admin.firestore.Timestamp.now();
-    const shortRef = db.collection('shorts').doc();
+    const shortRef = db.collection('flicks').doc();
 
     await shortRef.set({
       userId: user.userId,
@@ -17223,7 +17223,7 @@ app.post('/v1/shorts/:shortId/apply-filter', async (req, res) => {
       return res.status(400).json({ error: 'filterId is required' });
     }
 
-    const shortRef = db.collection('shorts').doc(shortId);
+    const shortRef = db.collection('flicks').doc(shortId);
     const shortSnap = await shortRef.get();
 
     if (!shortSnap.exists) {
@@ -17267,7 +17267,7 @@ app.post('/v1/shorts/:shortId/text-overlay', async (req, res) => {
       return res.status(400).json({ error: 'text is required' });
     }
 
-    const shortRef = db.collection('shorts').doc(shortId);
+    const shortRef = db.collection('flicks').doc(shortId);
     const shortSnap = await shortRef.get();
 
     if (!shortSnap.exists) {
@@ -17318,7 +17318,7 @@ app.post('/v1/shorts/:shortId/sticker', async (req, res) => {
       return res.status(400).json({ error: 'stickerId is required' });
     }
 
-    const shortRef = db.collection('shorts').doc(shortId);
+    const shortRef = db.collection('flicks').doc(shortId);
     const shortSnap = await shortRef.get();
 
     if (!shortSnap.exists) {
@@ -17373,7 +17373,7 @@ app.post('/v1/shorts/:shortId/trim', async (req, res) => {
       return res.status(400).json({ error: 'endTime is required and must be a number' });
     }
 
-    const shortRef = db.collection('shorts').doc(shortId);
+    const shortRef = db.collection('flicks').doc(shortId);
     const shortSnap = await shortRef.get();
 
     if (!shortSnap.exists) {
@@ -19916,7 +19916,7 @@ app.get('/v1/shorts/feed', async (req, res) => {
 
     const { limit, category } = req.query || {};
 
-    let query = db.collection('shorts')
+    let query = db.collection('flicks')
       .where('status', '==', 'published')
       .orderBy('publishedAt', 'desc')
       .limit(parseInt(limit as string) || 20);
@@ -19958,7 +19958,7 @@ app.get('/v1/shorts/discover', async (req, res) => {
   try {
     const { limit, interests } = req.query || {};
 
-    let query = db.collection('shorts')
+    let query = db.collection('flicks')
       .where('status', '==', 'published')
       .orderBy('engagementRate', 'desc')
       .limit(parseInt(limit as string) || 20);
@@ -20000,7 +20000,7 @@ app.get('/v1/shorts/trending', async (req, res) => {
     const timeRangeHours = parseInt(timeRange as string) || 24;
     const cutoffTime = new Date(now.toDate().getTime() - timeRangeHours * 60 * 60 * 1000);
 
-    const shortsSnap = await db.collection('shorts')
+    const shortsSnap = await db.collection('flicks')
       .where('status', '==', 'published')
       .where('publishedAt', '>=', admin.firestore.Timestamp.fromDate(cutoffTime))
       .orderBy('viewCount', 'desc')
@@ -20042,7 +20042,7 @@ app.get('/v1/shorts/audio/trending', async (req, res) => {
     const now = admin.firestore.Timestamp.now();
     const cutoffTime = new Date(now.toDate().getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const shortsSnap = await db.collection('shorts')
+    const shortsSnap = await db.collection('flicks')
       .where('status', '==', 'published')
       .where('publishedAt', '>=', admin.firestore.Timestamp.fromDate(cutoffTime))
       .where('musicId', '!=', null)
@@ -20140,7 +20140,7 @@ app.post('/v1/shorts/:shortId/audio', async (req, res) => {
       return res.status(400).json({ error: 'audioId is required' });
     }
 
-    const shortRef = db.collection('shorts').doc(shortId);
+    const shortRef = db.collection('flicks').doc(shortId);
     const shortSnap = await shortRef.get();
 
     if (!shortSnap.exists) {

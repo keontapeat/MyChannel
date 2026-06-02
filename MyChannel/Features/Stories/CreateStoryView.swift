@@ -190,7 +190,7 @@ struct CreateStoryView: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showCaptionEditor) {
-            CaptionEditorSheet(text: $viewModel.caption)
+            StoryCaptionEditorSheet(text: $viewModel.caption)
                 .presentationDetents([.height(220), .large])
                 .presentationDragIndicator(.visible)
         }
@@ -678,7 +678,7 @@ struct ProcessingOverlay: View {
 }
 
 // MARK: - Caption Editor Sheet
-private struct CaptionEditorSheet: View {
+private struct StoryCaptionEditorSheet: View {
     @Binding var text: String
     @Environment(\.dismiss) private var dismiss
     var body: some View {

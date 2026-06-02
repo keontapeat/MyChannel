@@ -239,6 +239,8 @@ struct ThermonuclearFeaturedManager: View {
                     await manager.removeFeaturedVideo(video)
                 } onMove: { from, to in
                     await manager.reorderVideos(from: from, to: to)
+                } onCategoryChange: { newCategory in
+                    await manager.updateCategory(newCategory, for: video)
                 }
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
@@ -626,11 +628,14 @@ struct FeaturedVideoRow: View {
     let total: Int
     let onRemove: () async -> Void
     let onMove: (Int, Int) async -> Void
+    var onCategoryChange: ((VideoCategory) async -> Void)? = nil
     
     @State private var isPressed = false
     @State private var isRemoving = false
     @State private var offset: CGFloat = 0
     @State private var isSwiping = false
+
+    private var isIntro: Bool { video.id == FeaturedStore.ownerIntroVideoId }
     
     var body: some View {
         HStack(spacing: 12) {
@@ -710,6 +715,25 @@ struct FeaturedVideoRow: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
+
+                // Category chip — tap to change how it's labeled on the Home card.
+                // The intro's category is fixed, so no editor there.
+                if isIntro {
+                    categoryChip(editable: false)
+                } else if let onCategoryChange {
+                    Menu {
+                        Picker("Category", selection: Binding(
+                            get: { video.category },
+                            set: { newValue in Task { await onCategoryChange(newValue) } }
+                        )) {
+                            ForEach(VideoCategory.allCases, id: \.self) { cat in
+                                Label(cat.displayName, systemImage: cat.iconName).tag(cat)
+                            }
+                        }
+                    } label: {
+                        categoryChip(editable: true)
+                    }
+                }
             }
             
             Spacer()
@@ -745,6 +769,27 @@ struct FeaturedVideoRow: View {
         )
         .scaleEffect(isPressed ? 0.98 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
+    }
+
+    @ViewBuilder
+    private func categoryChip(editable: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: video.category.iconName)
+                .font(.system(size: 11, weight: .semibold))
+            Text(video.category == .other ? "Set category" : video.category.displayName)
+                .font(.system(size: 12, weight: .semibold))
+            if editable {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+        }
+        .foregroundColor(video.category == .other ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule().fill(AppTheme.Colors.surface.opacity(0.9))
+                .overlay(Capsule().stroke(AppTheme.Colors.divider.opacity(0.5), lineWidth: 1))
+        )
     }
 }
 
@@ -979,6 +1024,32 @@ class FeaturedManager: ObservableObject {
         #endif
     }
     
+    func updateCategory(_ category: VideoCategory, for video: Video) async {
+        guard video.category != category else { return }
+        // Update local copy immediately for responsive UI.
+        if let idx = featuredVideos.firstIndex(where: { $0.id == video.id }) {
+            featuredVideos[idx].category = category
+        }
+        #if canImport(FirebaseFirestore)
+        do {
+            let db = Firestore.firestore()
+            try await db.collection("videos").document(video.id).setData([
+                "category": category.rawValue,
+                "updatedAt": FieldValue.serverTimestamp()
+            ], merge: true)
+            FeaturedStore.shared.syncFromFirestore()
+            await AnalyticsService.shared.trackEvent("featured_video_category_changed", parameters: [
+                "videoId": video.id,
+                "category": category.rawValue
+            ])
+            print("✅ Updated category for \(video.title) → \(category.displayName)")
+        } catch {
+            errorMessage = "Failed to update category: \(error.localizedDescription)"
+            print("❌ Error updating category: \(error)")
+        }
+        #endif
+    }
+
     func removeFeaturedVideo(_ video: Video) async {
         // Owner intro is bundled and not in Firestore; only remove from local list (reappears on next load)
         if video.id == FeaturedStore.ownerIntroVideoId {

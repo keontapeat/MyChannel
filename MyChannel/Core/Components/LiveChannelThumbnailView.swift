@@ -695,6 +695,7 @@ struct LiveChannelThumbnailView: View {
                urlString.contains("static.wikia.nocookie.net") || // Fandom wikis (not Wikipedia)
                urlString.contains("m.media-amazon.com") ||  // Amazon images
                urlString.contains("images-na.ssl-images-amazon.com") || // Amazon SSL images
+               urlString.contains("mzstatic.com") ||        // Apple iTunes/TV artwork (stable, immutable)
                urlString.contains("picsum.photos")          // Picsum seeded images used in debug
     }
     

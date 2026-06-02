@@ -22,6 +22,11 @@
         "npm --prefix firebase/functions run build"
       ],
       "runtime": "nodejs20"
+    },
+    {
+      "source": "cloud-functions/music-payouts",
+      "codebase": "music-payouts",
+      "runtime": "nodejs20"
     }
   ],
   "hosting": {

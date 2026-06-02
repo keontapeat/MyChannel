@@ -67,3 +67,55 @@ final class UserLookupService: ObservableObject {
     }
     #endif
 }
+
+// MARK: - Batched ID Resolution (Championship / Leaderboards)
+
+extension UserLookupService {
+    /// Resolve many users by their document ID in one pass.
+    /// Firestore `in` queries cap at 10 IDs, so we chunk and run in parallel.
+    /// Returns a `[userId: User]` map; unknown IDs are simply omitted.
+    func resolveUsersByIds(_ ids: [String]) async -> [String: User] {
+        let uniqueIds = Array(Set(ids.filter { !$0.isEmpty && $0 != "BYE" && $0 != "TBD" }))
+        guard !uniqueIds.isEmpty else { return [:] }
+
+        #if canImport(FirebaseFirestore)
+        var result: [String: User] = [:]
+        let chunks = stride(from: 0, to: uniqueIds.count, by: 10).map {
+            Array(uniqueIds[$0..<min($0 + 10, uniqueIds.count)])
+        }
+
+        await withTaskGroup(of: [String: User].self) { group in
+            for chunk in chunks {
+                group.addTask { [weak self] in
+                    guard let self else { return [:] }
+                    return await self.fetchChunk(chunk)
+                }
+            }
+            for await partial in group {
+                result.merge(partial) { _, new in new }
+            }
+        }
+        return result
+        #else
+        return [:]
+        #endif
+    }
+
+    #if canImport(FirebaseFirestore)
+    private func fetchChunk(_ ids: [String]) async -> [String: User] {
+        do {
+            let snap = try await db.collection("users")
+                .whereField(FieldPath.documentID(), in: ids)
+                .getDocuments()
+            var map: [String: User] = [:]
+            for doc in snap.documents {
+                map[doc.documentID] = mapUser(id: doc.documentID, data: doc.data())
+            }
+            return map
+        } catch {
+            print("⚠️ [UserLookupService] resolveUsersByIds chunk failed: \(error)")
+            return [:]
+        }
+    }
+    #endif
+}

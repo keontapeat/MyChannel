@@ -56,6 +56,7 @@ struct FlicksView: View {
     @AppStorage("flicks_feed_muted") private var flicksMuted: Bool = true
     @AppStorage("flicks_quality") private var preferredQuality: String = "auto"
     @AppStorage("flicks_playback_speed") private var playbackSpeed: Double = 1.0
+    @AppStorage("flicks_captions") private var captionsEnabled: Bool = false
     @State private var showSpeedPicker = false
     @State private var showQualityPicker = false
     @State private var savedVideoIds: Set<String> = UserDefaults.standard.stringArray(forKey: "saved_videos").map { Set($0) } ?? []
@@ -67,6 +68,11 @@ struct FlicksView: View {
     @State private var showSearchBar = false
     @State private var searchText = ""
     @State private var selectedRemixFlick: NuclearFlick?
+    @State private var selectedReportFlick: NuclearFlick?
+    @State private var playlistTargetFlick: NuclearFlick?
+    @State private var userPlaylists: [Playlist] = []
+    @State private var isLoadingPlaylists = false
+    @State private var newPlaylistName: String = ""
     
     // Filtered flicks based on search
     private var filteredFlicks: [NuclearFlick] {
@@ -130,6 +136,9 @@ struct FlicksView: View {
         .sheet(item: $selectedRemixFlick) { flick in
             RemixSheet(video: flick.toVideo())
         }
+        .sheet(item: $selectedReportFlick) { flick in
+            reportSheet(flick: flick)
+        }
         .fullScreenCover(item: $viewModel.selectedCreatorProfile) { user in
             NavigationStack {
                 PublicProfileView(user: user)
@@ -153,6 +162,7 @@ struct FlicksView: View {
             handleScenePhaseChange(phase)
         }
         .onDisappear {
+            viewModel.stopAlbumArtRotation()
             GlobalVideoPlayerManager.shared.resumeAfterLeavingFlicks()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HideFlicksUI"))) { _ in
@@ -530,7 +540,7 @@ struct FlicksView: View {
             // Share button
             actionButton(
                 icon: "arrowshape.turn.up.right.fill",
-                count: "Share",
+                count: flick.shareCount > 0 ? formatCount(flick.shareCount) : "Share",
                 color: .white
             ) {
                 viewModel.openShare(flick: flick)
@@ -678,7 +688,24 @@ struct FlicksView: View {
                     }
                 }
                 .buttonStyle(ScaleButtonStyle())
-                
+
+                // Captions (CC) toggle button
+                Button {
+                    captionsEnabled.toggle()
+                    impactLight.impactOccurred()
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(captionsEnabled ? Color.white.opacity(0.9) : Color.black.opacity(0.55))
+                            .frame(width: 44, height: 44)
+                        
+                        Image(systemName: "captions.bubble.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(captionsEnabled ? .black : .white)
+                    }
+                }
+                .buttonStyle(ScaleButtonStyle())
+
                 Spacer()
             }
             .padding(.top, 56)
@@ -849,6 +876,7 @@ struct FlicksView: View {
                     
                     Button {
                         selectedMoreOptionsFlick = nil
+                        playlistTargetFlick = flick
                         showPlaylistPicker = true
                     } label: {
                         HStack {
@@ -875,16 +903,21 @@ struct FlicksView: View {
     }
     
     private func reportFlick(flick: NuclearFlick) {
-        print("🚨 [Flicks] Reported flick: \(flick.id)")
-        notificationFeedback.notificationOccurred(.error)
-        // TODO: Send to backend
+        notificationFeedback.notificationOccurred(.warning)
+        selectedReportFlick = flick
     }
     
     private func notInterested(flick: NuclearFlick) {
         print("👎 [Flicks] Not interested in flick: \(flick.id)")
+        Task {
+            await FlicksFeedbackService.shared.notInterested(
+                flickId: flick.id,
+                creatorId: flick.creator.id,
+                tags: flick.tags
+            )
+        }
         viewModel.removeUnavailableFlick(id: flick.id)
         notificationFeedback.notificationOccurred(.warning)
-        // TODO: Send to backend for recommendation tuning
     }
     
     private func soundPage(sound: FlickMusicTrack) -> some View {
@@ -1012,20 +1045,13 @@ struct FlicksView: View {
                     
                     Spacer()
                     
-                    Text("Add to Playlist")
+                    Text("Save to Playlist")
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.white)
                     
                     Spacer()
                     
-                    Button {
-                        // Create new playlist
-                        notificationFeedback.notificationOccurred(.success)
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
+                    Color.clear.frame(width: 24)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
@@ -1033,67 +1059,208 @@ struct FlicksView: View {
                 Divider()
                     .background(Color.gray.opacity(0.3))
                 
-                // Playlists
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(["Watch Later", "Favorites", "My Mix", "Workout", "Chill Vibes"], id: \.self) { playlist in
-                            Button {
-                                showPlaylistPicker = false
-                                notificationFeedback.notificationOccurred(.success)
-                            } label: {
-                                HStack(spacing: 16) {
-                                    Image(systemName: "music.note.list")
-                                        .font(.system(size: 20))
-                                        .foregroundColor(.white.opacity(0.8))
-                                        .frame(width: 40)
-                                    
-                                    Text(playlist)
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(.white)
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.blue)
-                                        .opacity(0)
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 16)
+                if isLoadingPlaylists {
+                    Spacer()
+                    ProgressView().tint(.white)
+                    Spacer()
+                } else {
+                    // Playlists
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            if userPlaylists.isEmpty {
+                                Text("No playlists yet. Create one below.")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.white.opacity(0.6))
+                                    .padding(.vertical, 24)
                             }
-                            .buttonStyle(.plain)
-                            
-                            Divider()
-                                .background(Color.gray.opacity(0.2))
+                            ForEach(userPlaylists) { playlist in
+                                Button {
+                                    addCurrentFlickToPlaylist(playlist)
+                                } label: {
+                                    HStack(spacing: 16) {
+                                        Image(systemName: "music.note.list")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(.white.opacity(0.8))
+                                            .frame(width: 40)
+                                        
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(playlist.title)
+                                                .font(.system(size: 16, weight: .medium))
+                                                .foregroundColor(.white)
+                                            Text("\(playlist.videoCount) videos")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.white.opacity(0.5))
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        Image(systemName: "plus.circle")
+                                            .font(.system(size: 20, weight: .semibold))
+                                            .foregroundColor(AppTheme.Colors.primary)
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 16)
+                                }
+                                .buttonStyle(.plain)
+                                
+                                Divider()
+                                    .background(Color.gray.opacity(0.2))
+                            }
                         }
                     }
                 }
                 
                 // Create new playlist input
                 VStack(spacing: 12) {
-                    TextField("New playlist name", text: .constant(""))
+                    TextField("New playlist name", text: $newPlaylistName)
                         .textFieldStyle(.roundedBorder)
                         .padding(.horizontal, 20)
                     
-                    Button("Create") {
-                        showPlaylistPicker = false
-                        notificationFeedback.notificationOccurred(.success)
+                    Button("Create & Add") {
+                        createPlaylistAndAdd()
                     }
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(AppTheme.Colors.primary)
+                    .background(newPlaylistName.trimmingCharacters(in: .whitespaces).isEmpty ? Color.gray : AppTheme.Colors.primary)
                     .cornerRadius(12)
                     .padding(.horizontal, 20)
+                    .disabled(newPlaylistName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
                 .padding(.vertical, 20)
             }
             .background(Color.black)
             .navigationBarHidden(true)
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .task {
+            await loadUserPlaylists()
+        }
+    }
+
+    // MARK: - Report Sheet
+    private func reportSheet(flick: NuclearFlick) -> some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Report")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.white)
+                    Spacer()
+                    Button {
+                        selectedReportFlick = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+
+                Text("Why are you reporting this?")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.6))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+
+                Divider().background(Color.gray.opacity(0.3))
+
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(FlicksFeedbackService.ReportReason.allCases) { reason in
+                            Button {
+                                submitReport(flick: flick, reason: reason)
+                            } label: {
+                                HStack {
+                                    Text(reason.rawValue)
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.4))
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 16)
+                            }
+                            .buttonStyle(.plain)
+                            Divider().background(Color.gray.opacity(0.2))
+                        }
+                    }
+                }
+            }
+            .background(Color.black)
+            .navigationBarHidden(true)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func submitReport(flick: NuclearFlick, reason: FlicksFeedbackService.ReportReason) {
+        Task {
+            await FlicksFeedbackService.shared.report(flickId: flick.id, reason: reason)
+        }
+        selectedReportFlick = nil
+        notificationFeedback.notificationOccurred(.success)
+        // Down-rank similar content too.
+        viewModel.removeUnavailableFlick(id: flick.id)
+    }
+
+    // MARK: - Playlist Actions
+
+    private func loadUserPlaylists() async {
+        guard let userId = AppState.shared.currentUser?.id else {
+            userPlaylists = []
+            return
+        }
+        isLoadingPlaylists = true
+        defer { isLoadingPlaylists = false }
+        do {
+            userPlaylists = try await PlaylistFirestoreService.shared.getPlaylists(for: userId)
+        } catch {
+            print("⚠️ [Flicks] Failed to load playlists: \(error)")
+            userPlaylists = []
+        }
+    }
+
+    private func addCurrentFlickToPlaylist(_ playlist: Playlist) {
+        guard let flick = playlistTargetFlick else { return }
+        Task {
+            do {
+                try await PlaylistFirestoreService.shared.addVideoToPlaylist(videoId: flick.id, playlistId: playlist.id)
+                await MainActor.run {
+                    notificationFeedback.notificationOccurred(.success)
+                    showPlaylistPicker = false
+                }
+            } catch {
+                print("⚠️ [Flicks] Failed to add to playlist: \(error)")
+                await MainActor.run { notificationFeedback.notificationOccurred(.error) }
+            }
+        }
+    }
+
+    private func createPlaylistAndAdd() {
+        let name = newPlaylistName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, let userId = AppState.shared.currentUser?.id else { return }
+        guard let flick = playlistTargetFlick else { return }
+        Task {
+            do {
+                let playlistId = try await PlaylistFirestoreService.shared.createPlaylist(userId: userId, title: name)
+                try await PlaylistFirestoreService.shared.addVideoToPlaylist(videoId: flick.id, playlistId: playlistId)
+                await MainActor.run {
+                    newPlaylistName = ""
+                    notificationFeedback.notificationOccurred(.success)
+                    showPlaylistPicker = false
+                }
+            } catch {
+                print("⚠️ [Flicks] Failed to create playlist: \(error)")
+                await MainActor.run { notificationFeedback.notificationOccurred(.error) }
+            }
+        }
     }
     
     private var creatorVideosSheet: some View {
@@ -1346,6 +1513,7 @@ struct FlicksView: View {
     private func handleScenePhaseChange(_ phase: ScenePhase) {
         switch phase {
         case .inactive, .background:
+            viewModel.stopAlbumArtRotation()
             if let startTime = videoStartTime, currentIndex < viewModel.flicks.count {
                 let watchTime = Date().timeIntervalSince(startTime)
                 let flickId = viewModel.flicks[currentIndex].id
@@ -1354,6 +1522,7 @@ struct FlicksView: View {
             videoStartTime = nil
             
         case .active:
+            viewModel.startAlbumArtRotation()
             if currentIndex < viewModel.flicks.count {
                 videoStartTime = Date()
             }

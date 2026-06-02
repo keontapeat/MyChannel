@@ -81,11 +81,18 @@ class UniversityViewModel: ObservableObject {
     
     // User Profile
     private var userProfile: UserLearningProfile?
+
+    // 🔥 REAL DATA: streak freeze count + daily goal surfaced to the UI
+    @Published var streakFreezesAvailable: Int = 0
+    @Published var recentActiveDays: [String] = []
+    @Published var earnedBadgeCount: Int = 0
     
     // Services
     private let watchTrackingService = UniversityWatchTrackingService.shared
     private let categorizationService = AICareerCategorizationService.shared
     private let seedDataService = UniversitySeedDataService.shared
+    private let streakService = UniversityStreakService.shared
+    private let activityService = UniversityActivityService.shared
     
     func loadUserProgress() async {
         isLoading = true
@@ -149,108 +156,123 @@ class UniversityViewModel: ObservableObject {
                 videosCompleted: careerPathsProgress.map { $0.1.videosWatched }.reduce(0, +),
                 verificationScore: averageAIScore
             )
-            
-            // Streaks (keep existing logic)
-            streaksAndGoals = StreaksAndGoals(
-                currentStreak: 15,
-                longestStreak: 23,
-                activeGoals: [],
-                dailyGoal: nil,
-                todayProgress: 2.5,
-                todayGoalMet: true
-            )
-            
+        }
+
+        // 🔥 REAL DATA: Load the Firestore-backed streak (replaces hard-coded 15)
+        await loadStreakAndAchievements(userId: userId)
+
+        await MainActor.run {
             // Load active goals
             loadActiveGoals()
             
             // Load paths (legacy)
             loadLearningPaths()
             
-            // Load activity
-            loadRecentActivity()
-            
             // Load subjects
             loadSubjects()
             
             // Load certificates
             loadCertificates()
-            
-            // Load achievements
-            loadAchievements()
+        }
+
+        // Load real activity feed + leaderboard from Firestore
+        await loadActivityAndLeaderboard(userId: userId)
+    }
+
+    // MARK: - 🔥 REAL Streak + Achievements
+
+    private func loadStreakAndAchievements(userId: String) async {
+        let userStats = await streakService.loadStats(userId: userId)
+        let videosCompleted = careerPathsProgress.map { $0.1.videosWatched }.reduce(0, +)
+
+        await MainActor.run {
+            let displayStreak = userStats.displayStreak()
+            streaksAndGoals = StreaksAndGoals(
+                currentStreak: displayStreak,
+                longestStreak: userStats.longestStreak,
+                activeGoals: streaksAndGoals.activeGoals,
+                dailyGoal: streaksAndGoals.dailyGoal,
+                todayProgress: userStats.todayMinutes / 60.0,
+                todayGoalMet: userStats.goalMetToday()
+            )
+            streakFreezesAvailable = userStats.streakFreezesAvailable
+            recentActiveDays = userStats.recentActiveDays
+            totalPoints = userStats.totalPoints
+
+            // Derive badges + milestones from REAL metrics
+            let snapshot = UniversityAchievementsEngine.snapshot(
+                currentStreak: displayStreak,
+                longestStreak: userStats.longestStreak,
+                totalHours: totalUniversityHours,
+                videosCompleted: videosCompleted,
+                certificatesEarned: certificatesEarned,
+                totalLearningDays: userStats.totalLearningDays,
+                totalPoints: userStats.totalPoints
+            )
+            badges = snapshot.badges
+            milestones = snapshot.milestones
+            totalBadges = snapshot.totalBadges
+            earnedBadgeCount = snapshot.earnedBadges
+            totalAchievements = snapshot.totalAchievements
+        }
+    }
+
+    private func loadActivityAndLeaderboard(userId: String) async {
+        async let activity = activityService.fetchActivity(userId: userId)
+        async let learners = activityService.fetchTopLearners()
+        async let rank = activityService.fetchGlobalRank(userId: userId, userPoints: totalPoints)
+
+        let (fetchedActivity, fetchedLearners, fetchedRank) = await (activity, learners, rank)
+
+        await MainActor.run {
+            if !fetchedActivity.isEmpty { recentActivity = fetchedActivity }
+            if !fetchedLearners.isEmpty { topLearners = fetchedLearners }
+            globalRank = fetchedRank
+        }
+
+        // Keep the public leaderboard mirror in sync with this user's stats.
+        if let user = AppState.shared.currentUser {
+            await streakService.syncLeaderboardEntry(
+                userId: userId,
+                name: user.displayName,
+                avatarURL: user.profileImageURL ?? "",
+                certificates: certificatesEarned,
+                watchHours: Int(totalUniversityHours)
+            )
+        }
+    }
+
+    /// Record genuine learning time and advance the real streak.
+    /// Call this when a University video is actually watched.
+    func recordLearningSession(minutes: Double) async {
+        guard let userId = AppState.shared.currentUser?.id else { return }
+        let updated = await streakService.recordLearningActivity(userId: userId, minutes: minutes)
+        await MainActor.run {
+            streaksAndGoals.currentStreak = updated.displayStreak()
+            streaksAndGoals.longestStreak = updated.longestStreak
+            streaksAndGoals.todayProgress = updated.todayMinutes / 60.0
+            streaksAndGoals.todayGoalMet = updated.goalMetToday()
+            streakFreezesAvailable = updated.streakFreezesAvailable
+            totalPoints = updated.totalPoints
         }
     }
     
-    // MARK: - Streak Management
+    // MARK: - Streak Management (delegates to real Firestore-backed service)
     
     func updateStreak(watchDuration: TimeInterval) async {
-        let hoursWatched = watchDuration / 3600.0
-        streaksAndGoals.todayProgress += hoursWatched
-        
-        // Check if daily goal met
-        if let goal = streaksAndGoals.dailyGoal {
-            if streaksAndGoals.todayProgress >= goal.targetHours {
-                streaksAndGoals.todayGoalMet = true
-                await maintainStreak()
-            }
-        }
-        
-        // Update Firestore
-        await saveStreakProgress()
-    }
-    
-    private func maintainStreak() async {
-        streaksAndGoals.currentStreak += 1
-        if streaksAndGoals.currentStreak > streaksAndGoals.longestStreak {
-            streaksAndGoals.longestStreak = streaksAndGoals.currentStreak
-        }
-        
-        // Award streak milestone rewards
-        if streaksAndGoals.currentStreak % 7 == 0 {
-            await awardStreakMilestone(days: streaksAndGoals.currentStreak)
-        }
-        
-        HapticManager.shared.notification(type: .success)
+        let minutes = watchDuration / 60.0
+        await recordLearningSession(minutes: minutes)
     }
     
     func checkStreakStatus() async {
-        // Check if streak needs to be reset
-        let calendar = Calendar.current
-        let today = Date()
-        
-        // If no activity yesterday, reset streak
-        if let lastActivity = recentActivity.first?.timestamp {
-            let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
-            if !calendar.isDate(lastActivity, inSameDayAs: today) &&
-               !calendar.isDate(lastActivity, inSameDayAs: yesterday) {
-                streaksAndGoals.currentStreak = 0
-                await saveStreakProgress()
-            }
+        // The streak service computes the live (display) streak on load,
+        // automatically lapsing streaks where the last active day is too old.
+        guard let userId = AppState.shared.currentUser?.id else { return }
+        let stats = await streakService.loadStats(userId: userId)
+        await MainActor.run {
+            streaksAndGoals.currentStreak = stats.displayStreak()
+            streaksAndGoals.longestStreak = stats.longestStreak
         }
-    }
-    
-    private func awardStreakMilestone(days: Int) async {
-        let points = days * 10
-        totalPoints += points
-        
-        // Create milestone activity
-        let activity = LearningActivity(
-            id: UUID().uuidString,
-            type: .streakMaintained,
-            title: "\(days)-day streak achieved! +\(points) points",
-            subjectId: nil,
-            timestamp: Date(),
-            duration: 0,
-            aiVerified: true
-        )
-        
-        recentActivity.insert(activity, at: 0)
-        
-        print("🔥 Streak milestone! \(days) days - Earned \(points) points")
-    }
-    
-    private func saveStreakProgress() async {
-        // Save to Firestore
-        print("💾 Saving streak progress...")
     }
     
     // MARK: - Goal Management
@@ -436,29 +458,6 @@ class UniversityViewModel: ObservableObject {
         ]
     }
     
-    private func loadRecentActivity() {
-        recentActivity = [
-            LearningActivity(
-                id: "1",
-                type: .videoWatched,
-                title: "Completed: Advanced Swift Patterns",
-                subjectId: "swift",
-                timestamp: Date().addingTimeInterval(-3600),
-                duration: 1800,
-                aiVerified: true
-            ),
-            LearningActivity(
-                id: "2",
-                type: .streakMaintained,
-                title: "15-day streak maintained! +150 points",
-                subjectId: nil,
-                timestamp: Date().addingTimeInterval(-7200),
-                duration: 0,
-                aiVerified: true
-            )
-        ]
-    }
-    
     private func loadSubjects() {
         trendingSubjects = [
             UniversitySubject(
@@ -493,228 +492,123 @@ class UniversityViewModel: ObservableObject {
     }
     
     private func loadCertificates() {
-        earnedCertificates = [
-            Certificate(
-                id: "1",
-                title: "Swift Developer",
-                description: "Certified Swift Programming Expert",
-                category: .technology,
-                color: .orange,
-                requiredHours: 50,
-                requiredVideos: 30,
-                requiredSubjects: ["swift"],
-                progress: 1.0,
-                isEarned: true,
-                earnedDate: Date().addingTimeInterval(-86400 * 30),
-                verificationHash: "0x1234...",
-                aiVerificationScore: 95
-            )
-        ]
-        
-        availableCertificates = [
-            Certificate(
-                id: "2",
-                title: "iOS Developer Pro",
-                description: "Master iOS Development",
-                category: .technology,
-                color: .blue,
-                requiredHours: 100,
-                requiredVideos: 60,
-                requiredSubjects: ["swift", "swiftui", "uikit"],
-                progress: 0.45,
-                isEarned: false,
-                earnedDate: nil,
+        // Build certificate cards from REAL career-path progress.
+        // Earned = certificate already awarded; In Progress = everything else.
+        var earned: [Certificate] = []
+        var inProgress: [Certificate] = []
+
+        for (path, prog) in careerPathsProgress {
+            let cert = Certificate(
+                id: path.id,
+                title: "\(path.name) Certificate",
+                description: path.description,
+                category: subjectCategory(for: path.category),
+                color: path.color,
+                requiredHours: Int(path.certificateRequirement.minimumHours),
+                requiredVideos: path.certificateRequirement.minimumVideos,
+                requiredSubjects: path.certificateRequirement.requiredSkills,
+                progress: prog.certificateProgress,
+                isEarned: prog.certificateEarned,
+                earnedDate: prog.certificateEarnedDate,
                 verificationHash: nil,
-                aiVerificationScore: 0
+                aiVerificationScore: prog.averageAIScore
             )
-        ]
+            if prog.certificateEarned { earned.append(cert) } else { inProgress.append(cert) }
+        }
+
+        // If the user has no tracked paths yet, surface a few popular paths so the
+        // "In Progress" tab is never empty.
+        if inProgress.isEmpty && earned.isEmpty {
+            inProgress = CareerPath.allCareerPaths.prefix(3).map { path in
+                Certificate(
+                    id: path.id,
+                    title: "\(path.name) Certificate",
+                    description: path.description,
+                    category: subjectCategory(for: path.category),
+                    color: path.color,
+                    requiredHours: Int(path.certificateRequirement.minimumHours),
+                    requiredVideos: path.certificateRequirement.minimumVideos,
+                    requiredSubjects: path.certificateRequirement.requiredSkills,
+                    progress: 0,
+                    isEarned: false,
+                    earnedDate: nil,
+                    verificationHash: nil,
+                    aiVerificationScore: 0
+                )
+            }
+        }
+
+        earnedCertificates = earned.sorted { ($0.earnedDate ?? .distantPast) > ($1.earnedDate ?? .distantPast) }
+        availableCertificates = inProgress.sorted { $0.progress > $1.progress }
     }
-    
-    private func loadAchievements() {
-        totalAchievements = 24
-        totalPoints = 5670
-        globalRank = 1247
-        
-        badges = [
-            Badge(
-                id: "1",
-                title: "Early Bird",
-                description: "Watch before 8 AM",
-                icon: "sunrise.fill",
-                color: .orange,
-                requirement: "Watch 10 videos before 8 AM",
-                isEarned: true,
-                earnedDate: Date(),
-                points: 50
-            ),
-            Badge(
-                id: "2",
-                title: "Streak Master",
-                description: "7-day streak",
-                icon: "flame.fill",
-                color: .red,
-                requirement: "Maintain 7-day streak",
-                isEarned: true,
-                earnedDate: Date(),
-                points: 100
-            )
-        ]
-        
-        milestones = [
-            Milestone(
-                id: "1",
-                title: "First 10 Hours",
-                description: "Complete 10 hours of learning",
-                requirement: 10,
-                progress: 10,
-                isCompleted: true,
-                points: 100,
-                reward: "Early Learner Badge"
-            ),
-            Milestone(
-                id: "2",
-                title: "100 Hours Club",
-                description: "Complete 100 hours of learning",
-                requirement: 100,
-                progress: 142,
-                isCompleted: true,
-                points: 500,
-                reward: "Dedicated Learner Badge"
-            ),
-            Milestone(
-                id: "3",
-                title: "First Certificate",
-                description: "Earn your first certificate",
-                requirement: 1,
-                progress: 3,
-                isCompleted: true,
-                points: 200,
-                reward: "Certificate Master Badge"
-            )
-        ]
-        
-        topLearners = [
-            Learner(
-                id: "1",
-                name: "Alex Chen",
-                avatarURL: "",
-                rank: 1,
-                points: 12450,
-                certificates: 15,
-                watchHours: 450,
-                currentStreak: 45
-            ),
-            Learner(
-                id: "2",
-                name: "Sarah Johnson",
-                avatarURL: "",
-                rank: 2,
-                points: 11200,
-                certificates: 12,
-                watchHours: 420,
-                currentStreak: 38
-            )
-        ]
+
+    private func subjectCategory(for career: CareerCategory) -> SubjectCategory {
+        switch career {
+        case .business, .marketing: return .business
+        case .technology, .engineering: return .technology
+        case .creative: return .creative
+        case .health: return .health
+        case .trades: return .trades
+        case .education: return .education
+        case .design: return .creative
+        case .science: return .science
+        case .legal: return .business
+        case .hospitality: return .lifestyle
+        }
     }
     
     // MARK: - 🔥 NEW: Career Path Methods
     
     private func loadContinueLearningVideos(userId: String) async {
-        // Load incomplete videos from watch history
-        // For now, use mock data
-        let mockVideos = [
-            ContinueLearningVideo(
-                id: "1",
-                video: UniversityVideo(
-                    id: "1",
-                    videoId: "vid1",
-                    title: "Advanced Swift Patterns: Protocol-Oriented Programming",
-                    thumbnailURL: "https://picsum.photos/400/225",
-                    duration: 2400,
-                    creatorId: "creator1",
-                    creatorName: "iOS Academy",
-                    creatorAvatarURL: "https://picsum.photos/100/100",
-                    careerPaths: ["ios-development"],
-                    skillTags: ["Swift", "Protocols"],
-                    difficultyLevel: .advanced,
-                    isUniversityContent: true,
-                    certificateEligible: true,
-                    aiCategorizationScore: 0.95,
-                    watchProgress: 0.65,
-                    lastWatchedAt: Date(),
-                    aiVerificationScore: 92,
-                    completed: false
-                ),
-                careerPathId: "ios-development",
-                careerPathName: "iOS Development",
-                careerPathColor: Color(red: 0.0, green: 0.5, blue: 0.9),
-                progressPercentage: 0.65,
-                timeRemaining: 840,
-                lastWatchedAt: Date().addingTimeInterval(-3600)
-            )
-        ]
-        
+        // 🔥 REAL DATA: derive "Continue Watching" from genuinely in-progress
+        // University videos (watchProgress between 5% and 95%). When there is no
+        // in-progress content, the card is simply hidden — no fabricated video.
+        let realVideos = await UniversityVideoService.shared.fetchUniversityVideos(limit: 40)
+
+        let inProgress = realVideos
+            .filter { $0.watchProgress > 0.05 && $0.watchProgress < 0.95 }
+            .sorted { ($0.lastWatchedAt ?? .distantPast) > ($1.lastWatchedAt ?? .distantPast) }
+            .prefix(5)
+            .compactMap { video -> ContinueLearningVideo? in
+                guard let pathId = video.careerPaths.first,
+                      let path = CareerPath.getCareerPath(byId: pathId) else { return nil }
+                let remaining = video.duration * (1.0 - video.watchProgress)
+                return ContinueLearningVideo(
+                    id: video.id,
+                    video: video,
+                    careerPathId: path.id,
+                    careerPathName: path.name,
+                    careerPathColor: path.color,
+                    progressPercentage: video.watchProgress,
+                    timeRemaining: remaining,
+                    lastWatchedAt: video.lastWatchedAt ?? Date()
+                )
+            }
+
         await MainActor.run {
-            continueLearningVideos = mockVideos
+            continueLearningVideos = Array(inProgress)
         }
     }
     
     private func loadCareerPathVideos(userId: String) async {
-        // Load videos for each active career path
-        // For now, use mock data
-        var mockCareerPathVideos: [(careerPath: CareerPath, progress: CareerPathProgress, videos: [UniversityVideo])] = []
-        
+        // 🔥 REAL DATA: pull actual University-eligible videos from Firestore and
+        // group them by career path. Falls back to an empty list per path when no
+        // real content matches (the UI shows the path with a "coming soon" state)
+        // instead of fabricating lessons.
+        let realVideos = await UniversityVideoService.shared.fetchUniversityVideos()
+        let grouped = UniversityVideoService.shared.groupByCareerPath(realVideos)
+
+        var pathsWithVideos: [(careerPath: CareerPath, progress: CareerPathProgress, videos: [UniversityVideo])] = []
         for (careerPath, progress) in careerPathsProgress {
-            var mockVideos: [UniversityVideo] = []
-            
-            for index in 0..<10 {
-                let globalIndex = index
-                let videoId = "vid\(globalIndex)"
-                let videoTitle = "\(careerPath.name): Lesson \(globalIndex + 1)"
-                let thumbnailURL = "https://picsum.photos/400/\(225 + globalIndex)"
-                let duration = TimeInterval(1200 + globalIndex * 300)
-                let creatorId = "creator\(globalIndex)"
-                let creatorName = "Expert Teacher \(globalIndex + 1)"
-                let creatorAvatarURL = "https://picsum.photos/\(100 + globalIndex)/100"
-                let careerPathsArray = [careerPath.id]
-                let skillTagsArray = Array(careerPath.skillTags.prefix(3))
-                let difficultyLevels: [UniversityVideo.DifficultyLevel] = [.beginner, .intermediate, .advanced, .expert]
-                let difficultyLevel = difficultyLevels.randomElement() ?? .intermediate
-                let aiCategorizationScore = Double.random(in: 0.8...0.99)
-                let watchProgress = globalIndex < 3 ? Double.random(in: 0.1...0.7) : 0.0
-                let lastWatchedAt = globalIndex < 3 ? Date().addingTimeInterval(-Double(globalIndex) * 3600) : nil
-                let aiVerificationScore = Int.random(in: 75...95)
-                let completed = globalIndex < 2
-                
-                let video = UniversityVideo(
-                    id: "\(careerPath.id)_\(globalIndex)",
-                    videoId: videoId,
-                    title: videoTitle,
-                    thumbnailURL: thumbnailURL,
-                    duration: duration,
-                    creatorId: creatorId,
-                    creatorName: creatorName,
-                    creatorAvatarURL: creatorAvatarURL,
-                    careerPaths: careerPathsArray,
-                    skillTags: skillTagsArray,
-                    difficultyLevel: difficultyLevel,
-                    isUniversityContent: true,
-                    certificateEligible: true,
-                    aiCategorizationScore: aiCategorizationScore,
-                    watchProgress: watchProgress,
-                    lastWatchedAt: lastWatchedAt,
-                    aiVerificationScore: aiVerificationScore,
-                    completed: completed
-                )
-                
-                mockVideos.append(video)
+            let videos = grouped[careerPath.id] ?? []
+            // Only include paths that actually have content to show.
+            if !videos.isEmpty {
+                pathsWithVideos.append((careerPath: careerPath, progress: progress, videos: videos))
             }
-            
-            mockCareerPathVideos.append((careerPath: careerPath, progress: progress, videos: mockVideos))
         }
-        
+
         await MainActor.run {
-            careerPathsWithVideos = mockCareerPathVideos
+            careerPathsWithVideos = pathsWithVideos
         }
     }
     

@@ -5,11 +5,18 @@ struct ProfessionalCommentsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
     @State private var newComment = ""
-    @State private var comments: [VideoComment] = []
+    @State private var comments: [RealTimeComment] = []
+    @State private var likedCommentIds: Set<String> = []
     @State private var sortOption: CommentSortOption = .topComments
+    @State private var isLoading = true
+    @State private var isPosting = false
+    @State private var errorMessage: String?
+    @State private var listener: Any?
     @FocusState private var isTextFieldFocused: Bool
-    
-    var sortedComments: [VideoComment] {
+
+    private let commentsService = CommentsFirestoreService.shared
+
+    var sortedComments: [RealTimeComment] {
         switch sortOption {
         case .topComments:
             return comments.sorted { $0.likeCount > $1.likeCount }
@@ -17,7 +24,7 @@ struct ProfessionalCommentsSheet: View {
             return comments.sorted { $0.createdAt > $1.createdAt }
         }
     }
-    
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -25,20 +32,20 @@ struct ProfessionalCommentsSheet: View {
                     .fill(.white.opacity(0.2))
                     .frame(width: 50, height: 5)
                     .padding(.top, 12)
-                
+
                 HStack {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Comments")
                             .font(.system(size: 22, weight: .bold))
                             .foregroundStyle(AppTheme.Colors.textPrimary)
-                        
-                        Text("\(video.commentCount.formatted()) comments")
+
+                        Text("\(comments.count.formatted()) comments")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(AppTheme.Colors.textSecondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     // Sort picker
                     Picker("Sort", selection: $sortOption) {
                         ForEach(CommentSortOption.allCases, id: \.self) { option in
@@ -47,7 +54,7 @@ struct ProfessionalCommentsSheet: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 120)
-                    
+
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark")
                             .font(.system(size: 16, weight: .semibold))
@@ -60,105 +67,217 @@ struct ProfessionalCommentsSheet: View {
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 20)
-                
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(sortedComments) { comment in
-                            ProfessionalCommentRow(comment: comment)
-                                .padding(.horizontal, 24)
-                                .padding(.vertical, 16)
-                                .background(Color.black.opacity(0.1))
-                        }
-                    }
-                }
-                
-                VStack(spacing: 0) {
-                    Divider()
-                        .background(.gray.opacity(0.2))
-                    
-                    HStack(spacing: 16) {
-                        Circle()
-                            .fill(AppTheme.Colors.primary)
-                            .frame(width: 40, height: 40)
-                            .overlay(
-                                Text("Y")
-                                    .font(.system(size: 18, weight: .bold))
-                                    .foregroundStyle(.white)
-                            )
-                            .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 4, x: 0, y: 2)
-                        
-                        HStack(spacing: 16) {
-                            TextField("Add a thoughtful comment...", text: $newComment, axis: .vertical)
-                                .textFieldStyle(.plain)
-                                .font(.system(size: 15, weight: .medium))
-                                .focused($isTextFieldFocused)
-                                .lineLimit(1...4)
-                            
-                            if !newComment.isEmpty {
-                                Button("Post") {
-                                    postComment()
-                                }
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(AppTheme.Colors.primary, in: Capsule())
-                                .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 4, x: 0, y: 2)
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 14)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 24)
-                                .stroke(.white.opacity(0.2), lineWidth: 1)
-                        )
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 16)
-                }
-                .background(.ultraThinMaterial)
+
+                commentsList
+
+                inputBar
             }
             .navigationBarHidden(true)
         }
-        .onAppear {
-            loadComments()
+        .onAppear { startListening() }
+        .onDisappear { stopListening() }
+    }
+
+    @ViewBuilder
+    private var commentsList: some View {
+        if isLoading {
+            VStack {
+                Spacer()
+                ProgressView()
+                    .tint(AppTheme.Colors.primary)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+        } else if comments.isEmpty {
+            VStack(spacing: 12) {
+                Spacer()
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.system(size: 44))
+                    .foregroundStyle(AppTheme.Colors.textTertiary)
+                Text("No comments yet")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppTheme.Colors.textPrimary)
+                Text("Be the first to comment")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppTheme.Colors.textSecondary)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(sortedComments) { comment in
+                        ProfessionalCommentRow(
+                            comment: comment,
+                            isLiked: likedCommentIds.contains(comment.id),
+                            onLike: { toggleLike(comment) }
+                        )
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 16)
+                    }
+                }
+            }
         }
     }
-    
-    private func loadComments() {
-        comments = VideoComment.sampleComments
+
+    private var inputBar: some View {
+        VStack(spacing: 0) {
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
+            }
+
+            Divider()
+                .background(.gray.opacity(0.2))
+
+            HStack(spacing: 16) {
+                avatarView
+
+                HStack(spacing: 16) {
+                    TextField("Add a comment...", text: $newComment, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 15, weight: .medium))
+                        .focused($isTextFieldFocused)
+                        .lineLimit(1...4)
+                        .disabled(isPosting)
+
+                    if isPosting {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else if !newComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Button("Post") {
+                            postComment()
+                        }
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(AppTheme.Colors.primary, in: Capsule())
+                        .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 4, x: 0, y: 2)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(.white.opacity(0.2), lineWidth: 1)
+                )
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+        }
+        .background(.ultraThinMaterial)
     }
-    
+
+    @ViewBuilder
+    private var avatarView: some View {
+        if let urlString = appState.currentUser?.profileImageURL, let url = URL(string: urlString) {
+            AsyncImage(url: url) { image in
+                image.resizable().aspectRatio(contentMode: .fill)
+            } placeholder: {
+                Circle().fill(AppTheme.Colors.primary)
+            }
+            .frame(width: 40, height: 40)
+            .clipShape(Circle())
+        } else {
+            Circle()
+                .fill(AppTheme.Colors.primary)
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Text(String((appState.currentUser?.displayName ?? "Y").prefix(1)))
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(.white)
+                )
+        }
+    }
+
+    // MARK: - Data
+
+    private func startListening() {
+        listener = commentsService.listen(videoId: video.id) { fetched in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                comments = fetched
+                isLoading = false
+            }
+        }
+        // Fallback so the spinner never hangs if there are simply no comments yet.
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            if isLoading { isLoading = false }
+        }
+    }
+
+    private func stopListening() {
+        commentsService.stop(listener: listener)
+        listener = nil
+    }
+
     private func postComment() {
-        guard !newComment.isEmpty else { return }
+        let trimmed = newComment.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
         guard appState.requireAuthentication(hint: "Sign in to comment.") else { return }
-        
-        let comment = VideoComment(
-            author: User.sampleUsers[0],
-            text: newComment,
-            likeCount: 0,
-            replyCount: 0,
-            createdAt: Date()
-        )
-        
-        withAnimation(AppTheme.AnimationPresets.spring) {
-            comments.insert(comment, at: 0)
-        }
-        
-        newComment = ""
+        guard let userId = appState.currentUser?.id else { return }
+
+        errorMessage = nil
+        isPosting = true
         isTextFieldFocused = false
-        HapticManager.shared.impact(style: .medium)
+        let textToPost = trimmed
+
+        Task {
+            do {
+                try await commentsService.post(videoId: video.id, userId: userId, text: textToPost)
+                try? await ShortsFirestoreService.shared.incrementCommentCount(flickId: video.id)
+                await MainActor.run {
+                    newComment = ""
+                    isPosting = false
+                    HapticManager.shared.impact(style: .medium)
+                }
+            } catch {
+                await MainActor.run {
+                    isPosting = false
+                    errorMessage = error.localizedDescription
+                    HapticManager.shared.notification(type: .error)
+                }
+            }
+        }
+    }
+
+    private func toggleLike(_ comment: RealTimeComment) {
+        guard appState.requireAuthentication(hint: "Sign in to like comments.") else { return }
+        guard let userId = appState.currentUser?.id else { return }
+
+        let willLike = !likedCommentIds.contains(comment.id)
+        withAnimation(AppTheme.AnimationPresets.bouncy) {
+            if willLike {
+                likedCommentIds.insert(comment.id)
+            } else {
+                likedCommentIds.remove(comment.id)
+            }
+        }
+        HapticManager.shared.impact(style: .light)
+
+        Task {
+            await commentsService.toggleLike(
+                videoId: video.id,
+                commentId: comment.id,
+                userId: userId,
+                add: willLike
+            )
+        }
     }
 }
 
 struct ProfessionalCommentRow: View {
-    let comment: VideoComment
-    @State private var isLiked = false
+    let comment: RealTimeComment
+    let isLiked: Bool
+    let onLike: () -> Void
     @State private var showReplies = false
-    @State private var replyText = ""
-    @State private var showingReplyInput = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 16) {
@@ -178,61 +297,54 @@ struct ProfessionalCommentRow: View {
                 .frame(width: 40, height: 40)
                 .clipShape(Circle())
                 .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-                
+
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 10) {
                         Text("@\(comment.author.username)")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(AppTheme.Colors.textPrimary)
-                        
+
+                        if comment.author.isVerified {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.blue)
+                        }
+
                         Text(comment.timeAgo)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppTheme.Colors.textTertiary)
-                        
+
                         Spacer()
-                        
-                        Button(action: { }) {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 14))
-                                .foregroundStyle(AppTheme.Colors.textTertiary)
-                        }
-                        .buttonStyle(.plain)
                     }
-                    
+
                     Text(comment.text)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(AppTheme.Colors.textPrimary)
                         .multilineTextAlignment(.leading)
-                    
+
                     HStack(spacing: 24) {
-                        Button(action: { toggleLike() }) {
+                        Button(action: onLike) {
                             HStack(spacing: 8) {
                                 Image(systemName: isLiked ? "heart.fill" : "heart")
                                     .font(.system(size: 16))
                                     .foregroundStyle(isLiked ? .red : AppTheme.Colors.textTertiary)
-                                
-                                if comment.likeCount > 0 {
-                                    Text("\(comment.likeCount)")
+
+                                let displayCount = comment.likeCount + (isLiked ? 1 : 0)
+                                if displayCount > 0 {
+                                    Text("\(displayCount)")
                                         .font(.system(size: 13, weight: .semibold))
                                         .foregroundStyle(AppTheme.Colors.textTertiary)
                                 }
                             }
                         }
                         .buttonStyle(.plain)
-                        
-                        Button(action: { showingReplyInput.toggle() }) {
-                            Text("Reply")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(AppTheme.Colors.primary)
-                        }
-                        .buttonStyle(.plain)
-                        
+
                         Spacer()
                     }
                     .padding(.top, 6)
                 }
             }
-            
+
             if comment.replyCount > 0 {
                 Button(action: { showReplies.toggle() }) {
                     HStack(spacing: 12) {
@@ -240,112 +352,64 @@ struct ProfessionalCommentRow: View {
                             .fill(AppTheme.Colors.primary.opacity(0.6))
                             .frame(width: 32, height: 2)
                             .cornerRadius(1)
-                        
+
                         Text("View \(comment.replyCount) replies")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppTheme.Colors.primary)
-                        
+
                         Image(systemName: showReplies ? "chevron.up" : "chevron.down")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppTheme.Colors.primary)
-                        
+
                         Spacer()
                     }
                 }
                 .buttonStyle(.plain)
                 .padding(.leading, 56)
                 .padding(.top, 12)
-                
+
                 if showReplies {
-                    // Nested replies
                     VStack(alignment: .leading, spacing: 12) {
-                        ForEach(0..<min(comment.replyCount, 3), id: \.self) { index in
+                        ForEach(comment.replies) { reply in
                             HStack(alignment: .top, spacing: 12) {
-                                Circle()
-                                    .fill(AppTheme.Colors.primary.opacity(0.5))
-                                    .frame(width: 32, height: 32)
-                                    .overlay(
-                                        Text("R\(index + 1)")
-                                            .font(.system(size: 12, weight: .bold))
-                                            .foregroundStyle(.white)
-                                    )
-                                
+                                AsyncImage(url: URL(string: reply.author.profileImageURL ?? "")) { image in
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Circle()
+                                        .fill(AppTheme.Colors.primary.opacity(0.5))
+                                        .overlay(
+                                            Text(String(reply.author.displayName.prefix(1)))
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundStyle(.white)
+                                        )
+                                }
+                                .frame(width: 32, height: 32)
+                                .clipShape(Circle())
+
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text("@user\(index + 1)")
+                                    Text("@\(reply.author.username)")
                                         .font(.system(size: 13, weight: .semibold))
                                         .foregroundStyle(AppTheme.Colors.textPrimary)
-                                    
-                                    Text("This is a sample reply to the comment...")
+
+                                    Text(reply.text)
                                         .font(.system(size: 14, weight: .medium))
                                         .foregroundStyle(AppTheme.Colors.textPrimary)
-                                        .lineLimit(2)
                                 }
-                                
+
                                 Spacer()
                             }
                             .padding(.leading, 56)
-                        }
-                        
-                        if comment.replyCount > 3 {
-                            Text("View all \(comment.replyCount) replies")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(AppTheme.Colors.primary)
-                                .padding(.leading, 56)
                         }
                     }
                     .padding(.top, 8)
                 }
             }
-            
-            // Reply input field
-            if showingReplyInput {
-                HStack(spacing: 12) {
-                    Circle()
-                        .fill(AppTheme.Colors.primary)
-                        .frame(width: 32, height: 32)
-                        .overlay(
-                            Text("Y")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
-                        )
-                    
-                    HStack(spacing: 8) {
-                        TextField("Add a reply...", text: $replyText)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 14, weight: .medium))
-                        
-                        if !replyText.isEmpty {
-                            Button("Reply") {
-                                showingReplyInput = false
-                                replyText = ""
-                                HapticManager.shared.impact(style: .light)
-                            }
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(AppTheme.Colors.primary, in: Capsule())
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
-                }
-                .padding(.leading, 56)
-                .padding(.top, 12)
-            }
         }
-    }
-    
-    private func toggleLike() {
-        withAnimation(AppTheme.AnimationPresets.bouncy) {
-            isLiked.toggle()
-        }
-        HapticManager.shared.impact(style: .light)
     }
 }
 
 #Preview {
     ProfessionalCommentsSheet(video: Video.sampleVideos[0])
+        .environmentObject(AppState.shared)
         .preferredColorScheme(.dark)
 }

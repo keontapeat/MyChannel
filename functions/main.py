@@ -1,8 +1,8 @@
 # Simple Firebase Functions for MyChannel
-from firebase_functions import firestore_fn, https_fn, options
+from firebase_functions import firestore_fn, https_fn, scheduler_fn, options
 from firebase_admin import initialize_app, firestore, auth as admin_auth, messaging
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import os
 import requests
 import json
@@ -117,7 +117,22 @@ def ai_rank(req: https_fn.Request) -> https_fn.Response:
 
 # Initialize Firebase Admin
 initialize_app()
-db = firestore.client()
+
+def _safe_firestore_client():
+    """Return a Firestore client, tolerating the absence of Application Default
+    Credentials during local deploy-time code analysis. In production (and in the
+    running function) ADC is always present, so this returns a real client. During
+    `firebase deploy` the CLI imports this module on a dev machine that may lack
+    ADC; function bodies never run at analysis time, so a deferred client is safe.
+    Callers at module scope must tolerate `None` (they only execute in prod).
+    """
+    try:
+        return firestore.client()
+    except Exception:
+        logging.warning("firestore.client() unavailable at import (no ADC?); deferring.")
+        return None
+
+db = _safe_firestore_client()
 # --- Firestore Triggers: counters ---
 @firestore_fn.on_document_created(document="videos/{videoId}/comments/{commentId}")
 def on_comment_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
@@ -174,7 +189,7 @@ def on_video_view_created(event: firestore_fn.Event[firestore_fn.DocumentSnapsho
     except Exception:
         logging.exception('on_video_view_created')
 
-@firestore_fn.on_document_created(document="shorts/{shortId}/events/{eventId}")
+@firestore_fn.on_document_created(document="flicks/{shortId}/events/{eventId}")
 def on_short_event_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
     try:
         short_id = event.params["shortId"]
@@ -198,7 +213,7 @@ def on_short_event_created(event: firestore_fn.Event[firestore_fn.DocumentSnapsh
             update_data["shareCount"] = firestore.Increment(1)
         else:
             return
-        db.collection('shorts').document(short_id).set(update_data, merge=True)
+        db.collection('flicks').document(short_id).set(update_data, merge=True)
     except Exception:
         logging.exception('on_short_event_created')
 
@@ -833,3 +848,182 @@ def ads_serve(req: https_fn.Request) -> https_fn.Response:
     except Exception as e:
         logging.exception('ads_serve proxy')
         return https_fn.Response({'error': str(e)}, status=500, headers=cache_headers_no_store())
+
+
+# ============================================================
+# 🎯 FEATURE CARD (#1–#10) — server-side activation & expiry
+# ============================================================
+#
+# The iOS client previously activated/expired paid Feature Card bookings only
+# while an ADMIN device had the app open (the sync was gated on `isAdmin`). That
+# meant a creator's paid slot could go live late, or stay live past its end date,
+# if the admin wasn't around. This scheduled function makes activation/expiry
+# authoritative and admin-independent.
+#
+# Collections (must match FeatureSlotService.swift):
+#   feature_slot_bookings/{id}: {
+#       videoId, creatorId, videoTitle, videoThumbnail, creatorName,
+#       rank (1-10), duration, pricePaid, startDate (ts), endDate (ts),
+#       paymentStatus, status, payByDate (ts?), ...
+#   }
+#   featured_videos/{videoId}: the live Home carousel (priority = rank).
+#
+# Money safety: this function NEVER moves money. It only flips booking status and
+# mirrors live PAID bookings into featured_videos. Charges happen client-side via
+# StoreKit IAP (review-before-pay), so there is nothing to refund here.
+
+FEATURE_BOOKINGS = "feature_slot_bookings"
+FEATURED_VIDEOS = "featured_videos"
+FEATURE_TOTAL_SLOTS = 10
+
+
+def _ts_to_dt(value):
+    """Best-effort convert a Firestore timestamp/datetime to aware datetime (UTC)."""
+    if value is None:
+        return None
+    try:
+        # Firestore python returns datetime for timestamp fields.
+        if isinstance(value, datetime):
+            return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        # google.cloud Timestamp-like
+        if hasattr(value, "ToDatetime"):
+            dt = value.ToDatetime()
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        if hasattr(value, "timestamp"):
+            return datetime.fromtimestamp(value.timestamp(), tz=timezone.utc)
+    except Exception:
+        logging.exception("_ts_to_dt conversion failed")
+    return None
+
+
+def _sync_live_bookings_to_featured_card(client) -> None:
+    """Mirror currently-live PAID bookings into featured_videos (priority = rank),
+    and remove paid-slot featured docs that are no longer live. Mirrors the iOS
+    FeatureSlotService.syncLiveBookingsToFeaturedCard() so the two never diverge.
+    """
+    try:
+        now = datetime.now(timezone.utc)
+        live_snap = client.collection(FEATURE_BOOKINGS).where("status", "==", "active").stream()
+        live_video_ids = set()
+        for doc in live_snap:
+            b = doc.to_dict() or {}
+            start = _ts_to_dt(b.get("startDate"))
+            end = _ts_to_dt(b.get("endDate"))
+            # Only mirror PAID bookings whose window actually contains "now".
+            if b.get("paymentStatus") != "completed":
+                continue
+            if start and now < start:
+                continue
+            if end and now > end:
+                continue
+            video_id = b.get("videoId")
+            if not video_id:
+                continue
+            rank = int(b.get("rank") or FEATURE_TOTAL_SLOTS)
+            live_video_ids.add(video_id)
+
+            # Ensure the underlying video doc exists for the client to hydrate.
+            client.collection("videos").document(video_id).set({
+                "id": video_id,
+                "title": b.get("videoTitle") or "",
+                "thumbnailURL": b.get("videoThumbnail") or "",
+                "thumbnailUrl": b.get("videoThumbnail") or "",
+                "creatorId": b.get("creatorId") or "",
+                "userId": b.get("creatorId") or "",
+                "creatorName": b.get("creatorName") or "",
+                "creatorDisplayName": b.get("creatorName") or "",
+                "isPublic": True,
+                "visibility": "public",
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            }, merge=True)
+
+            client.collection(FEATURED_VIDEOS).document(video_id).set({
+                "videoId": video_id,
+                "priority": rank,            # #1 → priority 1 → shown first (ascending)
+                "source": "paid_slot",
+                "bookingId": doc.id,
+                "expiresAt": b.get("endDate"),
+                "addedAt": firestore.SERVER_TIMESTAMP,
+            }, merge=True)
+
+        # Remove paid-slot featured docs that are no longer live.
+        paid_docs = client.collection(FEATURED_VIDEOS).where("source", "==", "paid_slot").stream()
+        for doc in paid_docs:
+            vid = (doc.to_dict() or {}).get("videoId") or doc.id
+            if vid not in live_video_ids:
+                doc.reference.delete()
+    except Exception:
+        logging.exception("_sync_live_bookings_to_featured_card")
+
+
+@scheduler_fn.on_schedule(
+    schedule="every 15 minutes",
+    region="us-east1",            # us-central1 CPU quota is exhausted; us-east1 has headroom
+    memory=options.MemoryOption.MB_256,
+    max_instances=1,              # low-frequency job — keep CPU reservation minimal
+    concurrency=1,
+)
+def feature_slot_lifecycle(event: scheduler_fn.ScheduledEvent) -> None:
+    """Activate scheduled bookings, complete finished ones, release unpaid holds,
+    then re-sync the live Feature Card. Runs independently of any admin device.
+    """
+    try:
+        client = firestore.client()
+        now = datetime.now(timezone.utc)
+        changed = False
+
+        # Only bookings in a transitional state matter.
+        statuses = ["approvedAwaitingPayment", "scheduled", "active"]
+        snap = client.collection(FEATURE_BOOKINGS).where("status", "in", statuses).stream()
+
+        for doc in snap:
+            b = doc.to_dict() or {}
+            status = b.get("status")
+            start = _ts_to_dt(b.get("startDate"))
+            end = _ts_to_dt(b.get("endDate"))
+            pay_by = _ts_to_dt(b.get("payByDate"))
+
+            if status == "scheduled" and start and end and start <= now <= end:
+                doc.reference.update({"status": "active", "updatedAt": firestore.SERVER_TIMESTAMP})
+                changed = True
+            elif status in ("active", "scheduled") and end and now > end:
+                doc.reference.update({"status": "completed", "updatedAt": firestore.SERVER_TIMESTAMP})
+                changed = True
+                _notify_waitlist_for_freed_slot(client, int(b.get("rank") or 0))
+            elif status == "approvedAwaitingPayment" and pay_by and now > pay_by:
+                # Creator didn't pay in time — release the hold (no charge happened).
+                doc.reference.update({"status": "paymentExpired", "updatedAt": firestore.SERVER_TIMESTAMP})
+                changed = True
+                _notify_waitlist_for_freed_slot(client, int(b.get("rank") or 0))
+
+        # Always re-sync so the card reflects exactly what's live right now.
+        _sync_live_bookings_to_featured_card(client)
+        logging.info(f"[feature_slot_lifecycle] ran at {now.isoformat()} changed={changed}")
+    except Exception:
+        logging.exception("feature_slot_lifecycle")
+
+
+def _notify_waitlist_for_freed_slot(client, rank: int) -> None:
+    """Notify waitlisted creators (any-rank or matching rank) that a slot freed up."""
+    if rank <= 0:
+        return
+    try:
+        entries = client.collection("feature_slot_waitlist").where("notified", "==", False).stream()
+        for doc in entries:
+            e = doc.to_dict() or {}
+            desired = e.get("desiredRank")
+            if desired is not None and int(desired) != rank:
+                continue
+            client.collection("notifications").add({
+                "userId": e.get("creatorId"),
+                "type": "system",
+                "title": "A feature slot just opened 🎉",
+                "body": f"Slot #{rank} is now available. Tap to grab it before someone else does.",
+                "deepLink": f"mychannel://feature-slots?rank={rank}",
+                "isRead": False,
+                "groupedCount": 1,
+                "createdAt": firestore.SERVER_TIMESTAMP,
+            })
+            doc.reference.update({"notified": True})
+    except Exception:
+        logging.exception("_notify_waitlist_for_freed_slot")

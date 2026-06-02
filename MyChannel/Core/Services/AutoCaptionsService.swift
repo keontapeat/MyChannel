@@ -10,7 +10,7 @@ import Foundation
 
 // MARK: - Models
 
-struct CaptionTrack: Identifiable, Codable, Hashable {
+struct AutoCaptionTrack: Identifiable, Codable, Hashable {
     let id: String
     let language: String         // ISO 639-1 e.g. "en"
     let languageName: String     // "English"
@@ -78,7 +78,7 @@ final class AutoCaptionsService: ObservableObject {
 
     // MARK: - Transcribe (Whisper via Cloud Run)
 
-    func transcribe(videoId: String, videoURL: String) async throws -> CaptionTrack {
+    func transcribe(videoId: String, videoURL: String) async throws -> AutoCaptionTrack {
         isTranscribing = true
         lastError = nil
         defer { isTranscribing = false }
@@ -111,7 +111,7 @@ final class AutoCaptionsService: ObservableObject {
             }
             let lang = raw.language ?? "en"
             let langName = Self.supportedLanguages.first { $0.code == lang }?.name ?? "English"
-            return CaptionTrack(language: lang, languageName: langName, segments: segs)
+            return AutoCaptionTrack(language: lang, languageName: langName, segments: segs)
         } catch {
             lastError = error.localizedDescription
             throw error
@@ -120,7 +120,7 @@ final class AutoCaptionsService: ObservableObject {
 
     // MARK: - Translate captions
 
-    func translate(track: CaptionTrack, to targetLang: String) async throws -> CaptionTrack {
+    func translate(track: AutoCaptionTrack, to targetLang: String) async throws -> AutoCaptionTrack {
         isTranslating = true
         lastError = nil
         defer { isTranslating = false }
@@ -151,7 +151,7 @@ final class AutoCaptionsService: ObservableObject {
                 CaptionSegment(start: orig.start, end: orig.end, text: trans.text ?? orig.text)
             }
             let langName = Self.supportedLanguages.first { $0.code == targetLang }?.name ?? targetLang
-            return CaptionTrack(language: targetLang, languageName: langName, segments: newSegs)
+            return AutoCaptionTrack(language: targetLang, languageName: langName, segments: newSegs)
         } catch {
             lastError = error.localizedDescription
             throw error

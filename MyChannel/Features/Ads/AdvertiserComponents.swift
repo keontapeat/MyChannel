@@ -275,7 +275,7 @@ struct AdvertiserPaymentMethodRow: View {
 }
 
 struct TransactionRow: View {
-    let transaction: Transaction
+    let transaction: AdvertiserTransaction
     
     var body: some View {
         HStack {

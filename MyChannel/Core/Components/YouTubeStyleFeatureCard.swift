@@ -34,29 +34,10 @@ struct YouTubeStyleFeatureCard<Destination: View>: View {
                 
                 // Content
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(title)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                        
-                        if isAdmin {
-                            Text("ADMIN")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.red, in: Capsule())
-                        }
-                        
-                        if let badgeText {
-                            Text(badgeText)
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(badgeColor, in: Capsule())
-                        }
-                    }
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
                     
                     Text(subtitle)
                         .font(.system(size: 14, weight: .regular))
@@ -65,6 +46,25 @@ struct YouTubeStyleFeatureCard<Destination: View>: View {
                 }
                 
                 Spacer()
+                
+                // Badges (right-aligned so they form a clean vertical column across rows)
+                if isAdmin {
+                    Text("ADMIN")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.red, in: Capsule())
+                }
+                
+                if let badgeText {
+                    Text(badgeText)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(badgeColor, in: Capsule())
+                }
                 
                 // Chevron (YouTube-style: subtle)
                 Image(systemName: "chevron.right")
@@ -112,29 +112,10 @@ struct YouTubeStyleFeatureCardAction: View {
                 
                 // Content
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(title)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                        
-                        if isAdmin {
-                            Text("ADMIN")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.red, in: Capsule())
-                        }
-                        
-                        if let badgeText {
-                            Text(badgeText)
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(badgeColor, in: Capsule())
-                        }
-                    }
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
                     
                     Text(subtitle)
                         .font(.system(size: 14, weight: .regular))
@@ -143,6 +124,25 @@ struct YouTubeStyleFeatureCardAction: View {
                 }
                 
                 Spacer()
+                
+                // Badges (right-aligned so they form a clean vertical column across rows)
+                if isAdmin {
+                    Text("ADMIN")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.red, in: Capsule())
+                }
+                
+                if let badgeText {
+                    Text(badgeText)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(badgeColor, in: Capsule())
+                }
                 
                 // Chevron
                 Image(systemName: "chevron.right")

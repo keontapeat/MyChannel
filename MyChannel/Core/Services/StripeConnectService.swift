@@ -17,149 +17,59 @@ final class StripeConnectService: ObservableObject {
     @Published var connectedAccounts: [String: StripeAccount] = [:]
     
     // MARK: - Configuration
-    private let apiKey = AppSecrets.stripeSecretKey
-    private let baseURL = "https://api.stripe.com/v1"
+    // 🔐 SECURITY: The Stripe SECRET key must NEVER live in or be used by the
+    // client. All privileged Stripe operations (account creation, onboarding
+    // links, payment intents, transfers, balances) are performed by authenticated
+    // backend Cloud Functions that hold the secret key server-side. The client
+    // only ever sends a verified Firebase ID token.
+    private let backendBaseURL = "https://us-central1-mychannel-ca26d.cloudfunctions.net"
     
     // MARK: - Connect Account Management
     
-    /// Create a Stripe Connect account for a creator
+    /// Create a Stripe Connect account for a creator.
+    /// 🔐 Account creation requires the Stripe secret key and therefore happens
+    /// on the backend. Use the authenticated `createConnectOnboardingLink` Cloud
+    /// Function (see ArtistEarningsView / music-payouts) which creates the Express
+    /// account server-side and returns a hosted onboarding URL.
     func createConnectAccount(userId: String, email: String, country: String = "US") async throws -> StripeAccount {
-        isLoading = true
-        defer { isLoading = false }
-        
-        let url = URL(string: "\(baseURL)/accounts")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        
-        let parameters = [
-            "type": "express",
-            "country": country,
-            "email": email,
-            "capabilities[card_payments][requested]": "true",
-            "capabilities[transfers][requested]": "true",
-            "business_type": "individual"
-        ]
-        
-        let body = parameters.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
-        request.httpBody = body.data(using: .utf8)
-        
-        // ⚡ PERFORMANCE: Use NetworkOptimizer for request deduplication
-        let data = try await NetworkOptimizer.shared.optimizedRequest(
-            for: request,
-            priority: .high
-        )
-        
-        let accountData = try JSONDecoder().decode(StripeAccountResponse.self, from: data)
-        
-        let account = StripeAccount(
-            id: accountData.id,
-            userId: userId,
-            email: email,
-            isVerified: accountData.charges_enabled,
-            createdAt: Date()
-        )
-        
-        connectedAccounts[userId] = account
-        
-        print("✅ [Stripe] Created Connect account for user \(userId)")
-        return account
+        throw StripeError.mustUseBackend
     }
     
-    /// Create an account link for onboarding
+    /// Create an account link for onboarding.
+    /// 🔐 Backend-only — see `createConnectOnboardingLink` Cloud Function.
     func createAccountLink(accountId: String, returnURL: String, refreshURL: String) async throws -> String {
-        let url = URL(string: "\(baseURL)/account_links")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        
-        let parameters = [
-            "account": accountId,
-            "refresh_url": refreshURL,
-            "return_url": returnURL,
-            "type": "account_onboarding"
-        ]
-        
-        let body = parameters.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
-        request.httpBody = body.data(using: .utf8)
-        
-        // ⚡ PERFORMANCE: Use NetworkOptimizer for request deduplication
-        let data = try await NetworkOptimizer.shared.optimizedRequest(
-            for: request,
-            priority: .high
-        )
-        let linkData = try JSONDecoder().decode(AccountLinkResponse.self, from: data)
-        
-        return linkData.url
+        throw StripeError.mustUseBackend
     }
     
     // MARK: - Payment & Transfers
     
-    /// Create a payment intent for VS match wager
+    /// Create a payment intent for a VS match wager.
+    /// 🔐 Backend-only — routed through the authenticated escrow Cloud Function
+    /// (`/create-escrow-payment`) via `MoneyEscrowService`.
     func createPaymentIntent(amount: Int, currency: String = "usd", customerId: String? = nil) async throws -> String {
-        let url = URL(string: "\(baseURL)/payment_intents")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        
-        var parameters: [String: String] = [
-            "amount": "\(amount)",
-            "currency": currency,
-            "payment_method_types[]": "card"
-        ]
-        
-        if let customerId = customerId {
-            parameters["customer"] = customerId
-        }
-        
-        let body = parameters.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
-        request.httpBody = body.data(using: .utf8)
-        
-        // ⚡ PERFORMANCE: Use NetworkOptimizer for request deduplication
-        let data = try await NetworkOptimizer.shared.optimizedRequest(
-            for: request,
-            priority: .high
-        )
-        let intentData = try JSONDecoder().decode(PaymentIntentResponse.self, from: data)
-        
-        print("💰 [Stripe] Created payment intent: \(intentData.id)")
-        return intentData.id
+        throw StripeError.mustUseBackend
     }
     
-    /// Transfer funds to winner's Connect account
-    func transferToWinner(amount: Int, winnerId: String, currency: String = "usd") async throws {
-        guard let account = connectedAccounts[winnerId] else {
-            throw StripeError.accountNotFound
-        }
-        
-        let url = URL(string: "\(baseURL)/transfers")!
+    /// Transfer winnings to the match winner via Stripe Connect.
+    /// 🔐 HARDENED: routes through the authenticated `/create-transfer` Cloud
+    /// Function with a verified Firebase ID token. The backend derives the
+    /// winner, amount, and destination from the recorded match outcome — the
+    /// client cannot set the amount or destination, and the secret key never
+    /// touches the device.
+    func transferToWinner(amount: Int, winnerId: String, currency: String = "usd", matchId: String) async throws {
+        let url = URL(string: "\(backendBaseURL)/create-transfer")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await AuthTokenProvider.authorize(&request)
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["matchId": matchId])
         
-        let parameters = [
-            "amount": "\(amount)",
-            "currency": currency,
-            "destination": account.id
-        ]
-        
-        let body = parameters.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
-        request.httpBody = body.data(using: .utf8)
-        
-        // ⚡ PERFORMANCE: Use NetworkOptimizer for request deduplication
         let data = try await NetworkOptimizer.shared.optimizedRequest(
             for: request,
             priority: .high
         )
-        
-        let transferData = try JSONDecoder().decode(TransferResponse.self, from: data)
-        
-        print("💸 [Stripe] Transferred $\(amount/100) to winner \(winnerId)")
-        print("   Transfer ID: \(transferData.id)")
+        _ = try? JSONDecoder().decode(TransferResponse.self, from: data)
+        print("💸 [Stripe] Winner payout settled server-side for match \(matchId)")
     }
     
     // MARK: - Escrow Management
@@ -196,9 +106,10 @@ final class StripeConnectService: ObservableObject {
         let platformFee = escrowAmount * 0.1
         let winnerAmount = escrowAmount - platformFee
         
-        // Transfer to winner
+        // Transfer to winner — backend derives amount/destination from the
+        // verified match outcome; we pass the matchId so it can settle securely.
         let amountInCents = Int(winnerAmount * 100)
-        try await transferToWinner(amount: amountInCents, winnerId: winnerId)
+        try await transferToWinner(amount: amountInCents, winnerId: winnerId, matchId: matchId)
         
         // Release escrow
         try await MoneyEscrowService.shared.releaseFunds(
@@ -237,28 +148,10 @@ final class StripeConnectService: ObservableObject {
         return account.isVerified
     }
     
-    /// Get account balance
+    /// Get account balance.
+    /// 🔐 Backend-only — the Stripe balance endpoint requires the secret key.
     func getAccountBalance(accountId: String) async throws -> Balance {
-        let url = URL(string: "\(baseURL)/balance")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        
-        // ⚡ PERFORMANCE: Use NetworkOptimizer for caching and deduplication
-        let data = try await NetworkOptimizer.shared.optimizedRequest(
-            for: request,
-            priority: .normal
-        )
-        let balanceData = try JSONDecoder().decode(BalanceResponse.self, from: data)
-        
-        let availableBalance = balanceData.available.first?.amount ?? 0
-        let pendingBalance = balanceData.pending.first?.amount ?? 0
-        
-        return Balance(
-            available: Double(availableBalance) / 100,
-            pending: Double(pendingBalance) / 100,
-            currency: balanceData.available.first?.currency ?? "usd"
-        )
+        throw StripeError.mustUseBackend
     }
 }
 
@@ -323,6 +216,7 @@ enum StripeError: Error {
     case paymentFailed
     case invalidAmount
     case verificationRequired
+    case mustUseBackend
 }
 
 extension StripeError: LocalizedError {
@@ -340,6 +234,8 @@ extension StripeError: LocalizedError {
             return "Invalid payment amount"
         case .verificationRequired:
             return "Account verification required to receive payments"
+        case .mustUseBackend:
+            return "This operation runs on the secure backend. Use the authenticated Cloud Function endpoint."
         }
     }
 }

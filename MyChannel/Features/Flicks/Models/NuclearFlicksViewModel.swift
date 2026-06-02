@@ -77,14 +77,23 @@ class NuclearFlicksViewModel: ObservableObject {
         do {
             let db = Firestore.firestore()
             
-            // Try shorts collection first
-            let query = db.collection("shorts")
+            // Try flicks collection first
+            let query = db.collection("flicks")
                 .order(by: "createdAt", descending: true)
                 .limit(to: 20)
             
             let snapshot = try await query.getDocuments()
             
             var mainVideoBackfill = await loadPublicVideoFlicks(limit: 60)
+
+            // 🔄 MIGRATION FALLBACK: pull any flicks still living in the legacy
+            // "shorts" collection so pre-rename content isn't stranded.
+            if snapshot.documents.isEmpty {
+                let legacy = await loadLegacyShortsFlicks(limit: 20)
+                if !legacy.isEmpty {
+                    mainVideoBackfill = mergePlayableFlicks(primary: legacy, fallback: mainVideoBackfill, minimumCount: legacy.count + mainVideoBackfill.count)
+                }
+            }
             
             if !snapshot.documents.isEmpty {
                 lastDocument = snapshot.documents.last
@@ -163,7 +172,7 @@ class NuclearFlicksViewModel: ObservableObject {
         
         do {
             let db = Firestore.firestore()
-            let query = db.collection("shorts")
+            let query = db.collection("flicks")
                 .order(by: "createdAt", descending: true)
                 .start(afterDocument: lastDoc)
                 .limit(to: 10)
@@ -297,7 +306,7 @@ class NuclearFlicksViewModel: ObservableObject {
         #if canImport(FirebaseFirestore)
         do {
             let db = Firestore.firestore()
-            try await db.collection("shorts").document(flick.id).updateData([
+            try await db.collection("flicks").document(flick.id).updateData([
                 "viewCount": FieldValue.increment(Int64(1))
             ])
         } catch {
@@ -333,7 +342,7 @@ class NuclearFlicksViewModel: ObservableObject {
         #if canImport(FirebaseFirestore)
         do {
             let db = Firestore.firestore()
-            try await db.collection("shorts").document(flickId).updateData([
+            try await db.collection("flicks").document(flickId).updateData([
                 "likeCount": FieldValue.increment(Int64(1))
             ])
         } catch {
@@ -344,15 +353,23 @@ class NuclearFlicksViewModel: ObservableObject {
     
     // MARK: - Album Art Rotation
     
-    private func startAlbumArtRotation() {
-        rotationTimer = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { [weak self] _ in
+    func startAlbumArtRotation() {
+        guard rotationTimer == nil else { return }
+        // 30fps is visually smooth for a small spinning disc and halves wakeups.
+        rotationTimer = Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.albumArtRotation += 1
-                if self?.albumArtRotation ?? 0 >= 360 {
-                    self?.albumArtRotation = 0
+                guard let self else { return }
+                self.albumArtRotation += 2
+                if self.albumArtRotation >= 360 {
+                    self.albumArtRotation -= 360
                 }
             }
         }
+    }
+
+    func stopAlbumArtRotation() {
+        rotationTimer?.invalidate()
+        rotationTimer = nil
     }
     
     // MARK: - Helpers
@@ -489,6 +506,33 @@ class NuclearFlicksViewModel: ObservableObject {
         return videos
             .filter { isPlayableVideo($0) }
             .map { videoToFlick($0) }
+    }
+
+    /// 🔄 MIGRATION FALLBACK: reads the legacy "shorts" collection (pre-rename)
+    /// so existing content keeps showing until it's migrated into "flicks".
+    /// Safe to remove once a server-side migration copies shorts/* → flicks/*.
+    private func loadLegacyShortsFlicks(limit: Int) async -> [NuclearFlick] {
+        #if canImport(FirebaseFirestore)
+        do {
+            let db = Firestore.firestore()
+            let snapshot = try await db.collection("shorts")
+                .order(by: "createdAt", descending: true)
+                .limit(to: limit)
+                .getDocuments()
+            let parsed = snapshot.documents.compactMap { parseFlickFromDocument($0) }
+            guard !parsed.isEmpty else { return [] }
+            let validated = await validateFlicks(parsed)
+            if !validated.isEmpty {
+                print("🔄 [NuclearFlicks] Loaded \(validated.count) flicks from legacy 'shorts' collection")
+            }
+            return validated
+        } catch {
+            print("⚠️ [NuclearFlicks] Legacy shorts fallback failed: \(error.localizedDescription)")
+            return []
+        }
+        #else
+        return []
+        #endif
     }
     
     private func mergePlayableFlicks(primary: [NuclearFlick], fallback: [NuclearFlick], minimumCount: Int) -> [NuclearFlick] {

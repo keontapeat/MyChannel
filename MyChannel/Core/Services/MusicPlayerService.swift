@@ -309,10 +309,9 @@ final class MusicPlayerService: ObservableObject {
                 "deviceType": deviceType
             ])
 
-            try await db.collection("music_tracks").document(song.id).setData([
-                "streamCount": FieldValue.increment(Int64(1)),
-                "lastPlayedAt": FieldValue.serverTimestamp()
-            ], merge: true)
+            // 🔐 streamCount is payout-bearing and is incremented SERVER-SIDE by the
+            // incrementStreamCountOnPlay Cloud Function from the music_plays event
+            // above. The client must not write it directly (Firestore rules deny it).
             
             // Keep only last 50 recently played
             if let uid {

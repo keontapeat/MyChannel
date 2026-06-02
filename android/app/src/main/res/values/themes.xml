@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme — used as the window background before Compose takes over -->
+    <style name="Theme.MyChannel" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/background_dark</item>
+        <item name="android:statusBarColor">@color/background_dark</item>
+        <item name="android:navigationBarColor">@color/background_dark</item>
+    </style>
+
+    <!-- Splash screen theme using androidx.core:core-splashscreen -->
+    <style name="Theme.MyChannel.Splash" parent="Theme.SplashScreen">
+        <!-- Splash screen icon background -->
+        <item name="windowSplashScreenBackground">@color/background_dark</item>
+        <!-- Animated icon or static icon -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <!-- Duration of the animated icon (ms) -->
+        <item name="windowSplashScreenAnimationDuration">500</item>
+        <!-- Theme to transition to after the splash screen -->
+        <item name="postSplashScreenTheme">@style/Theme.MyChannel</item>
+    </style>
+</resources>

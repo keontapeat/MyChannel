@@ -208,11 +208,40 @@ class MoneyEscrowService: ObservableObject {
     
     // MARK: - 🔥 STRIPE API CALLS
     
+    /// 🔐 Create a wallet-deposit PaymentIntent through the AUTHENTICATED escrow
+    /// backend. The secret key stays server-side; the wallet is credited by the
+    /// Stripe webhook after the charge actually succeeds (never by the client).
+    /// Returns the PaymentIntent id (to confirm via the Stripe Payment Sheet).
+    func createWalletDepositIntent(userId: String, amountCents: Int) async throws -> String {
+        let url = URL(string: "\(backendAPIBaseURL)/create-escrow-payment")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await AuthTokenProvider.authorize(&request)
+        let body: [String: Any] = [
+            "customerId": userId,
+            "amount": amountCents,
+            "matchId": "wallet_deposit",
+            "captureMethod": "automatic"
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.configured.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw EscrowError.stripeError("Failed to create deposit intent")
+        }
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let id = json?["paymentIntentId"] as? String else {
+            throw EscrowError.stripeError("Invalid response")
+        }
+        return id
+    }
+    
     private func createPaymentIntent(customerId: String, amount: Double, matchId: String) async throws -> String {
         let url = URL(string: "\(backendAPIBaseURL)/create-escrow-payment")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await AuthTokenProvider.authorize(&request)
         
         let body: [String: Any] = [
             "customerId": customerId,
@@ -243,6 +272,7 @@ class MoneyEscrowService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await AuthTokenProvider.authorize(&request)
         request.httpBody = try JSONSerialization.data(withJSONObject: ["paymentIntentId": paymentIntentId])
         
         let (_, response) = try await URLSession.configured.data(for: request)
@@ -258,6 +288,7 @@ class MoneyEscrowService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await AuthTokenProvider.authorize(&request)
         request.httpBody = try JSONSerialization.data(withJSONObject: ["paymentIntentId": paymentIntentId])
         
         let (_, response) = try await URLSession.configured.data(for: request)
@@ -273,10 +304,12 @@ class MoneyEscrowService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await AuthTokenProvider.authorize(&request)
         
+        // 🔐 The backend derives the winner, payout amount, and destination from
+        // the verified match outcome + captured escrow rows. The client only
+        // names the match — amount/destination are intentionally NOT sent.
         let body: [String: Any] = [
-            "amount": Int(amount * 100), // cents
-            "destination": destinationAccountId,
             "matchId": matchId
         ]
         
@@ -312,8 +345,10 @@ class MoneyEscrowService: ObservableObject {
     
     private func verifyUserBalance(userId: String, amount: Double) async -> Bool {
         #if canImport(FirebaseFirestore)
-        // Check wallet balance in Firestore
-        let walletDoc = try? await db.collection("wallets").document(userId).getDocument()
+        // 🔥 FIX: Read the SAME collection VSMatchWalletService writes deposits to
+        // ("vs_match_wallets"). Previously this read "wallets", which is never
+        // funded — so every wager failed the balance check even after a deposit.
+        let walletDoc = try? await db.collection("vs_match_wallets").document(userId).getDocument()
         let balance = walletDoc?.data()?["availableBalance"] as? Double ?? 0
         return balance >= amount
         #else

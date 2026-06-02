@@ -1,6 +1,13 @@
 import SwiftUI
 
 // MARK: - Featured Hero Card
+// 🎯 DESIGN REQUIREMENTS:
+// ✅ All cards MUST have 16:9 aspect ratio (enforced by parent container)
+// ✅ All cards MUST show Play button overlay
+// ✅ All cards MUST show category badge (top-left)
+// ✅ All cards MUST show duration badge (top-right)
+// ✅ All cards MUST show creator name and view count (bottom)
+// ✅ All cards MUST show "+" button for Watch Later (bottom-right)
 struct FeaturedHeroCard: View {
     let video: Video
     let isCompact: Bool
@@ -27,11 +34,6 @@ struct FeaturedHeroCard: View {
             || url.contains("alt=media") // Firebase Storage token URLs
     }
 
-    /// Whether this video should use the YouTube/web-based live thumbnail preview
-    private var isYouTubeContent: Bool {
-        video.contentSource == .youtube || video.isLiveStream
-    }
-
     var body: some View {
         let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
 
@@ -42,19 +44,18 @@ struct FeaturedHeroCard: View {
                     // 1) Static poster (always rendered as base layer)
                     posterImage
 
-                    // 2) Video preview — only on the ACTIVE card, pick the right player
-                    if isActive && !isPreview {
-                        if isDirectPlayable {
-                            // Firebase Storage / local file → native AVPlayer loop
-                            MutedLoopVideoPlayer(videoURL: video.videoURL, isActive: isActive)
-                                .transition(.opacity)
-                                .allowsHitTesting(false)
-                        } else if isYouTubeContent && (!isPreview || allowLiveInPreview) {
-                            // YouTube / live → web-based thumbnail preview
-                            VideoLiveThumbnailView(video: video, cornerRadius: 16)
-                                .transition(.opacity)
-                                .allowsHitTesting(false)
-                        }
+                    // 2) Video preview — only on the ACTIVE card.
+                    //    Only native AVPlayer (direct MP4/HLS/Firebase) previews are
+                    //    allowed. YouTube is intentionally NOT previewed here: its
+                    //    WKWebView IFrame player renders its own error screen
+                    //    ("This video is unavailable. Error code: 152-4") when embedding
+                    //    is blocked, which would replace the thumbnail with an error.
+                    //    YouTube always stays on the static `posterImage` base layer.
+                    if isActive && !isPreview && isDirectPlayable {
+                        // Firebase Storage / local file / direct link → native AVPlayer loop
+                        MutedLoopVideoPlayer(videoURL: video.videoURL, isActive: isActive)
+                            .transition(.opacity)
+                            .allowsHitTesting(false)
                     }
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
@@ -91,15 +92,19 @@ struct FeaturedHeroCard: View {
     @ViewBuilder
     private var topBadges: some View {
         HStack {
-            HStack(spacing: 6) {
-                Image(systemName: video.category.iconName)
-                Text(video.category.displayName)
+            // Only show the category capsule when it's a real, meaningful category.
+            // A video saved as `.other` shows no badge instead of a useless "Other".
+            if video.category != .other {
+                HStack(spacing: 6) {
+                    Image(systemName: video.category.iconName)
+                    Text(video.category.displayName)
+                }
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Color.black.opacity(0.35)))
             }
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(Color.black.opacity(0.35)))
 
             Spacer()
 
@@ -150,6 +155,15 @@ struct FeaturedHeroCard: View {
                 Button(action: {
                     HapticManager.shared.impact(style: .light)
                     onAddToList()
+                    
+                    // Show visual feedback
+                    let saved = appState.isVideoInWatchLater(video.id)
+                    let message = saved ? "Added to Watch Later" : "Removed from Watch Later"
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("ShowToast"),
+                        object: nil,
+                        userInfo: ["message": message, "icon": saved ? "checkmark.circle.fill" : "xmark.circle.fill"]
+                    )
                 }) {
                     let saved = appState.isVideoInWatchLater(video.id)
                     ZStack {
@@ -175,6 +189,8 @@ struct FeaturedHeroCard: View {
 }
 
 // MARK: - Featured Hero Poster (Reusable)
+// 🎯 CRITICAL: Uses .scaledToFill() to ensure video fills the 16:9 container
+// This prevents letterboxing or pillarboxing regardless of source aspect ratio
 struct FeaturedHeroPoster: View {
     let video: Video
     
@@ -182,20 +198,20 @@ struct FeaturedHeroPoster: View {
         if video.id == "shot_by_keonta_intro" || video.id == FeaturedStore.ownerIntroVideoId {
             Image("ShotByKeontaThumbnail")
                 .resizable()
-                .scaledToFill()
+                .scaledToFill() // ✅ Fills 16:9 container
         } else if video.thumbnailURL.hasPrefix("asset://"),
                   let assetName = video.thumbnailURL.split(separator: "/").last.map(String.init),
                   !assetName.isEmpty {
             Image(assetName)
                 .resizable()
-                .scaledToFill()
+                .scaledToFill() // ✅ Fills 16:9 container
         } else {
             MultiSourceAsyncImage(
                 urls: video.posterCandidates,
                 content: { image in
                     image
                         .resizable()
-                        .scaledToFill()
+                        .scaledToFill() // ✅ Fills 16:9 container
                 },
                 placeholder: {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)

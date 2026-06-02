@@ -34,7 +34,19 @@ struct FeaturedUIKitCarousel: UIViewRepresentable {
         let currentVideoIds = videos.map { $0.id }
         if context.coordinator.lastVideoIds != currentVideoIds {
             context.coordinator.lastVideoIds = currentVideoIds
+            context.coordinator.lastSelectedIndex = selectedIndex
             collectionView.reloadData()
+        } else if context.coordinator.lastSelectedIndex != selectedIndex {
+            // The active card changed (e.g. user paged to the next video). The
+            // `isActive` flag is baked into each cell's hosting configuration at
+            // build time, so we must reconfigure the visible cells in place to
+            // recompute it — otherwise the newly-centered card never starts its
+            // autoplay preview and the previous one never stops.
+            context.coordinator.lastSelectedIndex = selectedIndex
+            let visiblePaths = collectionView.indexPathsForVisibleItems
+            if !visiblePaths.isEmpty {
+                collectionView.reconfigureItems(at: visiblePaths)
+            }
         }
         
         let clampedIndex = min(max(selectedIndex, 0), max(videos.count - 1, 0))
@@ -53,6 +65,7 @@ struct FeaturedUIKitCarousel: UIViewRepresentable {
         static let reuseID = "FeaturedUIKitCarouselCell"
         var parent: FeaturedUIKitCarousel
         var lastVideoIds: [String] = []
+        var lastSelectedIndex: Int = -1
         
         init(parent: FeaturedUIKitCarousel) {
             self.parent = parent

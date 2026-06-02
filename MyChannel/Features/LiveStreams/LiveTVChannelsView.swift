@@ -479,14 +479,7 @@ private struct HeroBannerCard: View {
     var body: some View {
         Button(action: action) {
             ZStack(alignment: .bottomLeading) {
-                AsyncImage(url: URL(string: channel.logoURL)) { phase in
-                    switch phase {
-                    case .success(let img):
-                        img.resizable().scaledToFill()
-                    default:
-                        Rectangle().fill(channelGradient)
-                    }
-                }
+                ChannelArtworkView(channel: channel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
 
@@ -571,14 +564,7 @@ private struct TrendingChip: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 ZStack(alignment: .topLeading) {
-                    AsyncImage(url: URL(string: channel.logoURL)) { phase in
-                        switch phase {
-                        case .success(let img):
-                            img.resizable().scaledToFill()
-                        default:
-                            Rectangle().fill(categoryColor.opacity(0.4))
-                        }
-                    }
+                    ChannelArtworkView(channel: channel)
                     .frame(width: 120, height: 68)
                     .clipped()
 
@@ -621,27 +607,8 @@ private struct TVGridCard: View {
         }) {
             VStack(alignment: .leading, spacing: 7) {
                 ZStack(alignment: .topLeading) {
-                    // Channel poster - always visible immediately
-                    AsyncImage(url: URL(string: channel.logoURL)) { phase in
-                        switch phase {
-                        case .success(let img):
-                            img.resizable().scaledToFill()
-                        case .failure:
-                            ZStack {
-                                Rectangle().fill(channelGradient)
-                                Image(systemName: categoryIcon)
-                                    .font(.system(size: 28))
-                                    .foregroundColor(.white.opacity(0.6))
-                            }
-                        case .empty:
-                            ZStack {
-                                Rectangle().fill(channelGradient)
-                                ProgressView().tint(.white.opacity(0.6))
-                            }
-                        @unknown default:
-                            Rectangle().fill(channelGradient)
-                        }
-                    }
+                    // Channel poster - always visible immediately, never a grey box
+                    ChannelArtworkView(channel: channel)
                     .frame(maxWidth: .infinity)
                     .aspectRatio(16/9, contentMode: .fit)
                     .clipped()
@@ -737,21 +704,7 @@ private struct TVListCard: View {
         }) {
             HStack(spacing: 12) {
                 ZStack(alignment: .topLeading) {
-                    AsyncImage(url: URL(string: channel.logoURL)) { phase in
-                        switch phase {
-                        case .success(let img):
-                            img.resizable().scaledToFill()
-                        case .failure:
-                            ZStack {
-                                Rectangle().fill(channelGradient)
-                                Image(systemName: categoryIcon)
-                                    .font(.system(size: 22))
-                                    .foregroundColor(.white.opacity(0.6))
-                            }
-                        default:
-                            Rectangle().fill(channelGradient)
-                        }
-                    }
+                    ChannelArtworkView(channel: channel)
                     .frame(width: 152, height: 86)
                     .clipped()
 

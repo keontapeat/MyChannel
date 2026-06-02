@@ -165,7 +165,7 @@ struct ContentManagementView: View {
             })
         }
         .fullScreenCover(isPresented: $showingFeaturedAdmin) {
-            FeaturedVideoAdminView()
+            FeatureSlotAdminView()
         }
         .fullScreenCover(item: $showingVideoAnalytics) { videoId in
             NavigationStack {

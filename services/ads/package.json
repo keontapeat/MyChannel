@@ -3,15 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node ./src/index.js" },
+  "scripts": {
+    "start": "node ./src/index.js",
+    "migrate": "node ./src/migrate.js && node ./src/migrate-adsense.js",
+    "test": "node ./test/auction.test.mjs && node ./test/tag.test.mjs && node ./test/stripe.test.mjs"
+  },
   "dependencies": {
-    "fastify": "5.1.0",
     "@fastify/cors": "^10.0.0",
     "@fastify/helmet": "^12.0.0",
     "@fastify/rate-limit": "^10.0.0",
-    "pg": "8.11.5",
+    "fastify": "5.1.0",
+    "firebase-admin": "^13.10.0",
     "stripe": "12.18.0"
   }
 }
-
-

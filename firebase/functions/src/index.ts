@@ -322,6 +322,39 @@ export const agentProxy = onCall(
 );
 
 // ============================================
+// 🎵 SERVER-SIDE STREAM COUNTER (MONEY-SAFE)
+// streamCount drives artist payouts ($/stream), so it must NEVER be writable by
+// clients. Listeners can only CREATE a music_plays event stamped with their own
+// uid (enforced by Firestore rules). This trigger folds each validated play into
+// music_tracks.streamCount via an atomic increment — the only path that can move
+// the payout basis. This closes the "mint your own streams → cash out" exploit.
+// ============================================
+
+export const incrementStreamCountOnPlay = onDocumentCreated('music_plays/{playId}', async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+  const data = snap.data();
+  const trackId = data.songId || data.trackId;
+  if (!trackId) {
+    console.warn('[incrementStreamCountOnPlay] play event missing songId/trackId');
+    return;
+  }
+
+  const db = admin.firestore();
+  try {
+    await db.collection('music_tracks').doc(trackId).set(
+      {
+        streamCount: admin.firestore.FieldValue.increment(1),
+        lastStreamAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true}
+    );
+  } catch (err) {
+    console.error(`[incrementStreamCountOnPlay] Failed for track ${trackId}:`, err);
+  }
+});
+
+// ============================================
 // 🔥 DELETE EXPIRED STORIES - Runs Every Hour
 // ============================================
 

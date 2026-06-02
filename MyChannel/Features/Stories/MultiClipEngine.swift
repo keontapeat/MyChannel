@@ -348,8 +348,8 @@ class MultiClipEngine: ObservableObject {
     }
 }
 
-// MARK: - Video Filter
-struct VideoFilter: Identifiable {
+// MARK: - Video Filter (multi-clip editor)
+struct ClipVideoFilter: Identifiable {
     var id = UUID()
     let name: String
     let filterName: String

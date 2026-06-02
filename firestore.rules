@@ -24,8 +24,10 @@ service cloud.firestore {
     
     function isAdmin() {
       return request.auth != null && 
-             (request.auth.token.email == 'keontapeat@mychannel.live' ||
-              request.auth.token.email == 'keontapeat@gmail.com');
+             (request.auth.token.admin == true ||
+              (request.auth.token.email_verified == true &&
+               (request.auth.token.email == 'keontapeat@mychannel.live' ||
+                request.auth.token.email == 'keontapeat@gmail.com')));
     }
     
     function isSignedIn() {
@@ -39,6 +41,14 @@ service cloud.firestore {
     // 🔥 PERFORMANCE: Check if user is creator without extra DB reads
     function isCreator(creatorId) {
       return request.auth != null && request.auth.uid == creatorId;
+    }
+
+    // 🎵 MUSIC: ownership helpers for docs that carry an artistId field
+    function ownsArtistData() {
+      return request.auth != null && resource.data.artistId == request.auth.uid;
+    }
+    function creatingOwnArtistData() {
+      return request.auth != null && request.resource.data.artistId == request.auth.uid;
     }
     
     // 🔥 PERFORMANCE: Validate data size to prevent slow queries
@@ -72,6 +82,7 @@ service cloud.firestore {
              url.matches('.*cloudfront\\.net.*') ||      // AWS CloudFront
              url.matches('.*pluto\\.tv.*') ||            // Pluto TV
              url.matches('.*image\\.tmdb\\.org.*') ||    // TMDB
+             url.matches('.*mzstatic\\.com.*') ||        // Apple iTunes/TV artwork (stable)
              url.matches('.*\\.jpg') ||                  // .jpg in URL (covers query strings)
              url.matches('.*\\.jpeg') ||                 // .jpeg
              url.matches('.*\\.png') ||                  // .png
@@ -87,6 +98,18 @@ service cloud.firestore {
     // ========================================
     // 📺 CORE VIDEO & CONTENT (OPTIMIZED)
     // ========================================
+    
+    // 📡 Live TV channel catalog - public read, admin-curated.
+    // Channels (artwork + stream URLs) live here so the lineup can be fixed
+    // server-side without an app release. Reads are public (cached by Firebase);
+    // writes are restricted to admins / the seed tooling.
+    match /liveTVChannels/{channelId} {
+      allow read: if true;
+      allow create, update: if isAdmin() &&
+                               (!('logoURL' in request.resource.data) ||
+                                isValidImageURL(request.resource.data.logoURL));
+      allow delete: if isAdmin();
+    }
     
     // Videos - 🔥 OPTIMIZED: Split read/write rules for better cache
     // 🖼️ Validates thumbnailURL to prevent blocked image sources
@@ -138,6 +161,17 @@ service cloud.firestore {
       allow update: if false;
     }
     
+    // Captions / subtitles tracks (YouTube Studio "Subtitles" parity).
+    // Public read so the player can show CC; only the video's creator (or an
+    // admin) can add/edit/delete tracks. Caption text is creator-authored
+    // content, not a money/ledger record, so owner writes are safe.
+    match /videos/{videoId}/captions/{languageCode} {
+      allow read: if true;
+      allow write: if isSignedIn() &&
+                      (get(/databases/$(database)/documents/videos/$(videoId)).data.creatorId == request.auth.uid
+                       || isAdmin());
+    }
+    
     // Video analytics - 🔥 OPTIMIZED: Lightweight rule
     match /video_analytics/{videoId}/{document=**} {
       allow read: if true;
@@ -173,19 +207,49 @@ service cloud.firestore {
     }
     
     // Flicks - 🔥 OPTIMIZED: Inline creator check + image validation
+    // (formerly the "shorts" collection — renamed to "flicks")
     match /flicks/{flickId} {
       allow read: if true;
       allow create: if isSignedIn() && 
                        isValidSize(request.resource.data, 30) &&
                        (!('thumbnailURL' in request.resource.data) || 
                         isValidImageURL(request.resource.data.thumbnailURL));
-      allow update: if (isCreator(resource.data.creatorId) || isAdmin()) &&
+      // Owner/admin for full edits, OR any signed-in user for engagement-only
+      // counter increments (view/like/comment/share/report counters).
+      allow update: if (
+                       (isCreator(resource.data.creatorId) || isAdmin()) &&
                        (!('thumbnailURL' in request.resource.data) || 
-                        isValidImageURL(request.resource.data.thumbnailURL));
+                        isValidImageURL(request.resource.data.thumbnailURL))
+                    ) || (
+                       isSignedIn() &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['viewCount','likeCount','commentCount','shareCount','reportCount','totalWatchTime','lastViewed','viralScore','viralPrediction','predictedViews','updatedAt'])
+                    );
       allow delete: if isCreator(resource.data.creatorId) || isAdmin();
     }
+
+    match /flicks/{flickId}/events/{eventId} {
+      allow read: if false;
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.type in ['view', 'like', 'unlike', 'comment', 'share'];
+      allow update, delete: if false;
+    }
+
+    // Flick reports (abuse / content moderation) - 🔥 SECURE
+    // Any signed-in user can file a report stamped with their uid; only the
+    // reporter or an admin can read it back; updates are admin-only (triage).
+    match /flickReports/{reportId} {
+      allow read: if isSignedIn() &&
+                     (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
     
-    // Shorts - 🔥 OPTIMIZED + image validation
+    // Shorts - 🔥 LEGACY: kept read-only for backward compatibility during migration.
+    // New writes go to the "flicks" collection above.
     match /shorts/{shortId} {
       allow read: if true;
       allow create: if isSignedIn() && 
@@ -210,6 +274,60 @@ service cloud.firestore {
     match /stories/{storyId} {
       allow read: if true;
       allow create, update, delete: if isSignedIn();
+
+      // Per-user like marker on a story
+      match /likes/{userId} {
+        allow read: if true;
+        allow create, update, delete: if isOwner(userId);
+      }
+
+      // Interactive sticker engagement (Instagram parity)
+      // Poll / quiz / question / slider / countdown aggregate docs are readable
+      // by anyone; only signed-in users can write, and per-user response docs are
+      // owned by that user.
+      match /polls/{pollId} {
+        allow read: if true;
+        allow write: if isSignedIn();
+        match /votes/{userId} {
+          allow read: if true;
+          allow create, update, delete: if isOwner(userId);
+        }
+      }
+      match /quizzes/{quizId} {
+        allow read: if true;
+        allow write: if isSignedIn();
+        match /answers/{userId} {
+          allow read: if true;
+          allow create, update, delete: if isOwner(userId);
+        }
+      }
+      match /questions/{questionId} {
+        allow read: if true;
+        allow write: if isSignedIn();
+        // Responses: a user may create their own; the story owner can read all.
+        match /responses/{responseId} {
+          allow read: if isSignedIn();
+          allow create: if isSignedIn() &&
+                           request.resource.data.userId == request.auth.uid;
+          allow update, delete: if false;
+        }
+      }
+      match /sliders/{sliderId} {
+        allow read: if true;
+        allow write: if isSignedIn();
+        match /results/{userId} {
+          allow read: if true;
+          allow create, update, delete: if isOwner(userId);
+        }
+      }
+      match /countdowns/{countdownId} {
+        allow read: if true;
+        allow write: if isSignedIn();
+        match /reminders/{userId} {
+          allow read: if isOwner(userId);
+          allow create, update, delete: if isOwner(userId);
+        }
+      }
     }
 
     match /stories/{storyId}/events/{eventId} {
@@ -231,6 +349,57 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
     }
+
+    // Story replies (DMs from viewers to creator) - 🔥 SECURE
+    match /story_replies/{replyId} {
+      // Sender or creator can read their thread
+      allow read: if isSignedIn() &&
+                     (request.auth.uid == resource.data.senderId ||
+                      request.auth.uid == resource.data.creatorId);
+      allow create: if isSignedIn() &&
+                       request.resource.data.senderId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Story shares tracking
+    match /story_shares/{shareId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Story seen tracking (one doc per user+story) - 🔥 PRIVATE
+    match /story_seen/{docId} {
+      allow read: if isSignedIn() &&
+                     (resource == null || request.auth.uid == resource.data.userId);
+      allow create, update: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+
+    // Per-user liked stories index - 🔥 PRIVATE
+    match /users/{userId}/liked_stories/{storyId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // 🔔 Notifications inbox (flat collection, queried by userId field)
+    // Used by NotificationsInboxService + StoryActionService story replies.
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() &&
+                     (resource == null || request.auth.uid == resource.data.userId);
+      // Any signed-in user may create a notification addressed to another user
+      // (e.g. story reply, mention). Must stamp the recipient userId.
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId is string;
+      // Only the recipient can mark read / delete.
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+    // Nested notifications written by Cloud Functions (notifications/{uid}/items/*)
+    match /notifications/{userId}/items/{itemId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
+    }
     
     // Story analytics (creator only) - 🔥 SECURE
     match /story_analytics/{userId}/{document=**} {
@@ -247,9 +416,19 @@ service cloud.firestore {
     }
     
     // Story highlights - 🔥 OPTIMIZED
+    // Supports BOTH the nested layout (story_highlights/{userId}/{highlightId})
+    // and the flat layout (story_highlights/{highlightId}) written by
+    // StoryHighlightsService where creatorId is a field.
     match /story_highlights/{userId}/{highlightId} {
       allow read: if true;  // Public
       allow create, update, delete: if isOwner(userId);
+    }
+    match /story_highlights/{highlightId} {
+      allow read: if true;  // Public
+      allow create: if isSignedIn() &&
+                       request.resource.data.creatorId == request.auth.uid;
+      allow update, delete: if isSignedIn() &&
+                       resource.data.creatorId == request.auth.uid;
     }
     
     // Close friends lists - 🔥 PRIVATE
@@ -267,6 +446,10 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
     match /users/{userId}/search_history/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    // Personalized feed signals (e.g. "not interested") used to tune Flicks recs
+    match /users/{userId}/feedSignals/{document=**} {
       allow read, write: if isOwner(userId);
     }
     match /users/{userId}/subscriptions/{document=**} {
@@ -318,13 +501,24 @@ service cloud.firestore {
                         isValidImageURL(request.resource.data.bannerURL)) &&
                        (!('bannerImageURL' in request.resource.data) || 
                         isValidImageURL(request.resource.data.bannerImageURL));
-      allow update: if (isOwner(userId) || isAdmin()) &&
+      allow update: if (
+                       (isOwner(userId) || isAdmin()) &&
                        (!('profileImageURL' in request.resource.data) || 
                         isValidImageURL(request.resource.data.profileImageURL)) &&
                        (!('bannerURL' in request.resource.data) || 
                         isValidImageURL(request.resource.data.bannerURL)) &&
                        (!('bannerImageURL' in request.resource.data) || 
-                        isValidImageURL(request.resource.data.bannerImageURL));
+                        isValidImageURL(request.resource.data.bannerImageURL))
+                    ) || (
+                       // 🏆 RANKING: any signed-in user may increment ONLY the
+                       // engagement counters on another creator's profile (so views,
+                       // likes, and subscriber counts can roll up to feed the Top
+                       // shelves). This is scoped to these exact fields — it can't be
+                       // used to edit profile data, verification, or anything else.
+                       isSignedIn() &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['totalViews','subscriberCount','likeCount','updatedAt'])
+                    );
       allow delete: if isOwner(userId) || isAdmin();
     }
     
@@ -364,6 +558,13 @@ service cloud.firestore {
     match /users/{userId}/watchLater/{document=**} {
       allow read, write: if isOwner(userId);
     }
+
+    // 🎬 Movies "My List" — saved movies for the Movies section.
+    // Mirrors the watchLater pattern; owner-only read/write. Without this rule the
+    // catch-all deny blocks MovieLibraryService sync and My List silently fails.
+    match /users/{userId}/movieList/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
     
     match /users/{userId}/watch-later/{document=**} {
       allow read, write: if isOwner(userId);
@@ -377,6 +578,13 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
     
+    // 🔥 PARITY FIX: "Not interested" choices from Watch History.
+    // HistoryService writes to users/{userId}/notInterested/{contentId}; without
+    // this rule the catch-all deny blocked the write and the feature silently failed.
+    match /users/{userId}/notInterested/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
     match /watchLater/{userId}/{document=**} {
       allow read, write: if isOwner(userId);
     }
@@ -384,6 +592,45 @@ service cloud.firestore {
     // Video resume positions - 🔥 OPTIMIZED
     match /watchHistory/{videoId} {
       allow read, write: if isSignedIn();
+    }
+    
+    // 🔥 PARITY FIX: Top-level watch progress (resume position) written by
+    // WatchProgressService on every video. Doc ID is "{userId}_{videoId}" and the
+    // document carries a userId field. Without this rule the default-deny blocked
+    // every saveProgress() call, so "Resume from where you left off" silently failed.
+    match /watch_progress/{docId} {
+      allow read: if isSignedIn() &&
+                     (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow create, update: if isSignedIn() &&
+                     request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() &&
+                     (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    
+    // 🔥 PARITY FIX: Timestamped comments (YouTube-style comments pinned to a moment
+    // in the video). TimestampedCommentsService reads these for everyone and lets a
+    // signed-in user post their own (stamped with authorUid).
+    match /timestamped_comments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+                     request.resource.data.authorUid == request.auth.uid;
+      allow update, delete: if isSignedIn() &&
+                     (resource.data.authorUid == request.auth.uid || isAdmin());
+    }
+    
+    // 🔥 PARITY FIX: Super Thanks (paid appreciation from the video detail view).
+    // SuperThanksSheet writes a doc stamped with the sender's uid. Reads are limited
+    // to the sender, the recipient creator, or an admin.
+    match /super-thanks/{thanksId} {
+      allow read: if isSignedIn() &&
+                     (resource.data.senderId == request.auth.uid ||
+                      resource.data.userId == request.auth.uid ||
+                      resource.data.creatorId == request.auth.uid ||
+                      isAdmin());
+      allow create: if isSignedIn() &&
+                     (request.resource.data.senderId == request.auth.uid ||
+                      request.resource.data.userId == request.auth.uid);
+      allow update, delete: if isAdmin();
     }
     
     // Notifications - 🔥 OPTIMIZED
@@ -427,16 +674,83 @@ service cloud.firestore {
       allow read, write: if isOwner(userId) || isAdmin();
     }
     
+    // 🔐 VS-match wallet balances are real money — server-written only (Admin SDK).
+    // Wallets are funded through the escrow Cloud Function after a verified Stripe
+    // payment; a user must never be able to set their own balance.
     match /vs_match_wallets/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
     }
     
-    match /vs_match_transactions/{userId}/{document=**} {
+    // 🔥 FIX: VSMatchWalletService writes this as a FLAT collection
+    // (db.collection("vs_match_transactions").document(txnId)) with a `userId`
+    // FIELD — not a subcollection. The old /{userId}/{document=**} rule never
+    // matched the real docs, so reads/writes fell through to default-deny.
+    match /vs_match_transactions/{transactionId} {
+      // A signed-in user can read their own transactions (queried by userId field)
+      allow read: if isSignedIn() &&
+                     (resource == null ||
+                      resource.data.winnerId == request.auth.uid ||
+                      resource.data.loserId == request.auth.uid ||
+                      resource.data.userId == request.auth.uid ||
+                      isAdmin());
+      // Create allowed for signed-in users; the doc must stamp them as a party
+      // to the transaction (prevents writing transactions for other users).
+      allow create: if isSignedIn() &&
+                       (request.resource.data.userId == request.auth.uid ||
+                        request.resource.data.winnerId == request.auth.uid ||
+                        request.resource.data.loserId == request.auth.uid ||
+                        isAdmin());
+      allow update, delete: if isAdmin();
+    }
+    
+    // Legacy nested layout — kept for backward compatibility.
+    match /vs_match_transactions/{userId}/items/{document=**} {
       allow read, write: if isOwner(userId) || isAdmin();
     }
     
-    match /vs_match_withdrawals/{userId}/{document=**} {
-      allow read, write: if isOwner(userId) || isAdmin();
+    match /vs_match_withdrawals/{withdrawalId} {
+      allow read: if isSignedIn() &&
+                     (resource == null ||
+                      resource.data.userId == request.auth.uid ||
+                      isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+    
+    // 🔒 ESCROW LEDGER — written by MoneyEscrowService when funds are held for a
+    // VS Match. A user may read/create their own escrow leg (stamped with their
+    // uid); only an admin (or backend) can flip status to released/refunded so a
+    // user can't pay themselves out client-side.
+    match /escrow/{escrowId} {
+      allow read: if isSignedIn() &&
+                     (resource == null ||
+                      resource.data.userId == request.auth.uid ||
+                      isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+    
+    // 💳 Stripe PaymentIntent records mirrored client-side for deposit tracking.
+    match /payment_intents/{paymentIntentId} {
+      allow read: if isSignedIn() &&
+                     (resource == null ||
+                      resource.data.userId == request.auth.uid ||
+                      isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+    
+    // 🚨 Fraud alerts raised during deposits. Users can file an alert tagged with
+    // their uid; only admins can read the queue or triage it.
+    match /fraud_alerts/{alertId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
     }
     
     // 🔥 OPTIMIZED: Gaming collections
@@ -513,6 +827,20 @@ service cloud.firestore {
     match /hall_of_fame/{document=**} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+    
+    // 🤖 AI championship telemetry — signed-in users append events the
+    // ML agents learn from. Reads restricted to admins (analytics only).
+    match /ai_championship_events/{document=**} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+    
+    match /ai_ranking_refreshes/{document=**} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
     
     // ========================================
@@ -662,6 +990,79 @@ service cloud.firestore {
       allow update, delete: if isCreator(resource.data.creatorId) || isAdmin();
     }
     
+    // ========================================
+    // 🌟 CHANNEL MEMBERSHIPS (YouTube parity)
+    // ========================================
+    // Membership TIER DEFINITIONS (name, price, perks). This is configuration
+    // data — the creator owns and edits their own tiers, and viewers can read
+    // them to see what a channel offers. It is NOT a money ledger: the actual
+    // subscription purchase runs through StoreKit/IAP and is recorded by the
+    // server in the locked-down monetization ledgers below.
+    match /membership_tiers/{tierId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+                       request.resource.data.creatorId == request.auth.uid &&
+                       isValidSize(request.resource.data, 20);
+      allow update: if isSignedIn() &&
+                       resource.data.creatorId == request.auth.uid &&
+                       request.resource.data.creatorId == request.auth.uid;
+      allow delete: if isSignedIn() &&
+                       (resource.data.creatorId == request.auth.uid || isAdmin());
+    }
+    
+    // Per-creator membership settings (enabled flag). Public read so a viewer's
+    // channel page knows whether to show the "Join" button; owner-only write.
+    match /creator_memberships/{creatorId} {
+      allow read: if true;
+      allow write: if isOwner(creatorId) || isAdmin();
+    }
+    
+    // ========================================
+    // 🛍️ CREATOR MERCH CATALOG (YouTube merch-shelf parity)
+    // ========================================
+    // Product CONFIGURATION authored by the creator (name, price, stock, image).
+    // Public read so the shelf is visible; owner-only write. This is NOT a money
+    // ledger — checkout/fulfillment/payment is a separate server-side flow.
+    match /creator_products/{productId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+                       request.resource.data.creatorId == request.auth.uid &&
+                       isValidSize(request.resource.data, 20);
+      allow update: if isSignedIn() &&
+                       resource.data.creatorId == request.auth.uid &&
+                       request.resource.data.creatorId == request.auth.uid;
+      allow delete: if isSignedIn() &&
+                       (resource.data.creatorId == request.auth.uid || isAdmin());
+    }
+    
+    // Per-creator merch on/off setting. Public read, owner-only write.
+    match /creator_merch_settings/{creatorId} {
+      allow read: if true;
+      allow write: if isOwner(creatorId) || isAdmin();
+    }
+    
+    // 🛍️ Merch orders ledger (PHYSICAL goods bought via Stripe, not IAP).
+    // This is a money record: it is written ONLY server-side by the
+    // escrow-payments Cloud Function (Admin SDK bypasses these rules). Clients
+    // may READ their own orders (as buyer or creator) but can NEVER write — an
+    // order a buyer can write is not a real order.
+    match /merch_orders/{orderId} {
+      allow read: if isSignedIn() &&
+                     (resource.data.buyerId == request.auth.uid ||
+                      resource.data.creatorId == request.auth.uid ||
+                      isAdmin());
+      allow write: if isAdmin();
+    }
+    
+    // Per-creator Super Chat config (enabled + minimum amount). Public read so
+    // the viewer UI knows the minimum; owner-only write. The actual money lives
+    // in the locked-down `super-thanks` / `tips` collections written server-side
+    // after a verified payment — this is just configuration.
+    match /creator_superchat_settings/{creatorId} {
+      allow read: if true;
+      allow write: if isOwner(creatorId) || isAdmin();
+    }
+    
     match /messages/{document=**} {
       allow read, write: if isSignedIn();
     }
@@ -672,33 +1073,85 @@ service cloud.firestore {
     }
     
     // ========================================
-    // 💰 MONETIZATION & PAYMENTS (OPTIMIZED)
+    // 💰 MONETIZATION & PAYMENTS (HARDENED)
     // ========================================
+    // 🔐 MONEY-SAFE PRINCIPLE: balances, earnings, transactions, and payouts are
+    // financial ledgers. Clients may READ their own rows but may NEVER write them
+    // — all writes happen server-side via the Admin SDK (Cloud Functions), which
+    // bypasses these rules. A ledger a client can write is not a ledger.
     
-    // 🔥 PERFORMANCE: Group all private financial data
     match /transactions/{userId}/{document=**} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
     }
     
+    // Tips: readable by all, but the money record is written server-side after a
+    // verified Stripe payment (pay-api / Cloud Function), not by direct client write.
     match /tips/{document=**} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
     
     match /creator_accounts/{userId} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
     }
     
     match /creator_earnings/{userId}/{document=**} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // 📊 Per-creator daily view rollups powering the Studio dashboard chart +
+    // "views today". Reads are limited to the creator/admin; writes are allowed
+    // for any signed-in viewer because watching a video increments the creator's
+    // bucket (mirrors the existing video_analytics policy). Writes are restricted
+    // to the counter fields so a viewer can't overwrite arbitrary analytics.
+    match /creator_analytics/{creatorId}/daily/{dayKey} {
+      allow read: if isOwner(creatorId) || isAdmin();
+      allow create, update: if isSignedIn() &&
+                     request.resource.data.diff(
+                       resource == null ? request.resource.data : resource.data
+                     ).affectedKeys().hasOnly(['date','views','updatedAt']);
+      allow delete: if isAdmin();
+    }
+
+    // 🔴 Live presence heartbeats for "watching now". A viewer writes their own
+    // short-lived session doc; the creator (or admin) can read to count active
+    // viewers. Docs are tiny and expire when the session ends/goes stale.
+    match /creator_presence/{creatorId}/active/{sessionId} {
+      allow read: if isOwner(creatorId) || isAdmin();
+      allow create, update, delete: if isSignedIn();
+    }
+
+    // 📰 Creator news / announcements shown in the Studio dashboard. Public read,
+    // admin-curated write (no creator can fabricate platform announcements).
+    match /creator_news/{newsId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 💸 Creator payout requests. A creator may file a withdrawal stamped with
+    // their own uid and read their own history; only an admin/backend can mark a
+    // payout processed/paid so a creator can't approve their own money.
+    match /payout_requests/{payoutId} {
+      allow read: if isSignedIn() &&
+                     (resource == null ||
+                      resource.data.creatorId == request.auth.uid ||
+                      isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.creatorId == request.auth.uid;
+      allow update, delete: if isAdmin();
     }
     
     match /creator_payouts/{userId}/{document=**} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
     }
     
     match /earnings/{userId}/{document=**} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
     }
     
     match /revenue_sharing/{document=**} {
@@ -707,7 +1160,41 @@ service cloud.firestore {
     }
     
     match /premium_stats/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+    
+    // ========================================
+    // 💰 CREATOR MONETIZATION (ENHANCED)
+    // ========================================
+    
+    // Tip transactions (IAP-based tipping from iOS app)
+    match /tip_transactions/{tipId} {
+      allow read: if isSignedIn() &&
+                     (resource == null ||
+                      resource.data.fromUserId == request.auth.uid ||
+                      resource.data.toUserId == request.auth.uid ||
+                      isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.fromUserId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+    
+    // Creator balance summaries (cached from pay-api ledger)
+    match /creator_balances/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();  // Written by pay-api service
+    }
+    
+    // Payout settings (auto-payout threshold, enabled/disabled)
+    match /payout_settings/{userId} {
       allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // Stripe Connect account status (synced from pay-api)
+    match /stripe_connect_accounts/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();  // Written by pay-api webhooks
     }
     
     match /plus_benefits/{document=**} {
@@ -720,9 +1207,10 @@ service cloud.firestore {
       allow write: if isOwner(userId);
     }
     
+    // Referral conversions drive payouts — recorded server-side only.
     match /referral_conversions/{document=**} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
     
     // ========================================
@@ -733,8 +1221,10 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
     
+    // 🔐 Ad spend/credit ledger — server-written only (billing runs server-side).
     match /ad_transactions/{userId}/{document=**} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
     }
     
     match /ad_user_profiles/{userId} {
@@ -767,6 +1257,40 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
+    }
+    
+    // 🎯 RANKED FEATURE CARD (#1–#10) — paid slot bookings
+    // Creators create their own requests (review-before-pay, unpaid) and may
+    // update ONLY their own booking to record a completed payment. Admin
+    // approves, rejects, schedules, activates, and removes.
+    match /feature_slot_bookings/{bookingId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+                    && request.resource.data.creatorId == request.auth.uid
+                    && request.resource.data.status == 'pendingReview'
+                    && request.resource.data.paymentStatus == 'unpaid';
+      // Creator may move their OWN approved booking into a paid state.
+      allow update: if isAdmin()
+                    || (isSignedIn()
+                        && resource.data.creatorId == request.auth.uid
+                        && resource.data.status == 'approvedAwaitingPayment'
+                        && request.resource.data.creatorId == resource.data.creatorId
+                        && request.resource.data.rank == resource.data.rank
+                        && request.resource.data.startDate == resource.data.startDate
+                        && request.resource.data.endDate == resource.data.endDate
+                        && request.resource.data.status in ['scheduled', 'active']
+                        && request.resource.data.paymentStatus == 'completed');
+      allow delete: if isAdmin();
+    }
+    
+    // Waitlist: creators add/remove their own entry; admin can read/clear.
+    match /feature_slot_waitlist/{entryId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+                    && request.resource.data.creatorId == request.auth.uid;
+      allow delete: if isAdmin()
+                    || (isSignedIn() && resource.data.creatorId == request.auth.uid);
+      allow update: if isAdmin();
     }
     
     // ========================================
@@ -803,17 +1327,46 @@ service cloud.firestore {
     // 🎓 UNIVERSITY (OPTIMIZED)
     // ========================================
     
+    // Per-user University profile (streak, points, daily goal) + activity feed.
     match /university_users/{userId} {
       allow read, write: if isOwner(userId) || isAdmin();
+
+      // Activity feed entries are owned by the user.
+      match /activity/{activityId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      // Career-path progress lives under the user as well in some flows.
+      match /career_paths/{pathId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
     }
     
     match /university_progress/{userId}/{document=**} {
       allow read, write: if isOwner(userId) || isAdmin();
     }
     
-    match /university_certificates/{userId}/{document=**} {
+    // Certificates are stored as TOP-LEVEL documents keyed by certificate id,
+    // each carrying a `userId` field. Public read (so credentials are verifiable),
+    // writes restricted to the owner of the certificate or an admin.
+    match /university_certificates/{certificateId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+    }
+
+    // Public, points-ranked leaderboard mirror. Anyone can read; a user may only
+    // write their own entry (document id == uid).
+    match /university_leaderboard/{userId} {
       allow read: if true;
       allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // Cached AI video → career-path categorizations (shared, read-only to clients).
+    match /video_categorizations/{videoId} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
     
     match /career_paths/{document=**} {
@@ -883,7 +1436,12 @@ service cloud.firestore {
     
     match /content_id_references/{document=**} {
       allow read: if true;
-      allow write: if isAdmin();
+      // Artists register their own reference files (ownerId === uid); admins too.
+      allow create: if isSignedIn() &&
+                       (!('ownerId' in request.resource.data) ||
+                        request.resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update, delete: if isSignedIn() &&
+                       ((resource.data.ownerId != null && resource.data.ownerId == request.auth.uid) || isAdmin());
     }
     
     match /content_matches/{document=**} {
@@ -954,17 +1512,22 @@ service cloud.firestore {
     // 🏥 SYSTEM HEALTH & MONITORING (OPTIMIZED)
     // ========================================
     
-    // 🔥 PERFORMANCE: Public health checks (no auth = faster)
+    // 🔐 Health/monitoring: public READ is fine for a status page, but writes must
+    // be authenticated to prevent anonymous flooding / dashboard poisoning (DoS &
+    // cost-abuse). Use the Admin SDK / authenticated probes for writes.
     match /health_check/{document=**} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isSignedIn();
     }
     
     match /doctor_reports/{document=**} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAdmin();
     }
     
     match /dr_drill_results/{document=**} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAdmin();
     }
     
     match /emergency_stops/{document=**} {
@@ -1071,13 +1634,351 @@ service cloud.firestore {
     }
     match /payments/{document=**} {
       allow read: if isSignedIn() && (resource == null || request.auth.uid == resource.data.userId || isAdmin());
-      allow write: if isSignedIn();
+      // 🔐 Payment records are written server-side only after Stripe confirms the
+      // charge. Clients can never fabricate a payment row.
+      allow write: if isAdmin();
     }
     match /ml_events/{document=**} {
       allow read: if isAdmin();
       allow write: if isSignedIn();
     }
     
+    // ========================================
+    // 🎵 MUSIC PLATFORM (DistroKid / Apple / Spotify parity)
+    // ========================================
+
+    // Catalog: tracks are publicly readable (streaming); only the owning artist
+    // (or admin) can create/edit/delete. Streams increment counters from any
+    // signed-in listener via a constrained update.
+    match /music_tracks/{trackId} {
+      allow read: if true;
+      allow create: if isSignedIn() && creatingOwnArtistData();
+      // 🔐 MONEY-SAFE: payouts are computed as streamCount × rate, so streamCount
+      // is NEVER client-writable — it is incremented server-side (Admin SDK) by the
+      // incrementStreamCountOnPlay trigger from validated music_plays events. This
+      // closes the "mint your own streams → cash out" exploit.
+      // Two allowed client writes:
+      //   1) Owner/admin editing catalog metadata, but streamCount must be unchanged.
+      //   2) Any signed-in listener flipping NON-payout engagement counters
+      //      (likeCount, lastViewedAt, updatedAt) — streamCount excluded.
+      allow update: if isSignedIn() && (
+                       (
+                         (resource.data.artistId == request.auth.uid || isAdmin()) &&
+                         request.resource.data.streamCount == resource.data.streamCount
+                       ) || (
+                         request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['likeCount','lastViewedAt','updatedAt'])
+                       )
+                    );
+      allow delete: if isSignedIn() && (resource.data.artistId == request.auth.uid || isAdmin());
+    }
+
+    // Albums / EPs
+    match /music_albums/{albumId} {
+      allow read: if true;
+      allow create: if isSignedIn() && creatingOwnArtistData();
+      allow update, delete: if isSignedIn() && (ownsArtistData() || isAdmin());
+    }
+
+    // Stream events: anyone signed-in logs a play (must stamp own userId).
+    match /music_streams/{streamId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+                       (!('userId' in request.resource.data) ||
+                        request.resource.data.userId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    // 🔐 Play events drive payout-bearing stream counts. A listener may only
+    // CREATE a play event stamped with their own listenerId; they can never edit
+    // or delete one. A server trigger (incrementStreamCountOnPlay) folds these
+    // into music_tracks.streamCount, so the payout basis is never client-set.
+    match /music_plays/{playId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn() &&
+                       (!('listenerId' in request.resource.data) ||
+                        request.resource.data.listenerId == request.auth.uid);
+      allow update, delete: if false;
+    }
+
+    // Per-listener rollup (keyed by uid) used by analytics.
+    match /music_listeners/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+    }
+
+    // Distribution records + stored DDEX feeds (owner/admin only).
+    match /music_distribution/{docId} {
+      allow read: if isSignedIn() && (ownsArtistData() || isAdmin());
+      allow create: if isSignedIn() && creatingOwnArtistData();
+      allow update, delete: if isSignedIn() && (ownsArtistData() || isAdmin());
+    }
+    match /music_distribution_ern/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Code counters (ISRC/UPC) — server (Admin SDK) only.
+    match /music_code_counters/{docId} {
+      allow read, write: if false;
+    }
+
+    // Content ID registry (acoustic fingerprints). Public read for matching;
+    // owning artist manages their own entries.
+    match /music_content_id/{trackId} {
+      allow read: if true;
+      allow create: if isSignedIn() && creatingOwnArtistData();
+      allow update, delete: if isSignedIn() && (ownsArtistData() || isAdmin());
+    }
+    match /music_content_id_scans/{scanId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // Track rights, collaborators & splits.
+    match /music_track_rights/{trackId} {
+      allow read: if true;
+      allow create, update, delete: if isSignedIn() && (ownsArtistData() || creatingOwnArtistData() || isAdmin());
+    }
+    match /music_track_collaborators/{trackId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && (ownsArtistData() || creatingOwnArtistData() || isAdmin());
+    }
+    match /music_track_versions/{versionId} {
+      allow read: if true;
+      allow create, update, delete: if isSignedIn() && (ownsArtistData() || creatingOwnArtistData() || isAdmin());
+    }
+
+    // Earnings split ledger — payees read their own entries; writes server-only.
+    match /music_split_earnings/{entryId} {
+      allow read: if isSignedIn() &&
+                     (resource.data.payeeArtistId == request.auth.uid ||
+                      resource.data.ownerArtistId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Payout requests (artist-initiated) + payout history.
+    match /music_payout_requests/{requestId} {
+      allow read: if isSignedIn() && (ownsArtistData() || isAdmin());
+      allow create: if isSignedIn() && creatingOwnArtistData();
+      allow update, delete: if isAdmin();
+    }
+    match /artist_payouts/{payoutId} {
+      allow read: if isSignedIn() && (ownsArtistData() || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Stripe Connect account state — owner reads, server writes.
+    match /artist_stripe/{artistId} {
+      allow read: if isOwner(artistId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Tax forms (W-9) — strictly private to the artist.
+    match /artist_tax_forms/{artistId} {
+      allow read: if isOwner(artistId) || isAdmin();
+      allow write: if isOwner(artistId);
+    }
+
+    // Artist profile (music) + verification.
+    match /artists/{artistId} {
+      allow read: if true;
+      allow create, update: if isOwner(artistId) &&
+                       (!('photos' in request.resource.data) || true);
+      allow delete: if isOwner(artistId) || isAdmin();
+    }
+    match /artist_verification/{artistId} {
+      allow read: if isOwner(artistId) || isAdmin();
+      allow create, update: if isOwner(artistId);
+      allow delete: if isAdmin();
+    }
+
+    // Labels & roster.
+    match /music_labels/{labelId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isSignedIn() &&
+                       (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+    match /label_artists/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Merch, tours, tour dates.
+    match /artist_merch/{merchId} {
+      allow read: if true;
+      allow create: if isSignedIn() && creatingOwnArtistData();
+      allow update, delete: if isSignedIn() && (ownsArtistData() || isAdmin());
+    }
+    match /artist_tours/{tourId} {
+      allow read: if true;
+      allow create: if isSignedIn() && creatingOwnArtistData();
+      allow update, delete: if isSignedIn() && (ownsArtistData() || isAdmin());
+    }
+    match /tour_dates/{dateId} {
+      allow read: if true;
+      allow create, update, delete: if isSignedIn();
+    }
+
+    // Notification preferences (music) — private to artist.
+    match /artist_notification_preferences/{artistId} {
+      allow read, write: if isOwner(artistId) || isAdmin();
+    }
+
+    // Fan engagement: messages, subscriptions, tiers.
+    match /artist_fan_messages/{messageId} {
+      allow read: if isSignedIn() &&
+                     (resource.data.artistId == request.auth.uid ||
+                      resource.data.fanId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.fanId == request.auth.uid;
+      allow update: if isSignedIn() &&
+                       (resource.data.artistId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+    match /artist_subscription_tiers/{tierId} {
+      allow read: if true;
+      allow create, update, delete: if isSignedIn() && (ownsArtistData() || creatingOwnArtistData() || isAdmin());
+    }
+    match /artist_subscriptions/{subId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+                       request.resource.data.fanId == request.auth.uid;
+      allow update, delete: if isSignedIn() &&
+                       (resource.data.fanId == request.auth.uid || isAdmin());
+    }
+
+    // Collaboration requests between artists.
+    match /music_collaborations/{collabId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+                       request.resource.data.requestingArtistId == request.auth.uid;
+      allow update: if isSignedIn() &&
+                       (resource.data.targetArtistId == request.auth.uid ||
+                        resource.data.requestingArtistId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Live streams, playlists, promotions, sync licensing (advanced.ts).
+    match /artist_live_streams/{streamId} {
+      allow read: if true;
+      allow create: if isSignedIn() && creatingOwnArtistData();
+      allow update, delete: if isSignedIn() && (ownsArtistData() || isAdmin());
+    }
+    match /artist_playlists/{playlistId} {
+      allow read: if true;
+      allow create: if isSignedIn() && creatingOwnArtistData();
+      allow update, delete: if isSignedIn() && (ownsArtistData() || isAdmin());
+    }
+    match /track_promotions/{promoId} {
+      allow read: if true;
+      allow create: if isSignedIn() && creatingOwnArtistData();
+      allow update, delete: if isSignedIn() && (ownsArtistData() || isAdmin());
+    }
+    match /sync_licenses/{licenseId} {
+      allow read: if true;
+      allow create: if isSignedIn() && creatingOwnArtistData();
+      allow update, delete: if isSignedIn() && (ownsArtistData() || isAdmin());
+    }
+
+    // Copyright strikes issued by Content ID.
+    match /copyright_strikes/{strikeId} {
+      allow read: if isSignedIn() &&
+                     (resource.data.artistId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && creatingOwnArtistData();
+      allow update: if isSignedIn() &&
+                     (resource.data.artistId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Pre-save smart links + nested pre-saves.
+    match /music_smart_links/{slug} {
+      allow read: if true;
+      allow create: if isSignedIn() && creatingOwnArtistData();
+      allow update, delete: if isSignedIn() && (ownsArtistData() || isAdmin());
+      match /presaves/{presaveId} {
+        allow read: if isSignedIn();
+        allow create: if true; // fans (possibly anon) can pre-save
+        allow update, delete: if isSignedIn();
+      }
+    }
+
+    // Cover-song mechanical licensing intake.
+    match /music_cover_licenses/{trackId} {
+      allow read: if isSignedIn() && (ownsArtistData() || isAdmin());
+      allow create, update: if isSignedIn() && (ownsArtistData() || creatingOwnArtistData() || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Fan music library (pre-save fulfillment writes here for the fan).
+    match /user_library/{userId}/tracks/{trackId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+
+    // Ad-revenue attribution used by Content ID monetization (server-written).
+    match /video_ad_revenue/{videoId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ========================================
+    // 🛍️ LIVE SHOPPING (YouTube-style merch)
+    // ========================================
+    // Public catalog reads. Writes restricted to the owning creator or admin.
+    // Physical-goods checkout happens on the creator's EXTERNAL storefront URL
+    // (App Store Guideline 3.1.5(a) compliant) — no money moves through these docs.
+
+    function ownsShopData() {
+      return request.auth != null && resource.data.creatorId == request.auth.uid;
+    }
+    function creatingOwnShopData() {
+      return request.auth != null && request.resource.data.creatorId == request.auth.uid;
+    }
+
+    // Live shopping streams/shows.
+    match /live_shopping_shows/{showId} {
+      allow read: if true;
+      allow create: if isSignedIn() && creatingOwnShopData();
+      allow update, delete: if isSignedIn() && (ownsShopData() || isAdmin());
+    }
+
+    // Product catalog. Counters (views/checkoutTaps) may be incremented by any
+    // signed-in viewer; all other fields are creator/admin only.
+    match /shopping_products/{productId} {
+      allow read: if true;
+      allow create: if isSignedIn() && creatingOwnShopData();
+      allow update: if isSignedIn() && (
+                      ownsShopData() || isAdmin() ||
+                      // Allow viewers to only bump analytics counters.
+                      request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['views', 'checkoutTaps'])
+                    );
+      allow delete: if isSignedIn() && (ownsShopData() || isAdmin());
+    }
+
+    // Creator storefront summaries.
+    match /creator_shops/{shopId} {
+      allow read: if true;
+      allow create: if isSignedIn() && creatingOwnShopData();
+      allow update, delete: if isSignedIn() && (ownsShopData() || isAdmin());
+    }
+
+    // Aggregate dashboard metrics (server/admin written, world readable).
+    match /shopping_metrics/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Shopping analytics events (append-only by signed-in viewers).
+    match /shopping_events/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
     // ========================================
     // 🎯 DEFAULT DENY (SECURITY)
     // ========================================

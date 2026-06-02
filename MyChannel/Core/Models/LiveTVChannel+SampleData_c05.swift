@@ -7,7 +7,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "nick-jr",
             name: "Nick Jr.",
-            logoURL: "https://i.ytimg.com/vi/nQ1c4_5fYYo/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video62/v4/53/33/33/53333372-6d23-07c8-6519-2f91fc98db6c/mzm.kpdggamc.lsr/600x600bb.jpg",
             streamURL: s_pbskids,
             category: .kids,
             description: "Preschool shows for little ones",
@@ -55,7 +55,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "garfield",
             name: "Garfield and Friends",
-            logoURL: "https://i.ytimg.com/vi/S_uTIqKLsO0/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video116/v4/73/ba/ed/73baed73-8073-557a-547a-173ae7e75271/pr_source.png/600x600bb.jpg",
             streamURL: s_kids2,
             category: .kids,
             description: "Lasagna-loving cat 24/7",
@@ -167,7 +167,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "mister-rogers",
             name: "Mister Rogers",
-            logoURL: "https://i.ytimg.com/vi/vmplK_MOEnc/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video69/v4/8d/ac/be/8dacbea7-2894-b6ae-3712-7a23bb459f50/mzl.soojzjrj.lsr/600x600bb.jpg",
             streamURL: s_pbskids,
             category: .kids,
             description: "Won't you be my neighbor? 24/7",
@@ -199,7 +199,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "strawberry-shortcake",
             name: "Strawberry Shortcake",
-            logoURL: "https://i.ytimg.com/vi/8wHDNMdGqzc/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video211/v4/ec/4f/2e/ec4f2e12-851f-5f11-5c81-4be51c9bd69c/Strawberry-Shortcake-Berry-in-the-Big-City_S3_3000x3000-Gracenote-Texted.jpg/600x600bb.jpg",
             streamURL: s_pbskids,
             category: .kids,
             description: "Sweet adventures 24/7",

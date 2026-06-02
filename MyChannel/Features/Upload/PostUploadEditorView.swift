@@ -250,14 +250,44 @@ struct PostUploadEditorView: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(AppTheme.Colors.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            
-            ProfessionalToggleRow(
-                title: "Public",
-                subtitle: "Anyone can search for and view",
-                icon: "globe",
-                isOn: $viewModel.isPublic
+
+            // 🔥 YouTube parity: full Public / Unlisted / Private picker
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Image(systemName: viewModel.visibility.iconName)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .frame(width: 24)
+                    Text("Visibility")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    Spacer()
+                }
+
+                Picker("Visibility", selection: $viewModel.visibility) {
+                    ForEach(Video.VisibilityStatus.allCases, id: \.self) { v in
+                        Text(v.displayName).tag(v)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: viewModel.visibility) { newValue in
+                    viewModel.isPublic = (newValue == .public)
+                }
+
+                Text(visibilityDescription)
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppTheme.Colors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppTheme.Colors.divider.opacity(0.2), lineWidth: 1)
+                    )
             )
-            
+
             ProfessionalToggleRow(
                 title: "Enable Comments",
                 subtitle: "Allow viewers to comment",
@@ -271,6 +301,22 @@ struct PostUploadEditorView: View {
                 icon: "18.circle",
                 isOn: $viewModel.ageRestricted
             )
+
+            // 🔥 COPPA compliance: Made for kids
+            ProfessionalToggleRow(
+                title: "Made for kids",
+                subtitle: "Required by law (COPPA). Limits data collection, personalized ads, and comments.",
+                icon: "figure.and.child.holdinghands",
+                isOn: $viewModel.madeForKids
+            )
+        }
+    }
+
+    private var visibilityDescription: String {
+        switch viewModel.visibility {
+        case .public: return "Anyone can search for and view this video."
+        case .unlisted: return "Anyone with the link can view. Won't appear in search or your channel."
+        case .private: return "Only you can view this video."
         }
     }
     
@@ -713,8 +759,10 @@ class PostUploadEditorViewModel: ObservableObject {
     @Published var category: VideoCategory
     @Published var tags: Set<String>
     @Published var isPublic: Bool
+    @Published var visibility: Video.VisibilityStatus
     @Published var commentsEnabled: Bool
     @Published var ageRestricted: Bool
+    @Published var madeForKids: Bool
     @Published var thumbnail: UIImage?
     
     // University content
@@ -738,10 +786,12 @@ class PostUploadEditorViewModel: ObservableObject {
         self.title = video.title
         self.description = video.description
         self.category = video.category
-        self.tags = [] // Set(video.tags) if available
-        self.isPublic = true // Default to public
-        self.commentsEnabled = true // Fetch from video settings
-        self.ageRestricted = false // Fetch from video settings
+        self.tags = Set(video.tags)
+        self.visibility = video.visibility
+        self.isPublic = video.visibility == .public
+        self.commentsEnabled = video.allowComments ?? true
+        self.ageRestricted = video.ageRestricted ?? false
+        self.madeForKids = video.madeForKids ?? false
         
         // 💰 Load existing monetization settings
         if let monetization = video.monetization {
@@ -763,8 +813,8 @@ class PostUploadEditorViewModel: ObservableObject {
             for await _ in Combine.Publishers.CombineLatest4(
                 $title,
                 $description,
-                Combine.Publishers.CombineLatest($category, $isPublic),
-                Combine.Publishers.CombineLatest($commentsEnabled, $ageRestricted)
+                Combine.Publishers.CombineLatest3($category, $isPublic, $visibility),
+                Combine.Publishers.CombineLatest4($commentsEnabled, $ageRestricted, $madeForKids, $tags)
             ).values {
                 self.hasChanges = true
             }
@@ -850,12 +900,23 @@ class PostUploadEditorViewModel: ObservableObject {
         
         // Proceed with saving metadata
         do {
+            // Resolve current visibility from the toggle (isPublic) unless the
+            // dedicated visibility picker changed it to unlisted/private.
+            let resolvedVisibility: Video.VisibilityStatus = {
+                if visibility != video.visibility { return visibility }
+                return isPublic ? .public : (video.visibility == .public ? .private : video.visibility)
+            }()
+
             try await VideoFirestoreService.shared.updateVideoMetadata(
                 videoId: video.id,
                 title: title != video.title ? title : nil,
                 description: description != video.description ? description : nil,
                 category: category != video.category ? category : nil,
-                tags: Array(tags) != video.tags ? Array(tags) : nil
+                tags: Array(tags) != video.tags ? Array(tags) : nil,
+                visibility: resolvedVisibility != video.visibility ? resolvedVisibility : nil,
+                madeForKids: madeForKids != (video.madeForKids ?? false) ? madeForKids : nil,
+                ageRestricted: ageRestricted != (video.ageRestricted ?? false) ? ageRestricted : nil,
+                allowComments: commentsEnabled != (video.allowComments ?? true) ? commentsEnabled : nil
             )
             
             // 💰 Save monetization settings if changed

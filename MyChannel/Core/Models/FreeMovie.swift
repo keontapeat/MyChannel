@@ -43,40 +43,65 @@ struct FreeMovie: Identifiable, Codable {
 
 // MARK: - Multi-source poster fallbacks
 extension FreeMovie {
+    /// Archive.org identifier parsed from the actual stream URL's `/download/<id>/`
+    /// path. This is the canonical identifier for the item and the most reliable
+    /// source for its cover image.
+    var archiveStreamIdentifier: String? {
+        guard let range = streamURL.range(of: "/download/") else { return nil }
+        let rest = streamURL[range.upperBound...]
+        let identifier: Substring
+        if let slash = rest.firstIndex(of: "/") {
+            identifier = rest[..<slash]
+        } else {
+            identifier = rest
+        }
+        return identifier.removingPercentEncoding ?? String(identifier)
+    }
+
+    /// Legacy identifier derived from the model `id` (e.g. `ia-the-kid-1921`).
+    /// Kept only as a low-priority fallback because these slugs do not always
+    /// match a real archive.org item.
     var archiveIdentifier: String? {
         if id.hasPrefix("ia-") {
             return String(id.dropFirst(3))
         }
-        if let range = streamURL.range(of: "/download/") {
-            let rest = streamURL[range.upperBound...]
-            if let slash = rest.firstIndex(of: "/") {
-                return String(rest[..<slash])
-            } else {
-                return String(rest)
-            }
-        }
-        return nil
+        return archiveStreamIdentifier
     }
     
     var posterCandidates: [URL] {
         var urls: [URL] = []
-        
+
+        // 1) Internet Archive cover derived from the REAL identifier embedded in the
+        //    stream URL (e.g. /download/CC_1921_02_06_TheKid/...). This is the most
+        //    reliable source for our catalog, so it goes first. Many of the hardcoded
+        //    TMDB poster hashes in sample data are stale/404, so we no longer trust
+        //    posterURL blindly ahead of the archive cover.
+        if let ia = archiveStreamIdentifier,
+           let u = URL(string: "https://archive.org/services/img/\(ia)") {
+            urls.append(u)
+        }
+
+        // 2) Explicit poster URL (TMDB or a curated YouTube thumbnail). Kept as a
+        //    strong candidate, but after the archive cover since TMDB hashes here
+        //    are frequently invalid.
         if !posterURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            let u = URL(string: posterURL) {
             urls.append(u)
         }
-        
+
+        // 3) Archive cover derived from the id slug (legacy fallback).
         if let ia = archiveIdentifier,
            let u = URL(string: "https://archive.org/services/img/\(ia)") {
             urls.append(u)
         }
-        
+
+        // 4) YouTube trailer thumbnail as a last resort.
         if let t = trailerURL,
            let vid = Self.youtubeID(from: t),
            let u = URL(string: "https://i.ytimg.com/vi/\(vid)/hqdefault.jpg") {
             urls.append(u)
         }
-        
+
         var seen = Set<String>()
         return urls.filter { seen.insert($0.absoluteString).inserted }
     }

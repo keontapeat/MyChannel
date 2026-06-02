@@ -180,86 +180,86 @@ struct TournamentBracket3DView: View {
     // MARK: - 🔥 REALISTIC BRACKET CONNECTORS (NBA-STYLE)
     
     private var bracketConnectors: some View {
-        GeometryReader { geometry in
+        GeometryReader { _ in
             ZStack {
                 // 🔥 REALISTIC CONNECTING LINES - NBA bracket style
-                ForEach(0..<tournament.rounds.count - 1, id: \.self) { roundIndex in
+                ForEach(0..<max(tournament.rounds.count - 1, 0), id: \.self) { roundIndex in
                     let currentRound = tournament.rounds[roundIndex]
-                    let nextRound = tournament.rounds[roundIndex + 1]
-                    
+
                     // Connect each match to next round
                     ForEach(Array(currentRound.matches.enumerated()), id: \.element.id) { matchIndex, match in
-                        if match.isCompleted, let _ = match.winner {
-                            // Calculate positions
-                            let startX = CGFloat(roundIndex) * 260 + 220
-                            let endX = CGFloat(roundIndex + 1) * 260 + 220
-                            
-                            // Match position in current round
-                            let matchSpacing: CGFloat = 140
-                            let startY = 65 + CGFloat(matchIndex) * matchSpacing
-                            
-                            // Find winner's position in next round
-                            let nextMatchIndex = matchIndex / 2
-                            let endY = 65 + CGFloat(nextMatchIndex) * matchSpacing
-                            
-                            // 🔥 REALISTIC BRACKET LINE (L-shaped)
-                            Path { path in
-                                // Horizontal line from match
-                                path.move(to: CGPoint(x: startX, y: startY))
-                                path.addLine(to: CGPoint(x: startX + 20, y: startY))
-                                
-                                // Vertical line to next round level
-                                path.addLine(to: CGPoint(x: startX + 20, y: endY))
-                                
-                                // Horizontal line to next round
-                                path.addLine(to: CGPoint(x: endX, y: endY))
-                            }
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        AppTheme.Colors.primary.opacity(0.6),
-                                        AppTheme.Colors.primary.opacity(0.4),
-                                        AppTheme.Colors.primary.opacity(0.2)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
-                            )
-                            .shadow(
-                                color: AppTheme.Colors.primary.opacity(0.4),
-                                radius: 6,
-                                x: 0,
-                                y: 2
-                            )
-                            
-                            // 🔥 WINNER INDICATOR (glowing dot)
-                            Circle()
-                                .fill(
-                                    RadialGradient(
-                                        colors: [
-                                            AppTheme.Colors.primary,
-                                            AppTheme.Colors.primary.opacity(0.6),
-                                            Color.clear
-                                        ],
-                                        center: .center,
-                                        startRadius: 2,
-                                        endRadius: 8
-                                    )
-                                )
-                                .frame(width: 8, height: 8)
-                                .position(x: endX, y: endY)
-                                .shadow(
-                                    color: AppTheme.Colors.primary.opacity(0.6),
-                                    radius: 8,
-                                    x: 0,
-                                    y: 0
-                                )
+                        if match.isCompleted, match.winner != nil {
+                            connector(roundIndex: roundIndex, matchIndex: matchIndex)
                         }
                     }
                 }
             }
         }
+    }
+
+    // MARK: - Single Bracket Connector (extracted to keep type-checking fast)
+    @ViewBuilder
+    private func connector(roundIndex: Int, matchIndex: Int) -> some View {
+        // Calculate positions
+        let startX = CGFloat(roundIndex) * 260 + 220
+        let endX = CGFloat(roundIndex + 1) * 260 + 220
+
+        // Match position in current round
+        let matchSpacing: CGFloat = 140
+        let startY = 65 + CGFloat(matchIndex) * matchSpacing
+
+        // Find winner's position in next round
+        let nextMatchIndex = matchIndex / 2
+        let endY = 65 + CGFloat(nextMatchIndex) * matchSpacing
+
+        ZStack {
+            // 🔥 REALISTIC BRACKET LINE (L-shaped)
+            Path { path in
+                // Horizontal line from match
+                path.move(to: CGPoint(x: startX, y: startY))
+                path.addLine(to: CGPoint(x: startX + 20, y: startY))
+
+                // Vertical line to next round level
+                path.addLine(to: CGPoint(x: startX + 20, y: endY))
+
+                // Horizontal line to next round
+                path.addLine(to: CGPoint(x: endX, y: endY))
+            }
+            .stroke(connectorGradient, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+            .shadow(color: AppTheme.Colors.primary.opacity(0.4), radius: 6, x: 0, y: 2)
+
+            // 🔥 WINNER INDICATOR (glowing dot)
+            Circle()
+                .fill(winnerDotGradient)
+                .frame(width: 8, height: 8)
+                .position(x: endX, y: endY)
+                .shadow(color: AppTheme.Colors.primary.opacity(0.6), radius: 8, x: 0, y: 0)
+        }
+    }
+
+    private var connectorGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                AppTheme.Colors.primary.opacity(0.6),
+                AppTheme.Colors.primary.opacity(0.4),
+                AppTheme.Colors.primary.opacity(0.2)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
+    private var winnerDotGradient: RadialGradient {
+        RadialGradient(
+            colors: [
+                AppTheme.Colors.primary,
+                AppTheme.Colors.primary.opacity(0.6),
+                Color.clear
+            ],
+            center: .center,
+            startRadius: 2,
+            endRadius: 8
+        )
     }
     
     // MARK: - 🔥 REALISTIC BRACKET ROUND (NBA-STYLE)

@@ -55,7 +55,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "ridiculousness",
             name: "Ridiculousness",
-            logoURL: "https://i.ytimg.com/vi/mShOAzli-5s/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video60/v4/3f/6c/1d/3f6c1d99-4137-b66d-a35f-d40fa5d60ffe/mzl.smusveuq.lsr/600x600bb.jpg",
             streamURL: s_entertain1,
             category: .comedy,
             description: "Rob Dyrdek! 24/7 😂📱",
@@ -187,7 +187,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "survivor",
             name: "Survivor",
-            logoURL: "https://i.ytimg.com/vi/wnNPL1BFSTU/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Features/c0/45/a2/dj.ccllwbph.jpg/600x600bb.jpg",
             streamURL: s_reality1,
             category: .reality,
             description: "Outwit. Outplay. Outlast. 24/7",
@@ -203,7 +203,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "amazing-race",
             name: "The Amazing Race",
-            logoURL: "https://i.ytimg.com/vi/gZp1bz4T3cs/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video1/v4/be/8f/a4/be8fa42f-1336-dd12-ad5e-f34fa8f85e16/mzl.inpojjko.lsr/600x600bb.jpg",
             streamURL: s_reality1,
             category: .reality,
             description: "Race around the world 24/7",
@@ -219,7 +219,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "ink-master",
             name: "Ink Master",
-            logoURL: "https://i.ytimg.com/vi/3fV3ERyWBHo/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video118/v4/6d/9a/05/6d9a05ad-bf72-3704-9931-b4fec0cc08d7/mzl.kexftmij.lsr/600x600bb.jpg",
             streamURL: s_reality1,
             category: .reality,
             description: "Tattoo competition 24/7",
@@ -252,7 +252,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "wild-n-out",
             name: "Wild 'N Out",
-            logoURL: "https://i.ytimg.com/vi/mTvIvHwACYY/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Features/31/79/12/dj.rrwkdjsc.jpg/600x600bb.jpg",
             streamURL: s_entertain2,
             category: .comedy,
             description: "Nick Cannon's Wild 'N Out 24/7",
@@ -268,7 +268,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "tosh",
             name: "Tosh.0",
-            logoURL: "https://i.ytimg.com/vi/N0Qbe3fNZ_A/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Features/v4/2b/d7/ec/2bd7ecfb-d07b-4053-e38a-b5eb3bbe1a91/mza_6674222021050700152.jpg/600x600bb.jpg",
             streamURL: s_entertain2,
             category: .comedy,
             description: "Daniel Tosh comedy 24/7",

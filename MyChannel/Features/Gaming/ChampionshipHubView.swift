@@ -17,6 +17,11 @@ struct ChampionshipHubView: View {
     @State private var shelfOffset: CGFloat = 0
     @State private var aiRankingConfidence: Double = 0
     @State private var isAIRefreshing: Bool = false
+    @State private var hasLoaded: Bool = false
+    
+    private var currentUserId: String? {
+        AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id
+    }
     
     private func safeInt(_ value: Double, fallback: Int = 0) -> Int {
         guard value.isFinite else { return fallback }
@@ -43,12 +48,54 @@ struct ChampionshipHubView: View {
         .background(AppTheme.Colors.background)
         .navigationTitle("Championship Games")
         .navigationBarTitleDisplayMode(.large)
+        .refreshable { await loadData(force: true) }
+        .overlay(alignment: .top) {
+            if medalSystem.isLoading && !hasLoaded {
+                ProgressView()
+                    .padding(.top, 8)
+            }
+        }
         .onAppear {
             withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
                 flameScale = 1.12
             }
-            Task { await trackHubOpened() }
+            Task {
+                await trackHubOpened()
+                await loadData(force: false)
+            }
         }
+    }
+    
+    // MARK: - Data Loading
+    
+    private func loadData(force: Bool) async {
+        if hasLoaded && !force { return }
+        await medalSystem.refreshAll(currentUserId: currentUserId)
+        if let uid = currentUserId {
+            await tournamentService.loadVictories(for: uid)
+        }
+        hasLoaded = true
+        // Auto-select a division that actually has rankings to show, if Gold is empty.
+        if (medalSystem.rankings[selectedDivision]?.isEmpty ?? true) {
+            if let populated = ChampionshipBeltSystem.ChampionshipDivision.allCases
+                .first(where: { !(medalSystem.rankings[$0]?.isEmpty ?? true) }) {
+                selectedDivision = populated
+            }
+        }
+        // Kick off an AI ranking confidence pass for the visible division.
+        await refreshAIConfidence(for: selectedDivision)
+    }
+    
+    private func refreshAIConfidence(for division: ChampionshipBeltSystem.ChampionshipDivision) async {
+        let competitors = medalSystem.rankings[division] ?? []
+        guard !competitors.isEmpty else { return }
+        isAIRefreshing = true
+        defer { isAIRefreshing = false }
+        let result = await aiOrchestrator.refreshRankingsWithAI(
+            division: division.rawValue,
+            currentUserIds: competitors.map { $0.userId }
+        )
+        aiRankingConfidence = result.avgConfidence
     }
 
     // MARK: - AI Tracking
@@ -64,15 +111,7 @@ struct ChampionshipHubView: View {
                         ?? AppState.shared.currentUser?.id else { return }
         Task {
             await aiOrchestrator.trackChampionshipEvent(userId: userId, event: .divisionSwitched)
-            isAIRefreshing = true
-            defer { isAIRefreshing = false }
-            let competitors = medalSystem.rankings[division] ?? []
-            guard !competitors.isEmpty else { return }
-            let result = await aiOrchestrator.refreshRankingsWithAI(
-                division: division.rawValue,
-                currentUserIds: competitors.map { $0.userId }
-            )
-            aiRankingConfidence = result.avgConfidence
+            await refreshAIConfidence(for: division)
         }
     }
 
@@ -149,7 +188,7 @@ struct ChampionshipHubView: View {
                     .foregroundColor(AppTheme.Colors.textPrimary)
                     .tracking(1.2)
 
-                Text("\(medalSystem.allMedals.count) divisions  •  Compete to be #1")
+                Text("\(ChampionshipBeltSystem.ChampionshipDivision.allCases.count) divisions  •  Compete to be #1")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textSecondary)
 
@@ -376,6 +415,7 @@ struct ChampionshipHubView: View {
                 MedalCard(
                     medal: medal,
                     champion: medalSystem.champions[medal.id],
+                    championProfile: medalSystem.champions[medal.id].flatMap { medalSystem.profile(for: $0.userId) },
                     isSelected: selectedDivision == medal.division
                 ) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
@@ -438,7 +478,8 @@ struct ChampionshipHubView: View {
                     first: rankings[0],
                     second: rankings[1],
                     third: rankings[2],
-                    division: selectedDivision
+                    division: selectedDivision,
+                    profiles: medalSystem.profiles
                 )
                 .padding(.horizontal, 20)
             }
@@ -447,7 +488,12 @@ struct ChampionshipHubView: View {
             if let rankings = medalSystem.rankings[selectedDivision], !rankings.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(Array(rankings.enumerated()), id: \.element.id) { idx, competitor in
-                        CompetitorRankingCard(competitor: competitor, division: selectedDivision)
+                        CompetitorRankingCard(
+                            competitor: competitor,
+                            division: selectedDivision,
+                            profile: medalSystem.profile(for: competitor.userId),
+                            isCurrentUser: competitor.userId == currentUserId
+                        )
                         if idx < rankings.count - 1 {
                             Divider()
                                 .padding(.leading, 72)
@@ -511,7 +557,9 @@ struct ChampionshipHubView: View {
                     Text("Upcoming Title Defenses")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
-                    Text("Next scheduled match")
+                    Text(medalSystem.titleDefenses.isEmpty
+                         ? "Next scheduled match"
+                         : "\(medalSystem.titleDefenses.count) scheduled")
                         .font(.system(size: 12))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
@@ -519,25 +567,38 @@ struct ChampionshipHubView: View {
             }
             .padding(.horizontal, 20)
 
-            ZStack {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(AppTheme.Colors.surface)
-                    .padding(.horizontal, 20)
+            if medalSystem.titleDefenses.isEmpty {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(AppTheme.Colors.surface)
+                        .padding(.horizontal, 20)
 
-                VStack(spacing: 6) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 28, weight: .light))
-                        .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.5))
-                    Text("No defenses scheduled")
-                        .font(.system(size: 14))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                    Text("Earn a championship to defend it")
-                        .font(.system(size: 12))
-                        .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.6))
+                    VStack(spacing: 6) {
+                        Image(systemName: "calendar.badge.clock")
+                            .font(.system(size: 28, weight: .light))
+                            .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.5))
+                        Text("No defenses scheduled")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        Text("Earn a championship to defend it")
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.textSecondary.opacity(0.6))
+                    }
+                    .padding(.vertical, 32)
                 }
-                .padding(.vertical, 32)
+                .frame(height: 110)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(medalSystem.titleDefenses) { defense in
+                        TitleDefenseCard(
+                            defense: defense,
+                            championProfile: medalSystem.profile(for: defense.championId),
+                            challengerProfile: medalSystem.profile(for: defense.challengerId)
+                        )
+                    }
+                }
+                .padding(.horizontal, 20)
             }
-            .frame(height: 110)
         }
     }
 }
@@ -584,6 +645,7 @@ private extension ChampionshipBeltSystem.ChampionshipDivision {
 struct MedalCard: View {
     let medal: ChampionshipBeltSystem.ChampionshipMedal
     let champion: ChampionshipBeltSystem.Champion?
+    let championProfile: User?
     let isSelected: Bool
     let action: () -> Void
 
@@ -620,20 +682,23 @@ struct MedalCard: View {
                 VStack(spacing: 5) {
                     if let champion = champion {
                         HStack(spacing: 6) {
-                            Circle()
-                                .fill(medal.division.swiftUIColor.opacity(0.25))
-                                .frame(width: 24, height: 24)
-                                .overlay(
-                                    Text(String(champion.userId.prefix(1)).uppercased())
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(medal.division.swiftUIColor)
-                                )
-                            Text("@\(champion.userId.prefix(8))")
+                            ChampionAvatar(
+                                profile: championProfile,
+                                userId: champion.userId,
+                                tint: medal.division.swiftUIColor,
+                                size: 24
+                            )
+                            Text(championProfile.map { "@\($0.username)" } ?? "@\(champion.userId.prefix(8))")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(AppTheme.Colors.textPrimary)
                                 .lineLimit(1)
+                            if championProfile?.isVerified == true {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(medal.division.swiftUIColor)
+                            }
                         }
-                        Text("\(champion.defenses) defenses")
+                        Text(champion.defenses == 1 ? "1 defense" : "\(champion.defenses) defenses")
                             .font(.system(size: 10))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     } else {
@@ -673,11 +738,54 @@ struct MedalCard: View {
     }
 }
 
+// MARK: - Champion Avatar (real photo or initial fallback)
+
+struct ChampionAvatar: View {
+    let profile: User?
+    let userId: String
+    let tint: Color
+    var size: CGFloat = 38
+
+    private var initial: String {
+        let source = profile?.displayName ?? profile?.username ?? userId
+        return String(source.prefix(1)).uppercased()
+    }
+
+    var body: some View {
+        Group {
+            if let urlString = profile?.profileImageURL,
+               let url = URL(string: urlString), !urlString.isEmpty {
+                CachedAsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    fallback
+                }
+            } else {
+                fallback
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+
+    private var fallback: some View {
+        Circle()
+            .fill(tint.opacity(0.22))
+            .overlay(
+                Text(initial)
+                    .font(.system(size: size * 0.42, weight: .bold))
+                    .foregroundColor(tint)
+            )
+    }
+}
+
 // MARK: - Competitor Ranking Card
 
 struct CompetitorRankingCard: View {
     let competitor: ChampionshipBeltSystem.RankedCompetitor
     let division: ChampionshipBeltSystem.ChampionshipDivision
+    let profile: User?
+    var isCurrentUser: Bool = false
     
     private func safeInt(_ value: Double, fallback: Int = 0) -> Int {
         guard value.isFinite else { return fallback }
@@ -691,6 +799,10 @@ struct CompetitorRankingCard: View {
         case 3: return Color(red:0.72,green:0.45,blue:0.20)
         default: return AppTheme.Colors.primary
         }
+    }
+
+    private var usernameText: String {
+        profile.map { "@\($0.username)" } ?? "@\(competitor.userId.prefix(10))"
     }
 
     var body: some View {
@@ -710,23 +822,34 @@ struct CompetitorRankingCard: View {
                     .foregroundColor(rankColor)
             }
 
-            // Avatar
-            Circle()
-                .fill(division.swiftUIColor.opacity(0.18))
-                .frame(width: 38, height: 38)
-                .overlay(
-                    Text(String(competitor.userId.prefix(1)).uppercased())
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(division.swiftUIColor)
-                )
+            // Avatar (real photo or initial)
+            ChampionAvatar(
+                profile: profile,
+                userId: competitor.userId,
+                tint: division.swiftUIColor,
+                size: 38
+            )
 
             // Info
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text("@\(competitor.userId.prefix(10))")
+                    Text(usernameText)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
-                    if competitor.isContender {
+                        .lineLimit(1)
+                    if profile?.isVerified == true {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(division.swiftUIColor)
+                    }
+                    if isCurrentUser {
+                        Text("YOU")
+                            .font(.system(size: 8, weight: .black))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(division.swiftUIColor))
+                    } else if competitor.isContender {
                         Text("CONTENDER")
                             .font(.system(size: 8, weight: .black))
                             .foregroundColor(.white)
@@ -767,6 +890,11 @@ struct CompetitorRankingCard: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .background(
+            isCurrentUser
+                ? division.swiftUIColor.opacity(0.06)
+                : Color.clear
+        )
     }
 }
 
@@ -777,6 +905,7 @@ struct OlympicPodiumView: View {
     let second: ChampionshipBeltSystem.RankedCompetitor
     let third: ChampionshipBeltSystem.RankedCompetitor
     let division: ChampionshipBeltSystem.ChampionshipDivision
+    var profiles: [String: User] = [:]
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 10) {
@@ -811,6 +940,8 @@ struct OlympicPodiumView: View {
             : rank == 2
                 ? Color(red:0.75,green:0.75,blue:0.80)
                 : Color(red:0.72,green:0.45,blue:0.20)
+        let profile = profiles[competitor.userId]
+        let nameText = profile.map { "@\($0.username)" } ?? "@\(competitor.userId.prefix(7))"
 
         VStack(spacing: 6) {
             // Rank crown/number
@@ -822,24 +953,24 @@ struct OlympicPodiumView: View {
                     .font(.system(size: rank == 1 ? 18 : 14))
             }
 
-            // Avatar
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: division.gradientColors,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: rank == 1 ? 52 : 42, height: rank == 1 ? 52 : 42)
-                .overlay(
-                    Text(String(competitor.userId.prefix(1)).uppercased())
-                        .font(.system(size: rank == 1 ? 20 : 16, weight: .black))
-                        .foregroundColor(.white)
-                )
-                .shadow(color: division.swiftUIColor.opacity(0.4), radius: 8, x: 0, y: 4)
+            // Avatar (real photo or initial)
+            ZStack {
+                if let urlString = profile?.profileImageURL,
+                   let url = URL(string: urlString), !urlString.isEmpty {
+                    CachedAsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        podiumInitial(competitor: competitor, rank: rank)
+                    }
+                } else {
+                    podiumInitial(competitor: competitor, rank: rank)
+                }
+            }
+            .frame(width: rank == 1 ? 52 : 42, height: rank == 1 ? 52 : 42)
+            .clipShape(Circle())
+            .shadow(color: division.swiftUIColor.opacity(0.4), radius: 8, x: 0, y: 4)
 
-            Text("@\(competitor.userId.prefix(7))")
+            Text(nameText)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(AppTheme.Colors.textPrimary)
                 .lineLimit(1)
@@ -872,6 +1003,22 @@ struct OlympicPodiumView: View {
             .frame(height: height)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func podiumInitial(competitor: ChampionshipBeltSystem.RankedCompetitor, rank: Int) -> some View {
+        Circle()
+            .fill(
+                LinearGradient(
+                    colors: division.gradientColors,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(
+                Text(String((profiles[competitor.userId]?.displayName ?? competitor.userId).prefix(1)).uppercased())
+                    .font(.system(size: rank == 1 ? 20 : 16, weight: .black))
+                    .foregroundColor(.white)
+            )
     }
 }
 
@@ -1061,6 +1208,96 @@ struct TournamentVictoryCard: View {
             }
         )
         .shadow(color: Color(red:1,green:0.84,blue:0).opacity(0.12), radius: 8, x: 0, y: 4)
+    }
+}
+
+// MARK: - Title Defense Card
+
+struct TitleDefenseCard: View {
+    let defense: ChampionshipBeltSystem.TitleDefense
+    let championProfile: User?
+    let challengerProfile: User?
+
+    private var divisionColor: Color {
+        defense.division?.swiftUIColor ?? AppTheme.Colors.primary
+    }
+
+    private var countdownText: String {
+        let interval = defense.scheduledDate.timeIntervalSinceNow
+        if interval <= 0 { return "Starting soon" }
+        let days = Int(interval) / 86_400
+        let hours = (Int(interval) % 86_400) / 3_600
+        if days > 0 { return "in \(days)d \(hours)h" }
+        let minutes = (Int(interval) % 3_600) / 60
+        if hours > 0 { return "in \(hours)h \(minutes)m" }
+        return "in \(minutes)m"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Division medal icon
+            ZStack {
+                Circle()
+                    .fill(divisionColor.opacity(0.16))
+                    .frame(width: 46, height: 46)
+                Text(defense.division?.icon ?? "🛡️")
+                    .font(.system(size: 22))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(defense.division?.shortName ?? "Title")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    if defense.status == .live {
+                        HStack(spacing: 3) {
+                            Circle().fill(Color.red).frame(width: 5, height: 5)
+                            Text("LIVE")
+                                .font(.system(size: 8, weight: .black))
+                                .foregroundColor(.red)
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.red.opacity(0.12)))
+                    }
+                }
+
+                // Champion vs challenger
+                HStack(spacing: 5) {
+                    Text(championProfile.map { "@\($0.username)" } ?? "@\(defense.championId.prefix(8))")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(divisionColor)
+                        .lineLimit(1)
+                    Text("vs")
+                        .font(.system(size: 10))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    Text(challengerProfile.map { "@\($0.username)" } ?? "@\(defense.challengerId.prefix(8))")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(countdownText)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(divisionColor)
+                Text(defense.scheduledDate.formatted(date: .abbreviated, time: .shortened))
+                    .font(.system(size: 9))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+        }
+        .padding(14)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(AppTheme.Colors.surface)
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(divisionColor.opacity(0.22), lineWidth: 1)
+            }
+        )
     }
 }
 

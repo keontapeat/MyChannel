@@ -171,7 +171,7 @@ const NuclearFlicksPage = () => {
     setError(null);
     
     try {
-      const flicksRef = collection(db, 'shorts');
+      const flicksRef = collection(db, 'flicks');
       const q = query(flicksRef, orderBy('createdAt', 'desc'), limit(20));
       const snapshot = await getDocs(q);
       
@@ -228,7 +228,7 @@ const NuclearFlicksPage = () => {
     setIsLoadingMore(true);
     
     try {
-      const flicksRef = collection(db, 'shorts');
+      const flicksRef = collection(db, 'flicks');
       const q = query(
         flicksRef,
         orderBy('createdAt', 'desc'),

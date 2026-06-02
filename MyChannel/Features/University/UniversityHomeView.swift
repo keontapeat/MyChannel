@@ -182,6 +182,10 @@ struct UniversityHomeView: View {
                 .padding(.top, 12)
                 .padding(.horizontal, 16)
 
+            streakWeekStrip
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
             if !viewModel.continueLearningVideos.isEmpty {
                 premiumContinueWatchingCard(video: viewModel.continueLearningVideos[0])
                     .padding(.horizontal, 16)
@@ -219,10 +223,105 @@ struct UniversityHomeView: View {
         }
     }
 
+    // MARK: - Streak Week Strip (Duolingo-style 7-day calendar)
+
+    private var streakWeekStrip: some View {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let formatter = UniversityStreakService.dayFormatter
+        let activeSet = Set(viewModel.recentActiveDays)
+        // Last 7 days, oldest → newest
+        let days: [(date: Date, key: String, label: String)] = (0..<7).reversed().map { offset in
+            let date = calendar.date(byAdding: .day, value: -offset, to: today) ?? today
+            let key = formatter.string(from: date)
+            let symbols = calendar.shortWeekdaySymbols
+            let weekdayIndex = (calendar.component(.weekday, from: date) - 1)
+            let label = String(symbols[weekdayIndex].prefix(1))
+            return (date, key, label)
+        }
+
+        return VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(Color(.systemOrange))
+                Text("\(viewModel.streaksAndGoals.currentStreak)-Day Streak")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(Color(.label))
+                Spacer()
+                if viewModel.streakFreezesAvailable > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "snowflake")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("\(viewModel.streakFreezesAvailable)")
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                    .foregroundColor(Color(.systemTeal))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(Color(.systemTeal).opacity(0.12), in: Capsule())
+                }
+            }
+
+            HStack(spacing: 0) {
+                ForEach(days, id: \.key) { day in
+                    let isActive = activeSet.contains(day.key)
+                    let isToday = day.key == formatter.string(from: today)
+                    VStack(spacing: 6) {
+                        Text(day.label)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color(.secondaryLabel))
+                        ZStack {
+                            Circle()
+                                .fill(isActive ? Color(.systemOrange) : Color(.secondarySystemBackground))
+                                .frame(width: 34, height: 34)
+                            if isActive {
+                                Image(systemName: "flame.fill")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundColor(.white)
+                            } else if isToday {
+                                Circle()
+                                    .stroke(Color(.systemOrange).opacity(0.6), lineWidth: 1.5)
+                                    .frame(width: 34, height: 34)
+                            }
+                        }
+                        .overlay(
+                            Circle()
+                                .stroke(isToday ? Color(.systemOrange) : Color.clear, lineWidth: 2)
+                                .frame(width: 40, height: 40)
+                        )
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+
+            // Daily goal progress
+            if viewModel.streaksAndGoals.dailyGoal != nil || viewModel.streaksAndGoals.todayProgress > 0 {
+                let goalMet = viewModel.streaksAndGoals.todayGoalMet
+                HStack(spacing: 8) {
+                    Image(systemName: goalMet ? "checkmark.circle.fill" : "target")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(goalMet ? UniversityTheme.Colors.verified : Color(.secondaryLabel))
+                    Text(goalMet ? "Daily goal complete — streak secured today!" : "Keep learning to secure today's streak")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(.secondaryLabel))
+                    Spacer()
+                }
+            }
+        }
+        .padding(16)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color(.separator).opacity(0.55), lineWidth: 0.8)
+        )
+        .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 3)
+    }
+
     // MARK: - Stats Hero Grid (replaces gradient hero card)
 
-    private var statsHeroGrid: some View {
-        VStack(spacing: 12) {
+    private var statsHeroGrid: some View {        VStack(spacing: 12) {
             HStack(spacing: 12) {
                 statTile(
                     value: "\(Int(viewModel.totalUniversityHours))",
@@ -250,7 +349,9 @@ struct UniversityHomeView: View {
                 statTile(
                     value: "\(viewModel.streaksAndGoals.currentStreak)",
                     unit: "Day Streak",
-                    label: "Current Learning Streak: \(viewModel.streaksAndGoals.currentStreak) Days",
+                    label: viewModel.streaksAndGoals.currentStreak > 0
+                        ? "Best: \(viewModel.streaksAndGoals.longestStreak) days"
+                        : "Start your learning streak",
                     icon: "flame.fill",
                     iconColor: Color(.systemOrange)
                 )
@@ -264,9 +365,9 @@ struct UniversityHomeView: View {
                     iconColor: UniversityTheme.Colors.accent
                 )
                 statTile(
-                    value: "#\(viewModel.globalRank)",
+                    value: viewModel.globalRank > 0 ? "#\(viewModel.globalRank)" : "—",
                     unit: "",
-                    label: "Rank: #\(viewModel.globalRank) (out of 1.5M)",
+                    label: viewModel.globalRank > 0 ? "Global Rank" : "Earn points to rank",
                     icon: "chart.bar.fill",
                     iconColor: Color(.systemPurple)
                 )
@@ -672,7 +773,7 @@ struct UniversityHomeView: View {
 
             sectionDivider
 
-            sectionHeader(title: "Badges \(viewModel.badges.count)/\(viewModel.totalBadges)", icon: "rosette")
+            sectionHeader(title: "Badges \(viewModel.earnedBadgeCount)/\(viewModel.totalBadges)", icon: "rosette")
                 .padding(.horizontal, 16)
             badgesSection
                 .padding(.horizontal, 16)
@@ -690,7 +791,7 @@ struct UniversityHomeView: View {
         HStack(spacing: 12) {
             statsOverviewTile(icon: "trophy.fill", value: "\(viewModel.totalAchievements)", label: "Achievements", iconColor: UniversityTheme.Colors.certificateGold)
             statsOverviewTile(icon: "star.fill", value: "\(viewModel.totalPoints)", label: "Points", iconColor: Color(.systemPurple))
-            statsOverviewTile(icon: "chart.bar.fill", value: "#\(viewModel.globalRank)", label: "Global Rank", iconColor: Color(.systemBlue))
+            statsOverviewTile(icon: "chart.bar.fill", value: viewModel.globalRank > 0 ? "#\(viewModel.globalRank)" : "—", label: "Global Rank", iconColor: Color(.systemBlue))
         }
     }
 
@@ -732,24 +833,42 @@ struct UniversityHomeView: View {
 
     private var leaderboardSection: some View {
         VStack(spacing: 0) {
-            ForEach(Array(viewModel.topLearners.prefix(5).enumerated()), id: \.element.id) { index, learner in
-                UniversityLeaderboardRow(learner: learner)
-                if index < min(4, viewModel.topLearners.count - 1) {
-                    Divider().padding(.leading, 58)
-                }
-            }
-
-            NavigationLink(destination: GlobalLeaderboardView()) {
-                HStack {
-                    Text("View Full Leaderboard")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(UniversityTheme.Colors.accent)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+            if viewModel.topLearners.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(.system(size: 32, weight: .thin))
                         .foregroundColor(Color(.tertiaryLabel))
+                    Text("Be the first on the leaderboard")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Color(.label))
+                    Text("Earn points by learning daily and completing certificates.")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(.secondaryLabel))
+                        .multilineTextAlignment(.center)
                 }
-                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 28)
+            } else {
+                ForEach(Array(viewModel.topLearners.prefix(5).enumerated()), id: \.element.id) { index, learner in
+                    UniversityLeaderboardRow(learner: learner)
+                    if index < min(4, viewModel.topLearners.count - 1) {
+                        Divider().padding(.leading, 58)
+                    }
+                }
+
+                NavigationLink(destination: GlobalLeaderboardView()) {
+                    HStack {
+                        Text("View Full Leaderboard")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(UniversityTheme.Colors.accent)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Color(.tertiaryLabel))
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 14)
+                }
             }
         }
         .background(Color(.secondarySystemBackground))

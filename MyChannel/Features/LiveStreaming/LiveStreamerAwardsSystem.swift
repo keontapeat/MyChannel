@@ -20,10 +20,25 @@ class LiveStreamerAwardsSystem: ObservableObject {
     @Published var upcomingAwards: [AwardCeremony] = []
     @Published var myAchievements: [Achievement] = []
     @Published var myBadges: [Badge] = []
-    
+
+    /// Currently applied leaderboard filters.
+    @Published private(set) var activeTimeframe: Timeframe = .weekly
+    @Published private(set) var activeCategory: LeaderboardCategory = .overall
+
+    /// Full roster used to derive filtered leaderboards. Seeded once.
+    private var roster: [StreamerRanking] = []
+
+    /// The current user's standing in the unfiltered overall leaderboard.
+    private var overallMyRanking: StreamerRanking?
+
+    /// Total number of ranked streamers on the platform (used for percentile math).
+    let totalStreamerCount = 12_480
+
     private init() {
         currentSeason = AwardSeason.current()
         loadRankings()
+        restoreVotes()
+        applyFilters(timeframe: activeTimeframe, category: activeCategory)
     }
     
     // MARK: - 🏆 AWARD CATEGORIES
@@ -181,6 +196,7 @@ class LiveStreamerAwardsSystem: ObservableObject {
         var rank: Int
         var points: Int
         var previousRank: Int?
+        var leaderboardCategory: LeaderboardCategory = .overall
         
         // Stats
         var totalHoursStreamed: Double
@@ -198,6 +214,9 @@ class LiveStreamerAwardsSystem: ObservableObject {
         var categoryScores: [AwardCategory: Int]
         var achievements: [Achievement]
         var badges: [Badge]
+
+        /// Baseline (all-time) points used as the source for timeframe scaling.
+        var seasonPoints: Int = 0
         
         var rankChange: Int? {
             guard let previous = previousRank else { return nil }
@@ -349,6 +368,76 @@ class LiveStreamerAwardsSystem: ObservableObject {
         // Record vote
         // Update vote count
     }
+
+    // MARK: - 🗳️ Local Voting State
+    //
+    // Lightweight, instantly-responsive vote tracking for the UI. One vote per
+    // category (changeable), persisted across launches. When real nominee user
+    // IDs and auth are available this hands off to StreamerAwardsVotingService.
+
+    /// categoryId -> the nominee the user voted for in that category.
+    @Published private(set) var votedNomineeByCategory: [String: String] = [:]
+    /// nomineeId -> locally-applied vote boost (optimistic increment).
+    @Published private(set) var localVoteBoost: [String: Int] = [:]
+
+    private static let votesDefaultsKey = "streamerAwards.localVotes.v1"
+
+    /// True if the user has already voted in the given category.
+    func hasVoted(inCategory categoryId: String) -> Bool {
+        votedNomineeByCategory[categoryId] != nil
+    }
+
+    /// True if this specific nominee is the user's pick for its category.
+    func didVote(forNominee nomineeId: String, inCategory categoryId: String) -> Bool {
+        votedNomineeByCategory[categoryId] == nomineeId
+    }
+
+    /// Extra votes the user has contributed to a nominee locally.
+    func voteBoost(forNominee nomineeId: String) -> Int {
+        localVoteBoost[nomineeId] ?? 0
+    }
+
+    /// Casts (or moves) the user's single vote for a category.
+    func castVote(nomineeId: String, categoryId: String) {
+        guard votedNomineeByCategory[categoryId] != nomineeId else { return }
+
+        // Moving a vote: remove the boost from the previous pick.
+        if let previous = votedNomineeByCategory[categoryId] {
+            localVoteBoost[previous] = max(0, (localVoteBoost[previous] ?? 0) - 1)
+        }
+        localVoteBoost[nomineeId, default: 0] += 1
+        votedNomineeByCategory[categoryId] = nomineeId
+
+        persistVotes()
+
+        #if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        #endif
+
+        // NOTE: When real nominee user IDs + auth are wired, hand off to
+        // StreamerAwardsVotingService.submitVote(categoryId:nomineeUserId:userId:)
+        // here to persist the vote server-side. The local state above keeps the
+        // UI responsive in the meantime.
+    }
+
+    private func persistVotes() {
+        let payload = LocalVotePayload(votedNomineeByCategory: votedNomineeByCategory, localVoteBoost: localVoteBoost)
+        if let data = try? JSONEncoder().encode(payload) {
+            UserDefaults.standard.set(data, forKey: Self.votesDefaultsKey)
+        }
+    }
+
+    private func restoreVotes() {
+        guard let data = UserDefaults.standard.data(forKey: Self.votesDefaultsKey),
+              let payload = try? JSONDecoder().decode(LocalVotePayload.self, from: data) else { return }
+        votedNomineeByCategory = payload.votedNomineeByCategory
+        localVoteBoost = payload.localVoteBoost
+    }
+
+    private struct LocalVotePayload: Codable {
+        var votedNomineeByCategory: [String: String]
+        var localVoteBoost: [String: Int]
+    }
     
     // MARK: - 🏅 AWARD CEREMONY
     
@@ -441,13 +530,37 @@ class LiveStreamerAwardsSystem: ObservableObject {
         return []
     }
     
-    enum Timeframe: String {
+    enum Timeframe: String, CaseIterable {
         case daily = "Today"
         case weekly = "This Week"
         case monthly = "This Month"
         case quarterly = "This Quarter"
         case yearly = "This Year"
         case allTime = "All Time"
+
+        /// Scales baseline points so each window produces a distinct standing.
+        var pointsMultiplier: Double {
+            switch self {
+            case .daily: return 0.18
+            case .weekly: return 1.0
+            case .monthly: return 3.6
+            case .quarterly: return 9.4
+            case .yearly: return 34.0
+            case .allTime: return 61.0
+            }
+        }
+
+        /// Short noun used in "Top Streamer of the …" copy.
+        var periodNoun: String {
+            switch self {
+            case .daily: return "Day"
+            case .weekly: return "Week"
+            case .monthly: return "Month"
+            case .quarterly: return "Quarter"
+            case .yearly: return "Year"
+            case .allTime: return "Era"
+            }
+        }
     }
     
     enum LeaderboardCategory: String, CaseIterable {
@@ -457,23 +570,104 @@ class LiveStreamerAwardsSystem: ObservableObject {
         case creative = "Creative"
         case music = "Music"
         case educational = "Educational"
-    }
-    
-    // MARK: - Helper Functions
-    
-    private func loadRankings() {
-        // Load from database
-        // Calculate current rankings
 
+        var icon: String {
+            switch self {
+            case .overall: return "trophy.fill"
+            case .gaming: return "gamecontroller.fill"
+            case .justChatting: return "message.fill"
+            case .creative: return "paintbrush.fill"
+            case .music: return "music.note"
+            case .educational: return "graduationcap.fill"
+            }
+        }
+
+        var awardCategory: AwardCategory {
+            switch self {
+            case .overall: return .streamerOfTheYear
+            case .gaming: return .gamingStreamer
+            case .justChatting: return .justChattingStreamer
+            case .creative: return .creativeStreamer
+            case .music: return .musicStreamer
+            case .educational: return .educationalStreamer
+            }
+        }
+    }
+
+    // MARK: - Filtering
+
+    /// Re-derives `topStreamers` and `myRanking` for the requested filters.
+    /// Deterministic: the same filter always yields the same ordering.
+    func applyFilters(timeframe: Timeframe, category: LeaderboardCategory) {
+        activeTimeframe = timeframe
+        activeCategory = category
+
+        let pool = category == .overall
+            ? roster
+            : roster.filter { $0.leaderboardCategory == category }
+
+        // Scale points by timeframe so each window feels distinct, then re-rank.
+        let multiplier = timeframe.pointsMultiplier
+        let ranked = pool
+            .map { ranking -> StreamerRanking in
+                var copy = ranking
+                copy.points = Int(Double(ranking.seasonPoints) * multiplier)
+                return copy
+            }
+            .sorted { $0.points > $1.points }
+            .enumerated()
+            .map { index, ranking -> StreamerRanking in
+                var copy = ranking
+                let newRank = index + 1
+                // Deterministic, believable week-over-week movement seeded off
+                // the streamer's identity so it's stable per render.
+                var hasher = Hasher()
+                hasher.combine(ranking.id)
+                hasher.combine(timeframe.rawValue)
+                hasher.combine(category.rawValue)
+                let swing = (abs(hasher.finalize()) % 5) - 2 // -2...+2
+                copy.previousRank = max(1, newRank + swing)
+                copy.rank = newRank
+                return copy
+            }
+
+        topStreamers = ranked
+        // "My" streamer keeps a stable standing for the My Stats tab: use their
+        // position in the current filter if present, otherwise their overall rank.
+        myRanking = ranked.first(where: { $0.id == Self.myStreamerId }) ?? overallMyRanking
+    }
+
+    /// Percentile string like "Top 4%" based on the full platform population.
+    func percentileLabel(for rank: Int) -> String {
+        guard totalStreamerCount > 0 else { return "Unranked" }
+        let pct = Double(rank) / Double(totalStreamerCount) * 100
+        if pct < 1 { return "Top 1%" }
+        return "Top \(Int(ceil(pct)))%"
+    }
+
+    // MARK: - Helper Functions
+
+    private static let myStreamerId = "streamer-4"
+
+    private func loadRankings() {
+        // Seed a full, deterministic roster spanning every category so each
+        // filter combination renders a populated leaderboard.
         let streamers: [(name: String, display: String, category: LeaderboardCategory, hours: Double, avg: Int, peak: Int, totalViews: Int, points: Int)] = [
             ("StreamerAlex", "Streamer Alex", .overall, 45.0, 6200, 8500, 88000, 12840),
-            ("Christian", "Christian Live", .gaming, 42.5, 5400, 7900, 84500, 11920),
+            ("ChristianLive", "Christian Live", .gaming, 42.5, 5400, 7900, 84500, 11920),
             ("Presey", "Presey", .justChatting, 39.0, 5200, 8500, 81200, 11640),
+            ("NovaBeats", "Nova Beats", .music, 37.5, 4800, 7200, 76400, 10980),
+            ("PixelPaige", "Pixel Paige", .creative, 36.0, 4300, 6600, 71200, 10510),
+            ("ProfRoman", "Professor Roman", .educational, 35.0, 3900, 5800, 64800, 9980),
             ("Rahfoover", "Rahfoover", .gaming, 34.0, 3100, 4200, 28000, 9540),
-            ("Mariancuck", "Mariancuck", .gaming, 31.0, 2900, 4980, 24400, 9015),
+            ("MariMakes", "Mari Makes", .creative, 31.0, 2900, 4980, 24400, 9015),
             ("Shivayla", "Shivayla", .justChatting, 30.5, 3200, 5320, 22100, 8760),
-            ("Saotti", "Saotti", .creative, 27.0, 2600, 4220, 20500, 8320),
-            ("Skamhar", "Skamhar", .gaming, 26.0, 2400, 4960, 19800, 8010)
+            ("SaottiSynth", "Saotti Synth", .music, 29.0, 2700, 4400, 21300, 8540),
+            ("Skamhar", "Skamhar", .gaming, 26.0, 2400, 4960, 19800, 8010),
+            ("CodeWithKai", "Code With Kai", .educational, 24.5, 2100, 3600, 17200, 7620),
+            ("LoFiLuna", "LoFi Luna", .music, 22.0, 1900, 3100, 15400, 7180),
+            ("ChattyChlo", "Chatty Chloe", .justChatting, 20.5, 1700, 2900, 13800, 6840),
+            ("InkAndIris", "Ink & Iris", .creative, 18.0, 1500, 2600, 11900, 6420)
         ]
 
         let seededAchievements: [Achievement] = [
@@ -488,7 +682,7 @@ class LiveStreamerAwardsSystem: ObservableObject {
             Badge(name: "Award Winner", description: "Won a streamer award", icon: "medal.fill", color: .orange, earnedDate: Date().addingTimeInterval(-86400 * 9), displayOnProfile: true)
         ]
 
-        topStreamers = streamers.enumerated().map { index, item in
+        roster = streamers.enumerated().map { index, item in
             let user = User(
                 id: "streamer-\(index + 1)",
                 username: item.name,
@@ -503,11 +697,14 @@ class LiveStreamerAwardsSystem: ObservableObject {
                 totalViews: item.totalViews
             )
 
-            let categoryScores: [AwardCategory: Int] = [
+            let specialtyCategory = item.category.awardCategory
+            // Build incrementally so a specialty category that collides with an
+            // existing key merges instead of crashing on a duplicate literal key.
+            var categoryScores: [AwardCategory: Int] = [
                 .streamerOfTheYear: max(70, 100 - index * 4),
-                .mostWatchedStreamer: max(66, 97 - index * 3),
-                item.category == .gaming ? .gamingStreamer : item.category == .justChatting ? .justChattingStreamer : item.category == .creative ? .creativeStreamer : .streamerOfTheYear: max(64, 94 - index * 2)
+                .mostWatchedStreamer: max(66, 97 - index * 3)
             ]
+            categoryScores[specialtyCategory] = max(categoryScores[specialtyCategory] ?? 0, max(64, 94 - index * 2))
 
             return StreamerRanking(
                 id: user.id,
@@ -515,33 +712,40 @@ class LiveStreamerAwardsSystem: ObservableObject {
                 rank: index + 1,
                 points: item.points,
                 previousRank: max(1, index + 2),
+                leaderboardCategory: item.category,
                 totalHoursStreamed: item.hours,
                 averageViewers: item.avg,
                 peakViewers: item.peak,
                 totalViews: item.totalViews,
                 uniqueViewers: Int(Double(item.totalViews) * 0.72),
-                chatMessagesPerMinute: Double(55 - index * 4),
-                subscriptionCount: 800 - index * 41,
-                giftsReceived: 220 - index * 17,
-                clipsCreated: 30 - index,
-                viralMoments: max(1, 8 - index),
+                chatMessagesPerMinute: Double(55 - min(index, 12) * 4),
+                subscriptionCount: max(120, 800 - index * 41),
+                giftsReceived: max(20, 220 - index * 14),
+                clipsCreated: max(4, 30 - index),
+                viralMoments: max(1, 8 - index / 2),
                 categoryScores: categoryScores,
                 achievements: seededAchievements,
-                badges: seededBadges
+                badges: seededBadges,
+                seasonPoints: item.points
             )
         }
 
-        myRanking = topStreamers.dropFirst(3).first
         myAchievements = seededAchievements + [
             Achievement(title: "24 Hour Warrior", description: "Completed a marathon stream", icon: "moon.stars.fill", rarity: .epic, unlockedDate: Date().addingTimeInterval(-86400 * 4), progress: nil, requirement: "24-hour stream")
         ]
         myBadges = seededBadges
 
-        currentSeason.winners = [
-            Winner(category: .streamerOfTheYear, streamer: topStreamers[0].streamer, acceptanceSpeech: "We built this with the community.", clipURL: nil),
-            Winner(category: .gamingStreamer, streamer: topStreamers[1].streamer, acceptanceSpeech: "Gaming is bigger than ever.", clipURL: nil),
-            Winner(category: .justChattingStreamer, streamer: topStreamers[2].streamer, acceptanceSpeech: "The chat carried this season.", clipURL: nil)
-        ]
+        // Hall of Fame winners reference stable roster identities.
+        if roster.count >= 3 {
+            currentSeason.winners = [
+                Winner(category: .streamerOfTheYear, streamer: roster[0].streamer, acceptanceSpeech: "We built this with the community.", clipURL: nil),
+                Winner(category: .gamingStreamer, streamer: roster[1].streamer, acceptanceSpeech: "Gaming is bigger than ever.", clipURL: nil),
+                Winner(category: .justChattingStreamer, streamer: roster[2].streamer, acceptanceSpeech: "The chat carried this season.", clipURL: nil)
+            ]
+        }
+
+        // Capture the user's overall standing for the My Stats tab.
+        overallMyRanking = roster.first(where: { $0.id == Self.myStreamerId })
     }
 }
 

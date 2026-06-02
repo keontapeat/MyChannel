@@ -24,6 +24,7 @@ struct VersusMatchCreatorView: View {
     @State private var showingSuccess = false
     @State private var showingError = false
     @State private var errorMessage = ""
+    @State private var showingOpponentPicker = false
     
     var body: some View {
         NavigationStack {
@@ -84,6 +85,9 @@ struct VersusMatchCreatorView: View {
             } message: {
                 Text(errorMessage)
             }
+            .sheet(isPresented: $showingOpponentPicker) {
+                OpponentPickerView(selectedOpponent: $selectedOpponent)
+            }
         }
     }
     
@@ -126,7 +130,8 @@ struct VersusMatchCreatorView: View {
                 .font(.system(size: 18, weight: .bold))
             
             Button {
-                // Show user picker
+                HapticManager.shared.impact(style: .light)
+                showingOpponentPicker = true
             } label: {
                 HStack {
                     if let opponent = selectedOpponent {
@@ -139,7 +144,7 @@ struct VersusMatchCreatorView: View {
                             )
                         
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(opponent.username)
+                            Text(opponent.displayName)
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(AppTheme.Colors.textPrimary)
                             
@@ -507,6 +512,138 @@ struct MatchSummaryRow: View {
             Text(value)
                 .font(.system(size: 16, weight: .bold))
                 .foregroundColor(AppTheme.Colors.textPrimary)
+        }
+    }
+}
+
+// MARK: - Opponent Picker
+
+/// Lets the challenger pick who to bet against. Loads real creators from
+/// Firestore (falls back to sample users in debug / when offline) and supports
+/// quick search by name or @username.
+struct OpponentPickerView: View {
+    @Binding var selectedOpponent: User?
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var allUsers: [User] = []
+    @State private var searchText: String = ""
+    @State private var isLoading = true
+    @State private var loadError: String?
+    
+    private var currentUserId: String? {
+        AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id
+    }
+    
+    private var filteredUsers: [User] {
+        guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else { return allUsers }
+        let q = searchText.lowercased()
+        return allUsers.filter {
+            $0.displayName.lowercased().contains(q) || $0.username.lowercased().contains(q)
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    ProgressView("Finding creators…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if filteredUsers.isEmpty {
+                    emptyState
+                } else {
+                    List {
+                        ForEach(filteredUsers) { user in
+                            Button {
+                                HapticManager.shared.impact(style: .light)
+                                selectedOpponent = user
+                                dismiss()
+                            } label: {
+                                opponentRow(user)
+                            }
+                            .listRowBackground(AppTheme.Colors.surface)
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .background(AppTheme.Colors.background)
+            .searchable(text: $searchText, prompt: "Search creators")
+            .navigationTitle("Choose Opponent")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .task { await loadUsers() }
+        }
+    }
+    
+    private func opponentRow(_ user: User) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color.gray.opacity(0.25))
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Image(systemName: "person.fill")
+                        .foregroundColor(.white)
+                )
+            
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(user.displayName)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    if user.isVerified {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.primary)
+                    }
+                }
+                Text("@\(user.username)")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            if selectedOpponent?.id == user.id {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(AppTheme.Colors.primary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+    
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "person.2.slash")
+                .font(.system(size: 40))
+                .foregroundColor(.secondary)
+            Text(loadError ?? "No creators found")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+    }
+    
+    private func loadUsers() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let users = try await UserFirestoreService.shared.fetchTopCreators(
+                excludingUserId: currentUserId
+            )
+            if users.isEmpty {
+                allUsers = User.sampleUsers.filter { $0.id != currentUserId }
+            } else {
+                allUsers = users
+            }
+        } catch {
+            loadError = "Couldn't load creators. Pull to retry."
+            allUsers = User.sampleUsers.filter { $0.id != currentUserId }
         }
     }
 }

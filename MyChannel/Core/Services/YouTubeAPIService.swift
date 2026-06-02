@@ -15,6 +15,17 @@ final class YouTubeAPIService {
 
     private let base = "https://www.googleapis.com/youtube/v3"
 
+    /// Resolve the best available thumbnail URL with an explicit return type so
+    /// the Swift type-checker doesn't have to solve a long `??` optional chain
+    /// inside the large `Video(...)` initializer (which was ~1.3s each).
+    private static func bestThumbnail(_ thumbs: SearchResponse.Item.Snippet.Thumbs, videoID: String) -> String {
+        if let url = thumbs.maxres?.url { return url }
+        if let url = thumbs.standard?.url { return url }
+        if let url = thumbs.high?.url { return url }
+        if let url = thumbs.medium?.url { return url }
+        return "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg"
+    }
+
     struct SearchResponse: Decodable {
         struct Item: Decodable {
             struct ID: Decodable { let videoId: String? }
@@ -60,11 +71,7 @@ final class YouTubeAPIService {
 
         let vids: [Video] = decoded.items.compactMap { item in
             guard let vid = item.id.videoId else { return nil }
-            let thumb = item.snippet.thumbnails.maxres?.url ??
-                        item.snippet.thumbnails.standard?.url ??
-                        item.snippet.thumbnails.high?.url ??
-                        item.snippet.thumbnails.medium?.url ??
-                        "https://i.ytimg.com/vi/\(vid)/hqdefault.jpg"
+            let thumb = YouTubeAPIService.bestThumbnail(item.snippet.thumbnails, videoID: vid)
 
             return Video(
                 title: item.snippet.title,
@@ -125,11 +132,7 @@ final class YouTubeAPIService {
         let vids: [Video] = decoded.items.compactMap { item in
             guard let vid = item.id.videoId else { return nil }
             let sn = item.snippet
-            let thumb = sn.thumbnails.maxres?.url ??
-                        sn.thumbnails.standard?.url ??
-                        sn.thumbnails.high?.url ??
-                        sn.thumbnails.medium?.url ??
-                        "https://i.ytimg.com/vi/\(vid)/hqdefault.jpg"
+            let thumb = YouTubeAPIService.bestThumbnail(sn.thumbnails, videoID: vid)
 
             return Video(
                 title: sn.title,

@@ -41,6 +41,15 @@ function generateTrackId(): string {
   return randomUUID();
 }
 
+/**
+ * Compose multiple GCS objects into one target object (server-side concat).
+ * Uses the JSON API compose operation via the storage client.
+ */
+async function composeFiles(sources: any[], target: any): Promise<void> {
+  const sourceNames = sources.map((f) => f.name);
+  await bucket.combine(sourceNames, target);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 1: Enhanced Music Upload & Processing Service
 // ─────────────────────────────────────────────────────────────────────────────
@@ -192,37 +201,56 @@ app.post('/v1/music/tracks/:trackId/complete', async (req, res) => {
       return indexA - indexB;
     });
 
-    // Combine chunks (simplified - in production, use a proper audio processing service)
     const finalAudioPath = `music/${user.userId}/tracks/${trackId}.${fileName?.split('.').pop() || 'mp3'}`;
     const finalAudioRef = bucket.file(finalAudioPath);
 
-    // For now, just move the first chunk (in production, combine all chunks)
-    const firstChunk = chunks[0];
-    const [chunkData] = await firstChunk.download();
-    await finalAudioRef.save(chunkData, {
-      contentType: mimeType || 'audio/mpeg'
-    });
+    // Combine ALL chunks into the final object. GCS compose merges up to 32
+    // objects at a time, so we compose in waves for larger uploads.
+    if (chunks.length === 1) {
+      await bucket.file(chunks[0].name).copy(finalAudioRef);
+    } else {
+      let intermediates = chunks.map((c) => bucket.file(c.name));
+      let wave = 0;
+      while (intermediates.length > 1) {
+        const next: typeof intermediates = [];
+        for (let i = 0; i < intermediates.length; i += 32) {
+          const group = intermediates.slice(i, i + 32);
+          const isFinalGroup = intermediates.length <= 32;
+          const target = isFinalGroup
+            ? finalAudioRef
+            : bucket.file(`${tempDir}/_compose_${wave}_${i}`);
+          await composeFiles(group, target);
+          next.push(target);
+        }
+        intermediates = next;
+        wave++;
+      }
+    }
+
+    await finalAudioRef.setMetadata({ contentType: mimeType || 'audio/mpeg' });
 
     const audioURL = `https://storage.googleapis.com/${bucket.name}/${finalAudioPath}`;
 
-    // Update track status
+    // Update track status — transcoding will be picked up by the transcode service.
     await trackRef.update({
       audioURL,
+      masterURL: audioURL,
       status: 'processing',
       processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-      transcodingStatus: 'in_progress'
+      transcodingStatus: 'pending'
     });
 
-    // Clean up temp chunks
-    for (const chunk of chunks) {
-      await chunk.delete();
+    // Clean up temp chunks (and any compose intermediates).
+    const [leftovers] = await bucket.getFiles({ prefix: tempDir });
+    for (const chunk of leftovers) {
+      await chunk.delete().catch(() => {});
     }
 
     res.json({
       trackId,
       audioURL,
       status: 'processing',
-      message: 'Upload complete. Transcoding in progress.'
+      message: 'Upload complete. Transcoding queued (HLS + lossless).'
     });
   } catch (error) {
     console.error('Complete upload error:', error);

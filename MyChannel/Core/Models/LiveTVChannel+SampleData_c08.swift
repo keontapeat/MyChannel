@@ -7,7 +7,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "cartoon-network-live",
             name: "Cartoon Network",
-            logoURL: "https://i.ytimg.com/vi/MrKbsv4OXQA/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video/v4/b9/6e/2f/b96e2feb-31cb-a6e3-9e1a-2e0e07cb18ad/mzl.edfwsgvj.lsr/600x600bb.jpg",
             streamURL: s_kids2,
             category: .kids,
             description: "All-day cartoons from CN 24/7",
@@ -17,7 +17,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "treehouse-tv",
             name: "Treehouse TV",
-            logoURL: "https://i.ytimg.com/vi/RYjg7l5bXJU/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video62/v4/53/33/33/53333372-6d23-07c8-6519-2f91fc98db6c/mzm.kpdggamc.lsr/600x600bb.jpg",
             streamURL: s_pbskids,
             category: .kids,
             description: "Preschool shows for toddlers 24/7",

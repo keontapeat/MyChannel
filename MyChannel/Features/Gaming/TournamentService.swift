@@ -68,7 +68,22 @@ class TournamentService: ObservableObject {
             
             upcomingTournaments = upcoming
             
-            print("✅ Loaded \(tournaments.count) active tournaments")
+            // Fetch completed tournaments (most recent first)
+            let completedSnapshot = try await db.collection("tournaments")
+                .whereField("status", isEqualTo: "completed")
+                .order(by: "endDate", descending: true)
+                .limit(to: 25)
+                .getDocuments()
+            
+            var completed: [BracketTournament] = []
+            for doc in completedSnapshot.documents {
+                if let tournament = try? await parseTournament(doc: doc) {
+                    completed.append(tournament)
+                }
+            }
+            completedTournaments = completed
+            
+            print("✅ Loaded \(tournaments.count) active, \(upcoming.count) upcoming, \(completed.count) completed tournaments")
             
         } catch {
             print("🚨 Error loading tournaments: \(error)")
@@ -78,6 +93,35 @@ class TournamentService: ObservableObject {
         #else
         // Fallback to sample data
         activeTournaments = [BracketTournament.sample]
+        #endif
+    }
+    
+    // MARK: - 🏆 LOAD A USER'S TOURNAMENT VICTORIES
+    
+    /// Fetch tournaments where the given user is recorded as the champion/winner.
+    /// Used by the Championship Hub "Tournament Victories" shelf.
+    func loadVictories(for userId: String) async {
+        guard !userId.isEmpty else { return }
+        #if canImport(FirebaseFirestore)
+        do {
+            let snapshot = try await db.collection("tournaments")
+                .whereField("status", isEqualTo: "completed")
+                .whereField("winnerId", isEqualTo: userId)
+                .order(by: "endDate", descending: true)
+                .limit(to: 25)
+                .getDocuments()
+            
+            var victories: [BracketTournament] = []
+            for doc in snapshot.documents {
+                if let tournament = try? await parseTournament(doc: doc) {
+                    victories.append(tournament)
+                }
+            }
+            completedTournaments = victories
+            print("✅ Loaded \(victories.count) tournament victories for \(userId.prefix(8))")
+        } catch {
+            print("🚨 Error loading victories: \(error)")
+        }
         #endif
     }
     
@@ -273,12 +317,31 @@ class TournamentService: ObservableObject {
                     currentRound: roundNumber,
                     winnerId: winnerId
                 )
+            } else {
+                // 🏆 Finals decided — crown the champion & close out the tournament.
+                try await completeTournament(tournamentId: tournamentId, winnerId: winnerId)
             }
             
             print("✅ Match result updated!")
         }
         #endif
     }
+    
+    // MARK: - 🏁 COMPLETE TOURNAMENT (crown champion)
+    
+    #if canImport(FirebaseFirestore)
+    /// Marks the tournament completed and records the winner so it surfaces in
+    /// the Championship Hub "Tournament Victories" shelf (queried by winnerId).
+    private func completeTournament(tournamentId: String, winnerId: String) async throws {
+        try await db.collection("tournaments").document(tournamentId).setData([
+            "status": "completed",
+            "winnerId": winnerId,
+            "endDate": Timestamp(date: Date()),
+            "completedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+        print("🏆 Tournament \(tournamentId.prefix(8)) completed — winner: \(winnerId.prefix(8))")
+    }
+    #endif
     
     // MARK: - ⬆️ ADVANCE WINNER
     

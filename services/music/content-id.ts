@@ -1,9 +1,18 @@
 import express from 'express';
 import admin from 'firebase-admin';
 import crypto from 'crypto';
+import {
+  Fingerprint,
+  compareFingerprints,
+  fingerprintHash,
+  activeFingerprintProvider,
+} from './fingerprint';
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+
+// Match threshold: normalized Hamming similarity above this counts as a match.
+const MATCH_THRESHOLD = parseFloat(process.env.CONTENT_ID_MATCH_THRESHOLD || '0.92');
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -48,8 +57,12 @@ app.post('/v1/music/content-id/register', async (req, res) => {
       return res.status(400).json({ error: 'trackId is required' });
     }
 
-    if (!fingerprint || typeof fingerprint !== 'string') {
-      return res.status(400).json({ error: 'fingerprint is required' });
+    // Accept a structured chromaprint fingerprint { algorithm, frames, duration }
+    // or a provider externalId. Reject the old opaque-string format.
+    if (!fingerprint || typeof fingerprint !== 'object' || !Array.isArray(fingerprint.frames)) {
+      return res.status(400).json({
+        error: 'fingerprint must be an object: { algorithm, frames:number[], duration }',
+      });
     }
 
     const trackRef = db.collection('music_tracks').doc(trackId);
@@ -65,13 +78,22 @@ app.post('/v1/music/content-id/register', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
+    const fp: Fingerprint = {
+      algorithm: fingerprint.algorithm || 'chromaprint',
+      frames: fingerprint.frames.map((n: any) => (Number(n) >>> 0)),
+      duration: Number(fingerprint.duration) || trackData.duration || 0,
+      externalId: fingerprint.externalId,
+    };
+
     const now = admin.firestore.Timestamp.now();
     const contentIdRef = db.collection('music_content_id').doc(trackId);
 
     await contentIdRef.set({
       trackId,
       artistId: user.userId,
-      fingerprint,
+      fingerprint: fp,
+      fingerprintHash: fingerprintHash(fp),
+      fingerprintProvider: activeFingerprintProvider(),
       registeredAt: now,
       status: 'active',
       copyrightPolicy: 'strict', // Default: copyright strike for unauthorized usage
@@ -237,31 +259,46 @@ app.post('/v1/music/content-id/scan-video', async (req, res) => {
       return res.status(400).json({ error: 'videoId is required' });
     }
 
-    if (!audioFingerprint || typeof audioFingerprint !== 'string') {
-      return res.status(400).json({ error: 'audioFingerprint is required' });
+    // audioFingerprint must be a structured chromaprint fingerprint.
+    if (!audioFingerprint || typeof audioFingerprint !== 'object' || !Array.isArray(audioFingerprint.frames)) {
+      return res.status(400).json({
+        error: 'audioFingerprint must be { algorithm, frames:number[], duration }',
+      });
     }
 
-    // Query Content ID database for matches
+    const candidate: Fingerprint = {
+      algorithm: audioFingerprint.algorithm || 'chromaprint',
+      frames: audioFingerprint.frames.map((n: any) => (Number(n) >>> 0)),
+      duration: Number(audioFingerprint.duration) || 0,
+    };
+
+    // Compare against the active Content ID reference database using real
+    // normalized Hamming similarity over chromaprint sub-fingerprints.
     const contentIdSnap = await db.collection('music_content_id')
       .where('status', '==', 'active')
-      .limit(100)
+      .limit(2000)
       .get();
 
     const matches: any[] = [];
     contentIdSnap.docs.forEach(doc => {
       const data = doc.data();
-      // Simulated fingerprint matching (in production, use proper audio fingerprinting)
-      const similarity = Math.random();
-      if (similarity > 0.85) {
+      const refFp = data.fingerprint as Fingerprint | undefined;
+      if (!refFp || !Array.isArray(refFp.frames) || refFp.frames.length === 0) return;
+
+      const similarity = compareFingerprints(candidate, refFp);
+      if (similarity >= MATCH_THRESHOLD) {
         matches.push({
           trackId: data.trackId,
           artistId: data.artistId,
           copyrightPolicy: data.copyrightPolicy,
           revenueSharePercentage: data.revenueSharePercentage,
-          similarity: (similarity * 100).toFixed(1)
+          similarity: (similarity * 100).toFixed(1),
         });
       }
     });
+
+    // Keep the strongest matches first.
+    matches.sort((a, b) => parseFloat(b.similarity) - parseFloat(a.similarity));
 
     // Process matches based on copyright policy
     const enforcementResults = matches.map(match => {
@@ -429,16 +466,20 @@ app.get('/v1/music/content-id/:matchId/revenue', async (req, res) => {
       return res.status(400).json({ error: 'This match is not set to revenue sharing' });
     }
 
-    // Mock revenue data (in production, calculate from video ad revenue)
-    const videoRevenue = Math.floor(Math.random() * 1000) + 100;
-    const artistRevenue = videoRevenue * (match.revenueSharePercentage || 50) / 100;
+    // Real revenue: sum ad revenue actually attributed to this video, then apply
+    // the artist's agreed share. Revenue is written by the ads pipeline into
+    // `video_ad_revenue/{videoId}` as { totalRevenue }.
+    const adRevSnap = await db.collection('video_ad_revenue').doc(scanData.videoId).get();
+    const videoRevenue = adRevSnap.exists ? (adRevSnap.data()!.totalRevenue || 0) : 0;
+    const sharePct = match.revenueSharePercentage || 50;
+    const artistRevenue = videoRevenue * sharePct / 100;
 
     res.json({
       matchId,
       trackId: match.trackId,
       videoRevenue,
       artistRevenue,
-      revenueSharePercentage: match.revenueSharePercentage,
+      revenueSharePercentage: sharePct,
       message: `Artist earned $${artistRevenue.toFixed(2)} from this video usage`
     });
   } catch (error) {
@@ -570,6 +611,7 @@ app.get('/v1/music/artists/:artistId/content-id/overview', async (req, res) => {
     let totalMatches = 0;
     let totalRevenue = 0;
     const matchesByPolicy: Record<string, number> = { strict: 0, monetize: 0, allow: 0 };
+    const monetizedVideoIds = new Set<string>();
 
     scansSnap.docs.forEach(doc => {
       const data = doc.data();
@@ -577,12 +619,20 @@ app.get('/v1/music/artists/:artistId/content-id/overview', async (req, res) => {
         if (match.artistId === artistId) {
           totalMatches++;
           matchesByPolicy[match.copyrightPolicy] = (matchesByPolicy[match.copyrightPolicy] || 0) + 1;
-          if (match.copyrightPolicy === 'monetize') {
-            totalRevenue += Math.floor(Math.random() * 100);
+          if (match.copyrightPolicy === 'monetize' && data.videoId) {
+            monetizedVideoIds.add(JSON.stringify({ v: data.videoId, p: match.revenueSharePercentage || 50 }));
           }
         }
       });
     });
+
+    // Real revenue: sum attributed ad revenue for each monetized video × share.
+    for (const entry of monetizedVideoIds) {
+      const { v, p } = JSON.parse(entry);
+      const adRevSnap = await db.collection('video_ad_revenue').doc(v).get();
+      const videoRevenue = adRevSnap.exists ? (adRevSnap.data()!.totalRevenue || 0) : 0;
+      totalRevenue += videoRevenue * (p / 100);
+    }
 
     // Get strikes
     const strikesSnap = await db.collection('copyright_strikes')
@@ -608,5 +658,5 @@ app.get('/v1/music/artists/:artistId/content-id/overview', async (req, res) => {
 
 const PORT = process.env.PORT || 8083;
 app.listen(PORT, () => {
-  console.log(`🎵 Music Content ID service listening on port ${PORT}`);
+  console.log(`🎵 Music Content ID service (${activeFingerprintProvider()}, threshold=${MATCH_THRESHOLD}) listening on port ${PORT}`);
 });

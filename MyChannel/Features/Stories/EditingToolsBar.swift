@@ -12,6 +12,7 @@ struct EditingToolsBar: View {
     @Binding var selectedTool: EditingTool
     let onTextAdd: () -> Void
     let onStickerAdd: () -> Void
+    let onInteractiveAdd: () -> Void
     let onDrawingStart: () -> Void
     let onMusicAdd: () -> Void
     let onFilterAdd: () -> Void
@@ -41,6 +42,15 @@ struct EditingToolsBar: View {
                 ) {
                     selectedTool = .sticker
                     onStickerAdd()
+                }
+
+                // Interactive stickers (poll / quiz / question / slider / link …)
+                EditingToolButton(
+                    icon: "chart.bar.doc.horizontal",
+                    title: "Polls",
+                    isSelected: false
+                ) {
+                    onInteractiveAdd()
                 }
                 
                 // Drawing tool
@@ -180,6 +190,7 @@ struct Blur: UIViewRepresentable {
             selectedTool: .constant(.text),
             onTextAdd: {},
             onStickerAdd: {},
+            onInteractiveAdd: {},
             onDrawingStart: {},
             onMusicAdd: {},
             onFilterAdd: {},

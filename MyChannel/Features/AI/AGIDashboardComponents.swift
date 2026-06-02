@@ -188,95 +188,13 @@ struct AgentDeploySheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(agent.name).font(.system(size: 22, weight: .bold))
-                            Text(agent.status.rawValue)
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .foregroundColor(statusColor)
-                        }
-                        Spacer()
-                        Label(agent.estimatedRevenue, systemImage: "dollarsign.circle.fill")
-                            .font(.system(size: 13, weight: .bold)).foregroundColor(.green)
-                    }
-
+                    headerRow
                     Divider()
-
-                    infoRow("Description", agent.description)
-                    infoRow("Impact", agent.impactDescription)
-                    infoRow("Build Time", agent.estimatedBuildTime)
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("REQUIRED DATA SOURCES")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
-                        ForEach(agent.requiredDataSources, id: \.self) { src in
-                            HStack(spacing: 6) {
-                                Image(systemName: "circle.fill").font(.system(size: 5)).foregroundColor(.green)
-                                Text(src).font(.system(size: 13)).foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("PROMPT TEMPLATE")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
-                        Text(agent.promptTemplate)
-                            .font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary)
-                            .padding(10).background(Color(.systemGray6)).cornerRadius(8)
-                    }
-
-                    if !runOutput.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("LAST OUTPUT")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
-                            Text(runOutput)
-                                .font(.system(size: 11, design: .monospaced)).foregroundColor(.green)
-                                .padding(10).background(Color.green.opacity(0.08)).cornerRadius(8)
-                        }
-                    }
-
-                    VStack(spacing: 10) {
-                        if agent.status != .live {
-                            Button { doDeployAgent() } label: {
-                                HStack {
-                                    if isDeploying { ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .black)).scaleEffect(0.8) }
-                                    else { Image(systemName: "bolt.fill") }
-                                    Text(isDeploying ? "DEPLOYING..." : "DEPLOY AGENT")
-                                        .font(.system(size: 15, weight: .black, design: .monospaced))
-                                }
-                                .frame(maxWidth: .infinity).padding(.vertical, 14)
-                                .background(isDeploying ? Color.gray : Color.green)
-                                .foregroundColor(.black).cornerRadius(12)
-                            }.disabled(isDeploying)
-                        }
-                        if agent.status == .live {
-                            Button {
-                                isRunning = true
-                                Task {
-                                    let out = (try? await agentManager.callAgent(agent.id, query: "Provide one improvement for MyChannel right now.")) ?? "No output"
-                                    await MainActor.run { runOutput = out; isRunning = false }
-                                }
-                            } label: {
-                                HStack {
-                                    if isRunning { ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white)).scaleEffect(0.8) }
-                                    else { Image(systemName: "play.circle.fill") }
-                                    Text(isRunning ? "RUNNING..." : "RUN NOW")
-                                        .font(.system(size: 15, weight: .black, design: .monospaced))
-                                }
-                                .frame(maxWidth: .infinity).padding(.vertical, 14)
-                                .background(isRunning ? Color.gray : Color.blue)
-                                .foregroundColor(.white).cornerRadius(12)
-                            }.disabled(isRunning)
-
-                            Button { agentManager.toggleAgent(agent.id, enabled: !agent.isEnabled) } label: {
-                                Text(agent.isEnabled ? "DISABLE AGENT" : "ENABLE AGENT")
-                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                    .frame(maxWidth: .infinity).padding(.vertical, 12)
-                                    .background(agent.isEnabled ? Color.orange.opacity(0.15) : Color.green.opacity(0.15))
-                                    .foregroundColor(agent.isEnabled ? .orange : .green).cornerRadius(10)
-                            }
-                        }
-                    }
+                    infoSection
+                    dataSourcesSection
+                    promptTemplateSection
+                    lastOutputSection
+                    actionButtons
                 }
                 .padding(20)
             }
@@ -287,6 +205,128 @@ struct AgentDeploySheet: View {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+    }
+
+    // MARK: - Body Sections
+
+    @ViewBuilder
+    private var headerRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(agent.name).font(.system(size: 22, weight: .bold))
+                Text(agent.status.rawValue)
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundColor(statusColor)
+            }
+            Spacer()
+            Label(agent.estimatedRevenue, systemImage: "dollarsign.circle.fill")
+                .font(.system(size: 13, weight: .bold)).foregroundColor(.green)
+        }
+    }
+
+    @ViewBuilder
+    private var infoSection: some View {
+        infoRow("Description", agent.description)
+        infoRow("Impact", agent.impactDescription)
+        infoRow("Build Time", agent.estimatedBuildTime)
+    }
+
+    @ViewBuilder
+    private var dataSourcesSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("REQUIRED DATA SOURCES")
+                .font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
+            ForEach(agent.requiredDataSources, id: \.self) { src in
+                HStack(spacing: 6) {
+                    Image(systemName: "circle.fill").font(.system(size: 5)).foregroundColor(.green)
+                    Text(src).font(.system(size: 13)).foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var promptTemplateSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("PROMPT TEMPLATE")
+                .font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
+            Text(agent.promptTemplate)
+                .font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary)
+                .padding(10).background(Color(.systemGray6)).cornerRadius(8)
+        }
+    }
+
+    @ViewBuilder
+    private var lastOutputSection: some View {
+        if !runOutput.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("LAST OUTPUT")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
+                Text(runOutput)
+                    .font(.system(size: 11, design: .monospaced)).foregroundColor(.green)
+                    .padding(10).background(Color.green.opacity(0.08)).cornerRadius(8)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var actionButtons: some View {
+        VStack(spacing: 10) {
+            if agent.status != .live {
+                deployButton
+            }
+            if agent.status == .live {
+                runNowButton
+                toggleEnabledButton
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var deployButton: some View {
+        Button { doDeployAgent() } label: {
+            HStack {
+                if isDeploying { ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .black)).scaleEffect(0.8) }
+                else { Image(systemName: "bolt.fill") }
+                Text(isDeploying ? "DEPLOYING..." : "DEPLOY AGENT")
+                    .font(.system(size: 15, weight: .black, design: .monospaced))
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 14)
+            .background(isDeploying ? Color.gray : Color.green)
+            .foregroundColor(.black).cornerRadius(12)
+        }.disabled(isDeploying)
+    }
+
+    @ViewBuilder
+    private var runNowButton: some View {
+        Button {
+            isRunning = true
+            Task {
+                let out = (try? await agentManager.callAgent(agent.id, query: "Provide one improvement for MyChannel right now.")) ?? "No output"
+                await MainActor.run { runOutput = out; isRunning = false }
+            }
+        } label: {
+            HStack {
+                if isRunning { ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white)).scaleEffect(0.8) }
+                else { Image(systemName: "play.circle.fill") }
+                Text(isRunning ? "RUNNING..." : "RUN NOW")
+                    .font(.system(size: 15, weight: .black, design: .monospaced))
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 14)
+            .background(isRunning ? Color.gray : Color.blue)
+            .foregroundColor(.white).cornerRadius(12)
+        }.disabled(isRunning)
+    }
+
+    @ViewBuilder
+    private var toggleEnabledButton: some View {
+        Button { agentManager.toggleAgent(agent.id, enabled: !agent.isEnabled) } label: {
+            Text(agent.isEnabled ? "DISABLE AGENT" : "ENABLE AGENT")
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .frame(maxWidth: .infinity).padding(.vertical, 12)
+                .background(agent.isEnabled ? Color.orange.opacity(0.15) : Color.green.opacity(0.15))
+                .foregroundColor(agent.isEnabled ? .orange : .green).cornerRadius(10)
         }
     }
 
@@ -474,82 +514,102 @@ struct PatentItemCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
-            } label: {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.purple)
-                        .padding(.top, 1)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(item.title)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.primary)
-                            .multilineTextAlignment(.leading)
-                        HStack(spacing: 6) {
-                            Text(priorityLabel)
-                                .font(.system(size: 9, weight: .black, design: .monospaced))
-                                .foregroundColor(priorityColor)
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(priorityColor.opacity(0.12))
-                                .cornerRadius(4)
-                            Text(item.claimType)
-                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.purple.opacity(0.8))
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Color.purple.opacity(0.1))
-                                .cornerRadius(4)
-                        }
-                    }
-                    Spacer()
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .padding(.top, 2)
-                }
-                .padding(12)
-            }
-            .buttonStyle(.plain)
+            headerButton
 
             if expanded {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(item.description)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary)
-
-                    HStack(spacing: 8) {
-                        Image(systemName: "dollarsign.circle.fill")
-                            .font(.system(size: 13))
-                            .foregroundColor(.green)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("EST. PATENT VALUE")
-                                .font(.system(size: 8, weight: .black, design: .monospaced))
-                                .foregroundColor(.secondary)
-                            Text("$\(item.estimatedValueLow)M – $\(item.estimatedValueHigh)M")
-                                .font(.system(size: 14, weight: .black, design: .monospaced))
-                                .foregroundColor(.green)
-                        }
-                        Spacer()
-                        Text(item.priority == .high ? "🔥 HIGH PRIORITY" : "⚡ MEDIUM")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundColor(item.priority == .high ? .red : .orange)
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background((item.priority == .high ? Color.red : Color.orange).opacity(0.12))
-                            .cornerRadius(6)
-                    }
-                    .padding(10)
-                    .background(Color.green.opacity(0.08))
-                    .cornerRadius(8)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.green.opacity(0.2), lineWidth: 1))
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 12)
+                expandedDetails
             }
         }
         .background(Color(.systemGray6))
         .cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.purple.opacity(0.2), lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private var headerButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(.purple)
+                    .padding(.top, 1)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.title)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.leading)
+                    HStack(spacing: 6) {
+                        Text(priorityLabel)
+                            .font(.system(size: 9, weight: .black, design: .monospaced))
+                            .foregroundColor(priorityColor)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(priorityColor.opacity(0.12))
+                            .cornerRadius(4)
+                        Text(item.claimType)
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.purple.opacity(0.8))
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Color.purple.opacity(0.1))
+                            .cornerRadius(4)
+                    }
+                }
+                Spacer()
+                Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .padding(.top, 2)
+            }
+            .padding(12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var expandedDetails: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(item.description)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
+
+            valueRow
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 12)
+    }
+
+    @ViewBuilder
+    private var valueRow: some View {
+        let isHigh = item.priority == .high
+        let valueText = "$\(item.estimatedValueLow)M – $\(item.estimatedValueHigh)M"
+        let priorityText = isHigh ? "🔥 HIGH PRIORITY" : "⚡ MEDIUM"
+        let priorityTint: Color = isHigh ? .red : .orange
+
+        HStack(spacing: 8) {
+            Image(systemName: "dollarsign.circle.fill")
+                .font(.system(size: 13))
+                .foregroundColor(.green)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("EST. PATENT VALUE")
+                    .font(.system(size: 8, weight: .black, design: .monospaced))
+                    .foregroundColor(.secondary)
+                Text(valueText)
+                    .font(.system(size: 14, weight: .black, design: .monospaced))
+                    .foregroundColor(.green)
+            }
+            Spacer()
+            Text(priorityText)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(priorityTint)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(priorityTint.opacity(0.12))
+                .cornerRadius(6)
+        }
+        .padding(10)
+        .background(Color.green.opacity(0.08))
+        .cornerRadius(8)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.green.opacity(0.2), lineWidth: 1))
     }
 }
 

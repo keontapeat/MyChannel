@@ -403,6 +403,18 @@ struct VideoEditorSheet: View {
                     }
                 }
                 
+                Section("Subtitles") {
+                    NavigationLink {
+                        VideoCaptionsManagerView(videoId: video.id, videoTitle: video.title)
+                    } label: {
+                        HStack {
+                            Image(systemName: "captions.bubble")
+                                .foregroundColor(AppTheme.Colors.primary)
+                            Text("Manage subtitles & CC")
+                        }
+                    }
+                }
+                
                 Section {
                     Button("Save Changes") {
                         saveChanges()
@@ -457,6 +469,13 @@ struct BulkEditSheet: View {
     @State private var newDescription = ""
     @State private var updateCategory = false
     @State private var newCategory: VideoCategory = .movies
+    @State private var updateTags = false
+    @State private var newTags = ""
+    @State private var updateMadeForKids = false
+    @State private var newMadeForKids = false
+    @State private var updateAgeRestricted = false
+    @State private var newAgeRestricted = false
+    @State private var isApplying = false
     
     var body: some View {
         NavigationStack {
@@ -487,13 +506,39 @@ struct BulkEditSheet: View {
                             }
                         }
                     }
+
+                    Toggle("Update Tags", isOn: $updateTags)
+                    if updateTags {
+                        TextField("Comma-separated tags", text: $newTags)
+                        Text("Replaces existing tags on selected videos.")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                }
+
+                // 🔥 YouTube parity: audience & restrictions
+                Section("Audience & Restrictions") {
+                    Toggle("Set 'Made for kids'", isOn: $updateMadeForKids)
+                    if updateMadeForKids {
+                        Toggle("Made for kids", isOn: $newMadeForKids)
+                    }
+
+                    Toggle("Set Age-restriction", isOn: $updateAgeRestricted)
+                    if updateAgeRestricted {
+                        Toggle("Age-restricted (18+)", isOn: $newAgeRestricted)
+                    }
                 }
                 
                 Section {
-                    Button("Apply to All Selected") {
+                    Button {
                         applyBulkEdit()
+                    } label: {
+                        HStack {
+                            if isApplying { ProgressView().tint(.white) }
+                            Text(isApplying ? "Applying…" : "Apply to All Selected")
+                        }
                     }
-                    .disabled(!updateTitle && !updateDescription && !updateCategory)
+                    .disabled(!hasAnyChange || isApplying)
                 }
             }
             .navigationTitle("Bulk Edit")
@@ -507,12 +552,22 @@ struct BulkEditSheet: View {
             }
         }
     }
+
+    private var hasAnyChange: Bool {
+        updateTitle || updateDescription || updateCategory || updateTags || updateMadeForKids || updateAgeRestricted
+    }
     
     private func applyBulkEdit() {
         // Capture @State values on main actor before entering Task
         let title = updateTitle ? newTitle : nil
         let description = updateDescription ? newDescription : nil
         let category = updateCategory ? newCategory : nil
+        let tags: [String]? = updateTags
+            ? newTags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            : nil
+        let madeForKids: Bool? = updateMadeForKids ? newMadeForKids : nil
+        let ageRestricted: Bool? = updateAgeRestricted ? newAgeRestricted : nil
+        isApplying = true
         Task {
             await withTaskGroup(of: Void.self) { group in
                 for videoId in selectedVideoIds {
@@ -523,7 +578,9 @@ struct BulkEditSheet: View {
                                 title: title,
                                 description: description,
                                 category: category,
-                                tags: nil
+                                tags: tags,
+                                madeForKids: madeForKids,
+                                ageRestricted: ageRestricted
                             )
                         } catch {
                             print("🚨 Error updating video \(videoId): \(error)")
@@ -532,6 +589,7 @@ struct BulkEditSheet: View {
                 }
             }
             await MainActor.run {
+                isApplying = false
                 HapticManager.shared.notification(type: .success)
                 onSave()
                 dismiss()

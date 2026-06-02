@@ -8,9 +8,11 @@
 import Foundation
 import Combine
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 // MARK: - Creator Economy Service
-@MainActor
 class CreatorEconomyService: ObservableObject {
     static let shared = CreatorEconomyService()
     
@@ -24,55 +26,155 @@ class CreatorEconomyService: ObservableObject {
     
     private let networkService = NetworkService.shared
     private let analyticsService = AnalyticsService.shared
+
+    #if canImport(FirebaseFirestore)
+    private var db: Firestore { Firestore.firestore() }
+    #endif
     
     private init() {}
     // MARK: - Payouts & History
+
+    /// Real payout history from Firestore `payout_requests` for this creator.
     func fetchPaymentHistory(creatorId: String) async throws -> [Payment] {
-        // Replace with real API call
-        let items: [Payment] = [
-            .init(id: UUID().uuidString, amount: 820.12, currency: "USD", type: .withdrawal, status: .completed, date: Date().addingTimeInterval(-86400*4)),
-            .init(id: UUID().uuidString, amount: 540.40, currency: "USD", type: .withdrawal, status: .completed, date: Date().addingTimeInterval(-86400*33))
-        ]
-        await MainActor.run { self.paymentHistory = items }
-        return items
+        #if canImport(FirebaseFirestore)
+        guard !creatorId.isEmpty else { return [] }
+        do {
+            let snap = try await db.collection("payout_requests")
+                .whereField("creatorId", isEqualTo: creatorId)
+                .order(by: "requestedAt", descending: true)
+                .limit(to: 50)
+                .getDocuments()
+
+            let items: [Payment] = snap.documents.map { doc in
+                let d = doc.data()
+                let amount = (d["amount"] as? Double) ?? 0
+                let statusRaw = (d["status"] as? String) ?? "pending"
+                let date = (d["requestedAt"] as? Timestamp)?.dateValue() ?? Date()
+                return Payment(
+                    id: doc.documentID,
+                    amount: amount,
+                    currency: (d["currency"] as? String) ?? "USD",
+                    type: .withdrawal,
+                    status: Self.mapStatus(statusRaw),
+                    date: date
+                )
+            }
+            await MainActor.run { self.paymentHistory = items }
+            return items
+        } catch {
+            print("⚠️ [CreatorEconomy] payout history fetch failed: \(error.localizedDescription)")
+            await MainActor.run { self.paymentHistory = [] }
+            return []
+        }
+        #else
+        await MainActor.run { self.paymentHistory = [] }
+        return []
+        #endif
     }
 
+    /// Submit a REAL payout request. Calls the pay-api /pay/withdraw endpoint
+    /// which validates the ledger balance, verifies the Stripe account is fully
+    /// onboarded, executes a Stripe Transfer, and debits the ledger atomically.
+    /// Also writes a Firestore payout_requests doc for the dashboard history.
     func requestWithdrawal(creatorId: String, amount: Double) async throws -> Payment {
-        // Validate and simulate payout
-        let payout = Payment(id: UUID().uuidString, amount: amount, currency: "USD", type: .withdrawal, status: .pending, date: Date())
+        guard amount > 0 else {
+            throw CreatorEconomyError.invalidPrice("Withdrawal amount must be greater than $0")
+        }
+
+        // 1. Hit the pay-api — this is the authoritative money path
+        struct WithdrawalRequest: Codable { let creatorId: String; let amount: Double }
+        struct WithdrawalResponse: Codable {
+            let ok: Bool?
+            let payoutId: String?
+            let amountCents: Int?
+            let stripeTransferId: String?
+            let error: String?
+            let onboardingRequired: Bool?
+        }
+        let response: WithdrawalResponse = try await networkService.post(
+            endpoint: .custom("/pay/withdraw"),
+            body: WithdrawalRequest(creatorId: creatorId, amount: amount),
+            responseType: WithdrawalResponse.self
+        )
+
+        if let errorMsg = response.error {
+            if response.onboardingRequired == true {
+                throw CreatorEconomyError.paymentFailed("Payout account setup is incomplete. Go to Payout Settings to finish connecting your bank account.")
+            }
+            throw CreatorEconomyError.paymentFailed(errorMsg)
+        }
+
+        // 2. Mirror to Firestore payout_requests so the dashboard history is live
+        #if canImport(FirebaseFirestore)
+        let payoutId = response.payoutId ?? UUID().uuidString
+        try? await Firestore.firestore().collection("payout_requests").document(payoutId).setData([
+            "id": payoutId,
+            "creatorId": creatorId,
+            "amount": amount,
+            "currency": "USD",
+            "status": "processing",
+            "stripeTransferId": response.stripeTransferId ?? "",
+            "requestedAt": FieldValue.serverTimestamp()
+        ])
+        #endif
+
+        let payout = Payment(
+            id: response.payoutId ?? UUID().uuidString,
+            amount: amount,
+            currency: "USD",
+            type: .withdrawal,
+            status: .pending,
+            date: Date()
+        )
         await MainActor.run { self.paymentHistory.insert(payout, at: 0) }
         return payout
+    }
+
+    private static func mapStatus(_ raw: String) -> PaymentStatus {
+        switch raw.lowercased() {
+        case "completed", "paid", "succeeded": return .completed
+        case "failed", "error": return .failed
+        case "refunded", "reversed": return .refunded
+        default: return .pending
+        }
     }
 
     
     // MARK: - Creator Revenue Management
     
-    /// Get creator's total earnings across all revenue streams
+    /// Get creator's total earnings across all revenue streams.
+    /// Reads the REAL `creator_earnings/{creatorId}` aggregate written by
+    /// NuclearAdMonetizationService + TipPaymentService, then breaks it down by
+    /// the per-source sub-collections. No more mock numbers.
     func getCreatorEarnings(for creatorId: String) async throws -> CreatorEarnings {
         isLoading = true
         defer { isLoading = false }
         
-        // Fetch all revenue streams
-        let adRevenue = try await getAdRevenue(creatorId: creatorId)
-        let tipRevenue = try await getTipRevenue(creatorId: creatorId)
-        let membershipRevenue = try await getMembershipRevenue(creatorId: creatorId)
-        let merchandiseRevenue = try await getMerchandiseRevenue(creatorId: creatorId)
-        let courseRevenue = try await getCourseRevenue(creatorId: creatorId)
-        let brandDealRevenue = try await getBrandDealRevenue(creatorId: creatorId)
-        let nftRevenue = try await getNFTRevenue(creatorId: creatorId)
-        let liveStreamRevenue = try await getLiveStreamRevenue(creatorId: creatorId)
+        // Fetch all revenue streams (real Firestore-backed)
+        let adRevenue = await getAdRevenue(creatorId: creatorId)
+        let tipRevenue = await getTipRevenue(creatorId: creatorId)
+        let membershipRevenue = await getRevenueStream(creatorId: creatorId, source: "membership")
+        let merchandiseRevenue = await getRevenueStream(creatorId: creatorId, source: "merchandise")
+        let courseRevenue = await getRevenueStream(creatorId: creatorId, source: "course")
+        let brandDealRevenue = await getRevenueStream(creatorId: creatorId, source: "brandDeal")
+        let nftRevenue = await getRevenueStream(creatorId: creatorId, source: "nft")
+        let liveStreamRevenue = await getRevenueStream(creatorId: creatorId, source: "liveStream")
         
         let totalRevenue = adRevenue + tipRevenue + membershipRevenue + merchandiseRevenue + 
                           courseRevenue + brandDealRevenue + nftRevenue + liveStreamRevenue
-        
-        let creatorShare = totalRevenue * Self.REVENUE_SHARE
-        let platformFee = totalRevenue * (1.0 - Self.REVENUE_SHARE)
+
+        // Prefer the authoritative aggregate balance if present; the ad service
+        // already stores the creator's net share, so don't double-apply the split.
+        let aggregate = await NuclearAdMonetizationService.shared.getCreatorEarnings(creatorId: creatorId)
+        let creatorShare = aggregate?.totalEarnings ?? (totalRevenue * Self.REVENUE_SHARE)
+        let grossRevenue = max(totalRevenue, creatorShare / Self.REVENUE_SHARE)
+        let platformFee = grossRevenue - creatorShare
         
         let earnings = CreatorEarnings(
             creatorId: creatorId,
-            totalRevenue: totalRevenue,
+            totalRevenue: grossRevenue,
             creatorShare: creatorShare,
-            platformFee: platformFee,
+            platformFee: max(0, platformFee),
             revenueBreakdown: CreatorRevenueBreakdown(
                 adRevenue: adRevenue,
                 tipRevenue: tipRevenue,
@@ -284,39 +386,37 @@ class CreatorEconomyService: ObservableObject {
         )
     }
     
-    // MARK: - Revenue Calculations (Mock implementations)
-    
-    private func getAdRevenue(creatorId: String) async throws -> Double {
-        // Calculate ad revenue with 90% share
-        return 1250.00 // Mock data
+    // MARK: - Revenue Calculations (real Firestore data)
+
+    /// Lifetime ad revenue (creator's net share) from the `creator_earnings` doc.
+    private func getAdRevenue(creatorId: String) async -> Double {
+        let earnings = await NuclearAdMonetizationService.shared.getCreatorEarnings(creatorId: creatorId)
+        return earnings?.totalEarnings ?? 0
     }
-    
-    private func getTipRevenue(creatorId: String) async throws -> Double {
-        return 450.00 // Mock data
+
+    /// Tip revenue from the creator's stored balance.
+    private func getTipRevenue(creatorId: String) async -> Double {
+        return (try? await TipPaymentService.shared.getCreatorEarnings(for: creatorId)) ?? 0
     }
-    
-    private func getMembershipRevenue(creatorId: String) async throws -> Double {
-        return 890.00 // Mock data
-    }
-    
-    private func getMerchandiseRevenue(creatorId: String) async throws -> Double {
-        return 340.00 // Mock data
-    }
-    
-    private func getCourseRevenue(creatorId: String) async throws -> Double {
-        return 670.00 // Mock data
-    }
-    
-    private func getBrandDealRevenue(creatorId: String) async throws -> Double {
-        return 2100.00 // Mock data
-    }
-    
-    private func getNFTRevenue(creatorId: String) async throws -> Double {
-        return 1800.00 // Mock data
-    }
-    
-    private func getLiveStreamRevenue(creatorId: String) async throws -> Double {
-        return 230.00 // Mock data
+
+    /// Generic per-source revenue read from `creator_earnings/{id}/sources/{source}`.
+    /// Returns 0 when a creator hasn't earned from that stream yet (no fake data).
+    private func getRevenueStream(creatorId: String, source: String) async -> Double {
+        #if canImport(FirebaseFirestore)
+        guard !creatorId.isEmpty else { return 0 }
+        do {
+            let doc = try await db.collection("creator_earnings")
+                .document(creatorId)
+                .collection("sources")
+                .document(source)
+                .getDocument()
+            return (doc.data()?["amount"] as? Double) ?? 0
+        } catch {
+            return 0
+        }
+        #else
+        return 0
+        #endif
     }
 }
 

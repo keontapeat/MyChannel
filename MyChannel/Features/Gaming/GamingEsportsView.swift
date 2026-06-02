@@ -17,6 +17,8 @@ struct GamingEsportsView: View {
     @State private var acceptingMatchId: String? = nil
     @State private var joinAlertMessage: String? = nil
     @State private var showJoinAlert = false
+    @State private var showingWallet = false
+    @State private var walletMode: VSWalletSheet.Mode = .deposit
     
     var body: some View {
         ZStack {
@@ -83,6 +85,32 @@ struct GamingEsportsView: View {
         }
         .alert(joinAlertMessage ?? "", isPresented: $showJoinAlert) {
             Button("OK", role: .cancel) {}
+        }
+        .sheet(isPresented: $showingWallet) {
+            // 🔥 FIX 3.1.1: Real-money wallet (Stripe) gated behind the same flag
+            // as wagering. Bypassing Apple IAP for funds violates Guideline 3.1.1.
+            if AppConfig.Features.enableCreatorMonetization {
+                VSWalletSheet(
+                    availableBalance: viewModel.availableBalance,
+                    initialMode: walletMode,
+                    onComplete: {
+                        Task { await viewModel.loadData() }
+                    }
+                )
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "wallet.pass")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    Text("Wallet Coming Soon")
+                        .font(.title3.bold())
+                    Text("Deposits and withdrawals will be available in a future update.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
+            }
         }
     }
     
@@ -1292,7 +1320,8 @@ struct GamingEsportsView: View {
             HStack(spacing: 12) {
                 Button(action: {
                     HapticManager.shared.impact(style: .medium)
-                    // Deposit
+                    walletMode = .deposit
+                    showingWallet = true
                 }) {
                     Text("Deposit")
                         .font(.system(size: 15, weight: .semibold))
@@ -1306,7 +1335,8 @@ struct GamingEsportsView: View {
                 
                 Button(action: {
                     HapticManager.shared.impact(style: .medium)
-                    // Withdraw
+                    walletMode = .withdraw
+                    showingWallet = true
                 }) {
                     Text("Withdraw")
                         .font(.system(size: 15, weight: .semibold))

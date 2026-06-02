@@ -12,17 +12,15 @@ struct SubscribedChannelCard: View {
     let notificationLevel: SubscriptionsViewModel.NotificationLevel
     let onUnsubscribe: () -> Void
     let onNotificationChange: (SubscriptionsViewModel.NotificationLevel) -> Void
+    var onOpen: () -> Void = {}
     
     @State private var showNotificationMenu = false
     @State private var showUnsubscribeConfirmation = false
     
     var body: some View {
         Button {
-            // Navigate to channel profile (you'd implement this navigation)
-            NotificationCenter.default.post(
-                name: NSNotification.Name("NavigateToProfile"),
-                object: channel.id
-            )
+            HapticManager.shared.impact(style: .light)
+            onOpen()
         } label: {
             HStack(spacing: 12) {
                 // Channel avatar

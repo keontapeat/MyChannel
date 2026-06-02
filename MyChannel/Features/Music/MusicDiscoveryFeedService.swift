@@ -11,6 +11,9 @@ import SwiftUI
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
 
 // MARK: - Uploaded Track Model
 
@@ -95,8 +98,19 @@ final class MusicDiscoveryFeedService: ObservableObject {
 
     func incrementStream(trackId: String) {
         #if canImport(FirebaseFirestore)
-        Firestore.firestore().collection("music_tracks").document(trackId)
-            .updateData(["streamCount": FieldValue.increment(Int64(1))])
+        // 🔐 streamCount is payout-bearing and server-controlled. We log a play
+        // event; the incrementStreamCountOnPlay Cloud Function does the increment.
+        var event: [String: Any] = [
+            "songId": trackId,
+            "playedAt": FieldValue.serverTimestamp(),
+            "source": "discovery_feed"
+        ]
+        #if canImport(FirebaseAuth)
+        if let uid = Auth.auth().currentUser?.uid {
+            event["listenerId"] = uid
+        }
+        #endif
+        Firestore.firestore().collection("music_plays").document().setData(event)
         #endif
     }
 

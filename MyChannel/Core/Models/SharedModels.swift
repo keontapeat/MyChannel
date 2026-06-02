@@ -123,6 +123,7 @@ enum StoryError: Error, LocalizedError {
     case invalidVideo(String)
     case recordingFailed(String)
     case processingFailed(String)
+    case uploadCancelled
     
     var errorDescription: String? {
         switch self {
@@ -136,6 +137,8 @@ enum StoryError: Error, LocalizedError {
             return "Recording failed: \(message)"
         case .processingFailed(let message):
             return "Processing failed: \(message)"
+        case .uploadCancelled:
+            return "Upload cancelled"
         }
     }
 }

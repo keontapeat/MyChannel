@@ -91,19 +91,15 @@ struct LiveStreamerAwardsView: View {
                     // Timeframe picker
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach([
-                                LiveStreamerAwardsSystem.Timeframe.daily,
-                                .weekly,
-                                .monthly,
-                                .quarterly,
-                                .yearly,
-                                .allTime
-                            ], id: \.rawValue) { timeframe in
+                            ForEach(LiveStreamerAwardsSystem.Timeframe.allCases, id: \.rawValue) { timeframe in
                                 AwardsFilterChip(
                                     title: timeframe.rawValue,
                                     isSelected: selectedTimeframe == timeframe
                                 ) {
                                     selectedTimeframe = timeframe
+                                    withAnimation(.easeInOut(duration: 0.25)) {
+                                        awards.applyFilters(timeframe: timeframe, category: selectedCategory)
+                                    }
                                 }
                             }
                         }
@@ -116,9 +112,13 @@ struct LiveStreamerAwardsView: View {
                             ForEach(LiveStreamerAwardsSystem.LeaderboardCategory.allCases, id: \.rawValue) { category in
                                 AwardsFilterChip(
                                     title: category.rawValue,
+                                    icon: category.icon,
                                     isSelected: selectedCategory == category
                                 ) {
                                     selectedCategory = category
+                                    withAnimation(.easeInOut(duration: 0.25)) {
+                                        awards.applyFilters(timeframe: selectedTimeframe, category: category)
+                                    }
                                 }
                             }
                         }
@@ -126,105 +126,136 @@ struct LiveStreamerAwardsView: View {
                     }
                 }
                 
-                if let topStreamer = awards.topStreamers.first {
-                    featuredTopStreamerCard(ranking: topStreamer)
-                        .padding(.horizontal, 16)
-                }
-                
-                // Rankings List
-                VStack(spacing: 12) {
-                    ForEach(Array(awards.topStreamers.dropFirst().enumerated()), id: \.element.id) { index, ranking in
-                        RankingCard(ranking: ranking)
+                if awards.topStreamers.isEmpty {
+                    leaderboardEmptyState
+                } else {
+                    if let topStreamer = awards.topStreamers.first {
+                        featuredTopStreamerCard(ranking: topStreamer)
+                            .padding(.horizontal, 16)
                     }
+                    
+                    // Rankings List
+                    VStack(spacing: 12) {
+                        ForEach(Array(awards.topStreamers.dropFirst().enumerated()), id: \.element.id) { index, ranking in
+                            RankingCard(ranking: ranking)
+                        }
+                    }
+                    .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 16)
             }
             .padding(.vertical, 20)
         }
     }
 
+    private var leaderboardEmptyState: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.system(size: 44, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+            Text("No streamers ranked yet")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+            Text("No one has charted in \(selectedCategory.rawValue) for \(selectedTimeframe.rawValue.lowercased()) yet. Check back soon or pick another filter.")
+                .font(.system(size: 14))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
+    }
+
     private func featuredTopStreamerCard(ranking: LiveStreamerAwardsSystem.StreamerRanking) -> some View {
         HStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(.systemGray4), Color(.systemGray2)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 128, height: 142)
-                .overlay(
-                    Image(systemName: "person.crop.square.fill")
-                        .font(.system(size: 54, weight: .medium))
-                        .foregroundColor(.white.opacity(0.92))
-                )
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Top Streamer of the \(selectedTimeframe == .daily ? "Day" : selectedTimeframe == .weekly ? "Week" : selectedTimeframe == .monthly ? "Month" : selectedTimeframe == .quarterly ? "Quarter" : selectedTimeframe == .yearly ? "Year" : "Era")")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-
-                Text("#1")
-                    .font(.system(size: 50, weight: .black, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.primary)
-
-                Text(ranking.streamer.displayName)
-                    .font(.system(size: 21, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .lineLimit(2)
-
-                Divider()
-
-                HStack(spacing: 18) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Hours Streamed")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        Text(String(format: "%.0f", ranking.totalHoursStreamed))
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Peak CCU")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        Text(formatCompactNumber(ranking.peakViewers))
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                    }
-                }
-            }
-
+            featuredAvatar
+            featuredInfoColumn(ranking: ranking)
             Spacer(minLength: 0)
-
-            VStack {
-                Spacer()
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.Colors.primary.opacity(0.16))
-                        .frame(width: 58, height: 58)
-                    Image(systemName: "medal.star.fill")
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(AppTheme.Colors.primary)
-                }
-            }
+            featuredMedalBadge
         }
         .padding(12)
-        .background(
-            LinearGradient(
-                colors: [Color(.systemBackground), AppTheme.Colors.primary.opacity(0.05)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(AppTheme.Colors.primary.opacity(0.65), lineWidth: 2)
-        )
+        .background(featuredCardBackground)
+        .overlay(featuredCardBorder)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: AppTheme.Colors.primary.opacity(0.18), radius: 12, x: 0, y: 8)
+    }
+
+    private var featuredAvatar: some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [Color(.systemGray4), Color(.systemGray2)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .frame(width: 128, height: 142)
+            .overlay(
+                Image(systemName: "person.crop.square.fill")
+                    .font(.system(size: 54, weight: .medium))
+                    .foregroundColor(.white.opacity(0.92))
+            )
+    }
+
+    private func featuredInfoColumn(ranking: LiveStreamerAwardsSystem.StreamerRanking) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Top Streamer of the \(selectedTimeframe.periodNoun)")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+
+            Text("#1")
+                .font(.system(size: 50, weight: .black, design: .rounded))
+                .foregroundColor(AppTheme.Colors.primary)
+
+            Text(ranking.streamer.displayName)
+                .font(.system(size: 21, weight: .bold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .lineLimit(2)
+
+            Divider()
+
+            HStack(spacing: 18) {
+                featuredStat(label: "Hours Streamed", value: String(format: "%.0f", ranking.totalHoursStreamed))
+                featuredStat(label: "Peak CCU", value: formatCompactNumber(ranking.peakViewers))
+            }
+        }
+    }
+
+    private func featuredStat(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+            Text(value)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+        }
+    }
+
+    private var featuredMedalBadge: some View {
+        VStack {
+            Spacer()
+            ZStack {
+                Circle()
+                    .fill(AppTheme.Colors.primary.opacity(0.16))
+                    .frame(width: 58, height: 58)
+                Image(systemName: "medal.star.fill")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.primary)
+            }
+        }
+    }
+
+    private var featuredCardBackground: some View {
+        LinearGradient(
+            colors: [Color(.systemBackground), AppTheme.Colors.primary.opacity(0.05)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var featuredCardBorder: some View {
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .stroke(AppTheme.Colors.primary.opacity(0.65), lineWidth: 2)
     }
 
     private func formatCompactNumber(_ value: Int) -> String {
@@ -306,6 +337,16 @@ struct LiveStreamerAwardsView: View {
     }
     
     // MARK: - Section 2: Nominee Showcase
+
+    /// Deterministic vote count from stable seeds so numbers don't jitter on redraw.
+    private func stableVoteCount(categoryId: String, index: Int, salt: Int = 0) -> Int {
+        var hasher = Hasher()
+        hasher.combine(categoryId)
+        hasher.combine(index)
+        hasher.combine(salt)
+        let base = abs(hasher.finalize())
+        return 100 + (base % 900)
+    }
     
     private var nomineeShowcaseSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -334,19 +375,20 @@ struct LiveStreamerAwardsView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 16) {
                             ForEach(0..<5, id: \.self) { index in
+                                let nomineeId = "\(category.id)-\(index)"
                                 NomineeCard(
                                     nominee: AwardNominee(
-                                        id: "\(category.id)-\(index)",
+                                        id: nomineeId,
                                         streamerName: "Nominee \(index + 1)",
                                         categoryName: category.rawValue,
-                                        voteCount: Int.random(in: 100...1000),
+                                        voteCount: stableVoteCount(categoryId: category.id, index: index) + awards.voteBoost(forNominee: nomineeId),
                                         avgViewers: "2.4K",
                                         hoursStreamed: "142",
                                         subscribers: "856"
                                     ),
-                                    isVoted: false,
+                                    isVoted: awards.didVote(forNominee: nomineeId, inCategory: category.id),
                                     onVote: {
-                                        // TODO: Handle vote
+                                        awards.castVote(nomineeId: nomineeId, categoryId: category.id)
                                     }
                                 )
                                 .staggeredReveal(index: index, delay: 0.05)
@@ -453,6 +495,35 @@ struct LiveStreamerAwardsView: View {
     }
     
     // MARK: - Section 5: Live Voting
+
+    /// Human-readable countdown to the end of the voting window.
+    private var votingTimeRemaining: String {
+        let seconds = awards.currentSeason.endDate.timeIntervalSinceNow
+        guard seconds > 0 else { return "Voting closed" }
+        let days = Int(seconds / 86400)
+        if days >= 1 { return "\(days)d left" }
+        let hours = Int(seconds / 3600)
+        if hours >= 1 { return "\(hours)h left" }
+        let minutes = max(1, Int(seconds / 60))
+        return "\(minutes)m left"
+    }
+
+    /// Stable, descending-sorted nominees for a category's live voting panel.
+    private func votingNominees(for category: LiveStreamerAwardsSystem.AwardCategory) -> [AwardNominee] {
+        (0..<3).map { index in
+            let nomineeId = "\(category.id)-vote-\(index)"
+            return AwardNominee(
+                id: nomineeId,
+                streamerName: "Nominee \(index + 1)",
+                categoryName: category.rawValue,
+                voteCount: stableVoteCount(categoryId: category.id, index: index, salt: 7) + awards.voteBoost(forNominee: nomineeId),
+                avgViewers: "2.4K",
+                hoursStreamed: "142",
+                subscribers: "856"
+            )
+        }
+        .sorted { $0.voteCount > $1.voteCount }
+    }
     
     private var liveVotingSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -471,7 +542,7 @@ struct LiveStreamerAwardsView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "clock.fill")
                         .font(.system(size: 12))
-                    Text("14d left")
+                    Text(votingTimeRemaining)
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .foregroundColor(.secondary)
@@ -480,42 +551,40 @@ struct LiveStreamerAwardsView: View {
             
             // Category voting results
             ForEach(Array(LiveStreamerAwardsSystem.AwardCategory.allCases.prefix(3)), id: \.id) { category in
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Image(systemName: category.icon)
-                            .font(.system(size: 14))
-                            .foregroundColor(category.color)
-                        
-                        Text(category.rawValue)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                    }
-                    .padding(.horizontal, 16)
-                    
-                    VStack(spacing: 8) {
-                        ForEach(0..<3, id: \.self) { index in
-                            VotingProgressBar(
-                                nominee: AwardNominee(
-                                    id: "\(category.id)-vote-\(index)",
-                                    streamerName: "Nominee \(index + 1)",
-                                    categoryName: category.rawValue,
-                                    voteCount: Int.random(in: 100...1000),
-                                    avgViewers: "2.4K",
-                                    hoursStreamed: "142",
-                                    subscribers: "856"
-                                ),
-                                totalVotes: 2500,
-                                isLeading: index == 0
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(AppTheme.Colors.surface)
-                    .cornerRadius(16)
-                    .padding(.horizontal, 16)
+                votingCategoryPanel(category: category)
+            }
+        }
+    }
+
+    private func votingCategoryPanel(category: LiveStreamerAwardsSystem.AwardCategory) -> some View {
+        let nominees = votingNominees(for: category)
+        let totalVotes = max(1, nominees.reduce(0) { $0 + $1.voteCount })
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: category.icon)
+                    .font(.system(size: 14))
+                    .foregroundColor(category.color)
+
+                Text(category.rawValue)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+            }
+            .padding(.horizontal, 16)
+
+            VStack(spacing: 8) {
+                ForEach(Array(nominees.enumerated()), id: \.element.id) { index, nominee in
+                    VotingProgressBar(
+                        nominee: nominee,
+                        totalVotes: totalVotes,
+                        isLeading: index == 0
+                    )
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(AppTheme.Colors.surface)
+            .cornerRadius(16)
+            .padding(.horizontal, 16)
         }
     }
     
@@ -562,7 +631,7 @@ struct LiveStreamerAwardsView: View {
                 Spacer()
                 
                 CircularProgress(
-                    progress: Double(awards.myAchievements.count) / Double(LiveStreamerAwardsSystem.allAchievements.count),
+                    progress: LiveStreamerAwardsSystem.allAchievements.isEmpty ? 0 : Double(awards.myAchievements.count) / Double(LiveStreamerAwardsSystem.allAchievements.count),
                     size: 60
                 )
             }
@@ -604,54 +673,64 @@ struct LiveStreamerAwardsView: View {
     
     private func myRankCard(ranking: LiveStreamerAwardsSystem.StreamerRanking) -> some View {
         VStack(spacing: 20) {
-            // Rank Badge
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [ranking.tier.color, ranking.tier.color.opacity(0.6)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 120, height: 120)
-                
-                VStack(spacing: 4) {
-                    Text("#\(ranking.rank)")
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Text(ranking.tier.rawValue)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                }
-            }
-            
-            // Rank Change
-            if let change = ranking.rankChange {
-                HStack(spacing: 4) {
-                    Image(systemName: change > 0 ? "arrow.up" : change < 0 ? "arrow.down" : "minus")
-                        .foregroundColor(change > 0 ? .green : change < 0 ? .red : .gray)
-                    Text("\(abs(change)) from last week")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            // Points
-            VStack(spacing: 4) {
-                Text("\(ranking.points) Points")
-                    .font(.system(size: 24, weight: .bold))
-                Text("Top \(Int(Double(ranking.rank) / 1000.0 * 100))% of streamers")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-            }
+            myRankBadge(ranking: ranking)
+            myRankChange(ranking: ranking)
+            myRankPoints(ranking: ranking)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)
         .background(AppTheme.Colors.surface)
         .cornerRadius(20)
         .padding(.horizontal, 16)
+    }
+
+    private func myRankBadge(ranking: LiveStreamerAwardsSystem.StreamerRanking) -> some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [ranking.tier.color, ranking.tier.color.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 120, height: 120)
+
+            VStack(spacing: 4) {
+                Text("#\(ranking.rank)")
+                    .font(.system(size: 32, weight: .bold))
+                    .foregroundColor(.white)
+
+                Text(ranking.tier.rawValue)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func myRankChange(ranking: LiveStreamerAwardsSystem.StreamerRanking) -> some View {
+        if let change = ranking.rankChange {
+            let symbol = change > 0 ? "arrow.up" : (change < 0 ? "arrow.down" : "minus")
+            let tint: Color = change > 0 ? .green : (change < 0 ? .red : .gray)
+            HStack(spacing: 4) {
+                Image(systemName: symbol)
+                    .foregroundColor(tint)
+                Text("\(abs(change)) from last \(selectedTimeframe.periodNoun.lowercased())")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private func myRankPoints(ranking: LiveStreamerAwardsSystem.StreamerRanking) -> some View {
+        VStack(spacing: 4) {
+            Text("\(ranking.points) Points")
+                .font(.system(size: 24, weight: .bold))
+            Text("\(awards.percentileLabel(for: ranking.rank)) of streamers")
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+        }
     }
     
     private var statsGrid: some View {
@@ -726,18 +805,25 @@ struct AwardsTabButton: View {
 
 struct AwardsFilterChip: View {
     let title: String
+    var icon: String? = nil
     let isSelected: Bool
     let action: () -> Void
     
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.surface)
-                .cornerRadius(20)
+            HStack(spacing: 6) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                Text(title)
+                    .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
+            }
+            .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(isSelected ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+            .cornerRadius(20)
         }
     }
 }

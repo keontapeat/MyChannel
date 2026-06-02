@@ -1,0 +1,16 @@
+# Transcode service image — includes ffmpeg/ffprobe for HLS + FLAC rendering.
+FROM node:20-slim
+
+# ffmpeg provides both ffmpeg and ffprobe; libchromaprint-tools provides fpcalc.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --omit=dev
+COPY . .
+RUN npm run build || npx tsc
+
+ENV PORT=8090
+EXPOSE 8090
+CMD ["node", "dist/transcode.js"]

@@ -33,7 +33,7 @@ private func loadFlicks() {
         
         do {
             let db = Firestore.firestore()
-            let snapshot = try await db.collection("shorts")
+            let snapshot = try await db.collection("flicks")
                 .whereField("creatorId", isEqualTo: currentUserId)
                 .order(by: "createdAt", descending: true)
                 .limit(to: 50)
@@ -300,7 +300,7 @@ console.log('Flick uploaded:', {
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 
-const flickRef = await addDoc(collection(db, 'shorts'), {
+const flickRef = await addDoc(collection(db, 'flicks'), {
   title: title,
   description: description,
   videoUrl: videoURL,

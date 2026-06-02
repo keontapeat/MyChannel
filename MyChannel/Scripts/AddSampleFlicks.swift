@@ -141,10 +141,10 @@ class AddSampleFlicks {
         let db = Firestore.firestore()
         
         do {
-            let snapshot = try await db.collection("shorts").getDocuments()
+            let snapshot = try await db.collection("flicks").getDocuments()
             
             for doc in snapshot.documents {
-                try await db.collection("shorts").document(doc.documentID).delete()
+                try await db.collection("flicks").document(doc.documentID).delete()
                 print("🗑️ [AddSampleFlicks] Deleted Flick: \(doc.documentID)")
             }
             

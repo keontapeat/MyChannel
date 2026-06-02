@@ -134,12 +134,14 @@ final class VSMatchWalletService: ObservableObject {
             // Don't block if fraud detection agent fails (graceful degradation)
         }
         
-        // Create payment intent
+        // 🔐 HARDENED: create the payment intent through the AUTHENTICATED escrow
+        // Cloud Function (secret key stays server-side). The wallet is credited
+        // SERVER-SIDE by the Stripe webhook once the charge actually succeeds — the
+        // client must never credit its own balance (Firestore rules enforce this).
         let amountInCents = Int(amount * 100)
-        let paymentIntentId = try await stripeService.createPaymentIntent(
-            amount: amountInCents,
-            currency: "usd",
-            customerId: userId
+        let paymentIntentId = try await MoneyEscrowService.shared.createWalletDepositIntent(
+            userId: userId,
+            amountCents: amountInCents
         )
 
         #if canImport(FirebaseFirestore)
@@ -151,28 +153,26 @@ final class VSMatchWalletService: ObservableObject {
             "createdAt": FieldValue.serverTimestamp()
         ])
         #endif
-        
-        // TODO: Confirm payment via Stripe Payment Sheet or backend
-        // For now, assume payment is confirmed after intent creation
-        print("💰 [Wallet] Payment intent created: \(paymentIntentId)")
-        
-        // Update wallet balance
-        try await updateBalance(userId: userId, amount: amount, type: .deposit)
-        
-        // Record transaction
+
+        print("💰 [Wallet] Deposit intent created server-side: \(paymentIntentId). " +
+              "Balance will update once Stripe confirms the charge (webhook).")
+
+        // NOTE: We intentionally do NOT credit the wallet here. The authoritative
+        // credit happens server-side after Stripe confirms payment, so a client
+        // can never inflate its balance by faking a deposit.
         let transaction = VSMatchTransaction(
             id: UUID().uuidString,
             userId: userId,
             type: .deposit,
             amount: amount,
-            status: .completed,
+            status: .pending,
             createdAt: Date(),
-            description: "Deposit to wallet",
+            description: "Deposit to wallet (pending payment confirmation)",
             matchId: nil
         )
-        
-        try await recordTransaction(transaction)
-        
+
+        try? await recordTransaction(transaction)
+
         return DepositResult(
             transactionId: transaction.id,
             amount: amount,
@@ -235,49 +235,20 @@ final class VSMatchWalletService: ObservableObject {
         return withdrawal
     }
     
-    /// Process withdrawal (transfer to bank/card)
+    /// Process withdrawal.
+    /// 🔐 HARDENED: money movement and wallet/withdrawal status changes happen
+    /// SERVER-SIDE only. The client merely records the pending request (done in
+    /// requestWithdrawal); a backend payout worker validates the request against
+    /// the authoritative ledger, performs the Stripe transfer with the secret key,
+    /// and flips the status. The client can no longer transfer funds to itself or
+    /// mark its own withdrawal complete (Firestore rules enforce admin-only writes
+    /// on vs_match_wallets / vs_match_withdrawals).
     private func processWithdrawal(_ withdrawal: Withdrawal) async {
-        do {
-            // Calculate net amount (after fee)
-            let netAmount = withdrawal.amount - withdrawal.processingFee
-            
-            // Transfer via Stripe
-            let amountInCents = Int(netAmount * 100)
-            try await stripeService.transferToWinner(
-                amount: amountInCents,
-                winnerId: withdrawal.userId
-            )
-            
-            // Update withdrawal status
-            #if canImport(FirebaseFirestore)
-            try await db.collection("vs_match_withdrawals").document(withdrawal.id).updateData([
-                "status": "completed",
-                "completedAt": FieldValue.serverTimestamp()
-            ])
-            
-            // Release held funds
-            try await releaseHeldFunds(userId: withdrawal.userId, amount: withdrawal.amount)
-            #endif
-            
-            // @MainActor class — direct mutation is safe
-            if let index = self.pendingWithdrawals.firstIndex(where: { $0.id == withdrawal.id }) {
-                var updated = withdrawal
-                updated.status = .completed
-                self.pendingWithdrawals[index] = updated
-            }
-        } catch {
-            // Mark as failed
-            #if canImport(FirebaseFirestore)
-            try? await db.collection("vs_match_withdrawals").document(withdrawal.id).updateData([
-                "status": "failed",
-                "error": error.localizedDescription,
-                "failedAt": FieldValue.serverTimestamp()
-            ])
-            
-            // Refund held funds to available balance (withdrawal failed)
-            try? await releaseHeldFunds(userId: withdrawal.userId, amount: withdrawal.amount, refundToAvailable: true)
-            #endif
-        }
+        // Intentionally a no-op on the client. The withdrawal request was already
+        // persisted with status "pending" by requestWithdrawal(); the secure
+        // backend payout worker takes it from here. Leaving this client-side would
+        // re-open a self-payout exploit.
+        print("🔐 [Wallet] Withdrawal \(withdrawal.id) queued for secure server-side processing")
     }
     
     // MARK: - 📊 TRANSACTION HISTORY

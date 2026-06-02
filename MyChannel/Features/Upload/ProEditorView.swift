@@ -19,6 +19,7 @@ struct ProEditorView: View {
     @State private var showExportOptions = false
     @State private var showSaveConfirmation = false
     @State private var isSaving = false
+    @State private var showTextEditor = false
     
     var body: some View {
         ZStack {
@@ -31,6 +32,9 @@ struct ProEditorView: View {
                 
                 // Video Preview
                 videoPreviewSection
+
+                // Contextual controls for the selected tool
+                contextualControls
                 
                 // Timeline
                 timelineSection
@@ -42,6 +46,12 @@ struct ProEditorView: View {
         .statusBar(hidden: true)
         .onAppear {
             editor.loadVideo(url: videoURL, existing: existingVideo)
+        }
+        .sheet(isPresented: $showTextEditor) {
+            TextOverlayEditorSheet { text in
+                editor.addTextOverlay(text: text, at: editor.currentTime)
+            }
+            .presentationDetents([.height(280)])
         }
         .sheet(isPresented: $showExportOptions) {
             ExportOptionsSheet(editor: editor, onExport: { quality in
@@ -236,6 +246,154 @@ struct ProEditorView: View {
         .background(AppTheme.Colors.surface)
     }
     
+    // MARK: - Contextual Controls
+    @ViewBuilder
+    private var contextualControls: some View {
+        Group {
+            switch editor.selectedTool {
+            case .speed:
+                speedControls
+            case .filters:
+                filterControls
+            case .audio:
+                audioControls
+            case .text:
+                textControls
+            default:
+                EmptyView()
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: editor.selectedTool)
+    }
+
+    private var speedControls: some View {
+        VStack(spacing: 10) {
+            Text("Playback Speed: \(String(format: "%.2gx", editor.playbackSpeed))")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+            HStack(spacing: 10) {
+                ForEach([0.5, 0.75, 1.0, 1.5, 2.0, 3.0], id: \.self) { speed in
+                    Button {
+                        editor.applySpeedChange(speed: speed)
+                        HapticManager.shared.impact(style: .light)
+                    } label: {
+                        Text("\(String(format: "%.2g", speed))x")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(editor.playbackSpeed == speed ? .white : AppTheme.Colors.textSecondary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(editor.playbackSpeed == speed ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .background(AppTheme.Colors.surface.opacity(0.5))
+    }
+
+    private var filterControls: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(VideoFilter.allCases) { filter in
+                    Button {
+                        editor.applyFilter(filter)
+                        HapticManager.shared.impact(style: .light)
+                    } label: {
+                        VStack(spacing: 6) {
+                            Circle()
+                                .fill(editor.selectedFilter == filter ? AppTheme.Colors.primary : AppTheme.Colors.surface)
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    Image(systemName: "camera.filters")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(editor.selectedFilter == filter ? .white : AppTheme.Colors.textSecondary)
+                                )
+                            Text(filter.rawValue)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(editor.selectedFilter == filter ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.vertical, 14)
+        .background(AppTheme.Colors.surface.opacity(0.5))
+    }
+
+    private var audioControls: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Image(systemName: editor.volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                Slider(value: Binding(
+                    get: { editor.volume },
+                    set: { editor.adjustVolume(level: $0) }
+                ), in: 0...1)
+                .tint(AppTheme.Colors.primary)
+                Text("\(Int(editor.volume * 100))%")
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(width: 44)
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.vertical, 14)
+        .background(AppTheme.Colors.surface.opacity(0.5))
+    }
+
+    private var textControls: some View {
+        VStack(spacing: 10) {
+            Button {
+                showTextEditor = true
+                HapticManager.shared.impact(style: .light)
+            } label: {
+                Label("Add Text", systemImage: "plus.circle.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(AppTheme.Colors.primary)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
+            if !editor.textOverlays.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(editor.textOverlays) { overlay in
+                            HStack(spacing: 6) {
+                                Text(overlay.text)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                    .lineLimit(1)
+                                Button {
+                                    editor.removeTextOverlay(id: overlay.id)
+                                    HapticManager.shared.impact(style: .light)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(AppTheme.Colors.textTertiary)
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(AppTheme.Colors.surface)
+                            .clipShape(Capsule())
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+        }
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .background(AppTheme.Colors.surface.opacity(0.5))
+    }
+
     // MARK: - Tools Panel
     private var toolsPanel: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -602,3 +760,57 @@ enum ExportQuality: String, CaseIterable, Identifiable {
     ProEditorView(videoURL: URL(string: "https://example.com/video.mp4")!, existingVideo: nil)
 }
 
+
+// MARK: - Text Overlay Editor Sheet
+struct TextOverlayEditorSheet: View {
+    let onAdd: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = ""
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                TextField("Enter text...", text: $text, axis: .vertical)
+                    .font(.system(size: 18, weight: .semibold))
+                    .focused($isFocused)
+                    .padding(16)
+                    .background(AppTheme.Colors.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .lineLimit(1...4)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+
+                Button {
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    onAdd(trimmed)
+                    HapticManager.shared.impact(style: .medium)
+                    dismiss()
+                } label: {
+                    Text("Add to Video")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AppTheme.Colors.textTertiary : AppTheme.Colors.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .padding(.horizontal, 20)
+
+                Spacer()
+            }
+            .background(AppTheme.Colors.background)
+            .navigationTitle("Add Text")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .onAppear { isFocused = true }
+        }
+    }
+}

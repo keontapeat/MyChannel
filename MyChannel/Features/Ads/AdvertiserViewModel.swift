@@ -39,7 +39,7 @@ class AdvertiserViewModel: ObservableObject {
     @Published var aiInsights: [String] = []
     @Published var topCreatives: [Creative] = []
     @Published var paymentMethods: [PaymentMethod] = []
-    @Published var transactions: [Transaction] = []
+    @Published var transactions: [AdvertiserTransaction] = []
     @Published var audiences: [Audience] = []
     @Published var creatives: [Creative] = []
     
@@ -206,21 +206,21 @@ class AdvertiserViewModel: ObservableObject {
     
     private func loadTransactions() async {
         transactions = [
-            Transaction(
+            AdvertiserTransaction(
                 id: "t1",
                 description: "Campaign Charge - Summer Sale",
                 amount: 234.56,
                 type: .debit,
                 date: Date()
             ),
-            Transaction(
+            AdvertiserTransaction(
                 id: "t2",
                 description: "Account Funding",
                 amount: 10000,
                 type: .credit,
                 date: Date().addingTimeInterval(-86400)
             ),
-            Transaction(
+            AdvertiserTransaction(
                 id: "t3",
                 description: "Campaign Charge - Brand Awareness",
                 amount: 156.78,
@@ -365,15 +365,15 @@ enum AdvertiserPaymentType {
     case bank
 }
 
-struct Transaction: Identifiable {
+struct AdvertiserTransaction: Identifiable {
     let id: String
     let description: String
     let amount: Double
-    let type: TransactionType
+    let type: AdvertiserTransactionType
     let date: Date
 }
 
-enum TransactionType {
+enum AdvertiserTransactionType {
     case credit
     case debit
 }

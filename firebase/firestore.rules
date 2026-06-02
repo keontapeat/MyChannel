@@ -173,19 +173,44 @@ service cloud.firestore {
     }
     
     // Flicks - 🔥 OPTIMIZED: Inline creator check + image validation
+    // (formerly the "shorts" collection — renamed to "flicks")
     match /flicks/{flickId} {
       allow read: if true;
       allow create: if isSignedIn() && 
                        isValidSize(request.resource.data, 30) &&
                        (!('thumbnailURL' in request.resource.data) || 
                         isValidImageURL(request.resource.data.thumbnailURL));
-      allow update: if (isCreator(resource.data.creatorId) || isAdmin()) &&
+      allow update: if (
+                       (isCreator(resource.data.creatorId) || isAdmin()) &&
                        (!('thumbnailURL' in request.resource.data) || 
-                        isValidImageURL(request.resource.data.thumbnailURL));
+                        isValidImageURL(request.resource.data.thumbnailURL))
+                    ) || (
+                       isSignedIn() &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['viewCount','likeCount','commentCount','shareCount','reportCount','totalWatchTime','lastViewed','viralScore','viralPrediction','predictedViews','updatedAt'])
+                    );
       allow delete: if isCreator(resource.data.creatorId) || isAdmin();
     }
+
+    match /flicks/{flickId}/events/{eventId} {
+      allow read: if false;
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.type in ['view', 'like', 'unlike', 'comment', 'share'];
+      allow update, delete: if false;
+    }
+
+    // Flick reports (abuse / content moderation) - 🔥 SECURE
+    match /flickReports/{reportId} {
+      allow read: if isSignedIn() &&
+                     (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
     
-    // Shorts - 🔥 OPTIMIZED + image validation
+    // Shorts - 🔥 LEGACY: kept read-only-compatible for migration.
     match /shorts/{shortId} {
       allow read: if true;
       allow create: if isSignedIn() && 
@@ -374,6 +399,11 @@ service cloud.firestore {
     }
     
     match /users/{userId}/blockedUsers/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // 🔥 PARITY FIX: "Not interested" choices from Watch History.
+    match /users/{userId}/notInterested/{document=**} {
       allow read, write: if isOwner(userId);
     }
     
@@ -755,7 +785,7 @@ service cloud.firestore {
     
     match /featured_videos/{document=**} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
     
     match /active_featured_videos/{document=**} {

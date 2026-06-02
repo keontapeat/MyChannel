@@ -29,6 +29,16 @@ class EnhancedTrendingService: ObservableObject {
     private let cache = NSCache<NSString, NSArray>()
     private var cancellables = Set<AnyCancellable>()
     private var updateTimer: Timer?
+
+    /// Lightweight, non-throwing accessor for the Studio dashboard "Ideas" card.
+    /// Returns currently-cached trending topic names (empty if none loaded yet),
+    /// so callers can fall back to evergreen tips without a network dependency.
+    func currentTopicTitles(limit: Int = 3) -> [String] {
+        return trendingTopics
+            .sorted { $0.trendingScore > $1.trendingScore }
+            .prefix(limit)
+            .map { $0.name }
+    }
     
     // ML Services Integration
     private let trendingAnalysisURL = "https://trending-analysis-fkri6ifojq-uc.a.run.app"

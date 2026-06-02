@@ -95,8 +95,7 @@ struct TrendingView: View {
         
         // Other videos
         let otherEntries: [(id: String, title: String)] = [
-            ("71GJrAY54Ew", "Scatz - Rebound (Official Music Video)"),
-            ("F98vGhQDrB8", "YouTube Video F98vGhQDrB8")
+            ("71GJrAY54Ew", "Scatz - Rebound (Official Music Video)")
         ]
         
         let otherVideos = otherEntries.map { e in

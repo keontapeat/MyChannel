@@ -23,7 +23,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "dexters-lab",
             name: "Dexter's Laboratory",
-            logoURL: "https://i.ytimg.com/vi/mH0h6BD5sPc/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video/b9/bb/44/mzl.ekiaettn.jpg/600x600bb.jpg",
             streamURL: s_kids2,
             category: .kids,
             description: "Omelette du fromage! 24/7 🔬",
@@ -55,7 +55,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "ed-edd-eddy",
             name: "Ed, Edd n Eddy",
-            logoURL: "https://i.ytimg.com/vi/gxo_JEgZO3A/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video/46/2a/a5/mzl.aeelrlhg.jpg/600x600bb.jpg",
             streamURL: s_kids2,
             category: .kids,
             description: "Jawbreakers! 24/7 🍬",
@@ -71,7 +71,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "codename-knd",
             name: "Codename: Kids Next Door",
-            logoURL: "https://i.ytimg.com/vi/LRsLvnB8t8M/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Features/4d/dd/f5/dj.ipvozibz.jpg/600x600bb.jpg",
             streamURL: s_kids2,
             category: .kids,
             description: "Kids Next Door, BATTLESTATIONS! 24/7",
@@ -201,7 +201,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "bobs-burgers",
             name: "Bob's Burgers",
-            logoURL: "https://i.ytimg.com/vi/Ql1V0c6Oo_o/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video5/v4/7a/d8/a6/7ad8a6e1-76c4-b135-6ff1-fd6d916ecb23/mzl.vokzsxrx.lsr/600x600bb.jpg",
             streamURL: s_entertain2,
             category: .comedy,
             description: "Burger of the day! 24/7 🍔",

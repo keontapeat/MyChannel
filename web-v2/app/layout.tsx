@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { MiniPlayerProvider } from "@/contexts/MiniPlayerContext";
 
@@ -7,11 +7,15 @@ export const metadata: Metadata = {
   description: "The next-generation video platform combining YouTube + Twitch + DraftKings + UFC",
   keywords: ["video", "streaming", "live", "gaming", "content creation", "vs matches"],
   authors: [{ name: "MyChannel" }],
-  viewport: "width=device-width, initial-scale=1",
-  themeColor: "#FF0000",
   icons: {
     icon: "/favicon.ico",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#FF0000",
 };
 
 export default function RootLayout({

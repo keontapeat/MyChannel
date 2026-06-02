@@ -40,7 +40,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "martin",
             name: "Martin",
-            logoURL: "https://i.ytimg.com/vi/I8xwjH_Y8ms/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Features/72/97/07/dj.osddohyv.jpg/600x600bb.jpg",
             streamURL: s_entertain1,
             category: .comedy,
             description: "GINA! You so crazy! 24/7 😂🔥",
@@ -72,7 +72,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "everybody-hates-chris",
             name: "Everybody Hates Chris",
-            logoURL: "https://i.ytimg.com/vi/zZHvnqZlfbo/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video114/v4/0e/73/47/0e73472b-dd41-1b24-4e39-4230873e82dc/pr_source.lsr/600x600bb.jpg",
             streamURL: s_entertain1,
             category: .comedy,
             description: "Chris Rock narrates! 24/7 😂",
@@ -104,7 +104,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "my-wife-kids",
             name: "My Wife and Kids",
-            logoURL: "https://i.ytimg.com/vi/VqakNNyVk-g/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video/3b/a4/89/mzl.qthkzhfe.jpg/600x600bb.jpg",
             streamURL: s_entertain1,
             category: .comedy,
             description: "Damon Wayans classic! 24/7 👨‍👩‍👧‍👦",
@@ -120,7 +120,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "wayans-bros",
             name: "The Wayans Bros.",
-            logoURL: "https://i.ytimg.com/vi/kUJcPME1T5o/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video3/v4/ce/8e/06/ce8e06f9-f287-0ec9-0d0c-dd3025b020a4/mzl.joxsulxi.jpg/600x600bb.jpg",
             streamURL: s_entertain1,
             category: .comedy,
             description: "Shawn & Marlon! 24/7 😂",
@@ -185,7 +185,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "bet-jams",
             name: "BET Jams",
-            logoURL: "https://i.ytimg.com/vi/JYdoJcV25f0/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video211/v4/0e/15/6b/0e156bae-6a14-5b35-6401-a217d813d826/IT_LSR_LHHATL_S13a_3000x3000.png/600x600bb.jpg",
             streamURL: s_vevo_hip,
             category: .music,
             description: "Hip-hop hits 24/7 🎤🔥",
@@ -250,7 +250,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "regular-show",
             name: "Regular Show",
-            logoURL: "https://i.ytimg.com/vi/y894QNtX0VA/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video/v4/30/98/85/30988553-3b03-378a-e631-62f47190e40c/mzl.xucimltm.jpg/600x600bb.jpg",
             streamURL: s_kids2,
             category: .kids,
             description: "OOOOOH! 24/7 🐦🦝",
@@ -266,7 +266,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "adventure-time",
             name: "Adventure Time",
-            logoURL: "https://i.ytimg.com/vi/LhQizg-KDXM/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video/v4/b9/6e/2f/b96e2feb-31cb-a6e3-9e1a-2e0e07cb18ad/mzl.edfwsgvj.lsr/600x600bb.jpg",
             streamURL: s_kids2,
             category: .kids,
             description: "Mathematical! 24/7 🗡️🐕",

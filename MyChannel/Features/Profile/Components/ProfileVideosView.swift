@@ -19,6 +19,7 @@ struct ProfileVideosView: View {
     @State private var typeFilter: VideoTypeFilter = .all
     @State private var advancedSortColumn: AdvancedSortColumn = .views
     @State private var advancedSortAscending: Bool = false
+    @StateObject private var analyticsStore = AdvancedAnalyticsStore()
     @State private var metrixVideoId: String? = nil
     @State private var showingFilterTray: Bool = true
     private let columns = [
@@ -282,6 +283,10 @@ struct ProfileVideosView: View {
             return filteredVideos.sorted { $0.viewCount > $1.viewCount }
         case .oldest:
             return filteredVideos.sorted { $0.createdAt < $1.createdAt }
+        case .mostComments:
+            return filteredVideos.sorted { $0.commentCount > $1.commentCount }
+        case .longest:
+            return filteredVideos.sorted { $0.duration > $1.duration }
         }
     }
     
@@ -337,11 +342,23 @@ struct ProfileVideosView: View {
                 ? base.sorted { $0.viewCount < $1.viewCount }
                 : base.sorted { $0.viewCount > $1.viewCount }
         case .ctr:
-            return base // CTR served by ML; default to view order
+            return base.sorted {
+                let a = analyticsStore.ctr(for: $0.id) ?? -1
+                let b = analyticsStore.ctr(for: $1.id) ?? -1
+                return advancedSortAscending ? a < b : a > b
+            }
         case .watchTime:
-            return base // Watch time served by ML; default to view order
+            return base.sorted {
+                let a = analyticsStore.avgWatchTime(for: $0.id) ?? -1
+                let b = analyticsStore.avgWatchTime(for: $1.id) ?? -1
+                return advancedSortAscending ? a < b : a > b
+            }
         case .revenue:
-            return base // Revenue served by ML; default to view order
+            return base.sorted {
+                let a = analyticsStore.revenue(for: $0.id, viewCount: $0.viewCount) ?? -1
+                let b = analyticsStore.revenue(for: $1.id, viewCount: $1.viewCount) ?? -1
+                return advancedSortAscending ? a < b : a > b
+            }
         }
     }
 
@@ -357,7 +374,7 @@ struct ProfileVideosView: View {
                     .transition(.opacity)
             }
         } else if layoutMode == .advanced {
-            // 🔥 ADVANCED: YouTube Studio-style table view
+            // 🔥 ADVANCED: YouTube Studio-style table view with REAL analytics
             VStack(spacing: 0) {
                 AdvancedTableColumnHeader(
                     sortColumn: $advancedSortColumn,
@@ -365,17 +382,32 @@ struct ProfileVideosView: View {
                 )
                 .padding(.bottom, 8)
 
+                if analyticsStore.isLoading && analyticsStore.analytics.isEmpty {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Loading analytics…")
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppTheme.Colors.textTertiary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                }
+
                 LazyVStack(spacing: 0) {
                     ForEach(advancedSortedVideos, id: \.id) { video in
                         AdvancedVideoTableRow(
                             video: video,
                             ownerId: user.id,
+                            analytics: analyticsStore.analytics(for: video.id),
                             onMetrixTap: { metrixVideoId = video.id }
                         )
                         Divider()
                             .padding(.leading, 16)
                     }
                 }
+            }
+            .task(id: filteredVideoIDs) {
+                await analyticsStore.load(videoIds: filteredVideoIDs)
             }
             .sheet(item: Binding(
                 get: { metrixVideoId.map { AdvancedMetrixItem(id: $0) } },
@@ -493,12 +525,16 @@ enum SortMode: String, CaseIterable {
     case newest
     case popular
     case oldest
+    case mostComments
+    case longest
 
     var title: String {
         switch self {
         case .newest: return "Newest"
-        case .popular: return "Popular"
+        case .popular: return "Most viewed"
         case .oldest: return "Oldest"
+        case .mostComments: return "Most comments"
+        case .longest: return "Longest"
         }
     }
 
@@ -507,6 +543,8 @@ enum SortMode: String, CaseIterable {
         case .newest: return "arrow.up.arrow.down"
         case .popular: return "chart.bar"
         case .oldest: return "clock.arrow.circlepath"
+        case .mostComments: return "bubble.left.and.bubble.right"
+        case .longest: return "timer"
         }
     }
 }

@@ -9,9 +9,16 @@ import Foundation
 import Combine
 import AVFoundation
 import SwiftUI
+import Network
 import FirebaseStorage
 
 // MARK: - Offline Download Service (YouTube Premium Parity)
+//
+// Canonical offline-downloads engine for MyChannel. This is the single source of
+// truth for offline video downloads across the app: the in-player download button,
+// the download quality sheet, the Downloads screen, and the Profile "Downloads" tab
+// all read and write through this service.
+//
 @MainActor
 class OfflineDownloadService: ObservableObject {
     static let shared = OfflineDownloadService()
@@ -22,6 +29,8 @@ class OfflineDownloadService: ObservableObject {
     @Published var totalDownloadProgress: Double = 0.0
     @Published var availableStorage: Int64 = 0
     @Published var usedStorage: Int64 = 0
+    /// True when the device currently has a Wi-Fi connection. Updated live via NWPathMonitor.
+    @Published private(set) var isOnWiFiConnection: Bool = true
     
     // Download settings
     @Published var downloadQuality: DownloadQuality = .medium
@@ -31,6 +40,10 @@ class OfflineDownloadService: ObservableObject {
     
     private let fileManager = FileManager.default
     private var cancellables = Set<AnyCancellable>()
+
+    // Live network reachability (replaces the old hardcoded isOnWiFi() placeholder).
+    private let pathMonitor = NWPathMonitor()
+    private let pathMonitorQueue = DispatchQueue(label: "com.mychannel.offlinedownloads.network")
     
     // Download directory
     private var downloadsDirectory: URL {
@@ -39,9 +52,22 @@ class OfflineDownloadService: ObservableObject {
     }
     
     private init() {
+        startNetworkMonitoring()
         setupDownloadService()
         loadExistingDownloads()
         updateStorageInfo()
+    }
+
+    // MARK: - Network Monitoring
+
+    private func startNetworkMonitoring() {
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            let onWiFi = path.status == .satisfied && path.usesInterfaceType(.wifi)
+            Task { @MainActor in
+                self?.isOnWiFiConnection = onWiFi
+            }
+        }
+        pathMonitor.start(queue: pathMonitorQueue)
     }
     
     // MARK: - Download Management
@@ -157,6 +183,84 @@ class OfflineDownloadService: ObservableObject {
     /// Check if video is available offline
     func isVideoAvailableOffline(_ videoId: String) -> Bool {
         return getOfflineVideo(videoId) != nil
+    }
+
+    // MARK: - Convenience API (shared across UI surfaces)
+
+    /// Whether a video has a download record in any state (queued/downloading/completed).
+    func hasDownload(videoId: String) -> Bool {
+        downloads.contains { $0.videoId == videoId }
+    }
+
+    /// The completed downloads, sorted newest-first. Used by the Downloads screen and Profile tab.
+    var completedDownloads: [OfflineDownload] {
+        downloads
+            .filter { $0.status == .completed }
+            .sorted { $0.downloadedAt > $1.downloadedAt }
+    }
+
+    /// Downloads that are currently queued or actively downloading.
+    var inProgressDownloads: [OfflineDownload] {
+        downloads.filter { $0.status == .downloading || $0.status == .queued }
+    }
+
+    /// Total bytes used by completed downloads (sum of file sizes), for quick UI display.
+    var totalDownloadedBytes: Int64 {
+        downloads.reduce(0) { $0 + Int64($1.fileSize) }
+    }
+
+    /// Human-readable total storage used by downloads.
+    func formattedStorageUsed() -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: usedStorage)
+    }
+
+    /// Delete a download by its source videoId (convenience for call sites that only
+    /// track the video, not the download record id).
+    func deleteDownload(videoId: String) async throws {
+        guard let download = downloads.first(where: { $0.videoId == videoId }) else {
+            throw OfflineDownloadError.downloadNotFound
+        }
+        try await deleteDownload(download.id)
+    }
+
+    /// Cancel an in-flight or queued download by its source videoId.
+    func cancelDownload(videoId: String) async {
+        guard let download = downloads.first(where: { $0.videoId == videoId }) else { return }
+        await cancelDownload(download.id)
+    }
+
+    /// Delete every download (completed, queued, in-flight).
+    func deleteAllDownloads() async {
+        for download in downloads {
+            try? await deleteDownload(download.id)
+        }
+    }
+
+    /// Build a playable `Video` for a completed offline download, pointing at the local file.
+    /// Returns nil if the file is missing (the stale record is cleaned up by the caller).
+    func offlinePlaybackVideo(for videoId: String) -> Video? {
+        guard let localURL = getOfflineVideo(videoId),
+              let download = downloads.first(where: { $0.videoId == videoId }) else {
+            return nil
+        }
+
+        return Video(
+            id: download.videoId,
+            title: download.title,
+            description: "Downloaded video",
+            thumbnailURL: download.thumbnailURL,
+            videoURL: localURL.absoluteString,
+            duration: download.duration,
+            viewCount: 0,
+            likeCount: 0,
+            creator: .defaultUser,
+            category: .entertainment,
+            tags: [],
+            isPublic: true
+        )
     }
     
     // MARK: - Download Queue Processing
@@ -365,9 +469,8 @@ class OfflineDownloadService: ObservableObject {
     }
     
     private func isOnWiFi() -> Bool {
-        // Check if device is connected to WiFi
-        // This would use Network framework
-        return true // Placeholder
+        // Live reachability from NWPathMonitor (see startNetworkMonitoring()).
+        return isOnWiFiConnection
     }
     
     private func handleNetworkChange() async {

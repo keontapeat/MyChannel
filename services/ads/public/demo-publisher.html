@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MyChannel Ads — Publisher Demo</title>
+  <style>
+    body { font-family: -apple-system, Arial, sans-serif; max-width: 760px; margin: 0 auto; padding: 24px; color: #202124; }
+    h1 { font-size: 22px; } h2 { font-size: 16px; color: #5f6368; margin-top: 32px; }
+    p { line-height: 1.5; }
+    .slot { margin: 16px 0; min-height: 90px; background: #fafafa; border: 1px dashed #ddd; border-radius: 8px; }
+    code { background: #f1f3f4; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  </style>
+
+  <!-- ▼▼▼ This is the entire MyChannel Ads integration — paste once in <head> ▼▼▼ -->
+  <script async src="http://localhost:9099/mca.js?client=pub-1234567890123456" crossorigin="anonymous"></script>
+  <!-- ▲▲▲ -->
+</head>
+<body>
+  <h1>The Daily Example — a MyChannel Ads publisher</h1>
+  <p>This page demonstrates monetization with <strong>MyChannel Ads</strong>. Each ad unit
+     below is filled by a real-time second-price auction, exactly like AdSense.</p>
+
+  <h2>Leaderboard (responsive display unit)</h2>
+  <ins class="adsbymychannel"
+       style="display:block"
+       data-mca-client="pub-1234567890123456"
+       data-mca-slot="1111111111"
+       data-mca-format="display"
+       data-full-width-responsive="true"></ins>
+  <script>(adsbymychannel = window.adsbymychannel || []).push({});</script>
+
+  <p>Article body content goes here. Publishers earn a 68% revenue share on every
+     impression (CPM) or click (CPC), with earnings paid out monthly once the
+     <code>$100</code> threshold is met.</p>
+
+  <h2>In-article native unit</h2>
+  <ins class="adsbymychannel"
+       style="display:block"
+       data-mca-client="pub-1234567890123456"
+       data-mca-slot="2222222222"
+       data-mca-format="in-article"></ins>
+  <script>(adsbymychannel = window.adsbymychannel || []).push({});</script>
+
+  <p>More content. Open your browser console / network tab to watch the
+     <code>/pub/ad</code> auction requests and impression pings fire.</p>
+</body>
+</html>

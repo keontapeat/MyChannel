@@ -50,7 +50,7 @@ final class AdYieldOptimizationService: ObservableObject {
     /// Caller (AdsService) renders the returned VAST URL in the existing IMA/AVPlayer flow.
     func resolve(_ req: AdYieldRequest) async -> AdYieldDecision {
         guard AppConfig.Features.enableAdYieldV2 else {
-            return .init(
+            return AdYieldDecision(
                 fill: false,
                 floorCPMUSD: 0,
                 bidders: [],
@@ -77,17 +77,27 @@ final class AdYieldOptimizationService: ObservableObject {
                 path: "/predict",
                 body: req
             )
-            return .init(
-                fill: raw.fill ?? false,
-                floorCPMUSD: raw.floor_cpm_usd ?? 0,
-                bidders: raw.bidders ?? [],
-                creativeTier: BrandSafetyTier(rawValue: raw.creative_tier ?? "general") ?? .general,
-                capRemaining: raw.cap_remaining ?? 0,
-                vastURL: raw.vast_url.flatMap(URL.init),
-                reason: raw.reason ?? "rtb_ok"
+            // Pre-type each value so the type-checker doesn't have to solve the
+            // whole multi-argument initializer + `??` overload set at once.
+            // (Previously this single expression took ~6s to type-check.)
+            let fill: Bool = raw.fill ?? false
+            let floorCPM: Double = raw.floor_cpm_usd ?? 0
+            let bidders: [String] = raw.bidders ?? []
+            let tier: BrandSafetyTier = BrandSafetyTier(rawValue: raw.creative_tier ?? "general") ?? .general
+            let capRemaining: Int = raw.cap_remaining ?? 0
+            let vastURL: URL? = raw.vast_url.flatMap(URL.init)
+            let reason: String = raw.reason ?? "rtb_ok"
+            return AdYieldDecision(
+                fill: fill,
+                floorCPMUSD: floorCPM,
+                bidders: bidders,
+                creativeTier: tier,
+                capRemaining: capRemaining,
+                vastURL: vastURL,
+                reason: reason
             )
         } catch {
-            return .init(
+            return AdYieldDecision(
                 fill: false,
                 floorCPMUSD: 0,
                 bidders: [],

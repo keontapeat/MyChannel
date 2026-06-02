@@ -34,6 +34,10 @@ final class EsportsTournamentService: ObservableObject {
         }
         
         if tournaments.isEmpty {
+            // 🔥 DAY-ONE: No tournaments in Firestore yet — seed the starter set as
+            // real, shared, joinable documents so every user sees the same live
+            // content (not just a client-only fallback). Idempotent via fixed IDs.
+            await seedStarterTournamentsIfNeeded()
             return Self.sampleTournaments()
         }
         
@@ -43,19 +47,81 @@ final class EsportsTournamentService: ObservableObject {
         #endif
     }
     
+    #if canImport(FirebaseFirestore)
+    /// Writes the starter tournament set to Firestore exactly once. Safe to call
+    /// repeatedly: uses fixed document IDs + merge, and a guard doc to avoid
+    /// re-seeding on every empty read. Only signed-in users can write (rules),
+    /// so this no-ops cleanly when unauthenticated.
+    private static var didAttemptSeed = false
+    private func seedStarterTournamentsIfNeeded() async {
+        guard !Self.didAttemptSeed else { return }
+        Self.didAttemptSeed = true
+        
+        let now = Date()
+        let hour: TimeInterval = 3600
+        let starters: [(id: String, name: String, game: String, prize: Double, entry: Double, format: String, current: Int, max: Int, startOffsetHours: Double, isLive: Bool, status: String)] = [
+            ("spring-championship", "Spring Championship", "Multi-Game", 50_000, 50, "Single Elimination", 248, 256, 38, false, "upcoming"),
+            ("pro-league-finals", "Pro League Finals", "Fortnite", 75_000, 100, "Single Elimination", 96, 128, 125, false, "upcoming"),
+            ("masters-valorant", "Masters Tournament", "Valorant", 100_000, 150, "Double Elimination", 180, 256, -2, true, "live"),
+            ("rookie-rumble", "Rookie Rumble", "Rocket League", 5_000, 10, "Single Elimination", 40, 64, 12, false, "active")
+        ]
+        
+        for t in starters {
+            let startDate = now.addingTimeInterval(t.startOffsetHours * hour)
+            let data: [String: Any] = [
+                "name": t.name,
+                "gameName": t.game,
+                "prizePool": t.prize,
+                "entryFee": t.entry,
+                "format": t.format,
+                "currentPlayers": t.current,
+                "maxPlayers": t.max,
+                "maxParticipants": t.max,
+                "isLive": t.isLive,
+                "status": t.status,
+                "category": "gaming",
+                "startDate": Timestamp(date: startDate),
+                "startTime": Timestamp(date: startDate),
+                "endDate": Timestamp(date: startDate.addingTimeInterval(604800)),
+                "updatedAt": FieldValue.serverTimestamp(),
+                "createdAt": FieldValue.serverTimestamp()
+            ]
+            do {
+                try await db.collection("tournaments").document(t.id).setData(data, merge: true)
+            } catch {
+                // Unauthenticated or offline — leave to ops seed script / next signed-in user.
+                print("⚠️ Tournament self-seed skipped for \(t.id): \(error.localizedDescription)")
+                return
+            }
+        }
+        print("✅ Seeded \(starters.count) starter tournaments to Firestore")
+    }
+    #endif
+    
     /// Join a tournament by adding the user to its participants subcollection.
     func joinTournament(tournamentId: String, userId: String) async throws {
         #if canImport(FirebaseFirestore)
         let ref = db.collection("tournaments").document(tournamentId)
         
+        // Idempotent: if the user already joined, don't double-count.
+        let existing = try await ref.collection("participants").document(userId).getDocument()
+        let alreadyJoined = existing.exists
+        
         try await ref.collection("participants").document(userId).setData([
             "userId": userId,
             "joinedAt": FieldValue.serverTimestamp()
-        ])
+        ], merge: true)
         
-        try await ref.updateData([
-            "currentPlayers": FieldValue.increment(Int64(1))
-        ])
+        // 🔥 FIX: Use setData(merge:) instead of updateData so this also works for
+        // tournaments whose parent doc was created lazily / by the seed tooling.
+        // updateData() throws if the document doesn't exist, which silently broke
+        // "JOIN" on freshly seeded tournaments.
+        if !alreadyJoined {
+            try await ref.setData([
+                "currentPlayers": FieldValue.increment(Int64(1)),
+                "updatedAt": FieldValue.serverTimestamp()
+            ], merge: true)
+        }
         #endif
     }
     

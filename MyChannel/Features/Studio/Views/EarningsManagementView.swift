@@ -12,10 +12,13 @@ import Charts
 struct EarningsManagementView: View {
     @EnvironmentObject private var appState: AppState
     @StateObject private var analyticsService = AdvancedAnalyticsService.shared
+    @StateObject private var economy = CreatorEconomyService.shared
     @State private var selectedPeriod: Period = .thisMonth
     @State private var showingWithdrawal = false
     @State private var showingPaymentHistory = false
     @State private var isLoading = true
+    @State private var earnings: CreatorEarnings?
+    @State private var payments: [Payment] = []
     @State private var topVideos: [(video: Video, revenue: Double)] = []
     
     enum Period: String, CaseIterable {
@@ -60,10 +63,15 @@ struct EarningsManagementView: View {
         .navigationTitle("Earnings")
         .navigationBarTitleDisplayMode(.large)
         .sheet(isPresented: $showingWithdrawal) {
-            WithdrawalSheet()
+            WithdrawalSheet(
+                availableBalance: availableBalance,
+                creatorId: appState.currentUser?.id ?? ""
+            ) {
+                Task { await loadEarningsData() }
+            }
         }
         .sheet(isPresented: $showingPaymentHistory) {
-            PaymentHistorySheet()
+            PaymentHistorySheet(payments: payments)
         }
         .task {
             await loadEarningsData()
@@ -80,19 +88,21 @@ struct EarningsManagementView: View {
         
         print("💰 [EarningsManagementView] Loading earnings data for: \(creatorId)")
         
-        // Load channel analytics
+        // Load channel analytics (for views-based context)
         do {
             _ = try await analyticsService.getChannelAnalytics(for: creatorId, timeframe: .last30Days)
-            _ = try await analyticsService.getRevenueAnalytics(for: creatorId, timeframe: .last30Days)
         } catch {
             print("⚠️ [EarningsManagementView] Failed to load analytics: \(error)")
         }
+
+        // 💰 Load REAL earnings + payout history from Firestore
+        let loadedEarnings = try? await economy.getCreatorEarnings(for: creatorId)
+        let loadedPayments = (try? await economy.fetchPaymentHistory(creatorId: creatorId)) ?? []
         
-        // Load top earning videos
+        // Load top earning videos from real view counts
         let videos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: creatorId, limit: 10)
         
-        // Calculate estimated revenue per video based on views
-        // YouTube CPM averages $1-3 per 1000 views, we estimate $2
+        // Estimate revenue per video based on real views (channel avg eCPM)
         let videosWithRevenue = videos.map { video -> (video: Video, revenue: Double) in
             let estimatedCPM = 2.0 // $2 per 1000 views
             let revenue = Double(video.viewCount) / 1000.0 * estimatedCPM
@@ -101,11 +111,17 @@ struct EarningsManagementView: View {
         .sorted { $0.revenue > $1.revenue }
         
         await MainActor.run {
+            self.earnings = loadedEarnings
+            self.payments = loadedPayments
             self.topVideos = videosWithRevenue
             self.isLoading = false
-            print("✅ [EarningsManagementView] Loaded \(videosWithRevenue.count) videos with revenue data")
+            print("✅ [EarningsManagementView] Loaded earnings: $\(String(format: "%.2f", loadedEarnings?.creatorShare ?? 0)), \(loadedPayments.count) payouts, \(videosWithRevenue.count) videos")
         }
     }
+
+    /// Creator's withdrawable balance (net 90% share).
+    private var availableBalance: Double { earnings?.creatorShare ?? 0 }
+    private var totalEarned: Double { earnings?.creatorShare ?? 0 }
     
     // MARK: - Total Earnings Card
     
@@ -116,24 +132,20 @@ struct EarningsManagementView: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 
-                Text("$\(String(format: "%.2f", analyticsService.channelAnalytics?.totalRevenue ?? 0))")
+                Text("$\(String(format: "%.2f", totalEarned))")
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .foregroundColor(.green)
                 
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 12, weight: .bold))
-                    Text("+\(String(format: "%.1f", analyticsService.revenueGrowth))%")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundColor(.green)
+                Text("90% creator share")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
             }
             
             // Balance Cards
             HStack(spacing: 12) {
                 BalanceCard(
                     title: "Available",
-                    amount: analyticsService.channelAnalytics?.totalRevenue ?? 0 * 0.8,
+                    amount: availableBalance,
                     icon: "banknote",
                     color: .green,
                     action: "Withdraw"
@@ -143,7 +155,7 @@ struct EarningsManagementView: View {
                 
                 BalanceCard(
                     title: "Pending",
-                    amount: analyticsService.channelAnalytics?.totalRevenue ?? 0 * 0.2,
+                    amount: earnings?.revenueBreakdown.tipRevenue ?? 0,
                     icon: "clock",
                     color: AppTheme.Colors.warning,
                     action: "View"
@@ -224,20 +236,39 @@ struct EarningsManagementView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Revenue Sources")
                 .font(.system(size: 20, weight: .semibold))
-            
+
+            let breakdown = earnings?.revenueBreakdown
+            let total = max(earnings?.creatorShare ?? 0, 0.0001)
+
             VStack(spacing: 12) {
                 EarningsRevenueSourceRow(
                     title: "Ad Revenue",
-                    amount: (analyticsService.channelAnalytics?.totalRevenue ?? 0) * 0.70,
-                    percentage: 70,
-                    icon: "heart.fill",
+                    amount: breakdown?.adRevenue ?? 0,
+                    percentage: Int(((breakdown?.adRevenue ?? 0) / total) * 100),
+                    icon: "play.rectangle.fill",
                     color: AppTheme.Colors.primary
                 )
-                
+
+                EarningsRevenueSourceRow(
+                    title: "Tips & Super Thanks",
+                    amount: breakdown?.tipRevenue ?? 0,
+                    percentage: Int(((breakdown?.tipRevenue ?? 0) / total) * 100),
+                    icon: "gift.fill",
+                    color: .pink
+                )
+
+                EarningsRevenueSourceRow(
+                    title: "Memberships",
+                    amount: breakdown?.membershipRevenue ?? 0,
+                    percentage: Int(((breakdown?.membershipRevenue ?? 0) / total) * 100),
+                    icon: "star.fill",
+                    color: .purple
+                )
+
                 EarningsRevenueSourceRow(
                     title: "Merchandise",
-                    amount: (analyticsService.channelAnalytics?.totalRevenue ?? 0) * 0.05,
-                    percentage: 5,
+                    amount: breakdown?.merchandiseRevenue ?? 0,
+                    percentage: Int(((breakdown?.merchandiseRevenue ?? 0) / total) * 100),
                     icon: "bag.fill",
                     color: .orange
                 )
@@ -285,14 +316,22 @@ struct EarningsManagementView: View {
                     .foregroundColor(AppTheme.Colors.primary)
             }
             
-            VStack(spacing: 12) {
-                ForEach(0..<3, id: \.self) { index in
-                    TopEarningVideoRow(
-                        rank: index + 1,
-                        title: "Amazing Content Video \(index + 1)",
-                        earnings: Double(250 - (index * 50)),
-                        views: 125000 - (index * 25000)
-                    )
+            if topVideos.isEmpty {
+                Text("Upload videos to start earning")
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 16)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(Array(topVideos.prefix(3).enumerated()), id: \.element.video.id) { index, item in
+                        TopEarningVideoRow(
+                            rank: index + 1,
+                            title: item.video.title,
+                            earnings: item.revenue,
+                            views: item.video.viewCount
+                        )
+                    }
                 }
             }
         }
@@ -313,14 +352,34 @@ struct EarningsManagementView: View {
                 .foregroundColor(AppTheme.Colors.primary)
             }
             
-            VStack(spacing: 12) {
-                PaymentRow(date: "Nov 1, 2025", amount: 1245.50, status: .completed)
-                PaymentRow(date: "Oct 1, 2025", amount: 980.25, status: .completed)
-                PaymentRow(date: "Sep 1, 2025", amount: 1520.75, status: .completed)
+            if payments.isEmpty {
+                Text("No payouts yet. Withdraw your earnings once you have a balance.")
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 16)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(payments.prefix(3), id: \.id) { payment in
+                        PaymentRow(
+                            date: payment.date.formatted(date: .abbreviated, time: .omitted),
+                            amount: payment.amount,
+                            status: mapPaymentStatus(payment.status)
+                        )
+                    }
+                }
             }
         }
         .padding(16)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func mapPaymentStatus(_ status: PaymentStatus) -> PaymentRow.PaymentStatus {
+        switch status {
+        case .completed: return .completed
+        case .failed, .refunded: return .failed
+        case .pending: return .pending
+        }
     }
     
     // MARK: - Optimization Tips
@@ -623,13 +682,24 @@ struct TipCard: View {
 
 struct WithdrawalSheet: View {
     @Environment(\.dismiss) private var dismiss
+    let availableBalance: Double
+    let creatorId: String
+    var onComplete: () -> Void = {}
+
     @State private var amount: String = ""
     @State private var selectedMethod: PaymentMethod = .bankTransfer
+    @State private var isProcessing = false
+    @State private var errorMessage: String?
     
     enum PaymentMethod: String, CaseIterable {
         case bankTransfer = "Bank Transfer"
         case paypal = "PayPal"
         case stripe = "Stripe"
+    }
+
+    private var requestedAmount: Double { Double(amount) ?? 0 }
+    private var canWithdraw: Bool {
+        requestedAmount > 0 && requestedAmount <= availableBalance && !isProcessing
     }
     
     var body: some View {
@@ -644,9 +714,15 @@ struct WithdrawalSheet: View {
                             .font(.system(size: 20, weight: .semibold))
                     }
                     
-                    Text("Available: $1,245.50")
+                    Text("Available: $\(String(format: "%.2f", availableBalance))")
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
+
+                    if requestedAmount > availableBalance {
+                        Text("Amount exceeds available balance")
+                            .font(.system(size: 12))
+                            .foregroundColor(.red)
+                    }
                 }
                 
                 Section("Payment Method") {
@@ -657,14 +733,26 @@ struct WithdrawalSheet: View {
                     }
                     .pickerStyle(.segmented)
                 }
+
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage)
+                            .font(.system(size: 13))
+                            .foregroundColor(.red)
+                    }
+                }
                 
                 Section {
-                    Button("Withdraw") {
-                        // Handle withdrawal
-                        dismiss()
+                    Button {
+                        Task { await submitWithdrawal() }
+                    } label: {
+                        HStack {
+                            if isProcessing { ProgressView().padding(.trailing, 4) }
+                            Text(isProcessing ? "Processing…" : "Withdraw")
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .frame(maxWidth: .infinity)
-                    .disabled(amount.isEmpty)
+                    .disabled(!canWithdraw)
                 }
             }
             .navigationTitle("Withdraw Funds")
@@ -678,22 +766,65 @@ struct WithdrawalSheet: View {
             }
         }
     }
+
+    private func submitWithdrawal() async {
+        guard !creatorId.isEmpty else {
+            errorMessage = "Sign in required to withdraw."
+            return
+        }
+        isProcessing = true
+        errorMessage = nil
+        do {
+            _ = try await CreatorEconomyService.shared.requestWithdrawal(
+                creatorId: creatorId,
+                amount: requestedAmount
+            )
+            isProcessing = false
+            onComplete()
+            dismiss()
+        } catch let e as CreatorEconomyError {
+            isProcessing = false
+            errorMessage = e.errorDescription
+        } catch {
+            isProcessing = false
+            // Surface the raw message so creators know exactly what happened
+            // (e.g. "Payout account setup is incomplete")
+            errorMessage = error.localizedDescription
+        }
+    }
 }
 
 // MARK: - Payment History Sheet
 
 struct PaymentHistorySheet: View {
     @Environment(\.dismiss) private var dismiss
+    let payments: [Payment]
     
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(0..<10, id: \.self) { index in
-                    PaymentRow(
-                        date: "Oct \(30 - index), 2025",
-                        amount: Double.random(in: 500...2000),
-                        status: .completed
-                    )
+            Group {
+                if payments.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .font(.system(size: 40))
+                            .foregroundColor(.secondary)
+                        Text("No payouts yet")
+                            .font(.system(size: 16, weight: .medium))
+                        Text("Your withdrawal history will appear here.")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        ForEach(payments, id: \.id) { payment in
+                            PaymentRow(
+                                date: payment.date.formatted(date: .abbreviated, time: .omitted),
+                                amount: payment.amount,
+                                status: statusFor(payment.status)
+                            )
+                        }
+                    }
                 }
             }
             .navigationTitle("Payment History")
@@ -705,6 +836,14 @@ struct PaymentHistorySheet: View {
                     }
                 }
             }
+        }
+    }
+
+    private func statusFor(_ status: PaymentStatus) -> PaymentRow.PaymentStatus {
+        switch status {
+        case .completed: return .completed
+        case .failed, .refunded: return .failed
+        case .pending: return .pending
         }
     }
 }

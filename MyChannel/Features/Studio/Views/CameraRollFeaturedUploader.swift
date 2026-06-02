@@ -21,7 +21,7 @@ class CameraRollFeaturedUploader: ObservableObject {
     @Published var errorMessage: String?
     @Published var statusText: String = ""
 
-    func upload(videoURL: URL, title: String, description: String, thumbnail: UIImage?) async -> Video? {
+    func upload(videoURL: URL, title: String, description: String, category: VideoCategory, thumbnail: UIImage?) async -> Video? {
         isUploading = true
         uploadProgress = 0
         errorMessage = nil
@@ -115,7 +115,7 @@ class CameraRollFeaturedUploader: ObservableObject {
                 "visibility": "public",
                 "status": "published",
                 "processingStatus": "completed",
-                "category": VideoCategory.other.rawValue,
+                "category": category.rawValue,
                 "tags": [],
                 "source": "camera_roll"
             ]
@@ -137,7 +137,7 @@ class CameraRollFeaturedUploader: ObservableObject {
                 viewCount: 0,
                 likeCount: 0,
                 creator: creator,
-                category: .other
+                category: category
             )
             statusText = "Uploaded & featured"
             await AnalyticsService.shared.trackEvent("featured_camera_roll_upload_completed", parameters: [
@@ -189,6 +189,7 @@ struct CameraRollUploadSheet: View {
 
     @State private var title: String = ""
     @State private var description: String = ""
+    @State private var category: VideoCategory = .entertainment
     @FocusState private var titleFocused: Bool
 
     var body: some View {
@@ -254,6 +255,36 @@ struct CameraRollUploadSheet: View {
                                 .background(Color(.systemGray6))
                                 .cornerRadius(10)
                         }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Category")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.secondary)
+                            Menu {
+                                Picker("Category", selection: $category) {
+                                    ForEach(VideoCategory.allCases, id: \.self) { cat in
+                                        Label(cat.displayName, systemImage: cat.iconName)
+                                            .tag(cat)
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: category.iconName)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                    Text(category.displayName)
+                                        .font(.system(size: 16, weight: .regular))
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(12)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(10)
+                            }
+                        }
                     }
                     .padding(.horizontal, 20)
 
@@ -290,6 +321,7 @@ struct CameraRollUploadSheet: View {
                                 videoURL: videoURL,
                                 title: title.isEmpty ? "Untitled Video" : title,
                                 description: description,
+                                category: category,
                                 thumbnail: thumbnail
                             ) {
                                 NotificationManager.shared.showSuccess("Uploaded & featured")

@@ -274,33 +274,63 @@ app.get('/v1/music/tracks/:trackId/listeners/demographic', async (req, res) => {
       .limit(10000)
       .get();
 
-    // Mock demographic data (in production, this would come from user profiles)
+    // Aggregate real demographics from listener profiles. Stream events carry
+    // userId; we resolve each unique listener's profile (age/gender/language)
+    // from the `users` collection and bucket them.
+    const uniqueUserIds = new Set<string>();
+    streamsSnap.docs.forEach(doc => {
+      const uid = doc.data().userId;
+      if (uid) uniqueUserIds.add(uid);
+    });
+
+    const ageBuckets: Record<string, number> = { '13-17': 0, '18-24': 0, '25-34': 0, '35-44': 0, '45-54': 0, '55+': 0 };
+    const genderBuckets: Record<string, number> = {};
+    const languageBuckets: Record<string, number> = {};
+    let profilesResolved = 0;
+
+    // Batch-get profiles (Firestore getAll supports up to 500 refs per call).
+    const ids = Array.from(uniqueUserIds).slice(0, 5000);
+    for (let i = 0; i < ids.length; i += 300) {
+      const chunk = ids.slice(i, i + 300);
+      const refs = chunk.map(id => db.collection('users').doc(id));
+      const snaps = await db.getAll(...refs);
+      snaps.forEach(snap => {
+        if (!snap.exists) return;
+        const u = snap.data()!;
+        profilesResolved++;
+        const age = Number(u.age) || 0;
+        if (age >= 13 && age <= 17) ageBuckets['13-17']++;
+        else if (age <= 24) ageBuckets['18-24']++;
+        else if (age <= 34) ageBuckets['25-34']++;
+        else if (age <= 44) ageBuckets['35-44']++;
+        else if (age <= 54) ageBuckets['45-54']++;
+        else if (age >= 55) ageBuckets['55+']++;
+        const gender = (u.gender || 'Unknown').toString();
+        genderBuckets[gender] = (genderBuckets[gender] || 0) + 1;
+        const lang = (u.language || u.locale || 'Unknown').toString();
+        languageBuckets[lang] = (languageBuckets[lang] || 0) + 1;
+      });
+    }
+
+    const toPct = (buckets: Record<string, number>, total: number, keyName: string) =>
+      Object.entries(buckets)
+        .filter(([, c]) => c > 0)
+        .map(([k, c]) => ({ [keyName]: k, percentage: total > 0 ? Math.round((c / total) * 100) : 0 }))
+        .sort((a: any, b: any) => b.percentage - a.percentage);
+
     const demographics = {
-      age: [
-        { range: '13-17', percentage: 15 },
-        { range: '18-24', percentage: 35 },
-        { range: '25-34', percentage: 30 },
-        { range: '35-44', percentage: 12 },
-        { range: '45-54', percentage: 5 },
-        { range: '55+', percentage: 3 }
-      ],
-      gender: [
-        { gender: 'Male', percentage: 52 },
-        { gender: 'Female', percentage: 45 },
-        { gender: 'Other', percentage: 3 }
-      ],
-      language: [
-        { language: 'English', percentage: 65 },
-        { language: 'Spanish', percentage: 15 },
-        { language: 'French', percentage: 8 },
-        { language: 'German', percentage: 5 },
-        { language: 'Other', percentage: 7 }
-      ]
+      age: Object.entries(ageBuckets).map(([range, c]) => ({
+        range,
+        percentage: profilesResolved > 0 ? Math.round((c / profilesResolved) * 100) : 0,
+      })),
+      gender: toPct(genderBuckets, profilesResolved, 'gender'),
+      language: toPct(languageBuckets, profilesResolved, 'language'),
     };
 
     res.json({
       trackId,
       totalListeners: streamsSnap.size,
+      profilesResolved,
       demographics
     });
   } catch (error) {

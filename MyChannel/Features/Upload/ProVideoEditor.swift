@@ -19,6 +19,99 @@ enum EditorTool {
     case trim, split, speed, filters, audio, text, transitions, effects
 }
 
+// MARK: - Editor Filters
+
+/// Core Image-backed video filters that actually render into the export.
+enum VideoFilter: String, CaseIterable, Identifiable {
+    case none = "None"
+    case vivid = "Vivid"
+    case mono = "Mono"
+    case noir = "Noir"
+    case sepia = "Sepia"
+    case cool = "Cool"
+    case warm = "Warm"
+    case fade = "Fade"
+
+    var id: String { rawValue }
+
+    /// Builds the filtered image for a given source frame.
+    func apply(to input: CIImage) -> CIImage {
+        switch self {
+        case .none:
+            return input
+        case .vivid:
+            let f = CIFilter(name: "CIColorControls")!
+            f.setValue(input, forKey: kCIInputImageKey)
+            f.setValue(1.25, forKey: kCIInputSaturationKey)
+            f.setValue(1.05, forKey: kCIInputContrastKey)
+            return f.outputImage ?? input
+        case .mono:
+            let f = CIFilter(name: "CIPhotoEffectMono")!
+            f.setValue(input, forKey: kCIInputImageKey)
+            return f.outputImage ?? input
+        case .noir:
+            let f = CIFilter(name: "CIPhotoEffectNoir")!
+            f.setValue(input, forKey: kCIInputImageKey)
+            return f.outputImage ?? input
+        case .sepia:
+            let f = CIFilter(name: "CISepiaTone")!
+            f.setValue(input, forKey: kCIInputImageKey)
+            f.setValue(0.85, forKey: kCIInputIntensityKey)
+            return f.outputImage ?? input
+        case .cool:
+            let f = CIFilter(name: "CITemperatureAndTint")!
+            f.setValue(input, forKey: kCIInputImageKey)
+            f.setValue(CIVector(x: 5500, y: 0), forKey: "inputNeutral")
+            f.setValue(CIVector(x: 7500, y: 0), forKey: "inputTargetNeutral")
+            return f.outputImage ?? input
+        case .warm:
+            let f = CIFilter(name: "CITemperatureAndTint")!
+            f.setValue(input, forKey: kCIInputImageKey)
+            f.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
+            f.setValue(CIVector(x: 5000, y: 0), forKey: "inputTargetNeutral")
+            return f.outputImage ?? input
+        case .fade:
+            let f = CIFilter(name: "CIPhotoEffectFade")!
+            f.setValue(input, forKey: kCIInputImageKey)
+            return f.outputImage ?? input
+        }
+    }
+}
+
+// MARK: - Text Overlay
+
+/// A text overlay that is burned into the exported video.
+struct EditorTextOverlay: Identifiable {
+    let id: String
+    var text: String
+    /// Normalized position (0...1) within the video frame.
+    var position: CGPoint
+    var fontSize: CGFloat
+    var color: Color
+    /// Seconds from the start the overlay appears.
+    var startTime: TimeInterval
+    /// Seconds from the start the overlay disappears.
+    var endTime: TimeInterval
+
+    init(
+        id: String = UUID().uuidString,
+        text: String,
+        position: CGPoint = CGPoint(x: 0.5, y: 0.5),
+        fontSize: CGFloat = 48,
+        color: Color = .white,
+        startTime: TimeInterval = 0,
+        endTime: TimeInterval = .greatestFiniteMagnitude
+    ) {
+        self.id = id
+        self.text = text
+        self.position = position
+        self.fontSize = fontSize
+        self.color = color
+        self.startTime = startTime
+        self.endTime = endTime
+    }
+}
+
 @MainActor
 class ProVideoEditor: ObservableObject {
     // Video state
@@ -32,6 +125,15 @@ class ProVideoEditor: ObservableObject {
     @Published var trimStart: TimeInterval = 0
     @Published var trimEnd: TimeInterval = 0
     @Published var timelineZoom: CGFloat = 0.5
+
+    // Effects state (these now actually render into the export)
+    @Published var selectedFilter: VideoFilter = .none
+    @Published var playbackSpeed: Double = 1.0
+    @Published var volume: Float = 1.0
+    @Published var textOverlays: [EditorTextOverlay] = []
+    @Published var isExporting = false
+    @Published var exportProgress: Double = 0
+    @Published var lastExportedURL: URL?
     
     // Video clips (for split functionality)
     @Published var clips: [VideoClip] = []
@@ -40,6 +142,9 @@ class ProVideoEditor: ObservableObject {
     private var videoURL: URL?
     private var existingVideo: Video?
     private var timeObserver: Any?
+
+    /// Live-preview filtered playback via an AVPlayerItem video composition.
+    private let previewCIContext = CIContext()
     
     // Store references for cleanup in deinit (nonisolated access)
     private nonisolated(unsafe) var playerForCleanup: AVPlayer?
@@ -142,70 +247,218 @@ class ProVideoEditor: ObservableObject {
         print("✂️ Trimming video from \(trimStart)s to \(trimEnd)s")
     }
     
-    func applySpeedChange(speed: Float) {
-        player?.rate = speed
-        print("⚡️ Applied speed change: \(speed)x")
+    func applySpeedChange(speed: Double) {
+        playbackSpeed = max(0.25, min(speed, 4.0))
+        if isPlaying {
+            player?.rate = Float(playbackSpeed)
+        }
+        print("⚡️ Applied speed change: \(playbackSpeed)x")
     }
-    
-    func applyFilter(name: String) {
-        // Apply video filter
-        print("🎨 Applied filter: \(name)")
+
+    func applyFilter(_ filter: VideoFilter) {
+        selectedFilter = filter
+        // Re-apply live preview composition so the change is visible immediately.
+        applyLivePreviewComposition()
+        print("🎨 Applied filter: \(filter.rawValue)")
     }
-    
+
     func adjustVolume(level: Float) {
-        player?.volume = level
-        print("🔊 Adjusted volume to \(level)")
+        volume = max(0, min(level, 1))
+        player?.volume = volume
+        print("🔊 Adjusted volume to \(volume)")
     }
-    
+
     func addTextOverlay(text: String, at time: TimeInterval) {
+        let overlay = EditorTextOverlay(
+            text: text,
+            startTime: time,
+            endTime: duration > 0 ? duration : .greatestFiniteMagnitude
+        )
+        textOverlays.append(overlay)
         print("📝 Added text overlay '\(text)' at \(time)s")
     }
-    
-    func addTransition(type: String, between clip1: VideoClip, and clip2: VideoClip) {
-        print("✨ Added \(type) transition between clips")
+
+    func removeTextOverlay(id: String) {
+        textOverlays.removeAll { $0.id == id }
+    }
+
+    func updateTextOverlay(_ overlay: EditorTextOverlay) {
+        if let idx = textOverlays.firstIndex(where: { $0.id == overlay.id }) {
+            textOverlays[idx] = overlay
+        }
+    }
+
+    /// Applies the currently selected filter to the live player preview so the
+    /// user sees exactly what will be exported.
+    private func applyLivePreviewComposition() {
+        guard let item = player?.currentItem, let asset = videoAsset else { return }
+        guard selectedFilter != .none else {
+            item.videoComposition = nil
+            return
+        }
+        let filter = selectedFilter
+        let context = previewCIContext
+        item.videoComposition = AVMutableVideoComposition(asset: asset) { request in
+            let source = request.sourceImage.clampedToExtent()
+            let output = filter.apply(to: source).cropped(to: request.sourceImage.extent)
+            request.finish(with: output, context: context)
+        }
     }
     
     // MARK: - Export
-    
+
     func exportVideo(quality: ExportQuality) async {
         guard let asset = videoAsset else {
             print("❌ No video asset to export")
             return
         }
-        
+
+        isExporting = true
+        exportProgress = 0
+        defer { isExporting = false }
+
         print("📹 Exporting video at \(quality.rawValue)...")
-        
-        // Create export session
-        guard let exportSession = AVAssetExportSession(asset: asset, presetName: preset(for: quality)) else {
-            print("❌ Failed to create export session")
-            return
-        }
-        
-        // Set output URL
-        let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent("edited_\(UUID().uuidString).mp4")
-        exportSession.outputURL = outputURL
-        exportSession.outputFileType = .mp4
-        
-        // Apply trim if needed
-        if trimStart > 0 || trimEnd < duration {
-            let start = CMTime(seconds: trimStart, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-            let end = CMTime(seconds: trimEnd, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-            exportSession.timeRange = CMTimeRange(start: start, end: end)
-        }
-        
-        // Export
-        await exportSession.export()
-        
-        if exportSession.status == .completed {
-            print("✅ Export completed: \(outputURL)")
-            
-            // If this is an existing video, update it in Firestore
-            if let existing = existingVideo {
-                await updateExistingVideo(existing, with: outputURL)
+
+        do {
+            // Build a composition so speed + audio volume can be baked in.
+            let composition = AVMutableComposition()
+            guard let sourceVideoTrack = try await asset.loadTracks(withMediaType: .video).first else {
+                print("❌ No video track")
+                return
             }
-        } else {
-            print("❌ Export failed: \(exportSession.error?.localizedDescription ?? "Unknown error")")
+
+            let fullDuration = try await asset.load(.duration)
+            let start = CMTime(seconds: trimStart, preferredTimescale: 600)
+            let end = CMTime(seconds: trimEnd > 0 ? trimEnd : fullDuration.seconds, preferredTimescale: 600)
+            let timeRange = CMTimeRange(start: start, end: end)
+
+            guard let compVideoTrack = composition.addMutableTrack(
+                withMediaType: .video,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+            ) else {
+                print("❌ Could not create composition video track")
+                return
+            }
+            try compVideoTrack.insertTimeRange(timeRange, of: sourceVideoTrack, at: .zero)
+            compVideoTrack.preferredTransform = try await sourceVideoTrack.load(.preferredTransform)
+
+            // Audio (respect volume / mute)
+            if volume > 0, let sourceAudioTrack = try await asset.loadTracks(withMediaType: .audio).first {
+                if let compAudioTrack = composition.addMutableTrack(
+                    withMediaType: .audio,
+                    preferredTrackID: kCMPersistentTrackID_Invalid
+                ) {
+                    try compAudioTrack.insertTimeRange(timeRange, of: sourceAudioTrack, at: .zero)
+                }
+            }
+
+            // Speed ramp (scale the inserted range)
+            if playbackSpeed != 1.0 {
+                let scaledDuration = CMTimeMultiplyByFloat64(timeRange.duration, multiplier: 1.0 / playbackSpeed)
+                composition.scaleTimeRange(
+                    CMTimeRange(start: .zero, duration: timeRange.duration),
+                    toDuration: scaledDuration
+                )
+            }
+
+            // Video composition: filter + text overlays burned in.
+            let naturalSize = try await sourceVideoTrack.load(.naturalSize)
+            let renderSize = renderSize(for: naturalSize, transform: compVideoTrack.preferredTransform)
+            let filter = selectedFilter
+            let overlays = textOverlays
+            let context = previewCIContext
+
+            let videoComposition = AVMutableVideoComposition(asset: composition) { request in
+                var image = request.sourceImage.clampedToExtent()
+                if filter != .none {
+                    image = filter.apply(to: image)
+                }
+                // Burn in text overlays active at this time.
+                let t = request.compositionTime.seconds
+                let activeOverlays = overlays.filter { t >= $0.startTime && t <= $0.endTime }
+                if !activeOverlays.isEmpty {
+                    image = Self.composite(overlays: activeOverlays, on: image, renderSize: request.sourceImage.extent.size)
+                }
+                request.finish(with: image.cropped(to: request.sourceImage.extent), context: context)
+            }
+            videoComposition.renderSize = renderSize
+
+            // Export
+            guard let exportSession = AVAssetExportSession(asset: composition, presetName: preset(for: quality)) else {
+                print("❌ Failed to create export session")
+                return
+            }
+            let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent("edited_\(UUID().uuidString).mp4")
+            exportSession.outputURL = outputURL
+            exportSession.outputFileType = .mp4
+            exportSession.videoComposition = videoComposition
+            exportSession.shouldOptimizeForNetworkUse = true
+
+            // Progress polling
+            let progressTask = Task { @MainActor in
+                while exportSession.status == .exporting || exportSession.status == .waiting {
+                    exportProgress = Double(exportSession.progress)
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                }
+            }
+
+            await exportSession.export()
+            progressTask.cancel()
+            exportProgress = 1.0
+
+            if exportSession.status == .completed {
+                print("✅ Export completed: \(outputURL)")
+                lastExportedURL = outputURL
+                if let existing = existingVideo {
+                    await updateExistingVideo(existing, with: outputURL)
+                }
+            } else {
+                print("❌ Export failed: \(exportSession.error?.localizedDescription ?? "Unknown error")")
+            }
+        } catch {
+            print("❌ Export error: \(error.localizedDescription)")
         }
+    }
+
+    /// Composites text overlays onto a CIImage by rendering them with Core Graphics.
+    nonisolated private static func composite(
+        overlays: [EditorTextOverlay],
+        on image: CIImage,
+        renderSize: CGSize
+    ) -> CIImage {
+        let size = renderSize == .zero ? image.extent.size : renderSize
+        guard size.width > 0, size.height > 0 else { return image }
+
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let overlayImage = renderer.image { ctx in
+            for overlay in overlays {
+                let uiColor = UIColor(overlay.color)
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: overlay.fontSize, weight: .bold),
+                    .foregroundColor: uiColor,
+                    .strokeColor: UIColor.black.withAlphaComponent(0.6),
+                    .strokeWidth: -3.0
+                ]
+                let attrString = NSAttributedString(string: overlay.text, attributes: attributes)
+                let textSize = attrString.size()
+                let x = (overlay.position.x * size.width) - textSize.width / 2
+                // CoreGraphics origin is top-left here (UIGraphicsImageRenderer).
+                let y = (overlay.position.y * size.height) - textSize.height / 2
+                attrString.draw(at: CGPoint(x: x, y: y))
+            }
+        }
+
+        guard let cgOverlay = overlayImage.cgImage else { return image }
+        // Flip overlay to match CIImage's bottom-left origin coordinate space.
+        var overlayCI = CIImage(cgImage: cgOverlay)
+        overlayCI = overlayCI.transformed(by: CGAffineTransform(scaleX: 1, y: -1).translatedBy(x: 0, y: -size.height))
+        return overlayCI.composited(over: image)
+    }
+
+    /// Returns the upright render size given a track's preferred transform.
+    nonisolated private func renderSize(for naturalSize: CGSize, transform: CGAffineTransform) -> CGSize {
+        let rect = CGRect(origin: .zero, size: naturalSize).applying(transform)
+        return CGSize(width: abs(rect.width), height: abs(rect.height))
     }
     
     private func preset(for quality: ExportQuality) -> String {

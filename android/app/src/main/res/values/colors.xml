@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand Colors -->
+    <color name="brand_red">#E85D5D</color>
+    <color name="brand_red_dark">#CC4444</color>
+    <color name="brand_red_light">#FF7A7A</color>
+
+    <!-- Dark Theme -->
+    <color name="background_dark">#0F0F0F</color>
+    <color name="surface_dark">#1A1A1A</color>
+    <color name="surface_variant_dark">#2A2A2A</color>
+    <color name="on_background_dark">#FFFFFF</color>
+    <color name="on_surface_dark">#E0E0E0</color>
+    <color name="on_surface_variant_dark">#AAAAAA</color>
+
+    <!-- Light Theme -->
+    <color name="background_light">#FFFFFF</color>
+    <color name="surface_light">#F5F5F5</color>
+    <color name="surface_variant_light">#EEEEEE</color>
+    <color name="on_background_light">#0F0F0F</color>
+    <color name="on_surface_light">#1A1A1A</color>
+    <color name="on_surface_variant_light">#555555</color>
+
+    <!-- Semantic -->
+    <color name="error">#CF6679</color>
+    <color name="on_error">#FFFFFF</color>
+    <color name="error_container_dark">#8C1D18</color>
+    <color name="error_container_light">#F9DEDC</color>
+
+    <!-- Outline -->
+    <color name="outline_dark">#444444</color>
+    <color name="outline_light">#BBBBBB</color>
+
+    <!-- Splash screen background (matches dark background) -->
+    <color name="splash_background">#0F0F0F</color>
+
+    <!-- Adaptive launcher icon background (brand red) -->
+    <color name="ic_launcher_background">#E85D5D</color>
+</resources>

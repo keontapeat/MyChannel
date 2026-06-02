@@ -487,7 +487,7 @@ struct VideoDetailMetaView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
 
-            LazyVStack(alignment: .leading, spacing: 16) {
+            LazyVStack(alignment: .leading, spacing: 8) {
                 ForEach(relatedVideos.filter { $0.id != video.id }.prefix(20)) { related in
                     Button {
                         HapticManager.shared.impact(style: .light)
@@ -498,82 +498,70 @@ struct VideoDetailMetaView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
+            .padding(.horizontal, 12)
+            .padding(.top, 2)
         }
     }
 
     @ViewBuilder
     private func relatedVideoRow(_ video: Video) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Thumbnail
+        HStack(alignment: .top, spacing: 8) {
+            // Compact thumbnail - YouTube style (120x68)
             ZStack(alignment: .bottomTrailing) {
                 AppAsyncImage(url: URL(string: video.thumbnailURL)) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
                 } placeholder: {
-                    Rectangle().fill(AppTheme.Colors.surface)
+                    Rectangle()
+                        .fill(AppTheme.Colors.surface)
                 }
-                .aspectRatio(16.0/9.0, contentMode: .fill)
-                .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .frame(width: 120, height: 68)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
+                // Duration badge - minimal
                 Text(formatDuration(video.duration))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(Color.black.opacity(0.75))
-                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                    .padding(8)
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(2)
+                    .padding(3)
             }
 
-            // Meta row
-            HStack(alignment: .top, spacing: 10) {
-                AsyncImage(url: URL(string: video.creator.profileImageURL ?? "")) { img in
-                    img.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Circle().fill(AppTheme.Colors.surface)
-                }
-                .frame(width: 32, height: 32)
-                .clipShape(Circle())
+            // Compact meta
+            VStack(alignment: .leading, spacing: 2) {
+                Text(video.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(video.title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
+                Text(video.creator.displayName)
+                    .font(.system(size: 11))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .lineLimit(1)
 
-                    HStack(spacing: 4) {
-                        Text(video.creator.displayName)
-                            .font(.system(size: 12))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        if video.creator.isVerified {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                    }
-
-                    Text("\(formatCount(video.viewCount)) views \u{2022} \(video.timeAgo)")
-                        .font(.system(size: 12))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 0)
-
-                Button(action: {}) {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .padding(8)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHidden(true)
+                Text("\(formatCount(video.viewCount)) views • \(video.timeAgo)")
+                    .font(.system(size: 11))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .lineLimit(1)
             }
-            .padding(.top, 2)
+
+            Spacer(minLength: 0)
+
+            // Minimal options button
+            Button(action: {}) {
+                Image(systemName: "ellipsis.vertical")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .frame(width: 24, height: 68)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHidden(true)
         }
+        .contentShape(Rectangle())
     }
 
     private func formatDuration(_ seconds: TimeInterval) -> String {
@@ -670,6 +658,14 @@ struct VideoDetailMetaView: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 24)
+        // 🔥 YOUTUBE PARITY: Whole comments card opens the full comments sheet (not just the + button)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            HapticManager.shared.impact(style: .light)
+            onComment()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Comments, \(formatCount(video.commentCount)). Tap to open.")
     }
     
     // MARK: - Action Methods (Firestore-backed)

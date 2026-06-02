@@ -206,8 +206,6 @@ struct MinimalContentSections: View {
             isCreator: true
         )
         let entries: [(id: String, title: String)] = [
-            ("96Zeze6gdEI", "YouTube Video 96Zeze6gdEI"),
-            ("l1gQVUGdMyw", "YouTube Video l1gQVUGdMyw"),
             ("71GJrAY54Ew", "Scatz - Rebound (Official Music Video)")
         ]
         let otherVideos = entries.map { e in
@@ -318,10 +316,7 @@ struct MinimalContentSections: View {
             yt("3Btk3asR_vc", "Sada Baby - Whole Lotta Choppas", "Sada Baby", views: 96_000_000),
             yt("7bUr0vbJIUK", "Icewear Vezzo - Up The Scoe ft. Lil Durk", "Icewear Vezzo", views: 47_000_000),
             yt("N8WcJ5d0-YI", "Babyface Ray - What The Business Is", "Babyface Ray", views: 20_000_000),
-            yt("kQ3JrQxv7CM", "Peezy - 2 Million Up", "Peezy", views: 56_000_000),
-            yt("w6B2Kp4eX1M", "Rebirth Island High Kill Gameplay", "Peezy", views: 1_650_000),
-            yt("q1Zk3Lm0TyU", "Top 10 Tips to Win More Gunfights", "Peezy", views: 1_050_000),
-            yt("m2N9rV3xQeE", "Warzone Movement Guide", "Peezy", views: 880_000)
+            yt("kQ3JrQxv7CM", "Peezy - 2 Million Up", "Peezy", views: 56_000_000)
         ]
     }
 
@@ -377,14 +372,11 @@ struct MinimalContentSections: View {
             })
         }
 
-        MinimalSection(title: "Trending Now", seeAllAction: { onSeeAllTrending() }) {
-            TopTenCarousel(
-                videos: trendingVideos(),
-                preserveOrder: true,
-                onPlay: { v in onPlayVideo(v) }
-            )
-            .padding(.top, 4)
-        }
+        TrendingNowSection(
+            videos: trendingVideos(),
+            onSeeAll: { onSeeAllTrending() },
+            onPlay: { v in onPlayVideo(v) }
+        )
 
         MinimalMusicSection(
             onOpenArtistMusicProfile: onOpenArtistMusicProfile,
@@ -442,12 +434,13 @@ struct MinimalContentSections: View {
 
     private func trendingVideos() -> [Video] {
         let base = friendChannelVideos.isEmpty ? [] : friendChannelVideos
-        let pinnedIDs = ["JSXmfgZzHqQ", "xfdydb_3Ra0", "96Zeze6gdEI", "l1gQVUGdMyw", "71GJrAY54Ew"]
+        let pinnedIDs = ["JSXmfgZzHqQ", "xfdydb_3Ra0", "71GJrAY54Ew"]
         let pinnedVideos: [Video] = pinnedIDs.compactMap { id in
             extraTrendingVideos().first(where: { $0.externalID == id }) ??
             detroitFlintArtistsTrending().first(where: { $0.externalID == id })
         }
-        let merged = pinnedVideos + [makeFriendTrendingVideo()] + extraTrendingVideos() + flintShowcaseVideos() + base
+        // Only real, playable content in Trending — no placeholder/filler videos.
+        let merged = pinnedVideos + [makeFriendTrendingVideo()] + extraTrendingVideos() + base
         var seen = Set<String>()
         return merged.filter { v in
             if seen.contains(v.id) { return false }
@@ -488,19 +481,32 @@ struct MinimalContentSections: View {
                 group.addTask { await loadBlockbusters() }
                 group.addTask { await loadFriendChannelVideos() }
                 group.addTask { await loadLiveChannelsAPI() }
-                group.addTask {
-                    let vids = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 50)
-                    await MainActor.run { firestoreVideos = vids }
-                }
+                group.addTask { await loadFirestoreVideos() }
             }
             // Start real-time ML-powered rankings
             rankService.startRealTimeRanking()
+
+            // 🧠 Self-classify the signed-in creator into the right Top shelf
+            // (artist / filmmaker / channel) from their own bio + uploads.
+            await CreatorCategoryClassifier.shared.classifyCurrentUserIfNeeded()
+        }
+        // 🔥 YOUTUBE PARITY: Reload creator-uploaded videos when a new upload publishes
+        // (HomeView re-broadcasts RefreshHomeFeed as RefreshHomeContentSections).
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshHomeContentSections"))) { _ in
+            Task { await loadFirestoreVideos() }
         }
         .fullScreenCover(item: $selectedLiveTVChannel) { channel in
             LiveTVPlayerView(channel: channel)
                 .environmentObject(appState)
                 .background(Color.black)
         }
+    }
+
+    // 🔥 Loads the latest public, creator-uploaded videos from Firestore for the
+    // "New from creators" / category / top-channels surfaces.
+    private func loadFirestoreVideos() async {
+        let vids = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 50)
+        await MainActor.run { firestoreVideos = vids }
     }
 
     // Loader for TMDB popular trailers powering the Home Free Movies row

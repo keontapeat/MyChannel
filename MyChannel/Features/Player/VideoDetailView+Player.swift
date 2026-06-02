@@ -195,6 +195,8 @@ extension VideoDetailView {
                             }
                     )
                     .clipped()
+                    // 🔥 YOUTUBE PARITY: Fade the video in once it's ready instead of a hard cut
+                    .transition(.opacity)
             } else {
                 // 🔥 FIX: Show black background while player loads (prevents white screen)
                 Color.black
@@ -204,8 +206,10 @@ extension VideoDetailView {
                         ProgressView()
                             .tint(.white)
                     }
+                    .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: activePlayer == nil)
         .onLongPressGesture(minimumDuration: 0.5) {
             withAnimation(.spring()) { showDebugHUD.toggle() }
         }
@@ -714,114 +718,59 @@ extension VideoDetailView {
         .opacity(controlsCoordinator.showControls ? 1.0 : 0.0)
     }
     
+    // 🔥 YOUTUBE PARITY: Slim top bar — AirPlay, a single settings gear (consolidates
+    // quality / captions / chapters / speed / loop / ambient / audio / theater / stats),
+    // and a close button. Fullscreen now lives at the bottom-right like YouTube.
     @ViewBuilder
     var topControlButtons: some View {
-        // Quality selector
-        Button(action: { showingQualitySelector = true }) {
-            ZStack {
-                Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                Image(systemName: "aqi.medium").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
-            }
-        }
-        .buttonStyle(ScaleButtonStyle())
-        
-        // Subtitles / CC toggle
-        if !playerManager.availableSubtitleOptions().isEmpty {
-            Button(action: { showingSubtitlePicker = true }) {
+        HStack(spacing: 10) {
+            // AirPlay / Cast (YouTube keeps casting up top)
+            AirPlayRoutePickerView()
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(.black.opacity(0.7)))
+                .accessibilityLabel("Cast / AirPlay")
+
+            // Consolidated settings menu (YouTube's gear)
+            playerSettingsMenu
+
+            // Close video completely
+            Button(action: {
+                print("❌ [VideoDetailView] Close button tapped - exiting video")
+                userExplicitlyClosed = true
+                playerManager.pause()
+                globalPlayer.closePlayer()
+                dismiss()
+            }) {
                 ZStack {
                     Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                    Image(systemName: "captions.bubble").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
                 }
             }
             .buttonStyle(ScaleButtonStyle())
+            .accessibilityLabel("Close video")
         }
-        
-        // Chapters toggle
-        let hasChapters = (video.chapters?.isEmpty == false) || !video.parsedChaptersFromDescription.isEmpty
-        if hasChapters {
-            Button(action: { showingChapters = true }) {
-                ZStack {
-                    Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                    Image(systemName: "list.bullet.rectangle").font(.system(size: 14, weight: .semibold)).foregroundColor(.white)
-                }
-            }
-            .buttonStyle(ScaleButtonStyle())
-        }
-        
-        // 🔥 PHASE 142: Ambient Mode Toggle
+    }
+
+    // 🔥 YOUTUBE PARITY: Single gear that opens a real settings sheet (PlayerSettingsSheet),
+    // housing every secondary control — quality, speed, captions, chapters, audio, loop,
+    // ambient, theater and stats — exactly like YouTube's settings panel.
+    @ViewBuilder
+    var playerSettingsMenu: some View {
         Button(action: {
-            ambientService.toggle()
-            showAmbientGlow = ambientService.isEnabled
             HapticManager.shared.impact(style: .light)
+            showingPlayerSettings = true
         }) {
             ZStack {
                 Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                Image(systemName: ambientService.isEnabled ? "lightbulb.fill" : "lightbulb")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(ambientService.isEnabled ? .yellow : .white)
-            }
-        }
-        .buttonStyle(ScaleButtonStyle())
-        
-        // 🔥 BEAST MODE: AI Multi-Language Dubbing
-        Button(action: { showingAudioTrackSelector = true }) {
-            ZStack {
-                Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                Image(systemName: "globe")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(currentAudioTrack != "English (Original)" ? .green : .white)
-            }
-        }
-        .buttonStyle(ScaleButtonStyle())
-        
-        // Theater Mode Toggle
-        Button(action: {
-            withAnimation(.spring()) {
-                isTheaterMode.toggle()
-            }
-        }) {
-            ZStack {
-                Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                Image(systemName: isTheaterMode ? "rectangle.compress.vertical" : "rectangle.expand.vertical")
+                Image(systemName: "gearshape.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
             }
         }
         .buttonStyle(ScaleButtonStyle())
-        
-        // Immersive fullscreen (YouTube-style)
-        Button(action: {
-            presentFullscreenPlayer()
-        }) {
-            ZStack {
-                Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                Image(systemName: "arrow.down.left.and.arrow.up.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-        }
-        .buttonStyle(ScaleButtonStyle())
-        .accessibilityLabel("Fullscreen")
-        
-        // Close video completely
-        Button(action: { 
-            print("❌ [VideoDetailView] Close button tapped - exiting video")
-            userExplicitlyClosed = true
-            // Stop playback and cleanup
-            playerManager.pause()
-            globalPlayer.closePlayer()
-            // Dismiss the view completely
-            dismiss()
-        }) {
-            ZStack {
-                Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-        }
-        .buttonStyle(ScaleButtonStyle())
-        .accessibilityLabel("Close video")
+        .accessibilityLabel("Player settings")
     }
     
     @ViewBuilder
@@ -1040,6 +989,17 @@ extension VideoDetailView {
             Spacer()
             quickControls
             Text(formatTime(playerManager.duration)).foregroundColor(.white).font(.caption.monospacedDigit())
+
+            // 🔥 YOUTUBE PARITY: Fullscreen toggle lives at the bottom-right, next to duration
+            Button(action: { presentFullscreenPlayer() }) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .accessibilityLabel("Fullscreen")
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 10)
@@ -1047,28 +1007,17 @@ extension VideoDetailView {
     
     @ViewBuilder
     var quickControls: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
+            // Quick speed toggle (full picker still available in settings gear)
             Button(action: { showingPlaybackSpeedSelector = true }) {
                 Text(playbackRate == 1.0 ? "1x" : String(format: "%.2gx", playbackRate))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(playbackRate != 1.0 ? AppTheme.Colors.primary : .white)
             }
             .buttonStyle(ScaleButtonStyle())
-            
-            // 🔥 YOUTUBE PARITY: Loop toggle
-            Button(action: {
-                isLooping.toggle()
-                HapticManager.shared.impact(style: .light)
-                print("🔁 [YouTube] Loop \(isLooping ? "ON" : "OFF")")
-            }) {
-                Image(systemName: "repeat")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(isLooping ? AppTheme.Colors.primary : .white)
-            }
-            .buttonStyle(ScaleButtonStyle())
-            
+
             // 🔥 YOUTUBE PARITY: Queue button
-            Button(action: { 
+            Button(action: {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     showingQueueSidebar.toggle()
                 }
@@ -1078,31 +1027,6 @@ extension VideoDetailView {
                     .foregroundColor(showingQueueSidebar ? AppTheme.Colors.primary : .white)
             }
             .buttonStyle(ScaleButtonStyle())
-            
-            // 🔥 PHASE 124: Social Clips (Duets)
-            Button(action: {
-                HapticManager.shared.impact(style: .medium)
-                print("🎬 Trigger Duet Flow")
-            }) {
-                Image(systemName: "rectangle.split.2x1")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.white)
-            }
-            .buttonStyle(ScaleButtonStyle())
-            
-            // 🔥 PHASE 125: Group Watch Parties
-            Button(action: {
-                HapticManager.shared.impact(style: .medium)
-                print("🍿 Trigger Watch Party Flow")
-            }) {
-                Image(systemName: "tv.badge.wifi")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.white)
-            }
-            .buttonStyle(ScaleButtonStyle())
-            
-            AirPlayRoutePickerView()
-                .frame(width: 24, height: 24)
         }
     }
     
@@ -1125,18 +1049,18 @@ extension VideoDetailView {
             // Dark overlay background
             Rectangle()
                 .fill(Color.black.opacity(0.85))
-            
+
             VStack(spacing: 0) {
                 // Countdown text at top
                 Text("Up next in \(upNextCountdown)s")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white.opacity(0.9))
-                    .padding(.top, 20)
-                    .padding(.bottom, 16)
-                
-                // Video preview card
-                HStack(spacing: 12) {
-                    // Thumbnail with duration badge
+                    .padding(.top, 16)
+                    .padding(.bottom, 12)
+
+                // Video preview card - compact
+                HStack(spacing: 10) {
+                    // Thumbnail with duration badge - smaller
                     ZStack(alignment: .bottomTrailing) {
                         AsyncImage(url: URL(string: next.thumbnailURL)) { phase in
                             switch phase {
@@ -1150,6 +1074,7 @@ extension VideoDetailView {
                                     .overlay(
                                         Image(systemName: "photo")
                                             .foregroundColor(.white.opacity(0.5))
+                                            .font(.system(size: 20))
                                     )
                             case .empty:
                                 Rectangle()
@@ -1159,90 +1084,90 @@ extension VideoDetailView {
                                 Rectangle().fill(Color.gray.opacity(0.3))
                             }
                         }
-                        .frame(width: 160, height: 90)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        
-                        // Duration badge
+                        .frame(width: 120, height: 68)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                        // Duration badge - minimal
                         if next.duration > 0 {
                             Text(formatTime(TimeInterval(next.duration)))
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 10, weight: .semibold))
                                 .foregroundColor(.white)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 1)
                                 .background(Color.black.opacity(0.8))
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                                .padding(4)
+                                .cornerRadius(2)
+                                .padding(3)
                         }
                     }
-                    
-                    // Video info
-                    VStack(alignment: .leading, spacing: 6) {
+
+                    // Video info - compact
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(next.title)
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.white)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
-                        
+
                         Text(next.creator.displayName)
-                            .font(.system(size: 13, weight: .regular))
+                            .font(.system(size: 12, weight: .regular))
                             .foregroundColor(.white.opacity(0.7))
                             .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, 20)
-                
+                .padding(.horizontal, 16)
+
                 Spacer()
-                
-                // Action buttons - YouTube style
-                HStack(spacing: 16) {
+
+                // Action buttons - compact YouTube style
+                HStack(spacing: 12) {
                     // Cancel button
                     Button {
                         HapticManager.shared.impact(style: .light)
                         cancelEndscreen()
                     } label: {
                         Text("Cancel")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
                             .background(
                                 Capsule()
                                     .fill(Color.white.opacity(0.15))
                             )
                     }
                     .buttonStyle(.plain)
-                    
+
                     // Play now button with countdown ring
                     Button {
                         HapticManager.shared.impact(style: .medium)
                         playNext(next)
                     } label: {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 6) {
                             // Circular countdown indicator
                             ZStack {
                                 Circle()
                                     .stroke(Color.black.opacity(0.2), lineWidth: 2)
-                                    .frame(width: 20, height: 20)
-                                
+                                    .frame(width: 18, height: 18)
+
                                 Circle()
                                     .trim(from: 0, to: CGFloat(upNextCountdown) / 5.0)
                                     .stroke(Color.black, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                                    .frame(width: 20, height: 20)
+                                    .frame(width: 18, height: 18)
                                     .rotationEffect(.degrees(-90))
                                     .animation(.linear(duration: 1), value: upNextCountdown)
-                                
+
                                 Image(systemName: "play.fill")
-                                    .font(.system(size: 8, weight: .bold))
+                                    .font(.system(size: 7, weight: .bold))
                                     .foregroundColor(.black)
                             }
-                            
+
                             Text("Play now")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(.black)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
                         .background(
                             Capsule()
                                 .fill(Color.white)
@@ -1250,7 +1175,7 @@ extension VideoDetailView {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.bottom, 40) // Increased bottom padding to avoid controls overlap
+                .padding(.bottom, 32)
             }
         }
         .aspectRatio(16.0/9.0, contentMode: .fit)
@@ -1258,7 +1183,7 @@ extension VideoDetailView {
             insertion: .opacity.combined(with: .scale(scale: 0.95)),
             removal: .opacity
         ))
-        .zIndex(300) // Increased z-index to be above controls (200)
+        .zIndex(300)
     }
     
     @ViewBuilder
@@ -1543,6 +1468,37 @@ extension VideoDetailView {
     
     var tertiaryOverlays: some View {
         secondaryOverlays
+            // 🔥 YOUTUBE PARITY: Settings gear → full settings sheet
+            .sheet(isPresented: $showingPlayerSettings) {
+                PlayerSettingsSheet(
+                    qualityLabel: videoQuality.displayName,
+                    speedLabel: playbackRate == 1.0 ? "Normal" : String(format: "%.2gx", playbackRate),
+                    audioLabel: currentAudioTrack,
+                    captionsAvailable: !playerManager.availableSubtitleOptions().isEmpty,
+                    chaptersAvailable: (video.chapters?.isEmpty == false) || !video.parsedChaptersFromDescription.isEmpty,
+                    isLooping: $isLooping,
+                    isAmbient: Binding(
+                        get: { ambientService.isEnabled },
+                        set: { newValue in
+                            if newValue != ambientService.isEnabled {
+                                ambientService.toggle()
+                                showAmbientGlow = ambientService.isEnabled
+                            }
+                        }
+                    ),
+                    isTheater: $isTheaterMode,
+                    showStats: $showDebugHUD,
+                    onQuality: { showingQualitySelector = true },
+                    onSpeed: { showingPlaybackSpeedSelector = true },
+                    onCaptions: { showingSubtitlePicker = true },
+                    onChapters: {
+                        if (video.chapters?.isEmpty == false) || !video.parsedChaptersFromDescription.isEmpty {
+                            showingChapters = true
+                        }
+                    },
+                    onAudio: { showingAudioTrackSelector = true }
+                )
+            }
             .fullScreenCover(item: $videoToPresent) { next in
             VideoDetailView(video: next)
                 .id(next.id) // Prevent view recreation on state changes

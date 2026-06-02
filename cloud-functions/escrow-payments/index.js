@@ -26,25 +26,69 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // Platform fee percentage (10%)
 const PLATFORM_FEE_PERCENT = 0.10;
 
-// CORS headers
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
+// 🔒 Strict CORS allowlist — never reflect arbitrary origins on money endpoints.
+const ALLOWED_ORIGINS = new Set([
+  'https://mychannel.live',
+  'https://www.mychannel.live',
+  'https://mychannel-ca26d.web.app',
+  'https://mychannel-ca26d.firebaseapp.com',
+]);
+
+function setCors(req, res) {
+  const origin = req.headers.origin;
+  if (!origin) {
+    // Native mobile clients send no Origin header.
+    res.set('Access-Control-Allow-Origin', 'https://mychannel.live');
+  } else if (ALLOWED_ORIGINS.has(origin)) {
+    res.set('Access-Control-Allow-Origin', origin);
+    res.set('Vary', 'Origin');
+  }
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
+
+const ADMIN_EMAILS = new Set([
+  'keontapeat@mychannel.live',
+  'keontapeat@gmail.com',
+]);
+
+function isAdmin(decoded) {
+  return (
+    decoded &&
+    (decoded.admin === true ||
+      (decoded.email_verified && ADMIN_EMAILS.has(decoded.email)))
+  );
+}
+
+// 🔐 Verify the Firebase ID token on the Authorization: Bearer <token> header.
+async function requireAuth(req) {
+  const header = req.headers.authorization || req.headers.Authorization || '';
+  const match = /^Bearer\s+(.+)$/i.exec(header);
+  if (!match) {
+    const err = new Error('Missing or malformed Authorization header');
+    err.status = 401;
+    throw err;
+  }
+  try {
+    return await admin.auth().verifyIdToken(match[1]);
+  } catch (e) {
+    const err = new Error('Invalid or expired authentication token');
+    err.status = 401;
+    throw err;
+  }
+}
 
 /**
  * Main HTTP handler
  */
 functions.http('escrowPayments', async (req, res) => {
+  setCors(req, res);
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    res.set(corsHeaders);
     res.status(204).send('');
     return;
   }
-
-  res.set(corsHeaders);
 
   const path = req.path;
 
@@ -62,6 +106,15 @@ functions.http('escrowPayments', async (req, res) => {
       case '/create-transfer':
         await handleCreateTransfer(req, res);
         break;
+      // 🛍️ MERCH (physical goods) — Stripe Connect destination charges.
+      // Physical goods MUST use an external processor per Apple Guideline
+      // 3.1.3(e); they are NOT Apple IAP.
+      case '/create-merch-order':
+        await handleCreateMerchOrder(req, res);
+        break;
+      case '/refund-merch-order':
+        await handleRefundMerchOrder(req, res);
+        break;
       case '/webhook':
         await handleStripeWebhook(req, res);
         break;
@@ -73,7 +126,7 @@ functions.http('escrowPayments', async (req, res) => {
     }
   } catch (error) {
     console.error('Payment error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -82,33 +135,60 @@ functions.http('escrowPayments', async (req, res) => {
  * Creates a PaymentIntent with capture_method=manual to hold funds
  */
 async function handleCreateEscrowPayment(req, res) {
-  const { customerId, amount, matchId, captureMethod } = req.body;
+  const decoded = await requireAuth(req);
+  const { amount, matchId, captureMethod } = req.body;
 
-  if (!customerId || !amount || !matchId) {
+  if (!amount || !matchId) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  // Validate amount (min $1, max $100,000)
-  if (amount < 100 || amount > 10000000) {
-    return res.status(400).json({ error: 'Amount must be between $1 and $100,000' });
+  // Validate amount (min $1, max $100,000) and ensure it is a clean integer of cents.
+  if (!Number.isInteger(amount) || amount < 100 || amount > 10000000) {
+    return res.status(400).json({ error: 'Amount must be a whole number of cents between $1 and $100,000' });
   }
 
-  console.log(`💰 Creating escrow payment: $${amount/100} for match ${matchId}`);
+  const isWalletDeposit = matchId === 'wallet_deposit';
 
-  // Create PaymentIntent with manual capture (holds funds)
+  // 🔐 Authorization. For a match wager the caller must be a participant. For a
+  // wallet deposit the caller funds their OWN wallet (no match needed).
+  if (!isWalletDeposit) {
+    const matchSnap = await db.collection('versus_matches').doc(matchId).get();
+    if (!matchSnap.exists) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+    const match = matchSnap.data();
+    const participants = [match.challengerId, match.opponentId].filter(Boolean);
+    if (!isAdmin(decoded) && !participants.includes(decoded.uid)) {
+      return res.status(403).json({ error: 'You are not a participant in this match' });
+    }
+  }
+
+  // 🔐 Resolve the Stripe customer SERVER-SIDE from the authenticated uid. We
+  // never trust a client-supplied customerId — that prevents charging or
+  // attaching funds to someone else's customer.
+  const userSnap = await db.collection('users').doc(decoded.uid).get();
+  const customerId = userSnap.exists ? userSnap.data().stripeCustomerId : null;
+  if (!customerId) {
+    return res.status(409).json({ error: 'No payment profile on file for this user' });
+  }
+
+  console.log(`💰 Creating ${isWalletDeposit ? 'wallet deposit' : 'escrow'} payment: $${amount/100} (${decoded.uid})`);
+
+  // Create PaymentIntent. Wallet deposits capture automatically; match wagers
+  // hold funds with manual capture.
   const paymentIntent = await stripe.paymentIntents.create({
     amount: amount, // Amount in cents
     currency: 'usd',
     customer: customerId,
-    capture_method: captureMethod || 'manual', // Don't capture immediately
+    capture_method: isWalletDeposit ? 'automatic' : (captureMethod || 'manual'),
     metadata: {
       matchId: matchId,
-      type: 'vs_match_escrow',
+      userId: decoded.uid,
+      type: isWalletDeposit ? 'wallet_deposit' : 'vs_match_escrow',
       createdAt: new Date().toISOString(),
     },
-    description: `VS Match Wager - Match ${matchId}`,
-    statement_descriptor: 'MYCHANNEL VS MATCH',
-    // Auto-confirm if customer has default payment method
+    description: isWalletDeposit ? 'MyChannel Wallet Deposit' : `VS Match Wager - Match ${matchId}`,
+    statement_descriptor: 'MYCHANNEL',
     automatic_payment_methods: {
       enabled: true,
       allow_redirects: 'never',
@@ -120,7 +200,9 @@ async function handleCreateEscrowPayment(req, res) {
     paymentIntentId: paymentIntent.id,
     customerId: customerId,
     matchId: matchId,
+    userId: decoded.uid,
     amount: amount,
+    type: isWalletDeposit ? 'wallet_deposit' : 'vs_match_escrow',
     status: 'requires_capture',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
@@ -136,14 +218,23 @@ async function handleCreateEscrowPayment(req, res) {
 
 /**
  * CAPTURE PAYMENT
- * Captures a held payment after match completion
+ * Captures a held payment after match completion. Server-authorized only:
+ * the caller must be an admin or a participant of the match the escrow belongs to.
  */
 async function handleCapturePayment(req, res) {
+  const decoded = await requireAuth(req);
   const { paymentIntentId } = req.body;
 
   if (!paymentIntentId) {
     return res.status(400).json({ error: 'Missing paymentIntentId' });
   }
+
+  const escrowSnap = await db.collection('stripe_escrow').doc(paymentIntentId).get();
+  if (!escrowSnap.exists) {
+    return res.status(404).json({ error: 'Escrow record not found' });
+  }
+  const escrow = escrowSnap.data();
+  await assertMatchParticipantOrAdmin(decoded, escrow.matchId);
 
   console.log(`🔒 Capturing payment: ${paymentIntentId}`);
 
@@ -167,14 +258,22 @@ async function handleCapturePayment(req, res) {
 
 /**
  * CANCEL PAYMENT
- * Cancels a held payment (refund)
+ * Cancels a held payment (refund). Server-authorized only.
  */
 async function handleCancelPayment(req, res) {
+  const decoded = await requireAuth(req);
   const { paymentIntentId } = req.body;
 
   if (!paymentIntentId) {
     return res.status(400).json({ error: 'Missing paymentIntentId' });
   }
+
+  const escrowSnap = await db.collection('stripe_escrow').doc(paymentIntentId).get();
+  if (!escrowSnap.exists) {
+    return res.status(404).json({ error: 'Escrow record not found' });
+  }
+  const escrow = escrowSnap.data();
+  await assertMatchParticipantOrAdmin(decoded, escrow.matchId);
 
   console.log(`❌ Cancelling payment: ${paymentIntentId}`);
 
@@ -195,47 +294,120 @@ async function handleCancelPayment(req, res) {
   });
 }
 
+// Caller must be a participant in the match, or an admin.
+async function assertMatchParticipantOrAdmin(decoded, matchId) {
+  if (isAdmin(decoded)) return;
+  if (!matchId) {
+    const err = new Error('Escrow has no associated match');
+    err.status = 400;
+    throw err;
+  }
+  const matchSnap = await db.collection('versus_matches').doc(matchId).get();
+  const match = matchSnap.exists ? matchSnap.data() : {};
+  const participants = [match.challengerId, match.opponentId].filter(Boolean);
+  if (!participants.includes(decoded.uid)) {
+    const err = new Error('You are not authorized for this match');
+    err.status = 403;
+    throw err;
+  }
+}
+
 /**
  * CREATE TRANSFER
- * Transfers funds to winner via Stripe Connect
+ * Transfers winnings to the match winner via Stripe Connect.
+ *
+ * 🔐 HARDENED: the client may ONLY name the match. The winner, the payout
+ * amount, and the destination account are all derived server-side from the
+ * recorded match outcome and the captured escrow rows — never trusted from the
+ * request body. This makes it impossible to redirect funds or inflate amounts.
  */
 async function handleCreateTransfer(req, res) {
-  const { amount, destination, matchId } = req.body;
+  const decoded = await requireAuth(req);
+  const { matchId } = req.body;
 
-  if (!amount || !destination || !matchId) {
-    return res.status(400).json({ error: 'Missing required fields' });
+  if (!matchId) {
+    return res.status(400).json({ error: 'Missing matchId' });
   }
 
-  console.log(`💸 Creating transfer: $${amount/100} to ${destination}`);
+  // 1. Load the match and confirm it has a verified, completed outcome.
+  const matchSnap = await db.collection('versus_matches').doc(matchId).get();
+  if (!matchSnap.exists) {
+    return res.status(404).json({ error: 'Match not found' });
+  }
+  const match = matchSnap.data();
+  const participants = [match.challengerId, match.opponentId].filter(Boolean);
+  if (!isAdmin(decoded) && !participants.includes(decoded.uid)) {
+    return res.status(403).json({ error: 'You are not a participant in this match' });
+  }
+  if (match.status !== 'completed' || !match.winnerId) {
+    return res.status(409).json({ error: 'Match is not completed with a verified winner' });
+  }
+  if (match.payoutTransferId) {
+    return res.status(409).json({ error: 'Winnings already paid out for this match' });
+  }
 
-  // Calculate platform fee
-  const platformFee = Math.round(amount * PLATFORM_FEE_PERCENT);
-  const transferAmount = amount - platformFee;
+  const winnerId = match.winnerId;
 
-  // Create transfer to winner's Connect account
-  const transfer = await stripe.transfers.create({
-    amount: transferAmount,
-    currency: 'usd',
-    destination: destination, // Stripe Connect account ID
-    metadata: {
-      matchId: matchId,
-      type: 'vs_match_winner_payout',
-      platformFee: platformFee,
-      grossAmount: amount,
+  // 2. Derive the pot from CAPTURED escrow rows for this match (never the body).
+  const escrowQuery = await db
+    .collection('stripe_escrow')
+    .where('matchId', '==', matchId)
+    .where('status', '==', 'captured')
+    .get();
+  let grossAmount = 0;
+  escrowQuery.forEach((d) => { grossAmount += Number(d.data().amount) || 0; });
+  if (grossAmount <= 0) {
+    return res.status(409).json({ error: 'No captured funds available for this match' });
+  }
+
+  // 3. Resolve the winner's connected account from server records only.
+  const winnerSnap = await db.collection('users').doc(winnerId).get();
+  const destination = winnerSnap.exists ? winnerSnap.data().stripeConnectAccountId : null;
+  if (!destination) {
+    return res.status(409).json({ error: 'Winner has no connected payout account' });
+  }
+
+  const platformFee = Math.round(grossAmount * PLATFORM_FEE_PERCENT);
+  const transferAmount = grossAmount - platformFee;
+
+  console.log(`💸 Settling match ${matchId}: $${transferAmount/100} to winner ${winnerId}`);
+
+  // 4. Create transfer to winner's Connect account, keyed for idempotency so a
+  //    retry can never double-pay.
+  const transfer = await stripe.transfers.create(
+    {
+      amount: transferAmount,
+      currency: 'usd',
+      destination: destination,
+      metadata: {
+        matchId: matchId,
+        winnerId: winnerId,
+        type: 'vs_match_winner_payout',
+        platformFee: platformFee,
+        grossAmount: grossAmount,
+      },
+      description: `VS Match Winner Payout - Match ${matchId}`,
     },
-    description: `VS Match Winner Payout - Match ${matchId}`,
-  });
+    { idempotencyKey: `vs_match_payout_${matchId}` }
+  );
 
   // Record transaction in Firestore
   await db.collection('stripe_transfers').doc(transfer.id).set({
     transferId: transfer.id,
     matchId: matchId,
+    winnerId: winnerId,
     destination: destination,
-    grossAmount: amount,
+    grossAmount: grossAmount,
     platformFee: platformFee,
     netAmount: transferAmount,
     status: 'paid',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  // Mark the match as paid so it can never be settled twice.
+  await matchSnap.ref.update({
+    payoutTransferId: transfer.id,
+    paidOutAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
   // Record platform revenue
@@ -254,6 +426,200 @@ async function handleCreateTransfer(req, res) {
     platformFee: platformFee,
     status: transfer.status,
   });
+}
+
+/**
+ * 🛍️ CREATE MERCH ORDER  (PHYSICAL GOODS — Stripe, NOT Apple IAP)
+ *
+ * Apple Guideline 3.1.3(e): physical goods/services consumed outside the app
+ * MUST use a payment method other than IAP. This endpoint charges the buyer via
+ * Stripe and pays the creator through their connected account (destination
+ * charge), taking the 10% platform fee.
+ *
+ * 🔐 Money-safety: the client may ONLY name the product + quantity + shipping
+ * address. Price, stock, totals, and the destination account are all derived
+ * SERVER-SIDE from Firestore. The client can never set the price or recipient.
+ */
+async function handleCreateMerchOrder(req, res) {
+  const decoded = await requireAuth(req);
+  const { productId, quantity, shippingAddress } = req.body;
+
+  const qty = Number.isInteger(quantity) ? quantity : parseInt(quantity, 10);
+  if (!productId || !Number.isInteger(qty) || qty < 1 || qty > 25) {
+    return res.status(400).json({ error: 'Invalid product or quantity (1–25)' });
+  }
+  if (!shippingAddress || typeof shippingAddress !== 'object' ||
+      !shippingAddress.line1 || !shippingAddress.city ||
+      !shippingAddress.postalCode || !shippingAddress.country) {
+    return res.status(400).json({ error: 'Complete shipping address is required for physical goods' });
+  }
+
+  // 1. Load the product server-side — this is the source of truth for price.
+  const productSnap = await db.collection('creator_products').doc(productId).get();
+  if (!productSnap.exists) {
+    return res.status(404).json({ error: 'Product not found' });
+  }
+  const product = productSnap.data();
+  if (product.isActive === false) {
+    return res.status(409).json({ error: 'Product is not available' });
+  }
+  const creatorId = product.creatorId;
+  if (!creatorId) {
+    return res.status(409).json({ error: 'Product has no creator' });
+  }
+  if (creatorId === decoded.uid) {
+    return res.status(409).json({ error: 'You cannot purchase your own product' });
+  }
+
+  // 2. Stock check (server-side).
+  const stock = Number.isInteger(product.stock) ? product.stock : 0;
+  if (stock < qty) {
+    return res.status(409).json({ error: 'Not enough stock available' });
+  }
+
+  // 3. Money math in integer cents — never trust client amounts.
+  const unitCents = Math.round(Number(product.price) * 100);
+  if (!Number.isInteger(unitCents) || unitCents < 50) {
+    return res.status(409).json({ error: 'Product price is invalid' });
+  }
+  const subtotalCents = unitCents * qty;
+  // Flat shipping placeholder ($5.99). Real shipping/tax can be computed later.
+  const shippingCents = 599;
+  const totalCents = subtotalCents + shippingCents;
+  const platformFeeCents = Math.round(subtotalCents * PLATFORM_FEE_PERCENT);
+
+  // 4. Resolve buyer's Stripe customer + creator's connected account server-side.
+  const buyerSnap = await db.collection('users').doc(decoded.uid).get();
+  const customerId = buyerSnap.exists ? buyerSnap.data().stripeCustomerId : null;
+  if (!customerId) {
+    return res.status(409).json({ error: 'No payment profile on file. Add a payment method first.' });
+  }
+  const creatorSnap = await db.collection('users').doc(creatorId).get();
+  const destination = creatorSnap.exists ? creatorSnap.data().stripeConnectAccountId : null;
+  if (!destination) {
+    return res.status(409).json({ error: 'This creator is not set up to receive payments yet' });
+  }
+
+  // 5. Pre-create the order row (pending) so the webhook can reconcile it.
+  const orderRef = db.collection('merch_orders').doc();
+
+  // 6. Destination charge: buyer pays, platform keeps fee, rest goes to creator.
+  const paymentIntent = await stripe.paymentIntents.create(
+    {
+      amount: totalCents,
+      currency: 'usd',
+      customer: customerId,
+      capture_method: 'automatic',
+      application_fee_amount: platformFeeCents,
+      transfer_data: { destination: destination },
+      metadata: {
+        type: 'merch_order',
+        orderId: orderRef.id,
+        productId: productId,
+        creatorId: creatorId,
+        buyerId: decoded.uid,
+        quantity: String(qty),
+        platformFeeCents: String(platformFeeCents),
+      },
+      description: `MyChannel Merch — ${product.name || productId}`,
+      statement_descriptor_suffix: 'MERCH',
+      automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
+    },
+    { idempotencyKey: `merch_${orderRef.id}` }
+  );
+
+  await orderRef.set({
+    orderId: orderRef.id,
+    productId: productId,
+    productName: product.name || '',
+    creatorId: creatorId,
+    buyerId: decoded.uid,
+    quantity: qty,
+    unitCents: unitCents,
+    subtotalCents: subtotalCents,
+    shippingCents: shippingCents,
+    totalCents: totalCents,
+    platformFeeCents: platformFeeCents,
+    currency: 'usd',
+    goodsType: 'physical',
+    shippingAddress: {
+      line1: String(shippingAddress.line1).slice(0, 200),
+      line2: shippingAddress.line2 ? String(shippingAddress.line2).slice(0, 200) : '',
+      city: String(shippingAddress.city).slice(0, 100),
+      state: shippingAddress.state ? String(shippingAddress.state).slice(0, 100) : '',
+      postalCode: String(shippingAddress.postalCode).slice(0, 20),
+      country: String(shippingAddress.country).slice(0, 2).toUpperCase(),
+    },
+    status: 'pending',
+    paymentIntentId: paymentIntent.id,
+    fulfillment: 'unfulfilled',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  console.log(`🛍️ Merch order ${orderRef.id} created: $${totalCents / 100} (creator ${creatorId})`);
+
+  res.status(200).json({
+    orderId: orderRef.id,
+    paymentIntentId: paymentIntent.id,
+    clientSecret: paymentIntent.client_secret,
+    amount: totalCents,
+    status: paymentIntent.status,
+  });
+}
+
+/**
+ * 🛍️ REFUND MERCH ORDER
+ * Buyer (their own order) or creator (their product) or admin may refund.
+ * Refunds the buyer; the connected-account transfer is reversed.
+ */
+async function handleRefundMerchOrder(req, res) {
+  const decoded = await requireAuth(req);
+  const { orderId } = req.body;
+  if (!orderId) {
+    return res.status(400).json({ error: 'Missing orderId' });
+  }
+
+  const orderSnap = await db.collection('merch_orders').doc(orderId).get();
+  if (!orderSnap.exists) {
+    return res.status(404).json({ error: 'Order not found' });
+  }
+  const order = orderSnap.data();
+
+  const isParty = decoded.uid === order.buyerId || decoded.uid === order.creatorId;
+  if (!isParty && !isAdmin(decoded)) {
+    return res.status(403).json({ error: 'Not authorized to refund this order' });
+  }
+  if (order.status === 'refunded') {
+    return res.status(409).json({ error: 'Order already refunded' });
+  }
+  if (order.status !== 'paid') {
+    return res.status(409).json({ error: 'Only paid orders can be refunded' });
+  }
+
+  const refund = await stripe.refunds.create(
+    {
+      payment_intent: order.paymentIntentId,
+      reverse_transfer: true,
+      refund_application_fee: true,
+      metadata: { orderId: orderId, type: 'merch_refund' },
+    },
+    { idempotencyKey: `merch_refund_${orderId}` }
+  );
+
+  await orderSnap.ref.update({
+    status: 'refunded',
+    refundId: refund.id,
+    refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  // Restore stock.
+  await db.collection('creator_products').doc(order.productId).set({
+    stock: admin.firestore.FieldValue.increment(order.quantity || 0),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  console.log(`↩️ Merch order ${orderId} refunded (${refund.id})`);
+  res.status(200).json({ orderId: orderId, refundId: refund.id, status: 'refunded' });
 }
 
 /**
@@ -304,14 +670,103 @@ async function handleStripeWebhook(req, res) {
   res.status(200).json({ received: true });
 }
 
+// 🔐 Credit a VS-match wallet SERVER-SIDE (Admin SDK bypasses security rules).
+// This is the ONLY place wallet balances move up — clients can never self-credit.
+// Idempotent: a given sourceId (paymentIntent/transfer id) is applied at most once.
+async function creditWallet(userId, amountCents, kind, sourceId) {
+  if (!userId || !Number.isInteger(amountCents) || amountCents <= 0) return;
+  const amountUSD = amountCents / 100;
+  const ledgerRef = db.collection('vs_match_wallet_credits').doc(sourceId);
+  await db.runTransaction(async (tx) => {
+    const existing = await tx.get(ledgerRef);
+    if (existing.exists) return; // already applied — idempotent guard
+    const walletRef = db.collection('vs_match_wallets').doc(userId);
+    tx.set(
+      walletRef,
+      {
+        availableBalance: admin.firestore.FieldValue.increment(amountUSD),
+        lifetimeEarnings: admin.firestore.FieldValue.increment(amountUSD),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    tx.set(ledgerRef, {
+      userId,
+      amountUSD,
+      kind, // 'wallet_deposit' | 'match_winnings'
+      sourceId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+  console.log(`✅ Credited $${amountUSD} to wallet ${userId} (${kind})`);
+}
+
 // Webhook handlers
 async function handlePaymentSucceeded(paymentIntent) {
   console.log(`✅ Payment succeeded: ${paymentIntent.id}`);
   
-  await db.collection('stripe_escrow').doc(paymentIntent.id).update({
+  await db.collection('stripe_escrow').doc(paymentIntent.id).set({
     status: 'succeeded',
     succeededAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  // 🔐 Credit the user's in-app wallet ONLY after Stripe confirms the charge.
+  if (paymentIntent.metadata && paymentIntent.metadata.type === 'wallet_deposit') {
+    await creditWallet(
+      paymentIntent.metadata.userId,
+      paymentIntent.amount_received || paymentIntent.amount,
+      'wallet_deposit',
+      paymentIntent.id
+    );
+  }
+
+  // 🛍️ Finalize a merch order once Stripe confirms payment. Idempotent: the
+  // transaction no-ops if the order is already marked paid, so duplicate webhook
+  // deliveries can't double-decrement stock.
+  if (paymentIntent.metadata && paymentIntent.metadata.type === 'merch_order') {
+    await finalizeMerchOrder(paymentIntent);
+  }
+}
+
+// Mark a merch order paid and decrement product stock atomically + idempotently.
+async function finalizeMerchOrder(paymentIntent) {
+  const orderId = paymentIntent.metadata.orderId;
+  const productId = paymentIntent.metadata.productId;
+  const quantity = parseInt(paymentIntent.metadata.quantity, 10) || 0;
+  if (!orderId) return;
+
+  const orderRef = db.collection('merch_orders').doc(orderId);
+  await db.runTransaction(async (tx) => {
+    const orderDoc = await tx.get(orderRef);
+    if (!orderDoc.exists) return;
+    if (orderDoc.data().status === 'paid') return; // already finalized
+
+    tx.update(orderRef, {
+      status: 'paid',
+      paidAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    if (productId && quantity > 0) {
+      const productRef = db.collection('creator_products').doc(productId);
+      tx.set(productRef, {
+        stock: admin.firestore.FieldValue.increment(-quantity),
+        salesCount: admin.firestore.FieldValue.increment(quantity),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+
+    // Record platform revenue for the merch fee.
+    const feeCents = parseInt(paymentIntent.metadata.platformFeeCents, 10);
+    const revRef = db.collection('platform_revenue').doc(`merch_${orderId}`);
+    tx.set(revRef, {
+      type: 'merch_fee',
+      orderId: orderId,
+      creatorId: paymentIntent.metadata.creatorId || null,
+      amount: Number.isInteger(feeCents) ? feeCents : null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
   });
+  console.log(`🛍️ Merch order ${orderId} finalized as paid`);
 }
 
 async function handlePaymentFailed(paymentIntent) {

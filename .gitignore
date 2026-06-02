@@ -25,6 +25,11 @@ Carthage/Build/
 **/GoogleService-Info.plist
 .env
 *.env
+**/.env
+**/.env.*
+functions/.env*
+web-v2/.env.local
+.ai_api_key
 
 # ADD: local developer-only secrets (never commit)
 LocalSecrets.plist# Ignore vendor and ephemeral dirs
@@ -52,3 +57,11 @@ services/dist/
 remove_*.py
 remove_*.rb
 remove_duplicates.rb
+node_modules
+
+# Google Cloud SDK (installed locally for function deploys — do not commit)
+google-cloud-sdk/
+gcloud-sdk.tar.gz
+
+# Local build/verify artifacts (SwiftPM checkouts, derived data)
+build-verify/

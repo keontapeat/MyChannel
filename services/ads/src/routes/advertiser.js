@@ -54,18 +54,68 @@ export default async function registerAdvertiserRoutes(app) {
   })
 
   app.post('/ads/fund', async (req) => {
-    const { email, amount_cents, confirm=true } = req.body
-    const { rows: adv } = await query('select id from advertisers where email=$1 limit 1',[email])
+    const { email, amount_cents, payment_method_id, confirm=true } = req.body
+    const { rows: adv } = await query('select id, stripe_customer_id from advertisers where email=$1 limit 1',[email])
     if (!adv.length) throw new Error('advertiser not found')
-    // Stripe PaymentIntent (test mode). In local dev, immediately credit.
+    
     const amount = Number(amount_cents)||0
-    if (process.env.STRIPE_SECRET) {
-      const intent = await stripe.paymentIntents.create({ amount, currency: 'usd', capture_method: 'automatic', confirm })
-      await query('update advertisers set balance_cents = coalesce(balance_cents,0)+$2 where id=$1',[adv[0].id, amount])
-      return { ok: true, payment_intent: intent.id }
+    const advertiserId = adv[0].id
+    
+    if (!process.env.STRIPE_SECRET) {
+      // Local dev mode - immediately credit without Stripe
+      await query('update advertisers set balance_cents = coalesce(balance_cents,0)+$2 where id=$1',[advertiserId, amount])
+      return { ok: true, payment_intent: 'mock', mode: 'local_dev' }
     }
-    await query('update advertisers set balance_cents = coalesce(balance_cents,0)+$2 where id=$1',[adv[0].id, amount])
-    return { ok: true, payment_intent: 'mock' }
+
+    try {
+      // Create or retrieve Stripe customer
+      let customerId = adv[0].stripe_customer_id
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email,
+          metadata: { advertiser_id: advertiserId.toString() }
+        })
+        customerId = customer.id
+        await query('update advertisers set stripe_customer_id=$2 where id=$1', [advertiserId, customerId])
+      }
+
+      // Create PaymentIntent
+      const intentParams = {
+        amount,
+        currency: 'usd',
+        customer: customerId,
+        capture_method: 'automatic',
+        confirm,
+        metadata: {
+          advertiser_id: advertiserId.toString(),
+          amount_cents: amount.toString()
+        },
+        description: `MyChannel Ads - Account Funding`
+      }
+
+      if (payment_method_id) {
+        intentParams.payment_method = payment_method_id
+      }
+
+      const intent = await stripe.paymentIntents.create(intentParams)
+
+      // If payment succeeded immediately, credit the account
+      if (intent.status === 'succeeded') {
+        await query('update advertisers set balance_cents = coalesce(balance_cents,0)+$2 where id=$1',[advertiserId, amount])
+      }
+
+      return { 
+        ok: true, 
+        payment_intent: intent.id,
+        status: intent.status,
+        client_secret: intent.client_secret,
+        requires_action: intent.status === 'requires_action',
+        next_action: intent.next_action
+      }
+    } catch (err) {
+      console.error('Stripe payment failed:', err)
+      throw new Error(`Payment failed: ${err.message}`)
+    }
   })
 
   app.get('/ads/balance', async (req) => {

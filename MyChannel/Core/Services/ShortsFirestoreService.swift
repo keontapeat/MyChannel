@@ -80,7 +80,7 @@ final class ShortsFirestoreService: ObservableObject {
     func fetchNextPage(limit: Int = 10) async -> [Video] {
         #if canImport(FirebaseFirestore)
         do {
-            var query: Query = db.collection("shorts")
+            var query: Query = db.collection("flicks")
                 .order(by: "createdAt", descending: true)
                 .limit(to: limit)
             if let last = lastSnapshot { query = query.start(afterDocument: last) }
@@ -190,7 +190,7 @@ final class ShortsFirestoreService: ObservableObject {
             ]
         }
         
-        try await db.collection("shorts").document(flickId).setData(data)
+        try await db.collection("flicks").document(flickId).setData(data)
         print("✅ [ShortsFirestore] Saved Flick: \(flickId)")
         
         return flickId
@@ -232,7 +232,7 @@ final class ShortsFirestoreService: ObservableObject {
     #if canImport(FirebaseFirestore)
     private func writeShortEvent(flickId: String, type: String) async throws {
         guard let userId = AuthenticationManager.shared.currentUser?.id else { return }
-        try await db.collection("shorts").document(flickId)
+        try await db.collection("flicks").document(flickId)
             .collection("events").document()
             .setData([
                 "type": type,
@@ -248,7 +248,7 @@ final class ShortsFirestoreService: ObservableObject {
     /// Delete a Flick from Firestore
     func deleteFlick(flickId: String) async throws {
         #if canImport(FirebaseFirestore)
-        try await db.collection("shorts").document(flickId).delete()
+        try await db.collection("flicks").document(flickId).delete()
         print("✅ [ShortsFirestore] Deleted Flick: \(flickId)")
         #endif
     }

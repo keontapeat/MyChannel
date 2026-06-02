@@ -9,9 +9,12 @@
 import SwiftUI
 
 struct PlaylistManagementView: View {
+    @EnvironmentObject private var appState: AppState
+    @StateObject private var playlistService = PlaylistFirestoreService.shared
     @State private var playlists: [Playlist] = []
     @State private var showingCreatePlaylist = false
     @State private var selectedPlaylist: Playlist?
+    @State private var isLoading = true
     
     var body: some View {
         ScrollView {
@@ -23,7 +26,10 @@ struct PlaylistManagementView: View {
                 createPlaylistButton
                 
                 // Playlists List
-                if playlists.isEmpty {
+                if isLoading {
+                    ProgressView("Loading playlists...")
+                        .padding(40)
+                } else if playlists.isEmpty {
                     emptyStateView
                 } else {
                     playlistsSection
@@ -36,21 +42,75 @@ struct PlaylistManagementView: View {
             .padding(.vertical, 20)
         }
         .navigationTitle("Playlists")
+        .refreshable {
+            await loadPlaylists()
+        }
+        .task {
+            await loadPlaylists()
+        }
         .sheet(isPresented: $showingCreatePlaylist) {
-            StudioCreatePlaylistSheet { playlist in
-                playlists.append(playlist)
+            StudioCreatePlaylistSheet(creatorId: appState.currentUser?.id ?? "") { _ in
+                Task { await loadPlaylists() }
             }
         }
         .sheet(item: $selectedPlaylist) { playlist in
-            StudioEditPlaylistSheet(playlist: playlist)
+            StudioEditPlaylistSheet(playlist: playlist) {
+                Task { await loadPlaylists() }
+            }
         }
+    }
+    
+    // MARK: - Data Loading
+    
+    private func loadPlaylists() async {
+        guard let userId = appState.currentUser?.id, !userId.isEmpty else {
+            await MainActor.run {
+                playlists = []
+                isLoading = false
+            }
+            return
+        }
+        do {
+            let loaded = try await playlistService.getPlaylists(for: userId)
+            // Hydrate video counts from each playlist's membership subcollection.
+            var hydrated: [Playlist] = []
+            for playlist in loaded {
+                let videoIds = (try? await playlistService.getPlaylistVideoIds(playlistId: playlist.id)) ?? []
+                hydrated.append(
+                    Playlist(
+                        id: playlist.id,
+                        title: playlist.title,
+                        description: playlist.description,
+                        thumbnailURL: playlist.thumbnailURL,
+                        creatorId: playlist.creatorId,
+                        videoIds: videoIds,
+                        isPublic: playlist.isPublic,
+                        createdAt: playlist.createdAt,
+                        updatedAt: playlist.updatedAt,
+                        tags: playlist.tags,
+                        category: playlist.category
+                    )
+                )
+            }
+            await MainActor.run {
+                playlists = hydrated
+                isLoading = false
+            }
+        } catch {
+            print("⚠️ [PlaylistManagement] Failed to load playlists: \(error.localizedDescription)")
+            await MainActor.run { isLoading = false }
+        }
+    }
+    
+    private var totalPlaylistVideos: Int {
+        playlists.reduce(0) { $0 + $1.videoCount }
     }
     
     private var playlistStatsHeader: some View {
         HStack(spacing: 12) {
             PlaylistStatsCard(title: "Playlists", value: "\(playlists.count)", icon: "list.bullet.rectangle", color: .blue)
-            PlaylistStatsCard(title: "Total Videos", value: "0", icon: "play.rectangle", color: .green)
-            PlaylistStatsCard(title: "Total Views", value: "0", icon: "eye", color: AppTheme.Colors.accent)
+            PlaylistStatsCard(title: "Total Videos", value: "\(totalPlaylistVideos)", icon: "play.rectangle", color: .green)
+            PlaylistStatsCard(title: "Public", value: "\(playlists.filter { $0.isPublic }.count)", icon: "globe", color: AppTheme.Colors.accent)
         }
     }
     
@@ -151,11 +211,16 @@ struct PlaylistRow: View {
 
 struct StudioCreatePlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
+    let creatorId: String
     let onCreate: (Playlist) -> Void
     
+    @StateObject private var playlistService = PlaylistFirestoreService.shared
     @State private var title = ""
     @State private var description = ""
     @State private var isPublic = true
+    @State private var category: PlaylistCategory = .general
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     
     var body: some View {
         NavigationStack {
@@ -164,22 +229,32 @@ struct StudioCreatePlaylistSheet: View {
                     TextField("Playlist Title", text: $title)
                     TextField("Description", text: $description, axis: .vertical)
                         .lineLimit(3...6)
+                    Picker("Category", selection: $category) {
+                        ForEach(PlaylistCategory.allCases, id: \.self) { cat in
+                            Text(cat.displayName).tag(cat)
+                        }
+                    }
                 }
                 Section("Visibility") {
                     Toggle("Public", isOn: $isPublic)
                 }
-                Section {
-                    Button("Create Playlist") {
-                        let playlist = Playlist(
-                            title: title,
-                            description: description,
-                            creatorId: "current_user", // TODO: Get from AuthenticationManager
-                            isPublic: isPublic
-                        )
-                        onCreate(playlist)
-                        dismiss()
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage)
+                            .font(.system(size: 13))
+                            .foregroundColor(.red)
                     }
-                    .disabled(title.isEmpty)
+                }
+                Section {
+                    Button {
+                        Task { await createPlaylist() }
+                    } label: {
+                        HStack {
+                            if isSaving { ProgressView().padding(.trailing, 4) }
+                            Text(isSaving ? "Creating…" : "Create Playlist")
+                        }
+                    }
+                    .disabled(title.isEmpty || creatorId.isEmpty || isSaving)
                 }
             }
             .navigationTitle("New Playlist")
@@ -191,19 +266,61 @@ struct StudioCreatePlaylistSheet: View {
             }
         }
     }
+    
+    private func createPlaylist() async {
+        guard !creatorId.isEmpty else {
+            errorMessage = "Sign in required to create a playlist."
+            return
+        }
+        isSaving = true
+        errorMessage = nil
+        do {
+            let newId = try await playlistService.createPlaylist(
+                userId: creatorId,
+                title: title,
+                description: description,
+                category: category,
+                visibility: isPublic ? "public" : "private"
+            )
+            let playlist = Playlist(
+                id: newId,
+                title: title,
+                description: description,
+                creatorId: creatorId,
+                isPublic: isPublic,
+                category: category
+            )
+            HapticManager.shared.notification(type: .success)
+            onCreate(playlist)
+            dismiss()
+        } catch {
+            isSaving = false
+            errorMessage = error.localizedDescription
+        }
+    }
 }
 
 struct StudioEditPlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
     let playlist: Playlist
+    var onChange: () -> Void = {}
     
+    @StateObject private var playlistService = PlaylistFirestoreService.shared
     @State private var title: String
     @State private var description: String
+    @State private var isPublic: Bool
+    @State private var category: PlaylistCategory
+    @State private var isSaving = false
+    @State private var showingDeleteConfirm = false
+    @State private var errorMessage: String?
     
-    init(playlist: Playlist) {
+    init(playlist: Playlist, onChange: @escaping () -> Void = {}) {
         self.playlist = playlist
+        self.onChange = onChange
         _title = State(initialValue: playlist.title)
         _description = State(initialValue: playlist.description)
+        _isPublic = State(initialValue: playlist.isPublic)
+        _category = State(initialValue: playlist.category)
     }
     
     var body: some View {
@@ -212,17 +329,45 @@ struct StudioEditPlaylistSheet: View {
                 Section("Details") {
                     TextField("Title", text: $title)
                     TextField("Description", text: $description, axis: .vertical)
+                        .lineLimit(3...6)
+                    Picker("Category", selection: $category) {
+                        ForEach(PlaylistCategory.allCases, id: \.self) { cat in
+                            Text(cat.displayName).tag(cat)
+                        }
+                    }
+                }
+                Section("Visibility") {
+                    Toggle("Public", isOn: $isPublic)
                 }
                 Section("Stats") {
                     HStack {
                         Text("Videos")
                         Spacer()
                         Text("\(playlist.videoCount)")
+                            .foregroundColor(.secondary)
+                    }
+                }
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage)
+                            .font(.system(size: 13))
+                            .foregroundColor(.red)
                     }
                 }
                 Section {
-                    Button("Save Changes") { dismiss() }
-                    Button("Delete Playlist", role: .destructive) { dismiss() }
+                    Button {
+                        Task { await saveChanges() }
+                    } label: {
+                        HStack {
+                            if isSaving { ProgressView().padding(.trailing, 4) }
+                            Text(isSaving ? "Saving…" : "Save Changes")
+                        }
+                    }
+                    .disabled(title.isEmpty || isSaving)
+                    
+                    Button("Delete Playlist", role: .destructive) {
+                        showingDeleteConfirm = true
+                    }
                 }
             }
             .navigationTitle("Edit Playlist")
@@ -232,6 +377,49 @@ struct StudioEditPlaylistSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .alert("Delete Playlist?", isPresented: $showingDeleteConfirm) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    Task { await deletePlaylist() }
+                }
+            } message: {
+                Text("This permanently removes the playlist. Your videos are not deleted.")
+            }
+        }
+    }
+    
+    private func saveChanges() async {
+        isSaving = true
+        errorMessage = nil
+        do {
+            try await playlistService.updatePlaylist(
+                id: playlist.id,
+                title: title,
+                description: description,
+                category: category,
+                visibility: isPublic ? "public" : "private",
+                tags: playlist.tags
+            )
+            HapticManager.shared.notification(type: .success)
+            onChange()
+            dismiss()
+        } catch {
+            isSaving = false
+            errorMessage = error.localizedDescription
+        }
+    }
+    
+    private func deletePlaylist() async {
+        isSaving = true
+        errorMessage = nil
+        do {
+            try await playlistService.deletePlaylist(id: playlist.id)
+            HapticManager.shared.notification(type: .success)
+            onChange()
+            dismiss()
+        } catch {
+            isSaving = false
+            errorMessage = error.localizedDescription
         }
     }
 }

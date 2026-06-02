@@ -109,7 +109,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "horror-movies",
             name: "Pluto TV Horror",
-            logoURL: "https://i.ytimg.com/vi/1LNJYHe-0m8/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video128/v4/7c/97/57/7c975776-bc93-4a04-f8dc-9374d12a4e3c/mzl.ftpfzsib.lsr/600x600bb.jpg",
             streamURL: s_movie3,
             category: .movies,
             description: "Scary movies 24/7 👻",
@@ -141,7 +141,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "pluto-sci-fi",
             name: "Pluto TV Sci-Fi",
-            logoURL: "https://i.ytimg.com/vi/hfSu24kzwp4/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Features/14/92/b0/dj.oxxoeyvr.jpg/600x600bb.jpg",
             streamURL: s_scifi1,
             category: .scifi,
             description: "Science fiction 24/7",
@@ -303,7 +303,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "forensic-files",
             name: "Forensic Files",
-            logoURL: "https://i.ytimg.com/vi/5Ggik1rly3k/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video122/v4/5c/12/e7/5c12e776-04dc-eb88-28b5-ff9d9c65742f/pr_source.jpg/600x600bb.jpg",
             streamURL: s_crime1,
             category: .documentary,
             description: "Crime investigation 24/7",

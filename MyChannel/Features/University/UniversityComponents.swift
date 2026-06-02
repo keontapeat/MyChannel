@@ -574,9 +574,47 @@ struct CategorySubjectsView: View {
 }
 
 struct GlobalLeaderboardView: View {
+    @State private var learners: [Learner] = []
+    @State private var isLoading = true
+
     var body: some View {
-        Text("Global Leaderboard")
-            .navigationTitle("Leaderboard")
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                if isLoading {
+                    ProgressView()
+                        .padding(.top, 60)
+                } else if learners.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "trophy")
+                            .font(.system(size: 48, weight: .thin))
+                            .foregroundColor(Color(.tertiaryLabel))
+                        Text("No learners ranked yet")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Learn daily and earn points to climb the global leaderboard.")
+                            .font(.system(size: 13))
+                            .foregroundColor(Color(.secondaryLabel))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                    }
+                    .padding(.top, 60)
+                } else {
+                    ForEach(Array(learners.enumerated()), id: \.element.id) { index, learner in
+                        UniversityLeaderboardRow(learner: learner)
+                        if index < learners.count - 1 {
+                            Divider().padding(.leading, 58)
+                        }
+                    }
+                }
+            }
+            .padding(.vertical, 8)
+        }
+        .background(Color(.systemBackground))
+        .navigationTitle("Leaderboard")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            learners = await UniversityActivityService.shared.fetchTopLearners(limit: 100)
+            isLoading = false
+        }
     }
 }
 

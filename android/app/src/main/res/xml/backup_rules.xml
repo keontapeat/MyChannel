@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Legacy Auto Backup rules (android:fullBackupContent), used on Android 11 and below.
+  Exclude sensitive auth state and encrypted preferences from cloud backup so
+  tokens are never restored onto a different device.
+  See: https://developer.android.com/guide/topics/data/autobackup
+-->
+<full-backup-content>
+    <!-- Do not back up DataStore preferences that may include session state -->
+    <exclude domain="file" path="datastore/" />
+    <!-- Do not back up encrypted token storage (Android Keystore backed) -->
+    <exclude domain="sharedpref" path="mychannel_secure_prefs.xml" />
+    <!-- Do not back up the local Room cache (re-fetched from Firebase) -->
+    <exclude domain="database" path="mychannel.db" />
+</full-backup-content>

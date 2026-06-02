@@ -517,13 +517,33 @@ final class ThermonuclearYouTubeThumbnailCache {
         guard let imageURL = URL(string: url) else { return nil }
         
         do {
-            let (data, _) = try await session.data(from: imageURL)
+            let (data, response) = try await session.data(from: imageURL)
+            
+            // 🔥 Reject non-2xx responses (e.g. YouTube 404 for deleted/private videos).
+            // YouTube still returns a tiny grey placeholder body with a 404, which AsyncImage
+            // would happily decode and display as the dreaded grey "•••" box.
+            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                markBadURL(url)
+                return nil
+            }
+            
+            // 🔥 Reject tiny payloads — the grey "video unavailable" placeholder is ~1KB.
+            if data.count < 2_000 {
+                markBadURL(url)
+                return nil
+            }
             
             // 🔥 Parse image AND validate on background thread in one shot
             let result = await Task.detached(priority: .userInitiated) { () -> UIImage? in
                 guard let uiImage = UIImage(data: data) else { return nil }
                 
-                // 🔥 ULTRA-FAST yellow detection
+                // 🔥 Reject placeholder-sized images. YouTube's missing-thumbnail grey box
+                // is served at 120x90 (hqdefault) or 120x68 (mq). Real art is ≥ 320px wide.
+                if uiImage.size.width <= 121 && uiImage.size.height <= 91 {
+                    return nil
+                }
+                
+                // 🔥 ULTRA-FAST yellow detection (catches the "error" thumbnail variant)
                 if Self.isYouTubeErrorThumbnailFast(uiImage) {
                     return nil
                 }

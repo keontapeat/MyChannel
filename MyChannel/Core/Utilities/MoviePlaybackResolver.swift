@@ -2,6 +2,19 @@ import SwiftUI
 import Foundation
 
 enum MoviePlaybackResolver {
+    /// Deterministic, stable Video id for a movie so that watch progress,
+    /// continue-watching and history map to the SAME document across launches
+    /// (Firestore `watch_progress/{userId}_{videoId}`). Without this, each play
+    /// created a random UUID and resume/continue-watching never worked.
+    static func stableVideoID(for movie: FreeMovie) -> String {
+        "movie-\(movie.id)"
+    }
+
+    /// Recover the originating FreeMovie.id from a stable Video id.
+    static func movieID(fromVideoID videoID: String) -> String? {
+        videoID.hasPrefix("movie-") ? String(videoID.dropFirst("movie-".count)) : nil
+    }
+
     static func directPlayableURL(for movie: FreeMovie) -> URL? {
         if let url = URL(string: movie.streamURL),
            ["mp4", "m3u8"].contains(url.pathExtension.lowercased()) {
@@ -17,6 +30,7 @@ enum MoviePlaybackResolver {
         guard let url = directPlayableURL(for: movie) else { return nil }
         let tags = movie.genre.map { $0.rawValue }
         return Video(
+            id: stableVideoID(for: movie),
             title: movie.title,
             description: movie.overview,
             thumbnailURL: movie.posterURL,
@@ -42,6 +56,7 @@ enum MoviePlaybackResolver {
         let playableURL = directPlayableURL(for: movie) ?? fallbackURL(for: movie)
         let tags = movie.genre.map { $0.rawValue }
         return Video(
+            id: stableVideoID(for: movie),
             title: movie.title,
             description: movie.overview,
             thumbnailURL: movie.posterURL,

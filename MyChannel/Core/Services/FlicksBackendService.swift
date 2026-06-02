@@ -137,8 +137,8 @@ class FlicksBackendService: ObservableObject {
         #if canImport(FirebaseFirestore)
         let db = Firestore.firestore()
         
-        // Try shorts collection first
-        let shortsQuery = db.collection("shorts")
+        // Try flicks collection first
+        let shortsQuery = db.collection("flicks")
             .whereField("isPublic", isEqualTo: true)
             .whereField("status", isEqualTo: "published")
             .order(by: "trendingScore", descending: true)
@@ -494,7 +494,7 @@ class FlicksBackendService: ObservableObject {
             ]
         ]
         
-        try await db.collection("shorts").document(flickId).setData(flickData)
+        try await db.collection("flicks").document(flickId).setData(flickData)
         
         // Create the NuclearFlick object
         let creator = FlickCreator(
@@ -534,7 +534,7 @@ class FlicksBackendService: ObservableObject {
         // Update view count in Firestore
         #if canImport(FirebaseFirestore)
         let db = Firestore.firestore()
-        let flickRef = db.collection("shorts").document(flickId)
+        let flickRef = db.collection("flicks").document(flickId)
         
         try? await flickRef.updateData([
             "viewCount": FieldValue.increment(Int64(1)),
@@ -558,7 +558,7 @@ class FlicksBackendService: ObservableObject {
     func trackFlickEngagement(flickId: String, action: String, value: Any? = nil) async {
         #if canImport(FirebaseFirestore)
         let db = Firestore.firestore()
-        let flickRef = db.collection("shorts").document(flickId)
+        let flickRef = db.collection("flicks").document(flickId)
         
         var updateData: [String: Any] = [:]
         
@@ -636,7 +636,7 @@ class FlicksBackendService: ObservableObject {
             // Store viral prediction in Firestore
             #if canImport(FirebaseFirestore)
             let db = Firestore.firestore()
-            try? await db.collection("shorts").document(flick.id).updateData([
+            try? await db.collection("flicks").document(flick.id).updateData([
                 "viralScore": response.viralScore,
                 "viralPrediction": response.prediction,
                 "predictedViews": response.predictedViews

@@ -568,11 +568,25 @@ final class TournamentScheduler: ObservableObject {
         
         try await db.collection("tournaments").document(tournament.id).setData([
             "name": tournament.name,
+            // 🔥 FIX: Write the schema the Esports Arena reader expects.
+            // EsportsTournamentService queries status in [active|upcoming|live]
+            // ordered by `startDate`, and maps `maxPlayers`/`gameName`. The old
+            // payload used `startTime` + `maxParticipants` + status "scheduled",
+            // so scheduled tournaments were invisible in the Arena and couldn't
+            // be joined. These aliases keep both readers working.
             "startTime": Timestamp(date: tournament.startTime),
+            "startDate": Timestamp(date: tournament.startTime),
+            "endDate": Timestamp(date: tournament.startTime.addingTimeInterval(604800)),
             "prizePool": tournament.prizePool,
+            "entryFee": 0,
             "maxParticipants": tournament.maxParticipants,
+            "maxPlayers": tournament.maxParticipants,
+            "currentPlayers": 0,
+            "gameName": "Multi-Game",
+            "format": "Single Elimination",
             "category": tournament.category,
-            "status": "scheduled"
+            "isLive": false,
+            "status": "upcoming"
         ])
         
         print("🏆 [Tournament Scheduler] Scheduled: \(tournament.name)")

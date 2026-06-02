@@ -24,6 +24,9 @@ class RealtimeViewTracker: ObservableObject {
     @Published var totalLiveViewers: Int = 0
     @Published var viewCountsByVideo: [String: Int] = [:]
     @Published var realtimeEngagement: [String: EngagementMetrics] = [:]
+
+    /// Creators this device is currently contributing a live viewer to.
+    private var activeCreatorPresence: Set<String> = []
     
     // MARK: - AI Monitoring Integration
     private let aiMonitoring = MonitoringAlertingService.shared
@@ -59,20 +62,28 @@ class RealtimeViewTracker: ObservableObject {
         }
         
         let sessionId = UUID().uuidString
-        let session = ViewSession(
+        var session = ViewSession(
             id: sessionId,
             videoId: videoId,
             userId: userId,
             startTime: Date(),
             lastHeartbeat: Date()
         )
-        
+
+        // Resolve creator once so we can roll views up + track live presence accurately
+        let creatorId = await getVideoCreatorId(videoId: videoId)
+        session.creatorId = creatorId
+
         activeViewSessions[sessionId] = session
         viewedVideosInSession[videoId] = Date() // Mark as viewed with timestamp
         updateLiveViewerCount()
         
         // Increment view count in Firestore (with retry logic)
-        await incrementViewCount(videoId: videoId, userId: userId)
+        await incrementViewCount(videoId: videoId, userId: userId, creatorId: creatorId)
+
+        // 🔴 LIVE PRESENCE: register this viewer so the creator's "watching now"
+        // counter is a real, global concurrent-viewer number (not a hardcoded 0).
+        await registerLivePresence(creatorId: creatorId)
         
         // Setup real-time listener for this video
         setupVideoListener(videoId: videoId)
@@ -125,6 +136,13 @@ class RealtimeViewTracker: ObservableObject {
         // Remove session
         activeViewSessions.removeValue(forKey: sessionId)
         updateLiveViewerCount()
+
+        // 🔴 LIVE PRESENCE: stop counting this device toward the creator's
+        // "watching now" once no remaining sessions belong to that creator.
+        if let creatorId = session.creatorId,
+           !activeViewSessions.values.contains(where: { $0.creatorId == creatorId }) {
+            await clearLivePresence(creatorId: creatorId)
+        }
         
         // Notify AI systems
         await notifyAISystems(event: .viewEnded(
@@ -163,7 +181,7 @@ class RealtimeViewTracker: ObservableObject {
     
     // MARK: - Firestore Integration
     
-    private func incrementViewCount(videoId: String, userId: String?) async {
+    private func incrementViewCount(videoId: String, userId: String?, creatorId: String? = nil) async {
         #if canImport(FirebaseFirestore)
         do {
             print("🔥🔥🔥 [ViewTracker] ⚡ INCREMENTING VIEW COUNT for: \(videoId)")
@@ -179,9 +197,14 @@ class RealtimeViewTracker: ObservableObject {
                 .collection("views")
                 .document()
             
-            // Get creator ID first
-            let creatorId = await getVideoCreatorId(videoId: videoId)
-            let isSelfView = userId != nil && userId == creatorId
+            // Get creator ID first (reuse if caller already resolved it)
+            let resolvedCreatorId: String?
+            if let creatorId {
+                resolvedCreatorId = creatorId
+            } else {
+                resolvedCreatorId = await getVideoCreatorId(videoId: videoId)
+            }
+            let isSelfView = userId != nil && userId == resolvedCreatorId
             
             try await viewRef.setData([
                 "userId": userId ?? "anonymous",
@@ -191,7 +214,42 @@ class RealtimeViewTracker: ObservableObject {
                 "isSelfView": isSelfView,
                 "watchDuration": 0
             ])
-            
+
+            // 🔥 RANKING FIX: Actually increment the video's viewCount AND roll the
+            // view up to the creator's users/{uid}.totalViews. This is the metric
+            // TopRankMLService reads, so watching a video now genuinely moves its
+            // creator up the Top shelves in real time. (Previously this method only
+            // logged an analytics event and read the count back — the count never grew.)
+            //
+            // Self-views are logged for analytics above but EXCLUDED from the
+            // ranking/view rollup so creators can't inflate placement by rewatching.
+            if !isSelfView {
+                let videoRef = db.collection("videos").document(videoId)
+                try await videoRef.setData([
+                    "viewCount": FieldValue.increment(Int64(1))
+                ], merge: true)
+
+                if let resolvedCreatorId, !resolvedCreatorId.isEmpty {
+                    // Best-effort roll-up to users/{uid}.totalViews. This may be denied
+                    // by security rules for non-owner views; that's fine — it's wrapped
+                    // so it never aborts the authoritative daily rollup below.
+                    do {
+                        try await db.collection("users").document(resolvedCreatorId).setData([
+                            "totalViews": FieldValue.increment(Int64(1))
+                        ], merge: true)
+                        print("📈 [ViewTracker] Rolled view up to creator \(resolvedCreatorId).totalViews")
+                    } catch {
+                        print("ℹ️ [ViewTracker] totalViews roll-up skipped: \(error.localizedDescription)")
+                    }
+
+                    // 📊 ACCURATE DASHBOARD: write a per-day rollup so the Studio dashboard
+                    // chart + "views today" reflect REAL traffic instead of random data.
+                    await incrementDailyViews(creatorId: resolvedCreatorId)
+                }
+            } else {
+                print("🙈 [ViewTracker] Self-view — logged but excluded from view rollup")
+            }
+
             // 🔥 FIX: Fetch ACTUAL count from Firestore after incrementing (not just local cache)
             // This ensures we have the real persisted count
             print("📡 [ViewTracker] Fetching updated view count from Firestore...")
@@ -252,6 +310,82 @@ class RealtimeViewTracker: ObservableObject {
         }
         #else
         return nil
+        #endif
+    }
+
+    // MARK: - 📊 Accurate Daily View Rollups
+
+    /// UTC day key (yyyy-MM-dd) used to bucket per-day analytics consistently
+    /// across devices/timezones so the Studio chart never double-counts.
+    private func dayKey(for date: Date = Date()) -> String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = TimeZone(identifier: "UTC")
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.string(from: date)
+    }
+
+    /// Increments today's view bucket for a creator. The Studio dashboard reads
+    /// `creator_analytics/{creatorId}/daily/{yyyy-MM-dd}` to draw a REAL trend
+    /// line and an accurate "views today" number.
+    private func incrementDailyViews(creatorId: String) async {
+        #if canImport(FirebaseFirestore)
+        guard !creatorId.isEmpty else { return }
+        let key = dayKey()
+        do {
+            try await db.collection("creator_analytics")
+                .document(creatorId)
+                .collection("daily")
+                .document(key)
+                .setData([
+                    "date": key,
+                    "views": FieldValue.increment(Int64(1)),
+                    "updatedAt": FieldValue.serverTimestamp()
+                ], merge: true)
+        } catch {
+            print("⚠️ [ViewTracker] Failed to roll up daily views: \(error.localizedDescription)")
+        }
+        #endif
+    }
+
+    // MARK: - 🔴 Live Presence ("watching now")
+
+    /// Registers a short-lived presence heartbeat so a creator's dashboard can
+    /// count REAL concurrent viewers across all devices. Documents are written
+    /// to `creator_presence/{creatorId}/active/{sessionId}` and expire when the
+    /// session ends or goes stale.
+    private func registerLivePresence(creatorId: String?) async {
+        #if canImport(FirebaseFirestore)
+        guard let creatorId, !creatorId.isEmpty else { return }
+        do {
+            let sessionId = AnalyticsSessionID.current
+            try await db.collection("creator_presence")
+                .document(creatorId)
+                .collection("active")
+                .document(sessionId)
+                .setData([
+                    "sessionId": sessionId,
+                    "lastSeen": FieldValue.serverTimestamp(),
+                    "userId": AuthenticationManager.shared.currentUser?.id ?? "anonymous"
+                ])
+            activeCreatorPresence.insert(creatorId)
+        } catch {
+            print("⚠️ [ViewTracker] Failed to register presence: \(error.localizedDescription)")
+        }
+        #endif
+    }
+
+    /// Removes the presence heartbeat for a creator when a viewer leaves.
+    private func clearLivePresence(creatorId: String?) async {
+        #if canImport(FirebaseFirestore)
+        guard let creatorId, !creatorId.isEmpty else { return }
+        let sessionId = AnalyticsSessionID.current
+        try? await db.collection("creator_presence")
+            .document(creatorId)
+            .collection("active")
+            .document(sessionId)
+            .delete()
+        activeCreatorPresence.remove(creatorId)
         #endif
     }
     
@@ -567,6 +701,100 @@ class RealtimeViewTracker: ObservableObject {
     func getEngagement(for videoId: String) -> EngagementMetrics? {
         return realtimeEngagement[videoId]
     }
+
+    // MARK: - 📊 Dashboard Reads (accurate, Firestore-backed)
+
+    /// Real concurrent viewers across a creator's whole channel right now.
+    /// Counts live presence heartbeats seen within the last 45 seconds so the
+    /// Studio "watching now" number is truthful instead of hardcoded 0.
+    func fetchWatchingNow(creatorId: String) async -> Int {
+        #if canImport(FirebaseFirestore)
+        guard !creatorId.isEmpty else { return 0 }
+        do {
+            let cutoff = Date().addingTimeInterval(-45)
+            let snap = try await db.collection("creator_presence")
+                .document(creatorId)
+                .collection("active")
+                .whereField("lastSeen", isGreaterThan: Timestamp(date: cutoff))
+                .getDocuments()
+            return snap.documents.count
+        } catch {
+            // Missing index or offline — fall back to this device's local sessions
+            print("⚠️ [ViewTracker] watching-now fallback: \(error.localizedDescription)")
+            return activeViewSessions.values.filter { $0.creatorId == creatorId }.count
+        }
+        #else
+        return activeViewSessions.values.filter { $0.creatorId == creatorId }.count
+        #endif
+    }
+
+    /// Per-day view buckets for the last `days` days (oldest → newest).
+    /// Powers the real trend chart and an accurate "views today" figure.
+    func fetchDailyViews(creatorId: String, days: Int = 28) async -> [(date: Date, views: Int)] {
+        #if canImport(FirebaseFirestore)
+        guard !creatorId.isEmpty else { return [] }
+        let cal = Calendar(identifier: .gregorian)
+        var utc = cal
+        utc.timeZone = TimeZone(identifier: "UTC") ?? .current
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = TimeZone(identifier: "UTC")
+        fmt.dateFormat = "yyyy-MM-dd"
+
+        do {
+            let snap = try await db.collection("creator_analytics")
+                .document(creatorId)
+                .collection("daily")
+                .order(by: "date", descending: true)
+                .limit(to: days)
+                .getDocuments()
+
+            var byKey: [String: Int] = [:]
+            for doc in snap.documents {
+                let d = doc.data()
+                let key = (d["date"] as? String) ?? doc.documentID
+                let views = (d["views"] as? Int) ?? Int((d["views"] as? Int64) ?? 0)
+                byKey[key] = views
+            }
+
+            // Build a continuous series so the chart has no gaps.
+            var series: [(date: Date, views: Int)] = []
+            let today = utc.startOfDay(for: Date())
+            for offset in stride(from: days - 1, through: 0, by: -1) {
+                guard let day = utc.date(byAdding: .day, value: -offset, to: today) else { continue }
+                let key = fmt.string(from: day)
+                series.append((date: day, views: byKey[key] ?? 0))
+            }
+            return series
+        } catch {
+            print("⚠️ [ViewTracker] daily-views fetch failed: \(error.localizedDescription)")
+            return []
+        }
+        #else
+        return []
+        #endif
+    }
+
+    /// Views recorded for the current UTC day.
+    func fetchViewsToday(creatorId: String) async -> Int {
+        #if canImport(FirebaseFirestore)
+        guard !creatorId.isEmpty else { return 0 }
+        do {
+            let doc = try await db.collection("creator_analytics")
+                .document(creatorId)
+                .collection("daily")
+                .document(dayKey())
+                .getDocument()
+            if let v = doc.data()?["views"] as? Int { return v }
+            if let v64 = doc.data()?["views"] as? Int64 { return Int(v64) }
+            return 0
+        } catch {
+            return 0
+        }
+        #else
+        return 0
+        #endif
+    }
 }
 
 // MARK: - Models
@@ -581,6 +809,13 @@ struct ViewSession {
     var watchDuration: TimeInterval = 0
     var videoDuration: TimeInterval?
     var isPlaying: Bool = true
+    var creatorId: String?
+}
+
+/// Stable per-app-launch session id used for live presence + de-duplicated
+/// analytics so a single viewer is only counted once as "watching now".
+enum AnalyticsSessionID {
+    static let current: String = UUID().uuidString
 }
 
 struct EngagementMetrics {

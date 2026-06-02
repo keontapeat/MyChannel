@@ -15,3 +15,15 @@
 
 node_modules
 #!include:.gitignore
+
+# macOS AppleDouble metadata files — these contain null bytes and break the
+# Python build ("source code string cannot contain null bytes"). Never upload.
+._*
+.DS_Store
+**/._*
+**/.DS_Store
+
+# Local virtualenv and caches — not needed in the deployed package.
+venv/
+__pycache__/
+**/__pycache__/

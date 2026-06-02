@@ -1469,6 +1469,45 @@ struct ProfileView: View {
                             .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
                         }
                         .padding(.horizontal)
+                        
+                        // 🔥 WATCH LATER SECTION - YouTube Parity
+                        NavigationLink(destination: WatchLaterView()) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "clock.badge.checkmark")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                Text("Watch Later")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                Spacer()
+                                // Show count badge if user has saved videos
+                                if appState.watchLaterVideos.count > 0 {
+                                    Text("\(appState.watchLaterVideos.count)")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            Capsule()
+                                                .fill(AppTheme.Colors.divider.opacity(0.2))
+                                        )
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                            }
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(AppTheme.Colors.surface)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
+                            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+                        }
+                        .padding(.horizontal)
                     }
                     .padding(.bottom, 24)
                 } header: {

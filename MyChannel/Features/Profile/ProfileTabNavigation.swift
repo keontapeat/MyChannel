@@ -141,7 +141,7 @@ private struct UIKitProfileTabRow: UIViewRepresentable {
             case .playlists:
                 return parent.user.videoCount > 10 ? parent.user.videoCount / 8 : nil
             case .downloads:
-                let count = DownloadManager.shared.downloads.count
+                let count = OfflineDownloadService.shared.completedDownloads.count
                 return count > 0 ? count : nil
             case .community:
                 return parent.user.subscriberCount > 1000 ? 12 : nil
@@ -306,7 +306,7 @@ struct ProfileTabButton: View {
         case .playlists:
             return user.videoCount > 10 ? user.videoCount / 8 : nil // Estimate playlists count
         case .downloads:
-            let count = DownloadManager.shared.downloads.count
+            let count = NuclearDownloadManager.shared.downloads.count
             return count > 0 ? count : nil
         case .community:
             return user.subscriberCount > 1000 ? 12 : nil // Mock community posts

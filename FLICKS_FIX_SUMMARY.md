@@ -128,7 +128,7 @@ private func loadFlicks() {
     Task {
         // ✅ NOW: Load user's Flicks from Firestore
         let db = Firestore.firestore()
-        let snapshot = try await db.collection("shorts")
+        let snapshot = try await db.collection("flicks")
             .whereField("creatorId", isEqualTo: currentUserId)
             .order(by: "createdAt", descending: true)
             .getDocuments()
@@ -151,7 +151,7 @@ Update `web-v2/app/flicks/upload/page.tsx` (line 94):
 
 ```typescript
 // ✅ NOW: Save Flick metadata to Firestore
-await addDoc(collection(db, 'shorts'), {
+await addDoc(collection(db, 'flicks'), {
   title,
   description,
   videoUrl: videoURL,

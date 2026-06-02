@@ -74,8 +74,17 @@ final class LiveTVManager: ObservableObject {
         
         print("🔄 [LiveTVManager] Refreshing channels from API...")
         
+        // 1️⃣ Prefer the Firebase-curated catalog (can be fixed server-side, no app release).
+        if let remote = await LiveTVCatalogService.shared.fetchRemoteChannels(), !remote.isEmpty {
+            channels = remote
+            lastRefresh = Date()
+            cache.save(channels: remote, lastRefresh: Date())
+            print("✅ [LiveTVManager] Using \(remote.count) Firebase-curated channels")
+            return
+        }
+        
         do {
-            // Fetch from Pluto TV API
+            // 2️⃣ Fetch from Pluto TV API and merge with curated local channels.
             let plutoChannels = try await fetchPlutoTVChannels()
             
             // Merge with our curated channels (keeps our metadata, updates stream URLs)
@@ -92,7 +101,7 @@ final class LiveTVManager: ObservableObject {
             
         } catch {
             print("⚠️ [LiveTVManager] Refresh failed: \(error.localizedDescription)")
-            // Fall back to curated channels if API fails
+            // 3️⃣ Fall back to curated local channels if everything else fails.
             if channels.isEmpty {
                 channels = LiveTVChannel.sampleChannels
             }

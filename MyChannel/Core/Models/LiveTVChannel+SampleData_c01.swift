@@ -137,7 +137,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "family-guy",
             name: "Family Guy",
-            logoURL: "https://i.ytimg.com/vi/Q4upY8UWrsU/hqdefault.jpg", // Family Guy Funniest Moments - 50M+ views
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video1/v4/6f/62/80/6f62804d-4e16-5948-cbf9-52174b700f45/mzl.kixbbnqo.lsr/600x600bb.jpg", // Family Guy Funniest Moments - 50M+ views
             streamURL: s_entertain2,
             category: .comedy,
             description: "Giggity giggity! 24/7 Family Guy 😂",
@@ -318,7 +318,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "aqua-teen",
             name: "Aqua Teen Hunger Force",
-            logoURL: "https://i.ytimg.com/vi/ZM3hDyTqY-g/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video1/v4/bc/92/44/bc924468-117d-c058-df93-7775a4630cc4/mzl.qqdnqczl.lsr/600x600bb.jpg",
             streamURL: s_entertain2,
             category: .comedy,
             description: "Number one in the hood, G! 24/7 🍟",

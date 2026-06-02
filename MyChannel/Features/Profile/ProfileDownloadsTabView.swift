@@ -3,7 +3,9 @@
 //  MyChannel
 //
 //  Inline downloads tab for ProfileView — YouTube-style.
-//  Backed by DownloadManager (Firestore + local files).
+//  Backed by OfflineDownloadService (the canonical offline-downloads engine),
+//  so it stays in perfect sync with the Downloads screen and the in-player
+//  download button.
 //
 
 import SwiftUI
@@ -12,18 +14,26 @@ import FirebaseAuth
 
 // MARK: - Profile Downloads Tab View (inline in profile)
 struct ProfileDownloadsTabView: View {
-    @StateObject private var downloadManager = DownloadManager.shared
+    @StateObject private var offlineService = OfflineDownloadService.shared
     @StateObject private var subscriptionService = SubscriptionService.shared
     @State private var showingUpgrade = false
     @State private var showingDeleteAlert = false
-    @State private var videoToDelete: DownloadedVideo?
+    @State private var videoToDelete: OfflineDownload?
     @State private var showingDeleteAllAlert = false
-    @State private var selectedVideoForPlayback: DownloadedVideo?
-    
+    @State private var shareItems: [Any]?
+
     private var isAuthenticated: Bool {
         Auth.auth().currentUser != nil
     }
-    
+
+    private var completedDownloads: [OfflineDownload] {
+        offlineService.completedDownloads
+    }
+
+    private var inProgressDownloads: [OfflineDownload] {
+        offlineService.inProgressDownloads
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if !isAuthenticated {
@@ -45,19 +55,28 @@ struct ProfileDownloadsTabView: View {
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
-            } else if !subscriptionService.isPlusSubscriber {
+            } else if AppConfig.Features.enableSubscriptions && !subscriptionService.isPlusSubscriber {
                 premiumUpgradePrompt
-            } else if downloadManager.isLoading {
-                loadingView
-            } else if downloadManager.downloads.isEmpty && downloadManager.activeDownloads.isEmpty {
+            } else if completedDownloads.isEmpty && inProgressDownloads.isEmpty {
                 emptyDownloadsView
             } else {
                 downloadsListView
             }
         }
         .padding(.vertical, 16)
+        .task {
+            offlineService.updateStorageInfo()
+        }
         .sheet(isPresented: $showingUpgrade) {
             MyChannelPlusView()
+        }
+        .sheet(isPresented: Binding(
+            get: { shareItems != nil },
+            set: { if !$0 { shareItems = nil } }
+        )) {
+            if let items = shareItems {
+                NativeShareSheet(items: items)
+            }
         }
         .alert("Delete Download", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
@@ -68,7 +87,7 @@ struct ProfileDownloadsTabView: View {
             }
         } message: {
             if let video = videoToDelete {
-                Text("Remove \"\(video.title)\" from downloads? This will free up \(video.formattedFileSize).")
+                Text("Remove \"\(video.title)\" from downloads? This will free up \(ByteCountFormatter.string(fromByteCount: Int64(video.fileSize), countStyle: .file)).")
             }
         }
         .alert("Delete All Downloads", isPresented: $showingDeleteAllAlert) {
@@ -77,56 +96,56 @@ struct ProfileDownloadsTabView: View {
                 deleteAllDownloads()
             }
         } message: {
-            Text("Remove all \(downloadManager.downloads.count) downloaded videos? This will free up \(downloadManager.getFormattedTotalStorage()).")
+            Text("Remove all \(completedDownloads.count) downloaded videos? This will free up \(offlineService.formattedStorageUsed()).")
         }
     }
-    
+
     // MARK: - Sign In Prompt
     private var signInPrompt: some View {
         VStack(spacing: 20) {
             Spacer().frame(height: 40)
-            
+
             Image(systemName: "person.crop.circle.badge.questionmark")
                 .font(.system(size: 48))
                 .foregroundColor(AppTheme.Colors.textSecondary)
-            
+
             Text("Sign in to download videos")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(AppTheme.Colors.textPrimary)
-            
+
             Spacer().frame(height: 40)
         }
         .frame(maxWidth: .infinity)
     }
-    
+
     // MARK: - Premium Upgrade Prompt
     private var premiumUpgradePrompt: some View {
         VStack(spacing: 24) {
             Spacer().frame(height: 32)
-            
+
             ZStack {
                 Circle()
                     .fill(Color.blue.opacity(0.1))
                     .frame(width: 100, height: 100)
-                
+
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 44))
                     .foregroundColor(.blue)
             }
-            
+
             VStack(spacing: 10) {
                 Text("Download videos to watch offline")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
                     .multilineTextAlignment(.center)
-                
+
                 Text("Get MyChannel Plus to download videos and watch them anywhere, even without internet.")
                     .font(.system(size: 15))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
-            
+
             VStack(spacing: 12) {
                 premiumBenefit(icon: "arrow.down.circle.fill", text: "Unlimited downloads")
                 premiumBenefit(icon: "wifi.slash", text: "Watch offline anywhere")
@@ -134,7 +153,7 @@ struct ProfileDownloadsTabView: View {
                 premiumBenefit(icon: "hd.circle.fill", text: "Up to 1080p quality")
             }
             .padding(.horizontal, 40)
-            
+
             Button {
                 showingUpgrade = true
                 HapticManager.shared.impact(style: .medium)
@@ -148,77 +167,59 @@ struct ProfileDownloadsTabView: View {
                     .cornerRadius(24)
             }
             .padding(.horizontal, 32)
-            
+
             Spacer().frame(height: 32)
         }
         .frame(maxWidth: .infinity)
     }
-    
+
     private func premiumBenefit(icon: String, text: String) -> some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
                 .font(.system(size: 18))
                 .foregroundColor(.blue)
                 .frame(width: 24)
-            
+
             Text(text)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(AppTheme.Colors.textPrimary)
-            
+
             Spacer()
         }
     }
-    
-    // MARK: - Loading View
-    private var loadingView: some View {
-        VStack(spacing: 16) {
-            Spacer().frame(height: 60)
-            
-            ProgressView()
-                .scaleEffect(1.2)
-                .tint(AppTheme.Colors.primary)
-            
-            Text("Loading downloads...")
-                .font(.system(size: 15))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-            
-            Spacer().frame(height: 60)
-        }
-        .frame(maxWidth: .infinity)
-    }
-    
+
     // MARK: - Empty Downloads
     private var emptyDownloadsView: some View {
         VStack(spacing: 24) {
             Spacer().frame(height: 40)
-            
+
             ZStack {
                 Circle()
                     .fill(AppTheme.Colors.surface)
                     .frame(width: 88, height: 88)
-                
+
                 Image(systemName: "arrow.down.to.line.circle")
                     .font(.system(size: 40))
                     .foregroundColor(AppTheme.Colors.textSecondary)
             }
-            
+
             VStack(spacing: 8) {
                 Text("No downloads yet")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
-                
+
                 Text("Videos you download will appear here.\nTap the download button on any video to save it.")
                     .font(.system(size: 14))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
-            
+
             Spacer().frame(height: 40)
         }
         .frame(maxWidth: .infinity)
     }
-    
+
     // MARK: - Downloads List
     private var downloadsListView: some View {
         VStack(spacing: 0) {
@@ -227,20 +228,20 @@ struct ProfileDownloadsTabView: View {
                 Image(systemName: "internaldrive")
                     .font(.system(size: 16))
                     .foregroundColor(AppTheme.Colors.textSecondary)
-                
+
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(downloadManager.getFormattedTotalStorage()) used")
+                    Text("\(offlineService.formattedStorageUsed()) used")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
-                    
-                    Text("\(downloadManager.downloads.count) video\(downloadManager.downloads.count == 1 ? "" : "s")")
+
+                    Text("\(completedDownloads.count) video\(completedDownloads.count == 1 ? "" : "s")")
                         .font(.system(size: 12))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
-                
+
                 Spacer()
-                
-                if !downloadManager.downloads.isEmpty {
+
+                if !completedDownloads.isEmpty {
                     Button {
                         showingDeleteAllAlert = true
                         HapticManager.shared.impact(style: .light)
@@ -257,19 +258,17 @@ struct ProfileDownloadsTabView: View {
             .cornerRadius(12)
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
-            
+
             // Active downloads (in-progress)
-            ForEach(Array(downloadManager.activeDownloads.keys.sorted()), id: \.self) { videoId in
-                if let progress = downloadManager.activeDownloads[videoId] {
-                    activeDownloadRow(videoId: videoId, progress: progress)
-                }
+            ForEach(inProgressDownloads) { download in
+                activeDownloadRow(download)
             }
-            
+
             // Completed downloads
-            ForEach(downloadManager.downloads) { download in
+            ForEach(completedDownloads) { download in
                 downloadRow(download)
-                
-                if download.id != downloadManager.downloads.last?.id {
+
+                if download.id != completedDownloads.last?.id {
                     Divider()
                         .padding(.leading, 96)
                         .padding(.trailing, 20)
@@ -277,46 +276,48 @@ struct ProfileDownloadsTabView: View {
             }
         }
     }
-    
+
     // MARK: - Active Download Row (in-progress)
-    private func activeDownloadRow(videoId: String, progress: Double) -> some View {
+    private func activeDownloadRow(_ download: OfflineDownload) -> some View {
         HStack(spacing: 14) {
             // Progress indicator
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.blue.opacity(0.1))
                     .frame(width: 72, height: 42)
-                
+
                 ZStack {
                     Circle()
                         .stroke(Color.blue.opacity(0.3), lineWidth: 2.5)
                         .frame(width: 28, height: 28)
-                    
+
                     Circle()
-                        .trim(from: 0, to: progress)
+                        .trim(from: 0, to: download.progress)
                         .stroke(Color.blue, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                         .frame(width: 28, height: 28)
-                    
-                    Text("\(Int(progress * 100))%")
+
+                    Text("\(Int(download.progress * 100))%")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundColor(.blue)
                 }
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
-                Text("Downloading...")
+                Text(download.title)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textPrimary)
-                
-                ProgressView(value: progress)
-                    .tint(.blue)
+                    .lineLimit(1)
+
+                Text(download.status == .queued ? "Waiting…" : "Downloading…")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
             }
-            
+
             Spacer()
-            
+
             Button {
-                downloadManager.cancelDownload(videoId: videoId)
+                Task { await offlineService.cancelDownload(download.id) }
                 HapticManager.shared.impact(style: .light)
             } label: {
                 Image(systemName: "xmark.circle.fill")
@@ -327,15 +328,15 @@ struct ProfileDownloadsTabView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
     }
-    
+
     // MARK: - Download Row
-    private func downloadRow(_ download: DownloadedVideo) -> some View {
+    private func downloadRow(_ download: OfflineDownload) -> some View {
         Button {
             playDownloadedVideo(download)
         } label: {
             HStack(spacing: 14) {
                 // Thumbnail
-                AsyncImage(url: URL(string: download.thumbnailUrl)) { image in
+                AsyncImage(url: URL(string: download.thumbnailURL)) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -351,7 +352,7 @@ struct ProfileDownloadsTabView: View {
                 .frame(width: 72, height: 42)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(alignment: .bottomTrailing) {
-                    Text(download.formattedDuration)
+                    Text(formattedDuration(download.duration))
                         .font(.system(size: 9, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 3)
@@ -360,7 +361,7 @@ struct ProfileDownloadsTabView: View {
                         .cornerRadius(3)
                         .padding(3)
                 }
-                
+
                 // Info
                 VStack(alignment: .leading, spacing: 3) {
                     Text(download.title)
@@ -368,12 +369,17 @@ struct ProfileDownloadsTabView: View {
                         .foregroundColor(AppTheme.Colors.textPrimary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                    
-                    Text(download.channelName)
-                        .font(.system(size: 13))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .lineLimit(1)
-                    
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.green)
+                        Text("Available offline")
+                            .font(.system(size: 13))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                    .lineLimit(1)
+
                     HStack(spacing: 8) {
                         Text(download.quality.displayName)
                             .font(.system(size: 10, weight: .bold))
@@ -382,25 +388,15 @@ struct ProfileDownloadsTabView: View {
                             .padding(.vertical, 2)
                             .background(download.quality.color)
                             .cornerRadius(3)
-                        
-                        Text(download.formattedFileSize)
+
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(download.fileSize), countStyle: .file))
                             .font(.system(size: 11))
                             .foregroundColor(AppTheme.Colors.textTertiary)
-                        
-                        Text(download.downloadTimeAgo)
-                            .font(.system(size: 11))
-                            .foregroundColor(AppTheme.Colors.textTertiary)
-                        
-                        if download.isWatched {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(.green)
-                        }
                     }
                 }
-                
+
                 Spacer()
-                
+
                 // More options
                 Menu {
                     Button {
@@ -408,15 +404,15 @@ struct ProfileDownloadsTabView: View {
                     } label: {
                         Label("Play", systemImage: "play.fill")
                     }
-                    
+
                     Button {
                         shareDownload(download)
                     } label: {
                         Label("Share", systemImage: "square.and.arrow.up")
                     }
-                    
+
                     Divider()
-                    
+
                     Button(role: .destructive) {
                         videoToDelete = download
                         showingDeleteAlert = true
@@ -437,70 +433,50 @@ struct ProfileDownloadsTabView: View {
         }
         .buttonStyle(.plain)
     }
-    
+
     // MARK: - Actions
-    
-    private func playDownloadedVideo(_ download: DownloadedVideo) {
+
+    private func playDownloadedVideo(_ download: OfflineDownload) {
         HapticManager.shared.impact(style: .light)
-        // Post notification to open the video in the global player
-        let videoURL = download.localFilePath
-        let fileURL = URL(fileURLWithPath: videoURL)
-        
-        if FileManager.default.fileExists(atPath: videoURL) {
-            // Create a Video object from the download for the player
-            let video = Video(
-                id: download.videoId,
-                title: download.title,
-                description: "Downloaded video",
-                thumbnailURL: download.thumbnailUrl,
-                videoURL: fileURL.absoluteString,
-                duration: download.duration,
-                viewCount: download.viewCount,
-                likeCount: 0,
-                creator: User(
-                    id: download.channelId,
-                    username: download.channelName.lowercased().replacingOccurrences(of: " ", with: ""),
-                    displayName: download.channelName,
-                    email: "",
-                    profileImageURL: "",
-                    bannerImageURL: nil,
-                    bio: "",
-                    subscriberCount: 0,
-                    videoCount: 0
-                ),
-                category: .entertainment,
-                tags: [],
-                isPublic: true
-            )
-            NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
-        } else {
+
+        guard let video = offlineService.offlinePlaybackVideo(for: download.videoId) else {
             // File missing — remove stale download
-            Task {
-                try? await downloadManager.deleteDownload(videoId: download.videoId)
-            }
+            Task { try? await offlineService.deleteDownload(download.id) }
+            return
         }
+
+        NotificationCenter.default.post(name: .openVideoFromHistory, object: video)
     }
-    
-    private func deleteDownload(_ download: DownloadedVideo) {
+
+    private func deleteDownload(_ download: OfflineDownload) {
         HapticManager.shared.impact(style: .medium)
         Task {
-            try? await downloadManager.deleteDownload(videoId: download.videoId)
+            try? await offlineService.deleteDownload(download.id)
         }
     }
-    
+
     private func deleteAllDownloads() {
         HapticManager.shared.impact(style: .heavy)
         Task {
-            for download in downloadManager.downloads {
-                try? await downloadManager.deleteDownload(videoId: download.videoId)
-            }
+            await offlineService.deleteAllDownloads()
         }
     }
-    
-    private func shareDownload(_ download: DownloadedVideo) {
-        let url = URL(string: "https://mychannel.live/watch?v=\(download.videoId)")!
-        let activityVC = UIActivityViewController(activityItems: [download.title, url], applicationActivities: nil)
-        UIApplication.shared.presentShareSheet(activityVC)
+
+    private func shareDownload(_ download: OfflineDownload) {
+        HapticManager.shared.impact(style: .light)
+        guard let url = URL(string: "https://mychannel.live/watch?v=\(download.videoId)") else { return }
+        shareItems = [download.title, url]
+    }
+
+    private func formattedDuration(_ duration: TimeInterval) -> String {
+        let total = max(Int(duration), 0)
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 

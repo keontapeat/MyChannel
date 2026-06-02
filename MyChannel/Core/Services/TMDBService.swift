@@ -90,7 +90,9 @@ final class TMDBService {
             // fetch details for runtime and genres (optional)
             let details = try await detailsFor(movieID: movie.id)
             let runtime = details?.runtime ?? 0
-            let genres = details?.genres?.map { FreeMovie.MovieGenre(rawValue: $0.name.lowercased()) }.compactMap { $0 } ?? []
+            let genres: [FreeMovie.MovieGenre] = details?.genres?.compactMap { genre in
+                FreeMovie.MovieGenre(rawValue: genre.name.lowercased())
+            } ?? []
 
             // Build FreeMovie. streamURL will use TMDB provider page link (external), not a direct mp4/hls.
             let title = movie.title ?? movie.name ?? ""
@@ -154,7 +156,9 @@ final class TMDBService {
             // details (optional)
             let details = try await detailsFor(movieID: movie.id)
             let runtime = details?.runtime ?? 0
-            let genres = details?.genres?.map { FreeMovie.MovieGenre(rawValue: $0.name.lowercased()) }.compactMap { $0 } ?? []
+            let genres: [FreeMovie.MovieGenre] = details?.genres?.compactMap { genre in
+                FreeMovie.MovieGenre(rawValue: genre.name.lowercased())
+            } ?? []
 
             let title = movie.title ?? movie.name ?? ""
             let posterURL = movie.poster_path.map { "\(Config.imageBase)/w500\($0)" } ?? ""

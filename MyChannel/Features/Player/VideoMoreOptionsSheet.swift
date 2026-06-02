@@ -44,6 +44,7 @@ struct VideoMoreOptionsSheet: View {
     @State private var showShareSheet = false
     @State private var showAddToPlaylist = false
     @State private var showRequestFeature = false
+    @State private var showMyFeatureSlots = false
     @State private var selectedReportReason: VideoReportReason = .spam
     @State private var showReportReasonPicker = false
     @State private var isPinnedLocal: Bool = false
@@ -59,144 +60,10 @@ struct VideoMoreOptionsSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    Label("Video: \(video.title)", systemImage: "film")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section {
-                    Button(action: {
-                        showShareSheet = true
-                        feedback()
-                    }) {
-                        HStack { Label("Share", systemImage: "square.and.arrow.up"); Spacer() }
-                    }
-                    
-                    Button(action: { showAddToPlaylist = true; feedback() }) {
-                        HStack { Label("Save to playlist", systemImage: "text.badge.plus"); Spacer() }
-                    }
-
-                    Button(action: {
-                        isWatchLater.toggle()
-                        feedback()
-                    }) {
-                        HStack {
-                            Label(
-                                isWatchLater ? "Remove from Watch Later" : "Save to Watch Later",
-                                systemImage: isWatchLater ? "bookmark.fill" : "bookmark"
-                            )
-                            Spacer()
-                        }
-                    }
-                    
-                    Button(action: {
-                        isSubscribed.toggle()
-                        feedback()
-                    }) {
-                        HStack {
-                            Label(
-                                isSubscribed ? "Unsubscribe" : "Subscribe",
-                                systemImage: isSubscribed ? "bell.slash.fill" : "bell.fill"
-                            )
-                            Spacer()
-                        }
-                    }
-                    
-                    // Feature Video Option (for all users)
-                    Button(action: {
-                        showRequestFeature = true
-                        feedback()
-                    }) {
-                        HStack {
-                            Label("Feature Video", systemImage: "star.fill")
-                            Spacer()
-                            Text("$$")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-                
-                // Owner-specific actions
-                if isOwner {
-                    Section("Your Video") {
-                        if let uid = resolvedOwnerId {
-                            Button(action: {
-                                if isPinnedLocal {
-                                    PinnedVideosStore.shared.unpin(video.id, for: uid)
-                                } else {
-                                    PinnedVideosStore.shared.pin(video.id, for: uid)
-                                }
-                                isPinnedLocal.toggle()
-                                feedback()
-                            }) {
-                                HStack {
-                                    Label(
-                                        isPinnedLocal ? "Unpin from Profile" : "Pin to Profile",
-                                        systemImage: isPinnedLocal ? "pin.slash" : "pin.fill"
-                                    )
-                                    Spacer()
-                                }
-                            }
-                        }
-                        
-                        Button(action: {
-                            NotificationCenter.default.post(name: Notification.Name("OpenVideoEditor"), object: video)
-                            dismiss()
-                            feedback()
-                        }) {
-                            HStack { 
-                                Label("Edit Video", systemImage: "pencil")
-                                Spacer() 
-                            }
-                        }
-                        
-                        Button(action: {
-                            NotificationCenter.default.post(name: Notification.Name("OpenVideoAnalytics"), object: video)
-                            dismiss()
-                            feedback()
-                        }) {
-                            HStack { 
-                                Label("View Analytics", systemImage: "chart.line.uptrend.xyaxis")
-                                Spacer() 
-                            }
-                        }
-                        
-                        Button(role: .destructive, action: {
-                            showDeleteAlert = true
-                            feedback()
-                        }) {
-                            Label("Delete Video", systemImage: "trash.fill")
-                        }
-                    }
-                }
-                
-                Section {
-                    if !isOwner {
-                        Button(role: .destructive) {
-                            showReportReasonPicker = true
-                            feedback()
-                        } label: {
-                            Label("Report", systemImage: "flag.fill")
-                        }
-                        
-                        Button(role: .destructive) {
-                            showBlockAlert = true
-                            feedback()
-                        } label: {
-                            Label("Block @\(video.creator.username)", systemImage: "hand.raised.fill")
-                        }
-                    }
-                    
-                    Button(action: {
-                        UIPasteboard.general.string = "https://mychannel.app/watch/\(video.id)"
-                        showCopyToast = true
-                        feedback()
-                    }) {
-                        Label("Copy Video Link", systemImage: "link")
-                    }
-                }
+                videoHeaderSection
+                primaryActionsSection
+                ownerActionsSection
+                reportAndLinkSection
             }
             .onAppear {
                 if let uid = resolvedOwnerId {
@@ -212,55 +79,21 @@ struct VideoMoreOptionsSheet: View {
                     }
                 }
             }
-            .confirmationDialog("Report Video", isPresented: $showReportReasonPicker, titleVisibility: .visible) {
-                ForEach(VideoReportReason.allCases) { reason in
-                    Button(reason.title) {
-                        selectedReportReason = reason
-                        showReportAlert = true
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Why are you reporting this video?")
-            }
-            .alert("Report this video?", isPresented: $showReportAlert) {
-                Button("Cancel", role: .cancel) {}
-                Button("Report", role: .destructive) { Task { await reportVideo(reason: selectedReportReason) } }
-            } message: {
-                Text(selectedReportReason.title)
-            }
-            .alert("Block \(video.creator.displayName)?", isPresented: $showBlockAlert) {
-                Button("Cancel", role: .cancel) {}
-                Button("Block", role: .destructive) { Task { await blockUser() } }
-            } message: {
-                Text("They won't be able to comment on your videos or see your content. Their content will be removed from your feed immediately.")
-            }
-            .alert("Delete this video?", isPresented: $showDeleteAlert) {
-                Button("Cancel", role: .cancel) {}
-                Button("Delete", role: .destructive) { 
+            .modifier(VideoOptionsDialogsModifier(
+                showReportReasonPicker: $showReportReasonPicker,
+                showReportAlert: $showReportAlert,
+                showBlockAlert: $showBlockAlert,
+                showDeleteAlert: $showDeleteAlert,
+                selectedReportReason: $selectedReportReason,
+                creatorDisplayName: video.creator.displayName,
+                onReport: { reason in Task { await reportVideo(reason: reason) } },
+                onBlock: { Task { await blockUser() } },
+                onDelete: {
                     Task { await deleteVideo() }
                     dismiss()
                 }
-            } message: {
-                Text("This action cannot be undone. The video will be permanently deleted.")
-            }
-            .overlay(
-                Group {
-                    if showCopyToast {
-                        ToastView(text: "Link copied!")
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                            .onAppear {
-                                Task { @MainActor in
-                                    try? await Task.sleep(nanoseconds: 2_000_000_000)
-                                    withAnimation {
-                                        showCopyToast = false
-                                    }
-                                }
-                            }
-                    }
-                },
-                alignment: .bottom
-            )
+            ))
+            .overlay(copyToastOverlay, alignment: .bottom)
         }
         .presentationDetents([.medium])
         .sheet(isPresented: $showShareSheet) {
@@ -270,7 +103,189 @@ struct VideoMoreOptionsSheet: View {
             AddToPlaylistSheet(videoId: video.id)
         }
         .fullScreenCover(isPresented: $showRequestFeature) {
-            RequestFeaturedVideoView(video: video)
+            FeatureSlotBookingView(video: video)
+        }
+        .fullScreenCover(isPresented: $showMyFeatureSlots) {
+            MyFeatureSlotsView()
+        }
+    }
+
+    // MARK: - Sections
+
+    @ViewBuilder
+    private var videoHeaderSection: some View {
+        Section {
+            Label("Video: \(video.title)", systemImage: "film")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var primaryActionsSection: some View {
+        Section {
+            Button(action: {
+                showShareSheet = true
+                feedback()
+            }) {
+                HStack { Label("Share", systemImage: "square.and.arrow.up"); Spacer() }
+            }
+
+            Button(action: { showAddToPlaylist = true; feedback() }) {
+                HStack { Label("Save to playlist", systemImage: "text.badge.plus"); Spacer() }
+            }
+
+            Button(action: {
+                isWatchLater.toggle()
+                feedback()
+            }) {
+                HStack {
+                    Label(
+                        isWatchLater ? "Remove from Watch Later" : "Save to Watch Later",
+                        systemImage: isWatchLater ? "bookmark.fill" : "bookmark"
+                    )
+                    Spacer()
+                }
+            }
+
+            Button(action: {
+                isSubscribed.toggle()
+                feedback()
+            }) {
+                HStack {
+                    Label(
+                        isSubscribed ? "Unsubscribe" : "Subscribe",
+                        systemImage: isSubscribed ? "bell.slash.fill" : "bell.fill"
+                    )
+                    Spacer()
+                }
+            }
+
+            // Feature Video Option (for all users)
+            Button(action: {
+                showRequestFeature = true
+                feedback()
+            }) {
+                HStack {
+                    Label("Feature Video", systemImage: "star.fill")
+                    Spacer()
+                    Text("$$")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            // My Feature Slots — track requests & pay after approval
+            Button(action: {
+                showMyFeatureSlots = true
+                feedback()
+            }) {
+                HStack {
+                    Label("My Feature Slots", systemImage: "list.star")
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var ownerActionsSection: some View {
+        if isOwner {
+            Section("Your Video") {
+                if let uid = resolvedOwnerId {
+                    Button(action: {
+                        if isPinnedLocal {
+                            PinnedVideosStore.shared.unpin(video.id, for: uid)
+                        } else {
+                            PinnedVideosStore.shared.pin(video.id, for: uid)
+                        }
+                        isPinnedLocal.toggle()
+                        feedback()
+                    }) {
+                        HStack {
+                            Label(
+                                isPinnedLocal ? "Unpin from Profile" : "Pin to Profile",
+                                systemImage: isPinnedLocal ? "pin.slash" : "pin.fill"
+                            )
+                            Spacer()
+                        }
+                    }
+                }
+
+                Button(action: {
+                    NotificationCenter.default.post(name: Notification.Name("OpenVideoEditor"), object: video)
+                    dismiss()
+                    feedback()
+                }) {
+                    HStack {
+                        Label("Edit Video", systemImage: "pencil")
+                        Spacer()
+                    }
+                }
+
+                Button(action: {
+                    NotificationCenter.default.post(name: Notification.Name("OpenVideoAnalytics"), object: video)
+                    dismiss()
+                    feedback()
+                }) {
+                    HStack {
+                        Label("View Analytics", systemImage: "chart.line.uptrend.xyaxis")
+                        Spacer()
+                    }
+                }
+
+                Button(role: .destructive, action: {
+                    showDeleteAlert = true
+                    feedback()
+                }) {
+                    Label("Delete Video", systemImage: "trash.fill")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var reportAndLinkSection: some View {
+        Section {
+            if !isOwner {
+                Button(role: .destructive) {
+                    showReportReasonPicker = true
+                    feedback()
+                } label: {
+                    Label("Report", systemImage: "flag.fill")
+                }
+
+                Button(role: .destructive) {
+                    showBlockAlert = true
+                    feedback()
+                } label: {
+                    Label("Block @\(video.creator.username)", systemImage: "hand.raised.fill")
+                }
+            }
+
+            Button(action: {
+                UIPasteboard.general.string = "https://mychannel.app/watch/\(video.id)"
+                showCopyToast = true
+                feedback()
+            }) {
+                Label("Copy Video Link", systemImage: "link")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var copyToastOverlay: some View {
+        if showCopyToast {
+            ToastView(text: "Link copied!")
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .onAppear {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        withAnimation {
+                            showCopyToast = false
+                        }
+                    }
+                }
         }
     }
     
@@ -352,6 +367,53 @@ struct VideoMoreOptionsSheet: View {
             NotificationManager.shared.showSuccess("@\(video.creator.username) has been blocked.")
             dismiss()
         }
+    }
+}
+
+// MARK: - Video Options Dialogs Modifier
+// Extracted from the main body to keep each type-checked expression small.
+private struct VideoOptionsDialogsModifier: ViewModifier {
+    @Binding var showReportReasonPicker: Bool
+    @Binding var showReportAlert: Bool
+    @Binding var showBlockAlert: Bool
+    @Binding var showDeleteAlert: Bool
+    @Binding var selectedReportReason: VideoReportReason
+    let creatorDisplayName: String
+    let onReport: (VideoReportReason) -> Void
+    let onBlock: () -> Void
+    let onDelete: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog("Report Video", isPresented: $showReportReasonPicker, titleVisibility: .visible) {
+                ForEach(VideoReportReason.allCases) { reason in
+                    Button(reason.title) {
+                        selectedReportReason = reason
+                        showReportAlert = true
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Why are you reporting this video?")
+            }
+            .alert("Report this video?", isPresented: $showReportAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Report", role: .destructive) { onReport(selectedReportReason) }
+            } message: {
+                Text(selectedReportReason.title)
+            }
+            .alert("Block \(creatorDisplayName)?", isPresented: $showBlockAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Block", role: .destructive) { onBlock() }
+            } message: {
+                Text("They won't be able to comment on your videos or see your content. Their content will be removed from your feed immediately.")
+            }
+            .alert("Delete this video?", isPresented: $showDeleteAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) { onDelete() }
+            } message: {
+                Text("This action cannot be undone. The video will be permanently deleted.")
+            }
     }
 }
 

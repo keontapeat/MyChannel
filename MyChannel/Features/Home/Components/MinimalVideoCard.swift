@@ -19,18 +19,22 @@ struct MinimalVideoCard: View {
     private var resolvedWidth: CGFloat { cardWidth ?? envCardWidth }
     private var resolvedHeight: CGFloat { (resolvedWidth * 9 / 16).rounded() }
 
-    /// Returns true only for actual live streams with a real HLS manifest (.m3u8).
-    /// Regular uploaded videos, Firebase Storage mp4s, and YouTube are excluded.
+    /// Returns true ONLY for content that can be previewed via a native AVPlayer
+    /// (direct HLS/MP4/MOV links and Firebase Storage URLs).
+    ///
+    /// ⛔️ YouTube is intentionally EXCLUDED. YouTube previews run inside a WKWebView
+    /// IFrame player, and when YouTube blocks embedding (region lock, age gate, or
+    /// "playback on other websites disabled") the iframe paints its OWN error screen
+    /// — e.g. "This video is unavailable. Error code: 152-4" — directly where the
+    /// thumbnail should be. A user must never see that, so YouTube always falls back
+    /// to a static cover image via `MultiSourceAsyncImage`/`posterCandidates`.
     private var hasStreamableURL: Bool {
-        if video.contentSource == .youtube, video.externalID?.isEmpty == false {
-            return true
-        }
+        // Never live-preview YouTube content in a card — static image only.
+        if video.contentSource == .youtube { return false }
         let url = video.videoURL.lowercased()
         if url.isEmpty { return false }
         if url.hasPrefix("asset://") { return false }
-        if url.contains("youtube.com") || url.contains("youtu.be") {
-            return video.externalID?.isEmpty == false
-        }
+        if url.contains("youtube.com") || url.contains("youtu.be") { return false }
         guard url.hasPrefix("http://") || url.hasPrefix("https://") else { return false }
         return url.contains(".m3u8") || url.contains(".mp4") || url.contains(".mov") || url.contains("firebasestorage.googleapis.com")
     }

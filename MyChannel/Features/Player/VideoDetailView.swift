@@ -49,6 +49,7 @@ struct VideoDetailView: View {
     @State var showingQualitySelector = false
     @State var showingPlaybackSpeedSelector = false
     @State var showingShareSheet = false
+    @State var showingPlayerSettings = false  // 🔥 YOUTUBE PARITY: Settings gear sheet
 
     // MARK: - UI States
     @State var expandedDescription = false

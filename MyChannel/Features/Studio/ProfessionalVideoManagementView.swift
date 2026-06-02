@@ -46,13 +46,13 @@ struct ProfessionalVideoManagementView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Button("Upload video", systemImage: "plus") {
-                            // Handle video upload
+                            NotificationCenter.default.post(name: NSNotification.Name("ShowUpload"), object: nil)
                         }
                         Button("Go live", systemImage: "dot.radiowaves.left.and.right") {
-                            // Handle live streaming
+                            NotificationCenter.default.post(name: NSNotification.Name("ShowGoLive"), object: nil)
                         }
                         Button("Create playlist", systemImage: "list.bullet.rectangle") {
-                            // Handle playlist creation
+                            NotificationCenter.default.post(name: NSNotification.Name("ShowCreatePlaylist"), object: nil)
                         }
                     } label: {
                         Image(systemName: "plus.circle.fill")

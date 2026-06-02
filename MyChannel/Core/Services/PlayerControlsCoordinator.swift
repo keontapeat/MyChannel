@@ -49,14 +49,20 @@ final class PlayerControlsCoordinator: ObservableObject {
     // MARK: - Control Visibility Management
     
     /// Show controls and reset the auto-hide timer if playing
+    /// 🔥 YOUTUBE PARITY: Smoothly cross-fade controls in (no snap)
     func showControlsAndResetTimer() {
-        showControls = true
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showControls = true
+        }
         resetHideTimer()
     }
     
     /// Toggle control visibility
+    /// 🔥 YOUTUBE PARITY: Animate the fade so tapping the video feels fluid
     func toggleControls() {
-        showControls.toggle()
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showControls.toggle()
+        }
         if showControls {
             resetHideTimer()
         } else {
@@ -66,7 +72,9 @@ final class PlayerControlsCoordinator: ObservableObject {
     
     /// Hide controls immediately
     func hideControls() {
-        showControls = false
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showControls = false
+        }
         cancelHideTimer()
     }
     

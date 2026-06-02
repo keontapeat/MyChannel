@@ -14,8 +14,8 @@ import FirebaseFirestore
 import FirebaseAuth
 #endif
 
-// TODO: Replace with your Stripe Connect client ID from dashboard.stripe.com/settings/connect
-private let STRIPE_CONNECT_CLIENT_ID = "ca_TODO_YOUR_CLIENT_ID"
+// Stripe Connect onboarding is now handled server-side via the
+// createConnectOnboardingLink Cloud Function (no client secret needed).
 private let STRIPE_PAYOUT_RATE: Double = 0.004 // $0.004 per stream
 
 struct ArtistEarningsView: View {
@@ -63,6 +63,7 @@ struct ArtistEarningsView: View {
         .task { await loadEarnings() }
         .sheet(isPresented: $showWithdrawSheet) {
             WithdrawSheet(
+                artistId: artistId,
                 pendingAmount: streamStats?.pendingPayout ?? 0,
                 stripeConnected: stripeConnected
             )
@@ -340,15 +341,32 @@ struct ArtistEarningsView: View {
     }
 
     private func openStripeOnboarding() {
-        let redirectURI = "mychannel://stripe-connect/callback"
-        let urlString = "https://connect.stripe.com/express/oauth/authorize"
-            + "?client_id=\(STRIPE_CONNECT_CLIENT_ID)"
-            + "&state=\(artistId)"
-            + "&redirect_uri=\(redirectURI.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
-            + "&stripe_user[business_type]=individual"
-            + "&stripe_user[business_name]=\((artistName).addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
-        if let url = URL(string: urlString) {
-            UIApplication.shared.open(url)
+        // Ask the backend to create (or reuse) an Express account and return a
+        // hosted onboarding link. No client secret or client_id lives in the app.
+        Task {
+            guard let url = URL(string: "\(AppConfig.API.musicPayoutsBaseURL)/createConnectOnboardingLink") else { return }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            // 🔐 Authenticated request — backend verifies the caller owns this artistId.
+            guard let token = try? await AuthTokenProvider.idToken() else { return }
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            let body: [String: Any] = [
+                "artistId": artistId,
+                "returnUrl": "mychannel://stripe-connect/return",
+                "refreshUrl": "mychannel://stripe-connect/refresh"
+            ]
+            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+            do {
+                let (data, _) = try await URLSession.shared.data(for: request)
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let link = json["url"] as? String,
+                   let onboardURL = URL(string: link) {
+                    await MainActor.run { UIApplication.shared.open(onboardURL) }
+                }
+            } catch {
+                // Surface nothing destructive; the card stays in "connect" state.
+            }
         }
     }
 
@@ -422,9 +440,13 @@ struct ArtistEarningsView: View {
 // MARK: - Withdraw Sheet
 
 private struct WithdrawSheet: View {
+    let artistId: String
     let pendingAmount: Double
     let stripeConnected: Bool
     @Environment(\.dismiss) private var dismiss
+    @State private var isRequesting = false
+    @State private var resultMessage: String?
+    @State private var didSucceed = false
 
     var body: some View {
         NavigationStack {
@@ -439,25 +461,36 @@ private struct WithdrawSheet: View {
                         .font(.system(size: 22, weight: .bold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
 
-                    Text("Funds will be sent to your connected bank account within 2–3 business days.")
+                    Text("Funds will be sent to your connected bank account within 2–3 business days. Collaborator splits are paid out automatically.")
                         .font(.system(size: 14))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
 
-                    Button {
-                        HapticManager.shared.notification(type: .success)
-                        dismiss()
-                    } label: {
-                        Text("Request Payout")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(pendingAmount >= 10 ? AppTheme.Colors.primary : Color.gray)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    if let resultMessage {
+                        Text(resultMessage)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(didSucceed ? .green : .red)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
                     }
-                    .disabled(pendingAmount < 10)
+
+                    Button {
+                        HapticManager.shared.impact(style: .medium)
+                        Task { await requestPayout() }
+                    } label: {
+                        HStack {
+                            if isRequesting { ProgressView().tint(.white) }
+                            Text(didSucceed ? "Payout Requested" : "Request Payout")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(pendingAmount >= 10 && !didSucceed ? AppTheme.Colors.primary : Color.gray)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .disabled(pendingAmount < 10 || isRequesting || didSucceed)
                     .padding(.horizontal, 24)
 
                     if pendingAmount < 10 {
@@ -487,6 +520,42 @@ private struct WithdrawSheet: View {
                         .foregroundColor(AppTheme.Colors.primary)
                 }
             }
+        }
+    }
+
+    private func requestPayout() async {
+        guard !isRequesting else { return }
+        isRequesting = true
+        resultMessage = nil
+        defer { isRequesting = false }
+
+        guard let url = URL(string: "\(AppConfig.API.musicPayoutsBaseURL)/requestPayout") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // 🔐 Authenticated request — backend verifies the caller owns this artistId.
+        guard let token = try? await AuthTokenProvider.idToken() else {
+            resultMessage = "Please sign in again to request a payout."
+            return
+        }
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "artistId": artistId,
+            "payoutType": "standard"
+        ])
+
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            if let success = json?["success"] as? Bool, success {
+                didSucceed = true
+                resultMessage = "Payout on the way. Splits sent to all collaborators."
+                HapticManager.shared.notification(type: .success)
+            } else {
+                resultMessage = (json?["message"] as? String) ?? (json?["error"] as? String) ?? "Payout could not be processed."
+            }
+        } catch {
+            resultMessage = "Network error. Please try again."
         }
     }
 

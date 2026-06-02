@@ -105,6 +105,26 @@ final class StudioAnalyticsService: ObservableObject {
         return nil
     }
     
+    /// 🔥 YouTube Studio parity: batch-fetch analytics for many videos at once.
+    /// Powers the Advanced (table) layout columns: CTR, Avg watch time, Revenue.
+    /// Runs fetches concurrently and returns a [videoId: analytics] map.
+    func fetchVideoAnalyticsBatch(videoIds: [String], dateRange: DateRange = .last28Days) async -> [String: StudioVideoAnalytics] {
+        guard !videoIds.isEmpty else { return [:] }
+        return await withTaskGroup(of: (String, StudioVideoAnalytics?).self) { group in
+            for id in videoIds {
+                group.addTask { [weak self] in
+                    let analytics = await self?.fetchVideoAnalytics(videoId: id, dateRange: dateRange)
+                    return (id, analytics)
+                }
+            }
+            var result: [String: StudioVideoAnalytics] = [:]
+            for await (id, analytics) in group {
+                if let analytics { result[id] = analytics }
+            }
+            return result
+        }
+    }
+
     private func parseRetentionCurve(_ data: Any?) -> [StudioVideoAnalytics.RetentionPoint] {
         guard let array = data as? [[String: Any]] else { return generateMockRetentionCurve() }
         return array.compactMap { dict in

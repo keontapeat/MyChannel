@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- MyChannel "M" logo mark in brand red -->
+    <path
+        android:fillColor="#E85D5D"
+        android:pathData="M54,20 L30,80 L42,80 L54,50 L66,80 L78,80 Z" />
+    <!-- Underline accent -->
+    <path
+        android:fillColor="#E85D5D"
+        android:pathData="M30,85 L78,85 L78,90 L30,90 Z" />
+</vector>

@@ -5,13 +5,14 @@ import Combine
 // MARK: - Placeholder Views
 struct MembershipMonetizationView: View {
     @Binding var settings: MembershipSettings
-    @State var membershipEnabled = true
+    @EnvironmentObject private var appState: AppState
+    @StateObject private var membershipService = CreatorMembershipFirestoreService.shared
+    @State var membershipEnabled = false
     @State var showingAddTier = false
-    @State var tiers: [MonetizationMembershipTier] = [
-        MonetizationMembershipTier(name: "Bronze", price: 4.99, perks: ["Early access to videos", "Custom badge"], color: .orange),
-        MonetizationMembershipTier(name: "Silver", price: 9.99, perks: ["Everything in Bronze", "Members-only content", "Priority replies"], color: .gray),
-        MonetizationMembershipTier(name: "Gold", price: 24.99, perks: ["Everything in Silver", "Monthly Q&A", "Exclusive merch discount"], color: .yellow)
-    ]
+    @State private var editingTier: MonetizationMembershipTier?
+    @State private var isLoading = true
+    @State private var statusMessage: String?
+    @State var tiers: [MonetizationMembershipTier] = []
     
     var body: some View {
         ScrollView {
@@ -28,15 +29,16 @@ struct MembershipMonetizationView: View {
                     Spacer()
                     Toggle("", isOn: $membershipEnabled)
                         .labelsHidden()
+                        .onChange(of: membershipEnabled) { newValue in
+                            Task { await setEnabled(newValue) }
+                        }
                 }
                 .padding()
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                 
-                // Stats Overview
-                HStack(spacing: 12) {
-                    StatBox(title: "Members", value: "1,234", icon: "person.3.fill", color: .blue)
-                    StatBox(title: "Monthly", value: "$12.4K", icon: "dollarsign.circle.fill", color: .green)
-                    StatBox(title: "Retention", value: "94%", icon: "chart.line.uptrend.xyaxis", color: .purple)
+                if isLoading {
+                    ProgressView("Loading memberships…")
+                        .padding(24)
                 }
                 
                 // Membership Tiers
@@ -54,12 +56,39 @@ struct MembershipMonetizationView: View {
                         }
                     }
                     
+                    if tiers.isEmpty && !isLoading {
+                        VStack(spacing: 8) {
+                            Image(systemName: "person.2.badge.gearshape")
+                                .font(.system(size: 36))
+                                .foregroundColor(.secondary)
+                            Text("No tiers yet")
+                                .font(.system(size: 15, weight: .semibold))
+                            Text("Create a tier to offer members-only perks.")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                    }
+                    
                     ForEach(tiers) { tier in
-                        MembershipTierCard(tier: tier)
+                        Button {
+                            editingTier = tier
+                        } label: {
+                            MembershipTierCard(tier: tier)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding()
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                
+                if let statusMessage {
+                    Text(statusMessage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
                 
                 // Revenue Share Info
                 VStack(alignment: .leading, spacing: 12) {
@@ -105,15 +134,241 @@ struct MembershipMonetizationView: View {
             .padding(16)
         }
         .navigationTitle("Memberships")
+        .task { await loadMemberships() }
+        .sheet(isPresented: $showingAddTier) {
+            MembershipTierEditorSheet(creatorId: appState.currentUser?.id ?? "") {
+                Task { await loadMemberships() }
+            }
+        }
+        .sheet(item: $editingTier) { tier in
+            MembershipTierEditorSheet(creatorId: appState.currentUser?.id ?? "", existingTier: tier) {
+                Task { await loadMemberships() }
+            }
+        }
+    }
+    
+    private func loadMemberships() async {
+        guard let creatorId = appState.currentUser?.id, !creatorId.isEmpty else {
+            await MainActor.run { isLoading = false }
+            return
+        }
+        let enabled = await membershipService.isMembershipEnabled(for: creatorId)
+        let loaded = (try? await membershipService.getTiers(for: creatorId)) ?? []
+        await MainActor.run {
+            membershipEnabled = enabled
+            tiers = loaded.map { MonetizationMembershipTier(from: $0) }
+            isLoading = false
+        }
+    }
+    
+    private func setEnabled(_ enabled: Bool) async {
+        guard let creatorId = appState.currentUser?.id, !creatorId.isEmpty else { return }
+        do {
+            try await membershipService.setMembershipEnabled(enabled, for: creatorId)
+            await MainActor.run { statusMessage = enabled ? "Memberships enabled ✓" : "Memberships disabled" }
+        } catch {
+            await MainActor.run { statusMessage = "Couldn't update: \(error.localizedDescription)" }
+        }
     }
 }
 
 struct MonetizationMembershipTier: Identifiable {
-    let id = UUID()
+    let id: String
     var name: String
     var price: Double
     var perks: [String]
     var color: Color
+    
+    init(id: String = UUID().uuidString, name: String, price: Double, perks: [String], color: Color) {
+        self.id = id
+        self.name = name
+        self.price = price
+        self.perks = perks
+        self.color = color
+    }
+    
+    /// Map from the persisted Firestore-backed MembershipTier model.
+    init(from tier: MembershipTier) {
+        self.id = tier.id
+        self.name = tier.name
+        self.price = tier.price
+        self.perks = tier.benefits
+        self.color = Self.color(from: tier.badgeColor)
+    }
+    
+    var badgeColorName: String {
+        switch color {
+        case .orange: return "orange"
+        case .gray: return "gray"
+        case .yellow: return "yellow"
+        case .blue: return "blue"
+        case .purple: return "purple"
+        case .green: return "green"
+        case .pink: return "pink"
+        default: return "blue"
+        }
+    }
+    
+    static func color(from name: String) -> Color {
+        switch name.lowercased() {
+        case "orange": return .orange
+        case "gray", "silver": return .gray
+        case "yellow", "gold": return .yellow
+        case "purple": return .purple
+        case "green": return .green
+        case "pink": return .pink
+        default: return .blue
+        }
+    }
+}
+
+// MARK: - Membership Tier Editor (create / edit / delete — persists to Firestore)
+
+struct MembershipTierEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let creatorId: String
+    var existingTier: MonetizationMembershipTier?
+    var onSaved: () -> Void = {}
+    
+    @StateObject private var membershipService = CreatorMembershipFirestoreService.shared
+    @State private var name: String
+    @State private var priceText: String
+    @State private var badgeColor: String
+    @State private var perks: [String]
+    @State private var newPerk: String = ""
+    @State private var isSaving = false
+    @State private var showingDeleteConfirm = false
+    @State private var errorMessage: String?
+    
+    private let colorOptions = ["bronze", "orange", "gray", "yellow", "blue", "purple", "green", "pink"]
+    
+    init(creatorId: String, existingTier: MonetizationMembershipTier? = nil, onSaved: @escaping () -> Void = {}) {
+        self.creatorId = creatorId
+        self.existingTier = existingTier
+        self.onSaved = onSaved
+        _name = State(initialValue: existingTier?.name ?? "")
+        _priceText = State(initialValue: existingTier.map { String(format: "%.2f", $0.price) } ?? "")
+        _badgeColor = State(initialValue: existingTier?.badgeColorName ?? "blue")
+        _perks = State(initialValue: existingTier?.perks ?? [])
+    }
+    
+    private var price: Double { Double(priceText) ?? 0 }
+    private var canSave: Bool {
+        !name.isEmpty && price >= 0.99 && price <= 999.99 && !creatorId.isEmpty && !isSaving
+    }
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Tier Details") {
+                    TextField("Tier name (e.g. Gold)", text: $name)
+                    HStack {
+                        Text("$")
+                        TextField("4.99", text: $priceText)
+                            .keyboardType(.decimalPad)
+                    }
+                    Picker("Badge color", selection: $badgeColor) {
+                        ForEach(colorOptions, id: \.self) { Text($0.capitalized).tag($0) }
+                    }
+                }
+                
+                Section("Perks") {
+                    ForEach(perks, id: \.self) { perk in
+                        Text(perk)
+                    }
+                    .onDelete { perks.remove(atOffsets: $0) }
+                    HStack {
+                        TextField("Add a perk", text: $newPerk)
+                        Button("Add") {
+                            let trimmed = newPerk.trimmingCharacters(in: .whitespaces)
+                            guard !trimmed.isEmpty else { return }
+                            perks.append(trimmed)
+                            newPerk = ""
+                        }
+                        .disabled(newPerk.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+                
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage)
+                            .font(.system(size: 13))
+                            .foregroundColor(.red)
+                    }
+                }
+                
+                Section {
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        HStack {
+                            if isSaving { ProgressView().padding(.trailing, 4) }
+                            Text(isSaving ? "Saving…" : "Save Tier")
+                        }
+                    }
+                    .disabled(!canSave)
+                    
+                    if existingTier != nil {
+                        Button("Delete Tier", role: .destructive) {
+                            showingDeleteConfirm = true
+                        }
+                    }
+                }
+            }
+            .navigationTitle(existingTier == nil ? "New Tier" : "Edit Tier")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .alert("Delete Tier?", isPresented: $showingDeleteConfirm) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    Task { await deleteTier() }
+                }
+            } message: {
+                Text("Existing members on this tier keep access until their billing period ends.")
+            }
+        }
+    }
+    
+    private func save() async {
+        isSaving = true
+        errorMessage = nil
+        let tier = MembershipTier(
+            id: existingTier?.id ?? UUID().uuidString,
+            name: name,
+            description: "",
+            price: price,
+            benefits: perks,
+            badgeColor: badgeColor
+        )
+        do {
+            try await membershipService.saveTier(tier, for: creatorId)
+            HapticManager.shared.notification(type: .success)
+            onSaved()
+            dismiss()
+        } catch {
+            isSaving = false
+            errorMessage = error.localizedDescription
+        }
+    }
+    
+    private func deleteTier() async {
+        guard let id = existingTier?.id else { return }
+        isSaving = true
+        errorMessage = nil
+        do {
+            try await membershipService.deleteTier(id)
+            HapticManager.shared.notification(type: .success)
+            onSaved()
+            dismiss()
+        } catch {
+            isSaving = false
+            errorMessage = error.localizedDescription
+        }
+    }
 }
 
 struct MembershipTierCard: View {
@@ -182,13 +437,17 @@ struct StatBox: View {
 
 struct MerchandiseMonetizationView: View {
     @Binding var settings: MerchandiseSettings
-    @State var merchEnabled = true
+    @EnvironmentObject private var appState: AppState
+    @StateObject private var merchService = CreatorMerchFirestoreService.shared
+    @State var merchEnabled = false
     @State var showingAddProduct = false
-    @State var products: [MerchProduct] = [
-        MerchProduct(name: "Limited Edition Hoodie", price: 59.99, stock: 42, image: "tshirt", category: "Apparel"),
-        MerchProduct(name: "Signature Hat", price: 29.99, stock: 128, image: "sun.haze", category: "Accessories"),
-        MerchProduct(name: "Phone Case", price: 19.99, stock: 87, image: "iphone", category: "Tech")
-    ]
+    @State private var editingProduct: CreatorProduct?
+    @State private var isLoading = true
+    @State private var statusMessage: String?
+    @State var products: [CreatorProduct] = []
+    
+    private var totalStock: Int { products.reduce(0) { $0 + $1.stock } }
+    private var catalogValue: Double { products.reduce(0) { $0 + ($1.price * Double($1.stock)) } }
     
     var body: some View {
         ScrollView {
@@ -205,15 +464,22 @@ struct MerchandiseMonetizationView: View {
                     Spacer()
                     Toggle("", isOn: $merchEnabled)
                         .labelsHidden()
+                        .onChange(of: merchEnabled) { newValue in
+                            Task { await setEnabled(newValue) }
+                        }
                 }
                 .padding()
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                 
-                // Stats Overview
+                // Stats Overview (real catalog figures)
                 HStack(spacing: 12) {
                     StatBox(title: "Products", value: "\(products.count)", icon: "bag.fill", color: .orange)
-                    StatBox(title: "Orders", value: "342", icon: "shippingbox.fill", color: .blue)
-                    StatBox(title: "Revenue", value: "$8.2K", icon: "dollarsign.circle.fill", color: .green)
+                    StatBox(title: "In Stock", value: "\(totalStock)", icon: "shippingbox.fill", color: .blue)
+                    StatBox(title: "Catalog Value", value: "$\(String(format: "%.0f", catalogValue))", icon: "dollarsign.circle.fill", color: .green)
+                }
+                
+                if isLoading {
+                    ProgressView("Loading products…").padding(24)
                 }
                 
                 // Products List
@@ -231,12 +497,36 @@ struct MerchandiseMonetizationView: View {
                         }
                     }
                     
+                    if products.isEmpty && !isLoading {
+                        VStack(spacing: 8) {
+                            Image(systemName: "bag.badge.plus")
+                                .font(.system(size: 36))
+                                .foregroundColor(.secondary)
+                            Text("No products yet")
+                                .font(.system(size: 15, weight: .semibold))
+                            Text("Add a product to start your merch shelf.")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                    }
+                    
                     ForEach(products) { product in
-                        MerchProductCard(product: product)
+                        Button { editingProduct = product } label: {
+                            MerchProductCard(product: product)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding()
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                
+                if let statusMessage {
+                    Text(statusMessage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
                 
                 // Integration Info
                 VStack(alignment: .leading, spacing: 12) {
@@ -244,7 +534,7 @@ struct MerchandiseMonetizationView: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                     
-                    Text("We handle everything:")
+                    Text("When checkout launches, we handle:")
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                     
@@ -267,24 +557,201 @@ struct MerchandiseMonetizationView: View {
             .padding(16)
         }
         .navigationTitle("Merchandise")
+        .task { await loadMerch() }
+        .sheet(isPresented: $showingAddProduct) {
+            MerchProductEditorSheet(creatorId: appState.currentUser?.id ?? "") {
+                Task { await loadMerch() }
+            }
+        }
+        .sheet(item: $editingProduct) { product in
+            MerchProductEditorSheet(creatorId: appState.currentUser?.id ?? "", existingProduct: product) {
+                Task { await loadMerch() }
+            }
+        }
+    }
+    
+    private func loadMerch() async {
+        guard let creatorId = appState.currentUser?.id, !creatorId.isEmpty else {
+            await MainActor.run { isLoading = false }
+            return
+        }
+        let enabled = await merchService.isMerchEnabled(for: creatorId)
+        let loaded = (try? await merchService.getProducts(for: creatorId)) ?? []
+        await MainActor.run {
+            merchEnabled = enabled
+            products = loaded
+            isLoading = false
+        }
+    }
+    
+    private func setEnabled(_ enabled: Bool) async {
+        guard let creatorId = appState.currentUser?.id, !creatorId.isEmpty else { return }
+        do {
+            try await merchService.setMerchEnabled(enabled, for: creatorId)
+            await MainActor.run { statusMessage = enabled ? "Merch store enabled ✓" : "Merch store disabled" }
+        } catch {
+            await MainActor.run { statusMessage = "Couldn't update: \(error.localizedDescription)" }
+        }
     }
 }
 
-struct MerchProduct: Identifiable {
-    let id = UUID()
-    var name: String
-    var price: Double
-    var stock: Int
-    var image: String
-    var category: String
+// MARK: - Merch Product Editor (create / edit / delete — persists to Firestore)
+
+struct MerchProductEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let creatorId: String
+    var existingProduct: CreatorProduct?
+    var onSaved: () -> Void = {}
+    
+    @StateObject private var merchService = CreatorMerchFirestoreService.shared
+    @State private var name: String
+    @State private var priceText: String
+    @State private var stockText: String
+    @State private var category: String
+    @State private var symbol: String
+    @State private var isActive: Bool
+    @State private var isSaving = false
+    @State private var showingDeleteConfirm = false
+    @State private var errorMessage: String?
+    
+    private let symbolOptions = ["bag.fill", "tshirt", "sun.haze", "iphone", "cup.and.saucer.fill", "gift.fill", "book.fill", "headphones"]
+    private let categoryOptions = ["Apparel", "Accessories", "Tech", "Home", "Print", "Other"]
+    
+    init(creatorId: String, existingProduct: CreatorProduct? = nil, onSaved: @escaping () -> Void = {}) {
+        self.creatorId = creatorId
+        self.existingProduct = existingProduct
+        self.onSaved = onSaved
+        _name = State(initialValue: existingProduct?.name ?? "")
+        _priceText = State(initialValue: existingProduct.map { String(format: "%.2f", $0.price) } ?? "")
+        _stockText = State(initialValue: existingProduct.map { String($0.stock) } ?? "")
+        _category = State(initialValue: existingProduct?.category ?? "Apparel")
+        _symbol = State(initialValue: existingProduct?.imageSystemName ?? "bag.fill")
+        _isActive = State(initialValue: existingProduct?.isActive ?? true)
+    }
+    
+    private var price: Double { Double(priceText) ?? 0 }
+    private var stock: Int { Int(stockText) ?? 0 }
+    private var canSave: Bool {
+        !name.isEmpty && price >= 0.01 && stock >= 0 && !creatorId.isEmpty && !isSaving
+    }
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Product") {
+                    TextField("Product name", text: $name)
+                    HStack {
+                        Text("$")
+                        TextField("0.00", text: $priceText)
+                            .keyboardType(.decimalPad)
+                    }
+                    HStack {
+                        Text("Stock")
+                        Spacer()
+                        TextField("0", text: $stockText)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 100)
+                    }
+                    Picker("Category", selection: $category) {
+                        ForEach(categoryOptions, id: \.self) { Text($0).tag($0) }
+                    }
+                    Picker("Icon", selection: $symbol) {
+                        ForEach(symbolOptions, id: \.self) { sym in
+                            Label(sym, systemImage: sym).tag(sym)
+                        }
+                    }
+                    Toggle("Listed (visible to viewers)", isOn: $isActive)
+                }
+                
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage).font(.system(size: 13)).foregroundColor(.red)
+                    }
+                }
+                
+                Section {
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        HStack {
+                            if isSaving { ProgressView().padding(.trailing, 4) }
+                            Text(isSaving ? "Saving…" : "Save Product")
+                        }
+                    }
+                    .disabled(!canSave)
+                    
+                    if existingProduct != nil {
+                        Button("Delete Product", role: .destructive) {
+                            showingDeleteConfirm = true
+                        }
+                    }
+                }
+            }
+            .navigationTitle(existingProduct == nil ? "New Product" : "Edit Product")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .alert("Delete Product?", isPresented: $showingDeleteConfirm) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    Task { await deleteProduct() }
+                }
+            } message: {
+                Text("This removes the product from your shelf.")
+            }
+        }
+    }
+    
+    private func save() async {
+        isSaving = true
+        errorMessage = nil
+        let product = CreatorProduct(
+            id: existingProduct?.id ?? UUID().uuidString,
+            name: name,
+            price: price,
+            stock: stock,
+            imageSystemName: symbol,
+            category: category,
+            isActive: isActive,
+            updatedAt: Date()
+        )
+        do {
+            try await merchService.saveProduct(product, for: creatorId)
+            HapticManager.shared.notification(type: .success)
+            onSaved()
+            dismiss()
+        } catch {
+            isSaving = false
+            errorMessage = error.localizedDescription
+        }
+    }
+    
+    private func deleteProduct() async {
+        guard let id = existingProduct?.id else { return }
+        isSaving = true
+        errorMessage = nil
+        do {
+            try await merchService.deleteProduct(id)
+            HapticManager.shared.notification(type: .success)
+            onSaved()
+            dismiss()
+        } catch {
+            isSaving = false
+            errorMessage = error.localizedDescription
+        }
+    }
 }
 
 struct MerchProductCard: View {
-    let product: MerchProduct
+    let product: CreatorProduct
     
     var body: some View {
         HStack(spacing: 16) {
-            Image(systemName: product.image)
+            Image(systemName: product.imageSystemName)
                 .font(.system(size: 40))
                 .foregroundColor(.orange)
                 .frame(width: 60, height: 60)
@@ -292,8 +759,18 @@ struct MerchProductCard: View {
                 .cornerRadius(12)
             
             VStack(alignment: .leading, spacing: 6) {
-                Text(product.name)
-                    .font(.system(size: 16, weight: .semibold))
+                HStack(spacing: 6) {
+                    Text(product.name)
+                        .font(.system(size: 16, weight: .semibold))
+                    if !product.isActive {
+                        Text("Hidden")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(.systemGray5), in: Capsule())
+                    }
+                }
                 
                 HStack(spacing: 12) {
                     Text("$\(String(format: "%.2f", product.price))")
@@ -345,13 +822,24 @@ struct FeatureRow: View {
 }
 
 struct DonationMonetizationView: View {
-    @State var superChatEnabled = true
+    @EnvironmentObject private var appState: AppState
+    @StateObject private var superChatService = CreatorSuperChatFirestoreService.shared
+    @State var superChatEnabled = false
     @State var minDonation = 1.0
-    @State var recentDonations: [Donation] = [
-        Donation(username: "BigFan123", amount: 50.00, message: "Love your content! Keep it up! 🔥", timestamp: Date()),
-        Donation(username: "CreatorSupport", amount: 100.00, message: "You're inspiring!", timestamp: Date().addingTimeInterval(-3600)),
-        Donation(username: "TrueFan", amount: 25.00, message: "Been watching since day 1!", timestamp: Date().addingTimeInterval(-7200))
-    ]
+    @State private var isLoading = true
+    @State private var isSavingSettings = false
+    @State private var statusMessage: String?
+    @State private var allTimeTotal: Double = 0
+    @State var recentDonations: [SuperChatEntry] = []
+    
+    private var todayTotal: Double {
+        let cal = Calendar.current
+        return recentDonations.filter { cal.isDateInToday($0.date) }.reduce(0) { $0 + $1.amount }
+    }
+    private var weekTotal: Double {
+        let weekAgo = Date().addingTimeInterval(-7 * 24 * 3600)
+        return recentDonations.filter { $0.date >= weekAgo }.reduce(0) { $0 + $1.amount }
+    }
     
     var body: some View {
         ScrollView {
@@ -368,15 +856,22 @@ struct DonationMonetizationView: View {
                     Spacer()
                     Toggle("", isOn: $superChatEnabled)
                         .labelsHidden()
+                        .onChange(of: superChatEnabled) { _ in
+                            Task { await saveSettings() }
+                        }
                 }
                 .padding()
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                 
-                // Stats Overview
+                // Stats Overview (real figures from received Super Thanks)
                 HStack(spacing: 12) {
-                    StatBox(title: "Today", value: "$425", icon: "heart.fill", color: .pink)
-                    StatBox(title: "This Week", value: "$2.1K", icon: "calendar", color: .blue)
-                    StatBox(title: "All Time", value: "$18.5K", icon: "chart.line.uptrend.xyaxis", color: .green)
+                    StatBox(title: "Today", value: "$\(String(format: "%.0f", todayTotal))", icon: "heart.fill", color: .pink)
+                    StatBox(title: "This Week", value: "$\(String(format: "%.0f", weekTotal))", icon: "calendar", color: .blue)
+                    StatBox(title: "All Time", value: "$\(String(format: "%.0f", allTimeTotal))", icon: "chart.line.uptrend.xyaxis", color: .green)
+                }
+                
+                if isLoading {
+                    ProgressView("Loading Super Chats…").padding(24)
                 }
                 
                 // Settings
@@ -388,7 +883,7 @@ struct DonationMonetizationView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Minimum Donation")
                                 .font(.system(size: 14, weight: .medium))
-                            Text("Set the minimum amount viewers can donate")
+                            Text("Set the minimum amount viewers can donate ($1–$500)")
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
                         }
@@ -402,19 +897,38 @@ struct DonationMonetizationView: View {
                                 .keyboardType(.decimalPad)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
+                            Button("Save") {
+                                Task { await saveSettings() }
+                            }
+                            .font(.system(size: 13, weight: .semibold))
+                            .disabled(isSavingSettings)
                         }
+                    }
+                    
+                    if let statusMessage {
+                        Text(statusMessage)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
                     }
                 }
                 .padding()
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                 
-                // Recent Donations
+                // Recent Donations (real)
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Recent Super Chats")
                         .font(.system(size: 18, weight: .semibold))
                     
-                    ForEach(recentDonations) { donation in
-                        DonationCard(donation: donation)
+                    if recentDonations.isEmpty && !isLoading {
+                        Text("No Super Chats yet. They'll show up here when viewers support you.")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 8)
+                    } else {
+                        ForEach(recentDonations) { donation in
+                            DonationCard(donation: donation)
+                        }
                     }
                 }
                 .padding()
@@ -463,19 +977,49 @@ struct DonationMonetizationView: View {
             .padding(16)
         }
         .navigationTitle("Super Chat")
+        .task { await loadSuperChat() }
+    }
+    
+    private func loadSuperChat() async {
+        guard let creatorId = appState.currentUser?.id, !creatorId.isEmpty else {
+            await MainActor.run { isLoading = false }
+            return
+        }
+        let settings = await superChatService.getSettings(for: creatorId)
+        let recent = (try? await superChatService.recentSuperChats(for: creatorId)) ?? []
+        let total = await superChatService.totalReceived(for: creatorId)
+        await MainActor.run {
+            superChatEnabled = settings.enabled
+            minDonation = settings.minimumAmount
+            recentDonations = recent
+            allTimeTotal = total
+            isLoading = false
+        }
+    }
+    
+    private func saveSettings() async {
+        guard let creatorId = appState.currentUser?.id, !creatorId.isEmpty else { return }
+        isSavingSettings = true
+        do {
+            try await superChatService.saveSettings(
+                .init(enabled: superChatEnabled, minimumAmount: minDonation),
+                for: creatorId
+            )
+            await MainActor.run {
+                statusMessage = "Settings saved ✓"
+                isSavingSettings = false
+            }
+        } catch {
+            await MainActor.run {
+                statusMessage = error.localizedDescription
+                isSavingSettings = false
+            }
+        }
     }
 }
 
-struct Donation: Identifiable {
-    let id = UUID()
-    var username: String
-    var amount: Double
-    var message: String
-    var timestamp: Date
-}
-
 struct DonationCard: View {
-    let donation: Donation
+    let donation: SuperChatEntry
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -484,7 +1028,7 @@ struct DonationCard: View {
                     .fill(amountColor(for: donation.amount).gradient)
                     .frame(width: 8, height: 8)
                 
-                Text(donation.username)
+                Text(donation.senderName)
                     .font(.system(size: 15, weight: .semibold))
                 
                 Spacer()
@@ -494,11 +1038,13 @@ struct DonationCard: View {
                     .foregroundColor(amountColor(for: donation.amount))
             }
             
-            Text(donation.message)
-                .font(.system(size: 14))
-                .foregroundColor(.secondary)
+            if !donation.message.isEmpty {
+                Text(donation.message)
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+            }
             
-            Text(timeAgo(from: donation.timestamp))
+            Text(timeAgo(from: donation.date))
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
         }
@@ -520,7 +1066,8 @@ struct DonationCard: View {
         let seconds = Int(Date().timeIntervalSince(date))
         if seconds < 60 { return "\(seconds)s ago" }
         if seconds < 3600 { return "\(seconds / 60)m ago" }
-        return "\(seconds / 3600)h ago"
+        if seconds < 86400 { return "\(seconds / 3600)h ago" }
+        return "\(seconds / 86400)d ago"
     }
 }
 

@@ -73,10 +73,24 @@ struct EditableElementView: View {
     }
     
     private func stickerElement(_ sticker: Sticker) -> some View {
-        // TODO: Load sticker image
-        Image(systemName: "star.fill")
-            .font(.system(size: 60))
-            .foregroundColor(.yellow)
+        Group {
+            if sticker.category == .emoji, !sticker.imageName.isEmpty {
+                // Emoji sticker — render the glyph itself.
+                Text(sticker.imageName)
+                    .font(.system(size: 80))
+            } else if let uiImage = UIImage(named: sticker.imageName) {
+                // Bundled/custom image sticker.
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 120, height: 120)
+            } else {
+                // Fallback.
+                Image(systemName: "star.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.yellow)
+            }
+        }
     }
     
     @ViewBuilder

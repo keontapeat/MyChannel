@@ -24,6 +24,19 @@ final class VideoFirestoreService: ObservableObject {
         do {
             if add { try await ref.setData(["likedAt": FieldValue.serverTimestamp()]) }
             else { try await ref.delete() }
+
+            // 🔥 RANKING FIX: Keep an aggregate likeCount on the video AND roll it
+            // up to the creator's users/{uid}.likeCount so engagement actually
+            // feeds TopRankMLService's engagement score in real time.
+            let delta: Int64 = add ? 1 : -1
+            let videoRef = db.collection("videos").document(videoId)
+            try await videoRef.setData(["likeCount": FieldValue.increment(delta)], merge: true)
+
+            if let creatorId = try await videoRef.getDocument().data()?["userId"] as? String, !creatorId.isEmpty {
+                try await db.collection("users").document(creatorId).setData([
+                    "likeCount": FieldValue.increment(delta)
+                ], merge: true)
+            }
         } catch { print("video like error: \(error)") }
         #endif
     }
@@ -126,7 +139,11 @@ final class VideoFirestoreService: ObservableObject {
         title: String? = nil,
         description: String? = nil,
         category: VideoCategory? = nil,
-        tags: [String]? = nil
+        tags: [String]? = nil,
+        visibility: Video.VisibilityStatus? = nil,
+        madeForKids: Bool? = nil,
+        ageRestricted: Bool? = nil,
+        allowComments: Bool? = nil
     ) async throws {
         #if canImport(FirebaseFirestore)
         var updateData: [String: Any] = [
@@ -146,10 +163,25 @@ final class VideoFirestoreService: ObservableObject {
         if let tags = tags {
             updateData["tags"] = tags
         }
+        // 🔥 YouTube parity: visibility (keeps isPublic mirror in sync)
+        if let visibility = visibility {
+            updateData["visibility"] = visibility.rawValue
+            updateData["isPublic"] = visibility == .public
+        }
+        // 🔥 COPPA: Made for kids
+        if let madeForKids = madeForKids {
+            updateData["madeForKids"] = madeForKids
+        }
+        if let ageRestricted = ageRestricted {
+            updateData["ageRestricted"] = ageRestricted
+        }
+        if let allowComments = allowComments {
+            updateData["allowComments"] = allowComments
+        }
         
         let ref = db.collection("videos").document(videoId)
         try await ref.updateData(updateData)
-        print("📝 [VideoFirestoreService] Updated video metadata for: \(videoId)")
+        print("📝 [VideoFirestoreService] Updated video metadata for: \(videoId) — keys: \(updateData.keys.sorted())")
         #endif
     }
     
@@ -378,8 +410,31 @@ final class VideoFirestoreService: ObservableObject {
                 let videoURL = (d["videoUrl"] as? String) ?? (d["videoURL"] as? String) ?? ""
                 let categoryRaw = (d["category"] as? String)?.lowercased() ?? "entertainment"
                 let category = VideoCategory(rawValue: categoryRaw) ?? .entertainment
-                
-                let video = Video(
+
+                // 🔥 Parse scheduled date + monetization + restrictions for management UI
+                let scheduledAt = (d["scheduledAt"] as? Timestamp)?.dateValue()
+                var monetization: Video.MonetizationSettings? = nil
+                if let m = d["monetization"] as? [String: Any] {
+                    var adBreaks: Video.AdBreaks? = nil
+                    if let ab = m["adBreaks"] as? [String: Any] {
+                        adBreaks = Video.AdBreaks(
+                            preRoll: (ab["preRoll"] as? Bool) ?? false,
+                            midRoll: (ab["midRoll"] as? Bool) ?? false,
+                            postRoll: (ab["postRoll"] as? Bool) ?? false,
+                            midRollInterval: ab["midRollInterval"] as? Int
+                        )
+                    }
+                    monetization = Video.MonetizationSettings(
+                        isMonetized: (m["isMonetized"] as? Bool) ?? false,
+                        adBreaks: adBreaks,
+                        donationEnabled: (m["donationEnabled"] as? Bool) ?? false,
+                        totalRevenue: (m["totalRevenue"] as? Double) ?? 0
+                    )
+                }
+                let hasCopyrightStrike = (d["hasCopyrightStrike"] as? Bool)
+                    ?? (((d["copyrightClaims"] as? [String])?.isEmpty == false) ? true : nil)
+
+                var video = Video(
                     id: doc.documentID,
                     title: d["title"] as? String ?? "",
                     description: d["description"] as? String ?? "",
@@ -394,12 +449,15 @@ final class VideoFirestoreService: ObservableObject {
                     tags: (d["tags"] as? [String]) ?? [],
                     isPublic: storedIsPublic,
                     visibility: visibilityStatus,
+                    scheduledAt: scheduledAt,
+                    monetization: monetization,
                     ageRestricted: d["ageRestricted"] as? Bool,
                     madeForKids: d["madeForKids"] as? Bool,
                     allowComments: d["allowComments"] as? Bool,
                     filmingLocation: d["filmingLocation"] as? String,
                     isPremiere: d["isPremiere"] as? Bool
                 )
+                video.hasCopyrightStrike = hasCopyrightStrike
                 videos.append(video)
             }
             print("✅ [VideoFirestoreService] Returning \(videos.count) videos")
@@ -590,21 +648,55 @@ final class VideoFirestoreService: ObservableObject {
                 let storedVisibilityRaw = (d["visibility"] as? String)?.lowercased()
                 let visibilityStatus = Video.VisibilityStatus(rawValue: storedVisibilityRaw ?? "") ?? (storedIsPublic ? .public : .private)
                 
-                let video = Video(
+                // 🔥 Parse scheduled date + monetization + restrictions (parity with fetchVideosByCreator)
+                let scheduledAt = (d["scheduledAt"] as? Timestamp)?.dateValue()
+                var monetization: Video.MonetizationSettings? = nil
+                if let m = d["monetization"] as? [String: Any] {
+                    var adBreaks: Video.AdBreaks? = nil
+                    if let ab = m["adBreaks"] as? [String: Any] {
+                        adBreaks = Video.AdBreaks(
+                            preRoll: (ab["preRoll"] as? Bool) ?? false,
+                            midRoll: (ab["midRoll"] as? Bool) ?? false,
+                            postRoll: (ab["postRoll"] as? Bool) ?? false,
+                            midRollInterval: ab["midRollInterval"] as? Int
+                        )
+                    }
+                    monetization = Video.MonetizationSettings(
+                        isMonetized: (m["isMonetized"] as? Bool) ?? false,
+                        adBreaks: adBreaks,
+                        donationEnabled: (m["donationEnabled"] as? Bool) ?? false,
+                        totalRevenue: (m["totalRevenue"] as? Double) ?? 0
+                    )
+                }
+                let hasCopyrightStrike = (d["hasCopyrightStrike"] as? Bool)
+                    ?? (((d["copyrightClaims"] as? [String])?.isEmpty == false) ? true : nil)
+                let categoryRaw = (d["category"] as? String)?.lowercased() ?? "entertainment"
+                let category = VideoCategory(rawValue: categoryRaw) ?? .entertainment
+                
+                var video = Video(
                     id: doc.documentID,
                     title: d["title"] as? String ?? "",
                     description: d["description"] as? String ?? "",
-                    thumbnailURL: d["thumbnailUrl"] as? String ?? "",
-                    videoURL: d["videoUrl"] as? String ?? "",
+                    thumbnailURL: (d["thumbnailUrl"] as? String) ?? (d["thumbnailURL"] as? String) ?? "",
+                    videoURL: (d["videoUrl"] as? String) ?? (d["videoURL"] as? String) ?? "",
                     duration: (d["duration"] as? Double) ?? 0,
                     viewCount: finalViewCount, // 🔥 FIX: Use the synced count
                     likeCount: (d["likeCount"] as? Int) ?? 0,
+                    commentCount: (d["commentCount"] as? Int) ?? 0,
                     creator: AppState.shared.currentUser ?? User.defaultUser,
-                    category: .entertainment,
+                    category: category,
                     tags: (d["tags"] as? [String]) ?? [],
                     isPublic: storedIsPublic,
-                    visibility: visibilityStatus
+                    visibility: visibilityStatus,
+                    scheduledAt: scheduledAt,
+                    monetization: monetization,
+                    ageRestricted: d["ageRestricted"] as? Bool,
+                    madeForKids: d["madeForKids"] as? Bool,
+                    allowComments: d["allowComments"] as? Bool,
+                    filmingLocation: d["filmingLocation"] as? String,
+                    isPremiere: d["isPremiere"] as? Bool
                 )
+                video.hasCopyrightStrike = hasCopyrightStrike
                 videos.append(video)
             }
             

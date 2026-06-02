@@ -1,8 +1,11 @@
 import express from 'express';
 import admin from 'firebase-admin';
+import { allocateISRC, allocateUPC, isValidISRC, isValidUPC } from './codes';
+import { buildERNMessage, DDEXRelease, DDEXTrack } from './ddex';
+import { deliverRelease, activeProvider } from './aggregator';
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -13,7 +16,6 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-// Helper function to verify Firebase Auth token
 async function requireUser(req: any, res: any) {
   try {
     const authHeader = req.headers.authorization;
@@ -21,7 +23,6 @@ async function requireUser(req: any, res: any) {
       res.status(401).json({ error: 'Unauthorized' });
       return null;
     }
-
     const token = authHeader.split('Bearer ')[1];
     const decoded = await admin.auth().verifyIdToken(token);
     return { userId: decoded.uid, email: decoded.email };
@@ -31,61 +32,192 @@ async function requireUser(req: any, res: any) {
   }
 }
 
+const VALID_PLATFORMS = ['spotify', 'apple_music', 'youtube_music', 'amazon_music', 'tidal', 'deezer'];
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Phase 2: Music Distribution Service
+// Code allocation — real ISRC / UPC
 // ─────────────────────────────────────────────────────────────────────────────
 
-// POST /v1/music/distribution/submit - Distribute track to external platforms
+// POST /v1/music/codes/isrc — allocate a registered ISRC for a track
+app.post('/v1/music/codes/isrc', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { trackId } = req.body || {};
+    if (!trackId) return res.status(400).json({ error: 'trackId is required' });
+
+    const trackRef = db.collection('music_tracks').doc(trackId);
+    const trackSnap = await trackRef.get();
+    if (!trackSnap.exists) return res.status(404).json({ error: 'Track not found' });
+    if (String(trackSnap.data()!.artistId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const existing = trackSnap.data()!.isrc;
+    if (existing && isValidISRC(existing)) {
+      return res.json({ trackId, isrc: existing, reused: true });
+    }
+
+    const isrc = await allocateISRC();
+    await trackRef.update({ isrc, isrcAllocatedAt: admin.firestore.Timestamp.now() });
+    res.json({ trackId, isrc, reused: false });
+  } catch (error: any) {
+    console.error('Allocate ISRC error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// POST /v1/music/codes/upc — allocate a UPC/EAN for a release (album/single)
+app.post('/v1/music/codes/upc', async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { albumId } = req.body || {};
+    if (!albumId) return res.status(400).json({ error: 'albumId is required' });
+
+    const albumRef = db.collection('music_albums').doc(albumId);
+    const albumSnap = await albumRef.get();
+    if (!albumSnap.exists) return res.status(404).json({ error: 'Album not found' });
+    if (String(albumSnap.data()!.artistId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const existing = albumSnap.data()!.upc;
+    if (existing && isValidUPC(existing)) {
+      return res.json({ albumId, upc: existing, reused: true });
+    }
+
+    const upc = await allocateUPC();
+    await albumRef.update({ upc, upcAllocatedAt: admin.firestore.Timestamp.now() });
+    res.json({ albumId, upc, reused: false });
+  } catch (error: any) {
+    console.error('Allocate UPC error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Distribution — real DDEX ERN generation + aggregator delivery
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Assemble a DDEXRelease from a single track (single release) or album. */
+async function buildReleaseFromTrack(trackId: string, ownerId: string): Promise<{ release: DDEXRelease; audioURLs: string[] } | { error: string }> {
+  const trackRef = db.collection('music_tracks').doc(trackId);
+  const trackSnap = await trackRef.get();
+  if (!trackSnap.exists) return { error: 'Track not found' };
+
+  const t = trackSnap.data()!;
+  if (String(t.artistId || '') !== ownerId) return { error: 'Forbidden' };
+  if (!t.audioURL) return { error: 'Track has no audio file' };
+
+  // Ensure a real ISRC.
+  let isrc = t.isrc;
+  if (!isrc || !isValidISRC(isrc)) {
+    isrc = await allocateISRC();
+    await trackRef.update({ isrc });
+  }
+
+  // Ensure a real UPC at the release level (single uses its own UPC).
+  let upc = t.upc;
+  if (!upc || !isValidUPC(upc)) {
+    upc = await allocateUPC();
+    await trackRef.update({ upc });
+  }
+
+  const contributors = [];
+  if (t.producer) contributors.push({ name: t.producer, role: 'Producer' });
+  if (t.songwriter) contributors.push({ name: t.songwriter, role: 'Composer' });
+
+  const ddexTrack: DDEXTrack = {
+    trackId,
+    isrc,
+    title: t.title || 'Untitled',
+    durationSeconds: t.duration || 0,
+    artistName: t.artistName || '',
+    contributors,
+    genre: t.genre,
+    isExplicit: !!t.isExplicit,
+    audioURL: t.audioURL,
+    trackNumber: 1,
+    pLineYear: String(t.copyrightYear || new Date().getFullYear()),
+    pLineText: t.copyrightOwner || t.artistName,
+  };
+
+  const release: DDEXRelease = {
+    releaseId: trackId,
+    upc,
+    title: t.title || 'Untitled',
+    displayArtist: t.artistName || '',
+    releaseType: 'Single',
+    genre: t.genre,
+    label: t.recordLabel || undefined,
+    cLineYear: String(t.copyrightYear || new Date().getFullYear()),
+    cLineText: t.copyrightOwner || t.artistName,
+    pLineYear: String(t.copyrightYear || new Date().getFullYear()),
+    pLineText: t.copyrightOwner || t.artistName,
+    releaseDate: (t.releaseDate?.toDate?.() || new Date()).toISOString().slice(0, 10),
+    artworkURL: t.artworkURL || '',
+    tracks: [ddexTrack],
+  };
+
+  return { release, audioURLs: [t.audioURL] };
+}
+
+// POST /v1/music/distribution/submit — generate DDEX + deliver to platforms
 app.post('/v1/music/distribution/submit', async (req, res) => {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
 
     const { trackId, platforms } = req.body || {};
-
     if (!trackId || typeof trackId !== 'string') {
       return res.status(400).json({ error: 'trackId is required' });
     }
-
-    if (!platforms || !Array.isArray(platforms)) {
+    if (!platforms || !Array.isArray(platforms) || platforms.length === 0) {
       return res.status(400).json({ error: 'platforms array is required' });
     }
+    const invalid = platforms.filter((p: string) => !VALID_PLATFORMS.includes(p));
+    if (invalid.length > 0) {
+      return res.status(400).json({ error: `Invalid platforms: ${invalid.join(', ')}` });
+    }
 
-    const validPlatforms = ['spotify', 'apple_music', 'youtube_music', 'amazon_music', 'tidal', 'deezer'];
-    const invalidPlatforms = platforms.filter(p => !validPlatforms.includes(p));
-    if (invalidPlatforms.length > 0) {
-      return res.status(400).json({ error: `Invalid platforms: ${invalidPlatforms.join(', ')}` });
+    const built = await buildReleaseFromTrack(trackId, user.userId);
+    if ('error' in built) {
+      const code = built.error === 'Forbidden' ? 403 : (built.error === 'Track not found' ? 404 : 400);
+      return res.status(code).json({ error: built.error });
     }
 
     const trackRef = db.collection('music_tracks').doc(trackId);
-    const trackSnap = await trackRef.get();
-
-    if (!trackSnap.exists) {
-      return res.status(404).json({ error: 'Track not found' });
-    }
-
-    const trackData = trackSnap.data()!;
-
-    if (String(trackData.artistId || '') !== user.userId) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
+    const trackData = (await trackRef.get()).data()!;
     if (trackData.status !== 'published') {
       return res.status(400).json({ error: 'Track must be published before distribution' });
     }
 
+    // Generate the real DDEX ERN feed.
+    const ernXml = buildERNMessage(built.release);
+
+    // Deliver via the configured provider/aggregator.
+    const delivery = await deliverRelease({
+      ernXml,
+      audioURLs: built.audioURLs,
+      artworkURL: built.release.artworkURL,
+      upc: built.release.upc,
+      releaseId: built.release.releaseId,
+    });
+
     const now = admin.firestore.Timestamp.now();
     const distributionRef = db.collection('music_distribution').doc();
 
-    // Create distribution record
     const platformStatuses: Record<string, any> = {};
-    platforms.forEach(platform => {
+    platforms.forEach((platform: string) => {
       platformStatuses[platform] = {
-        status: 'pending',
+        status: delivery.status === 'error' ? 'error' : 'delivered',
         submittedAt: now,
-        approvedAt: null,
-        rejectedAt: null,
-        rejectionReason: null
+        deliveredAt: delivery.status !== 'error' ? now : null,
+        liveAt: null,
+        rejectionReason: delivery.status === 'error' ? delivery.message : null,
       };
     });
 
@@ -93,74 +225,85 @@ app.post('/v1/music/distribution/submit', async (req, res) => {
       id: distributionRef.id,
       trackId,
       artistId: user.userId,
+      isrc: built.release.tracks[0].isrc,
+      upc: built.release.upc,
       platforms,
       platformStatuses,
-      overallStatus: 'pending',
+      provider: delivery.provider,
+      providerDeliveryId: delivery.deliveryId,
+      overallStatus: delivery.status === 'error' ? 'error' : 'delivered',
+      ernMessageStored: true,
       submittedAt: now,
-      updatedAt: now
+      updatedAt: now,
     });
 
-    // Update track distribution status
-    await trackRef.update({
-      distributionStatus: 'submitted',
-      distributionId: distributionRef.id,
-      distributionSubmittedAt: now
-    });
-
-    res.status(201).json({
+    // Store the ERN XML for audit/retry.
+    await db.collection('music_distribution_ern').doc(distributionRef.id).set({
       distributionId: distributionRef.id,
       trackId,
-      platforms,
-      status: 'pending',
-      message: 'Distribution submitted. Track will be reviewed by platforms.'
+      ernXml,
+      createdAt: now,
     });
-  } catch (error) {
+
+    await trackRef.update({
+      distributionStatus: delivery.status === 'error' ? 'error' : 'submitted',
+      distributionId: distributionRef.id,
+      distributionSubmittedAt: now,
+      isrc: built.release.tracks[0].isrc,
+      upc: built.release.upc,
+    });
+
+    res.status(delivery.status === 'error' ? 502 : 201).json({
+      distributionId: distributionRef.id,
+      trackId,
+      isrc: built.release.tracks[0].isrc,
+      upc: built.release.upc,
+      provider: delivery.provider,
+      providerDeliveryId: delivery.deliveryId,
+      platforms,
+      status: delivery.status,
+      message: delivery.message,
+    });
+  } catch (error: any) {
     console.error('Submit distribution error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });
 
-// GET /v1/music/distribution/:trackId/status - Check distribution status per platform
+// GET /v1/music/distribution/:trackId/status — per-platform status
 app.get('/v1/music/distribution/:trackId/status', async (req, res) => {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
 
     const { trackId } = req.params;
-
     const trackRef = db.collection('music_tracks').doc(trackId);
     const trackSnap = await trackRef.get();
-
-    if (!trackSnap.exists) {
-      return res.status(404).json({ error: 'Track not found' });
-    }
+    if (!trackSnap.exists) return res.status(404).json({ error: 'Track not found' });
 
     const trackData = trackSnap.data()!;
-
     if (String(trackData.artistId || '') !== user.userId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-
     if (!trackData.distributionId) {
       return res.status(404).json({ error: 'No distribution found for this track' });
     }
 
-    const distributionRef = db.collection('music_distribution').doc(trackData.distributionId);
-    const distributionSnap = await distributionRef.get();
+    const distSnap = await db.collection('music_distribution').doc(trackData.distributionId).get();
+    if (!distSnap.exists) return res.status(404).json({ error: 'Distribution record not found' });
 
-    if (!distributionSnap.exists) {
-      return res.status(404).json({ error: 'Distribution record not found' });
-    }
-
-    const distributionData = distributionSnap.data()!;
-
+    const d = distSnap.data()!;
     res.json({
-      distributionId: distributionData.id,
+      distributionId: d.id,
       trackId,
-      overallStatus: distributionData.overallStatus,
-      platforms: distributionData.platformStatuses,
-      submittedAt: distributionData.submittedAt?.toDate().toISOString(),
-      updatedAt: distributionData.updatedAt?.toDate().toISOString()
+      isrc: d.isrc,
+      upc: d.upc,
+      provider: d.provider,
+      providerDeliveryId: d.providerDeliveryId,
+      overallStatus: d.overallStatus,
+      platforms: d.platformStatuses,
+      submittedAt: d.submittedAt?.toDate().toISOString(),
+      updatedAt: d.updatedAt?.toDate().toISOString(),
     });
   } catch (error) {
     console.error('Get distribution status error:', error);
@@ -168,151 +311,101 @@ app.get('/v1/music/distribution/:trackId/status', async (req, res) => {
   }
 });
 
-// PUT /v1/music/distribution/:trackId/platforms/:platform/takedown - Remove from specific platform
+// PUT /v1/music/distribution/:trackId/platforms/:platform/takedown
 app.put('/v1/music/distribution/:trackId/platforms/:platform/takedown', async (req, res) => {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
 
     const { trackId, platform } = req.params;
-
-    const validPlatforms = ['spotify', 'apple_music', 'youtube_music', 'amazon_music', 'tidal', 'deezer'];
-    if (!validPlatforms.includes(platform)) {
+    if (!VALID_PLATFORMS.includes(platform)) {
       return res.status(400).json({ error: `Invalid platform: ${platform}` });
     }
 
     const trackRef = db.collection('music_tracks').doc(trackId);
     const trackSnap = await trackRef.get();
-
-    if (!trackSnap.exists) {
-      return res.status(404).json({ error: 'Track not found' });
-    }
+    if (!trackSnap.exists) return res.status(404).json({ error: 'Track not found' });
 
     const trackData = trackSnap.data()!;
-
     if (String(trackData.artistId || '') !== user.userId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-
     if (!trackData.distributionId) {
       return res.status(404).json({ error: 'No distribution found for this track' });
     }
 
-    const distributionRef = db.collection('music_distribution').doc(trackData.distributionId);
-    const distributionSnap = await distributionRef.get();
+    const distRef = db.collection('music_distribution').doc(trackData.distributionId);
+    const distSnap = await distRef.get();
+    if (!distSnap.exists) return res.status(404).json({ error: 'Distribution record not found' });
 
-    if (!distributionSnap.exists) {
-      return res.status(404).json({ error: 'Distribution record not found' });
-    }
-
-    const distributionData = distributionSnap.data()!;
-    const platformStatus = distributionData.platformStatuses[platform];
-
-    if (!platformStatus || platformStatus.status !== 'approved') {
+    const platformStatus = distSnap.data()!.platformStatuses[platform];
+    if (!platformStatus || !['delivered', 'live', 'approved'].includes(platformStatus.status)) {
       return res.status(400).json({ error: `Track is not currently distributed to ${platform}` });
     }
 
-    // Update platform status to takedown
-    await distributionRef.update({
+    await distRef.update({
       [`platformStatuses.${platform}.status`]: 'takedown_requested',
       [`platformStatuses.${platform}.takedownRequestedAt`]: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    res.json({
-      message: `Takedown requested for ${platform}`,
-      platform,
-      status: 'takedown_requested'
-    });
+    res.json({ message: `Takedown requested for ${platform}`, platform, status: 'takedown_requested' });
   } catch (error) {
     console.error('Platform takedown error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// GET /v1/music/distribution/available-platforms - List supported platforms with requirements
-app.get('/v1/music/distribution/available-platforms', async (req, res) => {
+// POST /v1/music/distribution/webhook — provider callback to update live status
+app.post('/v1/music/distribution/webhook', async (req, res) => {
   try {
-    const platforms = [
-      {
-        id: 'spotify',
-        name: 'Spotify',
-        requirements: {
-          audioFormat: 'WAV (24-bit/44.1kHz) or FLAC',
-          artwork: '3000x3000px JPG',
-          metadata: 'Title, Artist, Album, Genre, ISRC (optional)'
-        },
-        estimatedApprovalTime: '3-5 business days',
-        perStreamRate: '$0.003 - $0.005'
-      },
-      {
-        id: 'apple_music',
-        name: 'Apple Music',
-        requirements: {
-          audioFormat: 'ALAC or AAC (256kbps)',
-          artwork: '3000x3000px PNG/JPG',
-          metadata: 'Title, Artist, Album, Genre, ISRC, UPC'
-        },
-        estimatedApprovalTime: '2-4 business days',
-        perStreamRate: '$0.007 - $0.010'
-      },
-      {
-        id: 'youtube_music',
-        name: 'YouTube Music',
-        requirements: {
-          audioFormat: 'FLAC or high-quality MP3 (320kbps)',
-          artwork: 'Minimum 1200x1200px',
-          metadata: 'Title, Artist, Album, Genre'
-        },
-        estimatedApprovalTime: '1-3 business days',
-        perStreamRate: '$0.002 - $0.003'
-      },
-      {
-        id: 'amazon_music',
-        name: 'Amazon Music',
-        requirements: {
-          audioFormat: 'WAV or FLAC (16-bit/44.1kHz)',
-          artwork: '3000x3000px JPG',
-          metadata: 'Title, Artist, Album, Genre, UPC'
-        },
-        estimatedApprovalTime: '3-5 business days',
-        perStreamRate: '$0.004 - $0.006'
-      },
-      {
-        id: 'tidal',
-        name: 'Tidal',
-        requirements: {
-          audioFormat: 'FLAC (24-bit/96kHz preferred)',
-          artwork: '3000x3000px PNG',
-          metadata: 'Title, Artist, Album, Genre, ISRC'
-        },
-        estimatedApprovalTime: '5-7 business days',
-        perStreamRate: '$0.012 - $0.018'
-      },
-      {
-        id: 'deezer',
-        name: 'Deezer',
-        requirements: {
-          audioFormat: 'FLAC or MP3 (320kbps)',
-          artwork: '1500x1500px JPG',
-          metadata: 'Title, Artist, Album, Genre, ISRC'
-        },
-        estimatedApprovalTime: '3-5 business days',
-        perStreamRate: '$0.004 - $0.006'
-      }
-    ];
+    const { providerDeliveryId, platform, status, liveUrl } = req.body || {};
+    if (!providerDeliveryId || !platform || !status) {
+      return res.status(400).json({ error: 'providerDeliveryId, platform, status required' });
+    }
 
-    res.json({
-      platforms,
-      total: platforms.length
-    });
+    const snap = await db.collection('music_distribution')
+      .where('providerDeliveryId', '==', providerDeliveryId)
+      .limit(1)
+      .get();
+    if (snap.empty) return res.status(404).json({ error: 'Distribution not found' });
+
+    const ref = snap.docs[0].ref;
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const update: Record<string, any> = {
+      [`platformStatuses.${platform}.status`]: status,
+      updatedAt: now,
+    };
+    if (status === 'live') {
+      update[`platformStatuses.${platform}.liveAt`] = now;
+      if (liveUrl) update[`platformStatuses.${platform}.liveUrl`] = liveUrl;
+    }
+    await ref.update(update);
+
+    res.json({ received: true });
   } catch (error) {
-    console.error('Get available platforms error:', error);
+    console.error('Distribution webhook error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
+// GET /v1/music/distribution/available-platforms
+app.get('/v1/music/distribution/available-platforms', async (_req, res) => {
+  res.json({
+    provider: activeProvider(),
+    platforms: [
+      { id: 'spotify', name: 'Spotify', audioFormat: 'WAV/FLAC 16-24bit', artwork: '3000x3000 JPG', estimatedApprovalTime: '1-5 business days', perStreamRate: '$0.003-$0.005' },
+      { id: 'apple_music', name: 'Apple Music', audioFormat: 'ALAC/AAC 256kbps', artwork: '3000x3000 PNG/JPG', estimatedApprovalTime: '1-4 business days', perStreamRate: '$0.007-$0.010' },
+      { id: 'youtube_music', name: 'YouTube Music', audioFormat: 'FLAC/MP3 320', artwork: '1200x1200+', estimatedApprovalTime: '1-3 business days', perStreamRate: '$0.002-$0.003' },
+      { id: 'amazon_music', name: 'Amazon Music', audioFormat: 'WAV/FLAC', artwork: '3000x3000 JPG', estimatedApprovalTime: '2-5 business days', perStreamRate: '$0.004-$0.006' },
+      { id: 'tidal', name: 'TIDAL', audioFormat: 'FLAC 24-bit', artwork: '3000x3000 PNG', estimatedApprovalTime: '3-7 business days', perStreamRate: '$0.012-$0.018' },
+      { id: 'deezer', name: 'Deezer', audioFormat: 'FLAC/MP3 320', artwork: '1500x1500 JPG', estimatedApprovalTime: '2-5 business days', perStreamRate: '$0.004-$0.006' },
+    ],
+    total: VALID_PLATFORMS.length,
+  });
+});
+
 const PORT = process.env.PORT || 8081;
 app.listen(PORT, () => {
-  console.log(`🎵 Music distribution service listening on port ${PORT}`);
+  console.log(`🎵 Music distribution service (DDEX + ${activeProvider()}) listening on port ${PORT}`);
 });

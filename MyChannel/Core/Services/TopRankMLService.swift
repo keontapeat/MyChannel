@@ -90,18 +90,25 @@ final class TopRankMLService: ObservableObject {
 
     private static func fallbackRankedUser(_ friend: FriendArtist, category: RankCategory, rank: Int) -> TopRankedUser {
         let displayName = friend.name.hasSuffix("_c") ? String(friend.name.dropLast(2)) : friend.name
+        // Deterministic, stable stats so the very first paint (before the ML list
+        // loads) already looks full and believable instead of showing "0 total views".
+        let fid = "fallback_\(category.rawValue)_\(displayName.lowercased().replacingOccurrences(of: " ", with: "_"))"
+        var rng = StableRNG(string: fid)
+        let baseViews = Int.random(in: 120_000...900_000, using: &rng)
+        // Higher ranks read as bigger to feel like a real leaderboard.
+        let rankBoost = max(0, (4 - rank)) * 60_000
         return TopRankedUser(
-            id: "fallback_\(category.rawValue)_\(displayName.lowercased().replacingOccurrences(of: " ", with: "_"))",
+            id: fid,
             name: displayName,
             username: displayName.lowercased().replacingOccurrences(of: " ", with: ""),
             avatar: friend.avatar,
             isVerified: true,
-            totalViews: 0,
-            subscribers: category == .channel ? max(5000 - ((rank - 1) * 1500), 1500) : 0,
-            videoCount: category == .filmmaker ? max(24 - ((rank - 1) * 3), 15) : 0,
-            likeCount: 0,
-            commentCount: 0,
-            shareCount: 0,
+            totalViews: baseViews + rankBoost,
+            subscribers: category == .channel ? max(5000 - ((rank - 1) * 1500), 1500) : Int.random(in: 8_000...60_000, using: &rng),
+            videoCount: category == .filmmaker ? max(24 - ((rank - 1) * 3), 15) : Int.random(in: 12...40, using: &rng),
+            likeCount: Int.random(in: 2_000...25_000, using: &rng),
+            commentCount: Int.random(in: 200...4_000, using: &rng),
+            shareCount: Int.random(in: 50...1_500, using: &rng),
             watchTimeMinutes: 0,
             avgViewDuration: 0,
             engagementScore: Double(1000 - rank),
@@ -184,7 +191,11 @@ final class TopRankMLService: ObservableObject {
         let cachedIDs = Set(cachedUsers.map(\.id))
         let metricsChanged = allUsers.contains { newUser in
             guard let cached = cachedUsers.first(where: { $0.id == newUser.id }) else { return true }
-            return cached.totalViews != newUser.totalViews || cached.subscribers != newUser.subscribers || cached.videoCount != newUser.videoCount
+            return cached.totalViews != newUser.totalViews
+                || cached.subscribers != newUser.subscribers
+                || cached.videoCount != newUser.videoCount
+                || cached.likeCount != newUser.likeCount
+                || cached.category != newUser.category   // AI re-classified → must re-shelf
         }
         if !cachedUsers.isEmpty && newIDs == cachedIDs && !metricsChanged {
             print("[TopRankML] No metric changes detected, skipping re-rank")
@@ -225,7 +236,18 @@ final class TopRankMLService: ObservableObject {
                 // Skip accounts with no subscribers AND no videos — empty/new accounts
                 guard subs > 0 || videos > 0 else { continue }
 
-                let category = resolveCategory(from: data)
+                // 🧠 AI CATEGORY: prefer an explicit/stored category; otherwise let the
+                // AI classifier decide which Top shelf this real creator belongs in
+                // (artist / filmmaker / channel) from their bio + uploads. The classifier
+                // caches + persists, so this is cheap after the first resolve.
+                var category = resolveCategory(from: data)
+                if data["creatorCategory"] == nil {
+                    category = CreatorCategoryClassifier.shared.category(
+                        forUserId: uid,
+                        displayName: data["displayName"] as? String ?? data["username"] as? String ?? "Creator",
+                        bio: data["bio"] as? String
+                    )
+                }
 
                 let user = TopRankedUser(
                     id: uid,
@@ -260,10 +282,13 @@ final class TopRankMLService: ObservableObject {
         #endif
 
         // Score tiers:
-        // Pinned friends: 1000–996  |  Real Firestore users: 500  |  IG friends (non-pinned): 490  |  Seeded: ≤ 100
-        // Friends start at 490 so the list looks full. Real users replace them only after earning > 490 via engagement.
+        // Pinned friends: 1000–996  |  Real Firestore users: 500 + engagement bonus (→ up to ~880)
+        // IG friends (non-pinned): 490  |  Seeded: ≤ 100
+        // Real users sit just above the friend filler (490) and climb above each
+        // other as they actually earn views / subs / likes / videos. They can never
+        // cross into pinned territory (≥ 996), so your top-3 friends stay locked in.
         for i in 0..<users.count {
-            users[i].overallScore = 500
+            users[i].overallScore = 500 + Self.realUserEngagementBonus(users[i])
         }
 
         // Merge with SmartUserSeederService — only .real and .imported users, never .aiGenerated fakes
@@ -691,6 +716,19 @@ final class TopRankMLService: ObservableObject {
     }
 
     // MARK: - Helpers
+
+    /// Engagement bonus (0...380) layered on top of the real-user baseline (500).
+    /// Keeps real creators ordered against each other by their ACTUAL metrics while
+    /// staying safely below the pinned-friend band (≥ 996). As a real user earns more
+    /// views / subs / likes / uploads, this bonus grows and they climb the shelf.
+    static func realUserEngagementBonus(_ u: TopRankedUser) -> Double {
+        let viewsPts = min(log10(Double(max(u.totalViews, 1))) * 22.0, 150.0)        // up to 150
+        let subsPts  = min(log10(Double(max(u.subscribers, 1))) * 20.0, 120.0)        // up to 120
+        let likesPts = min(log10(Double(max(u.likeCount, 1))) * 10.0, 60.0)           // up to 60
+        let videoPts = min(Double(u.videoCount) * 1.5, 40.0)                          // up to 40
+        let verified = u.isVerified ? 10.0 : 0.0                                      // up to 10
+        return min(viewsPts + subsPts + likesPts + videoPts + verified, 380.0)
+    }
 
     static func formatCount(_ n: Int) -> String {
         if n >= 1_000_000_000 { return String(format: "%.1fB", Double(n)/1_000_000_000) }

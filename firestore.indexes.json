@@ -1,6 +1,81 @@
 {
   "indexes": [
     {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "channelId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "subscribedAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "payout_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "creatorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "requestedAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "videos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isPublic",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "watch_progress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "pct",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "timestamped_comments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "videoId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestampSec",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "adClicks",
       "queryScope": "COLLECTION",
       "fields": [
@@ -100,6 +175,93 @@
         },
         {
           "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "flicks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "creatorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "flicks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isPublic",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "trendingScore",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "flicks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "publishedAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "flicks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "engagementRate",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "flicks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "publishedAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "viewCount",
           "order": "DESCENDING"
         }
       ],
@@ -228,6 +390,96 @@
         },
         {
           "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "membership_tiers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "creatorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "price",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "creator_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "creatorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "super-thanks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "creatorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "merch_orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "buyerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "merch_orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "creatorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "live_streams",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "streamerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "startedAt",
           "order": "DESCENDING"
         }
       ],
@@ -801,6 +1053,325 @@
         }
       ],
       "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "music_tracks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "music_tracks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "music_streams",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "trackId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "music_streams",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "trackId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "music_albums",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "music_albums",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "artist_fan_messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "artist_fan_messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "artist_subscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "music_collaborations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "targetArtistId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "music_collaborations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "requestingArtistId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "artist_live_streams",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "artist_playlists",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "track_promotions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "trackId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sync_licenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "artist_merch",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "artist_tours",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "startDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "music_content_id_scans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "videoId", "order": "ASCENDING" },
+        { "fieldPath": "scannedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "copyright_strikes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "scanId", "order": "ASCENDING" },
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "artist_payouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "paidAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "music_split_earnings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "payeeArtistId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "music_payout_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "artistId", "order": "ASCENDING" },
+        { "fieldPath": "requestedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tournaments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "startDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tournaments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "prizePool", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "versus_matches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "versus_matches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vs_match_transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "competitor_rankings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "division", "order": "ASCENDING" },
+        { "fieldPath": "points", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "champions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "wonAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "title_defenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "scheduledDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tournaments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "endDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tournaments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "winnerId", "order": "ASCENDING" },
+        { "fieldPath": "endDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "university_certificates",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "earnedDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "university_leaderboard",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "points", "order": "DESCENDING" },
+        { "fieldPath": "currentStreak", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "career_paths",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "lastWatchedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vs-matches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "participants", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "completedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "live_shopping_shows",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isLive", "order": "ASCENDING" },
+        { "fieldPath": "viewerCount", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shopping_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "reviews", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shopping_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isFlashSale", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "discount", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

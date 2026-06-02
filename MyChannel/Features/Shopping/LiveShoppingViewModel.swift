@@ -65,6 +65,8 @@ struct ShoppingProduct: Identifiable, Codable {
     let hasARTryOn: Bool
     var stockRemaining: Int
     let brand: String
+    // App Store Guideline 3.1.5(a)–compliant external checkout link (physical goods).
+    var storefrontURL: String? = nil
 }
 
 struct LiveShoppingShow: Identifiable, Codable {
@@ -91,6 +93,7 @@ struct CreatorShop: Identifiable, Codable {
     let productCount: Int
     let totalSales: Int
     let rating: Double
+    var storefrontURL: String? = nil
 }
 
 // MARK: - ViewModel
@@ -101,84 +104,121 @@ class LiveShoppingViewModel: ObservableObject {
     @Published var featuredProducts: [ShoppingProduct] = []
     @Published var flashSaleProducts: [ShoppingProduct] = []
     @Published var creatorShops: [CreatorShop] = []
+    @Published var metrics: [ShoppingMetric] = ShoppingMetric.defaultMetrics
     @Published var flashSaleTimeRemaining: String = "2h 34m"
-    
+    @Published private(set) var isLoading = false
+
+    private let service = LiveShoppingService.shared
+    private var flashSaleEnd = Calendar.current.date(byAdding: .hour, value: 2, to: Date()) ?? Date()
+    private var countdownTimer: Timer?
+
     func loadLiveShops() async {
-        // Load from Firestore
-        liveShows = [
+        isLoading = true
+        defer { isLoading = false }
+
+        // Real Firestore data first.
+        async let showsTask = service.fetchLiveShows()
+        async let trendingTask = service.fetchTrendingProducts()
+        async let flashTask = service.fetchFlashSaleProducts()
+        async let shopsTask = service.fetchCreatorShops()
+        async let metricsTask = service.fetchMetrics()
+
+        let (shows, trending, flash, shops, liveMetrics) = await (showsTask, trendingTask, flashTask, shopsTask, metricsTask)
+
+        liveShows = shows
+        featuredProducts = trending
+        flashSaleProducts = flash
+        creatorShops = shops
+        if !liveMetrics.isEmpty { metrics = liveMetrics }
+
+        // In DEBUG/dev (no seeded data yet) fall back to samples so the UI is never empty.
+        if AppConfig.Features.enableMockData {
+            if liveShows.isEmpty { liveShows = Self.sampleShows() }
+            if featuredProducts.isEmpty { featuredProducts = Self.sampleProducts() }
+            if flashSaleProducts.isEmpty { flashSaleProducts = Array(Self.sampleProducts().prefix(3)) }
+            if creatorShops.isEmpty { creatorShops = Self.sampleCreatorShops() }
+        }
+
+        startCountdown()
+        updateCountdownLabel()
+    }
+
+    func search(_ query: String) async -> [ShoppingProduct] {
+        let results = await service.searchProducts(query: query)
+        if results.isEmpty && AppConfig.Features.enableMockData {
+            let q = query.lowercased()
+            return Self.sampleProducts().filter {
+                $0.name.lowercased().contains(q) || $0.brand.lowercased().contains(q)
+            }
+        }
+        return results
+    }
+
+    // MARK: - Flash sale countdown
+
+    private func startCountdown() {
+        countdownTimer?.invalidate()
+        countdownTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.updateCountdownLabel() }
+        }
+    }
+
+    private func updateCountdownLabel() {
+        let remaining = max(0, flashSaleEnd.timeIntervalSinceNow)
+        let hours = Int(remaining) / 3600
+        let minutes = (Int(remaining) % 3600) / 60
+        flashSaleTimeRemaining = "\(hours)h \(minutes)m"
+    }
+
+    deinit { countdownTimer?.invalidate() }
+
+    // MARK: - DEBUG-only sample fallbacks
+
+    private static func sampleShows() -> [LiveShoppingShow] {
+        [
             LiveShoppingShow(
-                id: "1",
+                id: "sample-1",
                 title: "Holiday Fashion Sale 🎄",
                 description: "Get ready for the holidays with amazing deals",
                 thumbnailURL: "",
-                creator: LiveShoppingShow.ShowCreator(
-                    id: "c1",
-                    name: "Fashion Queen",
-                    avatarURL: ""
-                ),
+                creator: LiveShoppingShow.ShowCreator(id: "c1", name: "Fashion Queen", avatarURL: ""),
                 startTime: Date(),
                 viewerCount: 3456,
                 featuredProducts: ["p1", "p2"],
                 isLive: true
             )
         ]
-        
-        featuredProducts = mockProducts()
-        flashSaleProducts = Array(mockProducts().prefix(3))
-        creatorShops = mockCreatorShops()
     }
-    
-    private func mockProducts() -> [ShoppingProduct] {
-        return [
+
+    private static func sampleProducts() -> [ShoppingProduct] {
+        [
             ShoppingProduct(
-                id: "1",
+                id: "sample-1",
                 name: "Premium Wireless Headphones",
                 description: "High-quality sound with active noise cancellation",
-                price: 199.99,
-                originalPrice: 299,
-                discount: 33,
-                imageURL: "",
-                category: .tech,
-                creatorId: "c1",
-                creatorCommission: 15.0,
-                rating: 4.8,
-                reviews: 1234,
-                hasARTryOn: true,
-                stockRemaining: 45,
-                brand: "SoundPro"
+                price: 199.99, originalPrice: 299, discount: 33, imageURL: "",
+                category: .tech, creatorId: "c1", creatorCommission: 15.0,
+                rating: 4.8, reviews: 1234, hasARTryOn: true, stockRemaining: 45, brand: "SoundPro",
+                storefrontURL: nil
             ),
             ShoppingProduct(
-                id: "2",
+                id: "sample-2",
                 name: "Designer Sneakers",
                 description: "Limited edition colorway",
-                price: 149.99,
-                originalPrice: 200,
-                discount: 25,
-                imageURL: "",
-                category: .fashion,
-                creatorId: "c1",
-                creatorCommission: 20.0,
-                rating: 4.9,
-                reviews: 567,
-                hasARTryOn: true,
-                stockRemaining: 12,
-                brand: "StepUp"
+                price: 149.99, originalPrice: 200, discount: 25, imageURL: "",
+                category: .fashion, creatorId: "c1", creatorCommission: 20.0,
+                rating: 4.9, reviews: 567, hasARTryOn: true, stockRemaining: 12, brand: "StepUp",
+                storefrontURL: nil
             )
         ]
     }
-    
-    private func mockCreatorShops() -> [CreatorShop] {
-        return [
+
+    private static func sampleCreatorShops() -> [CreatorShop] {
+        [
             CreatorShop(
-                id: "1",
-                creator: LiveShoppingShow.ShowCreator(
-                    id: "c1",
-                    name: "Tech Guru",
-                    avatarURL: ""
-                ),
-                productCount: 45,
-                totalSales: 12500,
-                rating: 4.9
+                id: "sample-1",
+                creator: LiveShoppingShow.ShowCreator(id: "c1", name: "Tech Guru", avatarURL: ""),
+                productCount: 45, totalSales: 12500, rating: 4.9, storefrontURL: nil
             )
         ]
     }

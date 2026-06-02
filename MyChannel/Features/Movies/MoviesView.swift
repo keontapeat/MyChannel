@@ -1,96 +1,79 @@
 import SwiftUI
 
-// MARK: - 🔥 HULU STYLE MOVIES VIEW 🔥
+// MARK: - 🎬 MOVIES (Netflix / Hulu parity)
+// Featured hero carousel • Continue Watching • My List • category filter •
+// working "View All" • per-card action menu • live search. Backed by Firebase
+// via MovieLibraryService + WatchProgressService.
 struct MoviesView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedTab: HuluTab = .movies
+    @EnvironmentObject private var appState: AppState
+    @StateObject private var library = MovieLibraryService.shared
+
+    @State private var selectedFilter: MovieFilter = .all
     @State private var searchText: String = ""
     @State private var selectedMovie: FreeMovie? = nil
     @State private var remoteMovies: [FreeMovie] = []
     @State private var isFetching: Bool = false
     @State private var showSearch: Bool = false
-    @State private var showMovieDetail: Bool = false
-    
-    enum HuluTab: String, CaseIterable {
-        case all = "ALL"
-        case tv = "TV"
-        case movies = "MOVIES"
-        case news = "NEWS"
-        case hubs = "HUBS"
-    }
-    
+    @State private var heroIndex: Int = 0
+    @State private var viewAll: ViewAllContext? = nil
+
+    // MARK: - Catalog
+
     private var allMovies: [FreeMovie] {
         deduped(remoteMovies + FreeMovie.sampleMovies)
     }
-    
-    // Featured movies (first row)
+
+    /// Movies matching the active category filter.
+    private var filteredMovies: [FreeMovie] {
+        switch selectedFilter {
+        case .all:
+            return allMovies
+        case .genre(let g):
+            return allMovies.filter { $0.genre.contains(g) }
+        }
+    }
+
     private var featuredMovies: [FreeMovie] {
         allMovies
             .filter { $0.runtime >= 60 && $0.imdbRating >= 7.0 }
             .sorted { $0.imdbRating > $1.imdbRating }
-            .prefix(50)
+            .prefix(5)
             .map { $0 }
     }
-    
-    // Horror Movies
-    private var horrorMovies: [FreeMovie] {
-        allMovies.filter { $0.genre.contains(.horror) || $0.genre.contains(.thriller) }.prefix(50).map { $0 }
-    }
-    
-    // Blockbuster Movies
-    private var blockbusterMovies: [FreeMovie] {
-        allMovies.filter { $0.genre.contains(.action) || $0.genre.contains(.scifi) }.sorted { $0.imdbRating > $1.imdbRating }.prefix(50).map { $0 }
-    }
-    
-    // Comedy Movies
-    private var comedyMovies: [FreeMovie] {
-        allMovies.filter { $0.genre.contains(.comedy) }.prefix(50).map { $0 }
+
+    private var continueWatching: [MovieResumeEntry] { library.continueWatching }
+    private var myList: [FreeMovie] { library.myListMovies(from: allMovies) }
+
+    private func movies(in genre: FreeMovie.MovieGenre) -> [FreeMovie] {
+        allMovies.filter { $0.genre.contains(genre) }
+            .sorted { $0.imdbRating > $1.imdbRating }
     }
 
-    // Drama Movies
-    private var dramaMovies: [FreeMovie] {
-        allMovies.filter { $0.genre.contains(.drama) }.prefix(50).map { $0 }
-    }
-
-    // Sci-Fi & Fantasy
-    private var scifiMovies: [FreeMovie] {
-        allMovies.filter { $0.genre.contains(.scifi) || $0.genre.contains(.fantasy) }.prefix(50).map { $0 }
-    }
-
-    // Top Rated
     private var topRatedMovies: [FreeMovie] {
-        allMovies.filter { $0.imdbRating >= 7.5 }.sorted { $0.imdbRating > $1.imdbRating }.prefix(50).map { $0 }
+        allMovies.filter { $0.imdbRating >= 7.5 }.sorted { $0.imdbRating > $1.imdbRating }
     }
 
-    // Animation
-    private var animationMovies: [FreeMovie] {
-        allMovies.filter { $0.genre.contains(.animation) }.prefix(50).map { $0 }
-    }
-
-    // Classics (pre-1980)
     private var classicMovies: [FreeMovie] {
-        allMovies.filter { $0.year < 1980 }.sorted { $0.imdbRating > $1.imdbRating }.prefix(50).map { $0 }
+        allMovies.filter { $0.year > 0 && $0.year < 1980 }.sorted { $0.imdbRating > $1.imdbRating }
     }
 
-    // Full Movies (60+ min)
-    private var fullMovies: [FreeMovie] {
-        allMovies.filter { $0.runtime >= 60 }.sorted { $0.year > $1.year }.prefix(100).map { $0 }
-    }
-    
     private var searchResults: [FreeMovie] {
         guard !searchText.isEmpty else { return [] }
         return allMovies.filter {
             $0.title.localizedCaseInsensitiveContains(searchText) ||
             $0.director.localizedCaseInsensitiveContains(searchText) ||
-            $0.cast.joined().localizedCaseInsensitiveContains(searchText)
+            $0.cast.joined(separator: " ").localizedCaseInsensitiveContains(searchText) ||
+            $0.genreString.localizedCaseInsensitiveContains(searchText)
         }
     }
-    
+
+    // MARK: - Body
+
     var body: some View {
         NavigationStack {
             ZStack {
-                // Hulu Dark background
-                Color(red: 20/255, green: 22/255, blue: 25/255).ignoresSafeArea()
+                Color(red: 13/255, green: 14/255, blue: 17/255).ignoresSafeArea()
 
                 if showSearch {
                     searchView
@@ -102,184 +85,298 @@ struct MoviesView: View {
         }
         .fullScreenCover(item: $selectedMovie) { mv in
             MovieDetailView(movie: mv)
+                .environmentObject(appState)
+        }
+        .sheet(item: $viewAll) { ctx in
+            ViewAllGrid(title: ctx.title, movies: ctx.movies) { movie in
+                viewAll = nil
+                // Defer presenting the detail cover until the sheet has dismissed,
+                // otherwise SwiftUI can drop the second presentation.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    selectedMovie = movie
+                }
+            }
+            .environmentObject(appState)
         }
         .task {
-            if remoteMovies.isEmpty {
-                await initialFetch()
-            }
+            if remoteMovies.isEmpty { await initialFetch() }
+            bindLibrary()
         }
+        .onChange(of: appState.currentUser?.id) { _ in bindLibrary() }
     }
-    
-    // MARK: - Main Content (Hulu Style)
+
+    // MARK: - Main Content
+
     private var mainContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
-                // Top Header with dismiss + Tabs
-                VStack(spacing: 0) {
-                    // Top bar: back/close button + title + search
-                    HStack(spacing: 16) {
-                        Button(action: { dismiss() }) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 36, height: 36)
-                                .background(Color.white.opacity(0.12), in: Circle())
-                        }
-                        .buttonStyle(PlainButtonStyle())
+                header
+                categoryBar
 
-                        Spacer()
-
-                        Text("Movies")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.white)
-
-                        Spacer()
-
-                        Button {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                showSearch = true
-                            }
-                        } label: {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 36, height: 36)
-                                .background(Color.white.opacity(0.12), in: Circle())
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
-                    .padding(.bottom, 14)
-
-                    // Hulu-style Tabs
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(HuluTab.allCases, id: \.self) { tab in
-                                Button {
-                                    withAnimation(.spring(response: 0.3)) { selectedTab = tab }
-                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                } label: {
-                                    Text(tab.rawValue)
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundColor(selectedTab == tab ? .black : .white.opacity(0.8))
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 8)
-                                        .background(Capsule().fill(selectedTab == tab ? Color.white : Color.clear))
-                                        .overlay(Capsule().stroke(Color.white.opacity(selectedTab == tab ? 0 : 0.3), lineWidth: 1))
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                    }
-                    .padding(.bottom, 16)
+                switch selectedFilter {
+                case .all:
+                    allTabContent
+                case .genre(let g):
+                    genreGrid(for: g)
                 }
-
-                // Content Rows (Hulu Style)
-                VStack(spacing: 28) {
-                    if !featuredMovies.isEmpty {
-                        movieRow(title: "Featured Movies", movies: featuredMovies)
-                    }
-                    if !topRatedMovies.isEmpty {
-                        movieRow(title: "Top Rated", movies: topRatedMovies)
-                    }
-                    if !horrorMovies.isEmpty {
-                        movieRow(title: "Horror Movies", movies: horrorMovies)
-                    }
-                    if !blockbusterMovies.isEmpty {
-                        movieRow(title: "Blockbuster Movies", movies: blockbusterMovies)
-                    }
-                    if !comedyMovies.isEmpty {
-                        movieRow(title: "Comedy Movies", movies: comedyMovies)
-                    }
-                    if !scifiMovies.isEmpty {
-                        movieRow(title: "Sci-Fi & Fantasy", movies: scifiMovies)
-                    }
-                    if !dramaMovies.isEmpty {
-                        movieRow(title: "Drama", movies: dramaMovies)
-                    }
-                    if !animationMovies.isEmpty {
-                        movieRow(title: "Animation", movies: animationMovies)
-                    }
-                    if !fullMovies.isEmpty {
-                        movieRow(title: "Full Movies", movies: fullMovies)
-                    }
-                    if !classicMovies.isEmpty {
-                        movieRow(title: "Classic Cinema", movies: classicMovies)
-                    }
-                }
-                .padding(.bottom, 80)
             }
+            .padding(.bottom, 90)
         }
     }
-    
-    // MARK: - Movie Row (Hulu Style)
-    private func movieRow(title: String, movies: [FreeMovie]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Section Header
-            HStack(alignment: .bottom) {
-                Text(title)
-                    .font(.system(size: 20, weight: .bold))
+
+    private var allTabContent: some View {
+        VStack(spacing: 30) {
+            if !featuredMovies.isEmpty {
+                heroCarousel
+            }
+
+            if !continueWatching.isEmpty {
+                continueWatchingRow
+            }
+
+            if !myList.isEmpty {
+                movieRow(title: "My List", movies: myList)
+            }
+
+            if !topRatedMovies.isEmpty {
+                movieRow(title: "Top Rated", movies: topRatedMovies)
+            }
+
+            ForEach(MovieFilter.featuredGenres, id: \.self) { genre in
+                let list = movies(in: genre)
+                if !list.isEmpty {
+                    movieRow(title: genre.rowTitle, movies: list)
+                }
+            }
+
+            if !classicMovies.isEmpty {
+                movieRow(title: "Classic Cinema", movies: classicMovies)
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(spacing: 16) {
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
+                    .frame(width: 36, height: 36)
+                    .background(Color.white.opacity(0.12), in: Circle())
+            }
+            .buttonStyle(PlainButtonStyle())
 
-                Spacer()
+            Spacer()
 
-                Text("VIEW ALL")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white.opacity(0.6))
-                    .tracking(1.0)
+            Text("Movies")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.white)
+
+            Spacer()
+
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { showSearch = true }
+                HapticManager.shared.impact(style: .light)
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 36, height: 36)
+                    .background(Color.white.opacity(0.12), in: Circle())
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 14)
+    }
+
+    // MARK: - Category Bar (functional filter)
+
+    private var categoryBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(MovieFilter.allFilters, id: \.self) { filter in
+                    let isSelected = filter == selectedFilter
+                    Button {
+                        withAnimation(.spring(response: 0.3)) { selectedFilter = filter }
+                        HapticManager.shared.impact(style: .light)
+                    } label: {
+                        Text(filter.title)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(isSelected ? .black : .white.opacity(0.85))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(isSelected ? Color.white : Color.clear))
+                            .overlay(Capsule().stroke(Color.white.opacity(isSelected ? 0 : 0.3), lineWidth: 1))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
             }
             .padding(.horizontal, 16)
+        }
+        .padding(.bottom, 8)
+    }
 
-            // Horizontal Scroll
+    // MARK: - Hero Carousel
+
+    private var heroCarousel: some View {
+        TabView(selection: $heroIndex) {
+            ForEach(Array(featuredMovies.enumerated()), id: \.element.id) { idx, movie in
+                FeaturedMovieHeroCard(
+                    movie: movie,
+                    isInMyList: library.isInMyList(movie.id),
+                    onPlay: { open(movie) },
+                    onToggleList: { toggleList(movie) },
+                    onInfo: { open(movie) }
+                )
+                .tag(idx)
+            }
+        }
+        .frame(height: 470)
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .overlay(alignment: .bottom) {
+            HStack(spacing: 6) {
+                ForEach(0..<featuredMovies.count, id: \.self) { i in
+                    Capsule()
+                        .fill(i == heroIndex ? Color.white : Color.white.opacity(0.35))
+                        .frame(width: i == heroIndex ? 18 : 6, height: 6)
+                        .animation(.spring(response: 0.3), value: heroIndex)
+                }
+            }
+            .padding(.bottom, 8)
+        }
+    }
+
+    // MARK: - Continue Watching Row
+
+    private var continueWatchingRow: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Continue Watching")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: 12) {
-                    ForEach(movies) { movie in
-                        HuluMovieCard(movie: movie) {
-                            selectedMovie = movie
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        }
+                    ForEach(continueWatching) { entry in
+                        ContinueWatchingMovieCard(entry: entry) { open(entry.movie) }
                     }
                 }
                 .padding(.horizontal, 16)
             }
         }
     }
-    
-    // MARK: - Search View (Kept simple for now)
+
+    // MARK: - Generic Movie Row
+
+    private func movieRow(title: String, movies: [FreeMovie]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center) {
+                Text(title)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+
+                Spacer()
+
+                Button {
+                    viewAll = ViewAllContext(title: title, movies: movies)
+                    HapticManager.shared.impact(style: .light)
+                } label: {
+                    Text("VIEW ALL")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white.opacity(0.65))
+                        .tracking(1.0)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding(.horizontal, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 12) {
+                    ForEach(movies.prefix(40)) { movie in
+                        HuluMovieCard(
+                            movie: movie,
+                            isInMyList: library.isInMyList(movie.id),
+                            onTap: { open(movie) },
+                            onToggleList: { toggleList(movie) }
+                        )
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    // MARK: - Genre Grid (filter selected)
+
+    private func genreGrid(for genre: FreeMovie.MovieGenre) -> some View {
+        let list = filteredMovies
+        return Group {
+            if list.isEmpty {
+                emptyState(text: "No \(genre.rowTitle.lowercased()) yet")
+            } else {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 110, maximum: 160), spacing: 12)],
+                    spacing: 18
+                ) {
+                    ForEach(list) { movie in
+                        HuluMovieCard(
+                            movie: movie,
+                            isInMyList: library.isInMyList(movie.id),
+                            onTap: { open(movie) },
+                            onToggleList: { toggleList(movie) }
+                        )
+                    }
+                }
+                .padding(16)
+            }
+        }
+    }
+
+    private func emptyState(text: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "film.stack")
+                .font(.system(size: 44))
+                .foregroundColor(.white.opacity(0.25))
+            Text(text)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.white.opacity(0.6))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
+    }
+
+    // MARK: - Search
+
     private var searchView: some View {
         VStack(spacing: 0) {
-            // Search Header
             HStack(spacing: 12) {
                 Button {
-                    withAnimation {
-                        showSearch = false
-                        searchText = ""
-                    }
+                    withAnimation { showSearch = false; searchText = "" }
                 } label: {
                     Image(systemName: "arrow.left")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
                 }
                 .buttonStyle(PressableScaleStyle())
-                
+
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 16))
                         .foregroundColor(.gray)
-                    
+
                     TextField("Search movies, actors, directors...", text: $searchText)
                         .font(.system(size: 16))
                         .foregroundColor(.white)
                         .autocorrectionDisabled()
-                    
+
                     if !searchText.isEmpty {
-                        Button {
-                            searchText = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.gray)
+                        Button { searchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundColor(.gray)
                         }
                     }
                 }
@@ -289,9 +386,11 @@ struct MoviesView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            
-            // Search Results
+
             if searchText.isEmpty {
+                searchSuggestions
+            } else if searchResults.isEmpty {
+                emptyState(text: "No results for \u{201C}\(searchText)\u{201D}")
                 Spacer()
             } else {
                 ScrollView {
@@ -300,9 +399,12 @@ struct MoviesView: View {
                         spacing: 16
                     ) {
                         ForEach(searchResults) { movie in
-                            HuluMovieCard(movie: movie) {
-                                selectedMovie = movie
-                            }
+                            HuluMovieCard(
+                                movie: movie,
+                                isInMyList: library.isInMyList(movie.id),
+                                onTap: { open(movie) },
+                                onToggleList: { toggleList(movie) }
+                            )
                         }
                     }
                     .padding(16)
@@ -310,8 +412,66 @@ struct MoviesView: View {
             }
         }
     }
-    
+
+    private var searchSuggestions: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Browse by Genre")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white.opacity(0.7))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    ForEach(MovieFilter.featuredGenres, id: \.self) { genre in
+                        Button {
+                            withAnimation { showSearch = false; selectedFilter = .genre(genre) }
+                        } label: {
+                            Text(genre.rowTitle)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 18)
+                                .background(
+                                    LinearGradient(
+                                        colors: [AppTheme.Colors.primary.opacity(0.35), Color.white.opacity(0.05)],
+                                        startPoint: .topLeading, endPoint: .bottomTrailing
+                                    ),
+                                    in: RoundedRectangle(cornerRadius: 12)
+                                )
+                        }
+                        .buttonStyle(PressableScaleStyle(scale: 0.97))
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func open(_ movie: FreeMovie) {
+        selectedMovie = movie
+        HapticManager.shared.impact(style: .medium)
+    }
+
+    private func toggleList(_ movie: FreeMovie) {
+        library.toggleMyList(movie, userId: appState.currentUser?.id)
+        HapticManager.shared.impact(style: .light)
+    }
+
+    private func bindLibrary() {
+        if let userId = appState.currentUser?.id {
+            library.bind(userId: userId)
+            Task { await library.hydrateContinueWatching(userId: userId, catalog: allMovies) }
+        } else {
+            library.refreshContinueWatching(from: allMovies)
+        }
+    }
+
     // MARK: - Data Fetching
+
     private func initialFetch() async {
         isFetching = true
         defer { isFetching = false }
@@ -323,6 +483,7 @@ struct MoviesView: View {
                 let others = mapped.filter { !$0.id.hasPrefix("tmdb-") }
                 remoteMovies = deduped(tmdb + others)
             }
+            library.refreshContinueWatching(from: allMovies)
         }
     }
 
@@ -337,93 +498,63 @@ struct MoviesView: View {
     }
 }
 
-// MARK: - Hulu-Style Movie Card
-struct HuluMovieCard: View {
-    let movie: FreeMovie
-    let action: () -> Void
+// MARK: - Movie Filter
 
-    private let cardWidth: CGFloat = 130
-    private let posterHeight: CGFloat = 195
+enum MovieFilter: Hashable {
+    case all
+    case genre(FreeMovie.MovieGenre)
 
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                // Poster with ... button overlay
-                ZStack(alignment: .topTrailing) {
-                    MultiSourceAsyncImage(
-                        urls: movie.posterCandidates,
-                        content: { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: cardWidth, height: posterHeight)
-                                .clipped()
-                        },
-                        placeholder: {
-                            Rectangle()
-                                .fill(Color(red: 40/255, green: 42/255, blue: 45/255))
-                                .frame(width: cardWidth, height: posterHeight)
-                                .overlay(
-                                    Image(systemName: "film")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(.gray)
-                                )
-                                .shimmer(active: true)
-                        }
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                    // Three dots (Hulu style)
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(6)
-                            .background(Color.black.opacity(0.45))
-                            .clipShape(Circle())
-                    }
-                    .padding(7)
-                }
-                .frame(width: cardWidth, height: posterHeight)
-                .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 3)
-
-                // Title
-                Text(movie.title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .frame(width: cardWidth, alignment: .leading)
-
-                // Rating row
-                HStack(spacing: 4) {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 9))
-                        .foregroundColor(.yellow)
-                    Text(String(format: "%.1f", movie.imdbRating))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.7))
-                }
-            }
+    var title: String {
+        switch self {
+        case .all: return "All"
+        case .genre(let g): return g.shortTitle
         }
-        .buttonStyle(PressableScaleStyle(scale: 0.95))
-        .contextMenu {
-            Button { action() } label: {
-                Label("Watch Now", systemImage: "play.fill")
-            }
-            Button {} label: {
-                Label("Add to My Stuff", systemImage: "plus")
-            }
-            ShareLink(item: URL(string: movie.streamURL) ?? URL(fileURLWithPath: "/")) {
-                Label("Share", systemImage: "square.and.arrow.up")
-            }
+    }
+
+    /// Genres surfaced as filter chips and as home rows, in priority order.
+    static let featuredGenres: [FreeMovie.MovieGenre] = [
+        .action, .scifi, .horror, .comedy, .drama, .thriller, .animation, .family, .romance, .western
+    ]
+
+    static var allFilters: [MovieFilter] {
+        [.all] + featuredGenres.map { .genre($0) }
+    }
+}
+
+extension FreeMovie.MovieGenre {
+    var shortTitle: String {
+        switch self {
+        case .scifi: return "Sci-Fi"
+        default: return rawValue.capitalized
+        }
+    }
+
+    var rowTitle: String {
+        switch self {
+        case .action: return "Action & Adventure"
+        case .scifi: return "Sci-Fi & Fantasy"
+        case .horror: return "Horror"
+        case .comedy: return "Comedy"
+        case .drama: return "Drama"
+        case .thriller: return "Thrillers"
+        case .animation: return "Animation"
+        case .family: return "Family"
+        case .romance: return "Romance"
+        case .western: return "Westerns"
+        default: return shortTitle
         }
     }
 }
 
-#Preview("Hulu Movies Grid") {
+// MARK: - View All context
+
+struct ViewAllContext: Identifiable {
+    let id = UUID()
+    let title: String
+    let movies: [FreeMovie]
+}
+
+#Preview("Movies") {
     MoviesView()
         .environmentObject(AppState())
 }

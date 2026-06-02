@@ -48,10 +48,13 @@ struct GlobalNowPlayingBar: View {
                 .onTapGesture {
                     NotificationCenter.default.post(name: NSNotification.Name("PresentGlobalNowPlayingSheet"), object: nil)
                 }
+                // 🔥 YOUTUBE PARITY: Smooth slide-up + fade instead of a hard pop
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .padding(.horizontal)
         .padding(.bottom, 88) // leave space above tab bar
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: preview.currentTrackId)
     }
 }
 

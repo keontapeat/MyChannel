@@ -29,7 +29,8 @@ struct YouTubeStyleUploadFlow: View {
     // Video details
     @State private var videoTitle = ""
     @State private var videoDescription = ""
-    @State private var selectedVisibility: VideoVisibility = .privateVideo
+    // 🔥 YOUTUBE PARITY: Default to Public so uploads appear on the home feed immediately.
+    @State private var selectedVisibility: VideoVisibility = .publicVideo
     @State private var selectedCategory = "Entertainment"
     @State private var videoTags: [String] = []
     @State private var newTag = ""

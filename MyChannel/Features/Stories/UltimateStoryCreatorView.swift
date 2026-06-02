@@ -34,6 +34,11 @@ struct UltimateStoryCreatorView: View {
     @State private var showingDiscardAlert = false
     @State private var errorMessage: String?
     @State private var showingError = false
+    @State private var showingTextComposer = false
+    @State private var editingTextElement: EditableElement?
+    @State private var showingInteractiveStickerPicker = false
+    @State private var pendingInteractiveType: InteractiveStickerType?
+    @State private var selectedInteractiveStickerId: String?
     
     var onStoryCreated: (Story) -> Void
     
@@ -137,6 +142,77 @@ struct UltimateStoryCreatorView: View {
         } message: {
             Text(errorMessage ?? "Something went wrong")
         }
+        // ✍️ TEXT COMPOSER (Instagram-style)
+        .fullScreenCover(isPresented: $showingTextComposer) {
+            textComposerCover
+        }
+        // 📊 INTERACTIVE STICKER PICKER
+        .sheet(isPresented: $showingInteractiveStickerPicker) {
+            InteractiveStickerPicker(
+                onPick: { type in
+                    showingInteractiveStickerPicker = false
+                    // Defer so the picker fully dismisses before the config sheet shows.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        pendingInteractiveType = type
+                    }
+                },
+                onDismiss: { showingInteractiveStickerPicker = false }
+            )
+            .presentationDetents([.medium, .large])
+        }
+        // ⚙️ INTERACTIVE STICKER CONFIG
+        .sheet(item: $pendingInteractiveType) { type in
+            InteractiveStickerConfigSheet(
+                type: type,
+                onComplete: { kind in
+                    viewModel.addInteractiveSticker(kind)
+                    pendingInteractiveType = nil
+                },
+                onCancel: { pendingInteractiveType = nil }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var textComposerCover: some View {
+        if let editing = editingTextElement, case let .text(existing) = editing.type {
+            StoryTextComposer(
+                initialText: existing == " " ? "" : existing,
+                initialColor: editing.color ?? .white,
+                initialFont: editing.font ?? .bold,
+                initialBackground: editing.backgroundStyle ?? .none,
+                onDone: { result in
+                    viewModel.updateTextElement(
+                        id: editing.id,
+                        text: result.text,
+                        color: result.color,
+                        font: result.font,
+                        background: result.background
+                    )
+                    editingTextElement = nil
+                    showingTextComposer = false
+                },
+                onCancel: {
+                    editingTextElement = nil
+                    showingTextComposer = false
+                }
+            )
+        } else {
+            StoryTextComposer(
+                onDone: { result in
+                    viewModel.addTextElement(
+                        text: result.text,
+                        color: result.color,
+                        font: result.font,
+                        background: result.background
+                    )
+                    showingTextComposer = false
+                },
+                onCancel: {
+                    showingTextComposer = false
+                }
+            )
+        }
     }
     
     // MARK: - Load Selected Media from Photo Picker
@@ -228,7 +304,14 @@ struct UltimateStoryCreatorView: View {
                 EditableElementView(
                     element: element,
                     isSelected: selectedElement?.id == element.id,
-                    onTap: { selectedElement = element },
+                    onTap: {
+                        selectedElement = element
+                        // Double-purpose: tapping a text element opens the composer to edit it.
+                        if case .text = element.type {
+                            editingTextElement = element
+                            showingTextComposer = true
+                        }
+                    },
                     onDrag: { translation in
                         viewModel.updateElement(element.id, offset: translation)
                     },
@@ -237,6 +320,22 @@ struct UltimateStoryCreatorView: View {
                     },
                     onRotate: { angle in
                         viewModel.updateElement(element.id, rotation: angle)
+                    }
+                )
+            }
+
+            // 📊 INTERACTIVE STICKERS (poll/quiz/question/slider/etc. — stay live)
+            ForEach(viewModel.interactiveStickers) { sticker in
+                PlacedInteractiveStickerView(
+                    sticker: sticker,
+                    isSelected: selectedInteractiveStickerId == sticker.id,
+                    onSelect: { selectedInteractiveStickerId = sticker.id },
+                    onDelete: { viewModel.removeInteractiveSticker(id: sticker.id) },
+                    onDrag: { translation in
+                        viewModel.updateInteractiveSticker(id: sticker.id, offset: translation)
+                    },
+                    onScale: { scale in
+                        viewModel.updateInteractiveSticker(id: sticker.id, scale: scale)
                     }
                 )
             }
@@ -305,11 +404,16 @@ struct UltimateStoryCreatorView: View {
                 selectedTool: $viewModel.selectedTool,
                 onTextAdd: {
                     HapticManager.shared.impact(style: .light)
-                    viewModel.addTextElement()
+                    editingTextElement = nil
+                    showingTextComposer = true
                 },
                 onStickerAdd: {
                     HapticManager.shared.impact(style: .light)
                     showingStickerPicker = true
+                },
+                onInteractiveAdd: {
+                    HapticManager.shared.impact(style: .light)
+                    showingInteractiveStickerPicker = true
                 },
                 onDrawingStart: {
                     HapticManager.shared.impact(style: .light)
@@ -463,6 +567,25 @@ struct UltimateStoryCreatorView: View {
                         .progressViewStyle(LinearProgressViewStyle(tint: .white))
                         .frame(width: 200)
                 }
+
+                if viewModel.isUploading {
+                    Text("\(Int(viewModel.uploadProgress * 100))%")
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.8))
+
+                    // ❌ Cancel upload (Instagram parity)
+                    Button {
+                        viewModel.cancelUpload()
+                    } label: {
+                        Text("Cancel")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 10)
+                            .background(Capsule().stroke(Color.white.opacity(0.6), lineWidth: 1.5))
+                    }
+                    .padding(.top, 8)
+                }
             }
         }
     }
@@ -524,6 +647,15 @@ struct UltimateStoryCreatorView: View {
                 #if canImport(FirebaseAuth)
                 print("🚨 Firebase Auth uid at error time: \(Auth.auth().currentUser?.uid ?? "NIL - NOT SIGNED IN")")
                 #endif
+                // User-initiated cancel: silently reset, no error alert.
+                if case StoryError.uploadCancelled = error {
+                    await MainActor.run {
+                        viewModel.isProcessing = false
+                        viewModel.processingMessage = ""
+                        viewModel.uploadWasCancelled = false
+                    }
+                    return
+                }
                 await MainActor.run {
                     viewModel.isProcessing = false
                     viewModel.processingMessage = ""

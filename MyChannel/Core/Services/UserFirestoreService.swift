@@ -35,8 +35,16 @@ final class UserFirestoreService: ObservableObject {
             "isCreator": user.isCreator,
             "followerCount": user.followerCount,
             "followingCount": user.followingCount,
+            // 🏆 RANKING: mark every signed-up profile as a real user so the
+            // RealUserRankingGate counts them and real creators naturally rise
+            // above seed/friend data as the platform grows.
+            "userType": "real",
             "updatedAt": FieldValue.serverTimestamp()
         ]
+
+        // Ensure a totalViews field always exists so the ranking engine can
+        // order real creators from day one (starts at 0, climbs as they're watched).
+        userData["totalViews"] = user.totalViews ?? 0
         
         // Optional fields
         if let profileImageURL = user.profileImageURL {
@@ -186,6 +194,40 @@ final class UserFirestoreService: ObservableObject {
         let ref = db.collection("users").document(userId)
         try await ref.delete()
         print("✅ User document deleted from Firestore: \(userId)")
+        #endif
+    }
+    
+    /// Fetch a page of real users to choose from (used by the VS Match opponent
+    /// picker). Ordered by subscriberCount so the most relevant creators surface
+    /// first. Excludes the requesting user so you can't challenge yourself.
+    func fetchTopCreators(excludingUserId: String? = nil, limit: Int = 40) async throws -> [User] {
+        #if canImport(FirebaseFirestore)
+        let snapshot = try await db.collection("users")
+            .order(by: "subscriberCount", descending: true)
+            .limit(to: limit)
+            .getDocuments()
+        
+        let users: [User] = snapshot.documents.compactMap { doc in
+            let data = doc.data()
+            guard let username = data["username"] as? String, !username.isEmpty else { return nil }
+            return User(
+                id: doc.documentID,
+                username: username,
+                displayName: (data["displayName"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? username,
+                email: data["email"] as? String ?? "",
+                profileImageURL: (data["profileImageURL"] as? String) ?? (data["profileImageUrl"] as? String) ?? (data["avatarUrl"] as? String) ?? (data["photoURL"] as? String),
+                subscriberCount: data["subscriberCount"] as? Int ?? 0,
+                isVerified: data["isVerified"] as? Bool ?? false,
+                isCreator: data["isCreator"] as? Bool ?? false
+            )
+        }
+        
+        if let excludingUserId {
+            return users.filter { $0.id != excludingUserId }
+        }
+        return users
+        #else
+        return User.sampleUsers
         #endif
     }
 }

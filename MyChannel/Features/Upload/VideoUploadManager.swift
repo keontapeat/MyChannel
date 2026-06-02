@@ -278,6 +278,19 @@ class VideoUploadManager: ObservableObject {
                 print("💾 [VideoUploadManager] Saving video to Firestore with viewCount: 0")
                 try? await VideoFirestoreService.shared.saveVideo(uploadedVideo)
 
+                // 🧠 SEED TOP-SHELF CATEGORY: a creator's own upload category is the
+                // strongest, cheapest signal for which Top shelf they belong in
+                // (Top Artists / Top Indie Filmmakers / Top MyChannels). Persist it
+                // so TopRankMLService slots them correctly on the next ranking cycle.
+                if let creatorId = AuthenticationManager.shared.currentUser?.id {
+                    if let shelf = CreatorCategoryClassifier.shared.heuristicCategory(
+                        bio: AuthenticationManager.shared.currentUser?.bio,
+                        videoCategories: [uploadedVideo.category]
+                    ) {
+                        await CreatorCategoryClassifier.shared.assignCategory(shelf, toUserId: creatorId)
+                    }
+                }
+
                 // 🔥 FIX: Verify viewCount was saved correctly
                 let savedCount = await RealtimeViewTracker.shared.getViewCount(for: uploadedVideo.id)
                 print("📊 [VideoUploadManager] Verified viewCount after save: \(savedCount)")

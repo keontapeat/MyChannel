@@ -341,7 +341,13 @@ class DatabaseService: ObservableObject {
     // MARK: - Firestore Story Parsing
     #if canImport(FirebaseFirestore)
     private func storyFromFirestoreDoc(_ doc: DocumentSnapshot) -> Story? {
-        let d = doc.data() ?? [:]
+        return storyFromFirestoreData(doc.data() ?? [:], id: doc.documentID)
+    }
+
+    /// Public dictionary-based parser so other views (e.g. the story viewer) can
+    /// rebuild a full `Story` — including stickers/polls/links/music — from a
+    /// Firestore document's data.
+    func storyFromFirestoreData(_ d: [String: Any], id: String) -> Story? {
         guard let creatorId = d["creatorId"] as? String,
               let mediaURL = d["mediaURL"] as? String,
               let mediaTypeRaw = d["mediaType"] as? String,
@@ -358,8 +364,14 @@ class DatabaseService: ObservableObject {
         let textColor = d["textColor"] as? String
         let audience = d["audience"] as? String ?? "public"
 
+        // Parse rich interactive content (Instagram parity)
+        let music = parseStoryMusic(d["music"])
+        let stickers = parseStoryStickers(d["stickers"])
+        let polls = parseStoryPolls(d["polls"])
+        let links = parseStoryLinks(d["links"])
+
         return Story(
-            id: doc.documentID,
+            id: id,
             creatorId: creatorId,
             mediaURL: mediaURL,
             mediaType: mediaType,
@@ -374,8 +386,108 @@ class DatabaseService: ObservableObject {
             isLive: d["isLive"] as? Bool ?? false,
             backgroundColor: backgroundColor,
             textColor: textColor,
+            music: music,
+            stickers: stickers,
+            polls: polls,
+            links: links,
             audience: audience
         )
+    }
+
+    // MARK: - Rich field parsers (mirror StoryService.saveStory serialization)
+
+    private func parseStoryMusic(_ raw: Any?) -> StoryMusic? {
+        guard let m = raw as? [String: Any],
+              let title = m["title"] as? String,
+              let artist = m["artist"] as? String else { return nil }
+        return StoryMusic(
+            id: m["id"] as? String ?? UUID().uuidString,
+            title: title,
+            artist: artist,
+            previewURL: m["previewURL"] as? String ?? "",
+            duration: m["duration"] as? TimeInterval ?? 30.0,
+            startTime: m["startTime"] as? TimeInterval ?? 0.0
+        )
+    }
+
+    private func parseStoryStickers(_ raw: Any?) -> [StorySticker] {
+        guard let arr = raw as? [[String: Any]] else { return [] }
+        return arr.compactMap { s in
+            guard let typeRaw = s["type"] as? String,
+                  let type = StorySticker.StickerType(rawValue: typeRaw) else { return nil }
+            return StorySticker(
+                id: s["id"] as? String ?? UUID().uuidString,
+                type: type,
+                x: s["x"] as? Double ?? 0.5,
+                y: s["y"] as? Double ?? 0.5,
+                scale: s["scale"] as? Double ?? 1.0,
+                rotation: s["rotation"] as? Double ?? 0.0,
+                data: parseStickerData(s["data"]) ?? .emoji("⭐️")
+            )
+        }
+    }
+
+    private func parseStickerData(_ raw: Any?) -> StickerData? {
+        guard let d = raw as? [String: Any], let kind = d["kind"] as? String else { return nil }
+        switch kind {
+        case "emoji": return .emoji(d["value"] as? String ?? "⭐️")
+        case "gif": return .gif(d["value"] as? String ?? "")
+        case "location":
+            return .location(d["name"] as? String ?? "", d["lat"] as? Double ?? 0, d["lng"] as? Double ?? 0)
+        case "hashtag": return .hashtag(d["value"] as? String ?? "")
+        case "time": return .time((d["value"] as? Timestamp)?.dateValue() ?? Date())
+        case "weather": return .weather(d["condition"] as? String ?? "", d["temperature"] as? String ?? "")
+        case "countdown":
+            return .countdown(title: d["title"] as? String ?? "Countdown", endTime: (d["endTime"] as? Timestamp)?.dateValue() ?? Date())
+        case "poll":
+            return .poll(
+                question: d["question"] as? String ?? "",
+                options: d["options"] as? [String] ?? [],
+                votes: d["votes"] as? [Int] ?? []
+            )
+        default:
+            return nil
+        }
+    }
+
+    private func parseStoryPolls(_ raw: Any?) -> [StoryPoll] {
+        guard let arr = raw as? [[String: Any]] else { return [] }
+        return arr.compactMap { p in
+            guard let question = p["question"] as? String else { return nil }
+            let optionsRaw = p["options"] as? [[String: Any]] ?? []
+            let options = optionsRaw.map { o in
+                StoryPoll.PollOption(
+                    id: o["id"] as? String ?? UUID().uuidString,
+                    text: o["text"] as? String ?? "",
+                    voteCount: o["voteCount"] as? Int ?? 0,
+                    color: o["color"] as? String ?? "#FF6B6B"
+                )
+            }
+            return StoryPoll(
+                id: p["id"] as? String ?? UUID().uuidString,
+                question: question,
+                options: options,
+                x: p["x"] as? Double ?? 0.5,
+                y: p["y"] as? Double ?? 0.5,
+                expiresAt: (p["expiresAt"] as? Timestamp)?.dateValue() ?? Date().addingTimeInterval(86400)
+            )
+        }
+    }
+
+    private func parseStoryLinks(_ raw: Any?) -> [StoryLink] {
+        guard let arr = raw as? [[String: Any]] else { return [] }
+        return arr.compactMap { l in
+            guard let url = l["url"] as? String, let title = l["title"] as? String else { return nil }
+            return StoryLink(
+                id: l["id"] as? String ?? UUID().uuidString,
+                url: url,
+                title: title,
+                description: l["description"] as? String,
+                imageURL: l["imageURL"] as? String,
+                x: l["x"] as? Double ?? 0.5,
+                y: l["y"] as? Double ?? 0.85
+            )
+        }
     }
     #endif
 

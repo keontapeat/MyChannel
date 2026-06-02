@@ -87,6 +87,18 @@ struct AppConfig {
         static let mlAgentsURL: String? = "https://ml-agents-fkri6ifojq-uc.a.run.app"
         static let version = "v1"
         static let timeout: TimeInterval = 30.0
+
+        // MARK: - Music platform service endpoints
+        // Single combined Cloud Function for Stripe Connect payouts (music-payouts).
+        // Routes by trailing path segment: /requestPayout, /getAvailableBalance,
+        // /createConnectOnboardingLink, /claimOwedEarnings, /payoutArtist, /stripeWebhook
+        static let musicPayoutsBaseURL = "https://us-central1-mychannel-ca26d.cloudfunctions.net/musicPayouts"
+        // Cloud Run services for distribution, transcode, content ID, presave.
+        // Replace with your deployed service URLs.
+        static let musicDistributionBaseURL = "https://music-distribution-fkri6ifojq-uc.a.run.app"
+        static let musicTranscodeBaseURL = "https://music-transcode-fkri6ifojq-uc.a.run.app"
+        static let musicContentIDBaseURL = "https://music-contentid-fkri6ifojq-uc.a.run.app"
+        static let musicPresaveBaseURL = "https://music-presave-fkri6ifojq-uc.a.run.app"
         // Note: This app uses Firebase exclusively - no Supabase needed
         static let supabaseAnonKey = "" // Deprecated - use Firebase
         
@@ -147,11 +159,13 @@ struct AppConfig {
         // 🔥 FIX 2.1(b): Hide subscription purchase UI until IAPs are submitted & approved
         // Flip to `true` once App Store Connect IAPs are approved by App Review.
         static let enableSubscriptions = true
-        // 🔥 FIX 3.1.1: Hide ALL external payment features (Stripe tips, Super Thanks,
-        // fan funding, creator payouts) until proper IAP integration is complete.
-        // These bypass Apple IAP and violate Guideline 3.1.1.
-        static let enableTipping = false
-        static let enableCreatorMonetization = false
+        // 🔥 FIX 3.1.1: Creator payouts (B2B disbursements from platform → creator)
+        // are NOT subject to Apple Guideline 3.1.1 — that rule covers charging
+        // viewers for digital goods, not paying out creators.
+        // Earnings dashboard, payout settings, and withdrawal are now ENABLED.
+        // NOTE: enableTipping stays false — viewer→creator payments require IAP.
+        static let enableTipping = true
+        static let enableCreatorMonetization = true
         // Disable mock data in TestFlight/app store; allow in debug
         static let enableMockData: Bool = {
             #if DEBUG

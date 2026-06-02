@@ -27,6 +27,7 @@ class ProCameraEngine: NSObject, ObservableObject {
     // Camera session
     let captureSession = AVCaptureSession()
     private var videoDeviceInput: AVCaptureDeviceInput?
+    private var audioDeviceInput: AVCaptureDeviceInput?
     private var photoOutput = AVCapturePhotoOutput()
     private var movieOutput = AVCaptureMovieFileOutput()
     
@@ -37,6 +38,9 @@ class ProCameraEngine: NSObject, ObservableObject {
     // Recording timer
     private var recordingTimer: Timer?
     private var recordingStartTime: Date?
+
+    // Recording completion bridge (delegate callback -> async/await)
+    private var recordingContinuation: CheckedContinuation<URL?, Never>?
     
     // Camera capabilities
     private var supportedZoomFactors: [CGFloat] = [0.5, 1.0, 2.0]
@@ -153,7 +157,21 @@ class ProCameraEngine: NSObject, ObservableObject {
         } else {
             print("🚨 Could not add movie output")
         }
-        
+
+        // Add audio input so recorded videos have sound (Instagram parity).
+        // Boomerang/Superzoom strip audio later; normal video keeps it.
+        if let audioDevice = AVCaptureDevice.default(for: .audio) {
+            do {
+                let audioInput = try AVCaptureDeviceInput(device: audioDevice)
+                if captureSession.canAddInput(audioInput) {
+                    captureSession.addInput(audioInput)
+                    audioDeviceInput = audioInput
+                }
+            } catch {
+                print("⚠️ Could not add audio input: \(error)")
+            }
+        }
+
         captureSession.commitConfiguration()
     }
     
@@ -289,41 +307,59 @@ class ProCameraEngine: NSObject, ObservableObject {
     // MARK: - Video Recording
     func startRecording() async {
         guard !isRecording else { return }
-        
+
         // Create temp URL
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("mov")
-        
+
+        // Mirror front-camera recordings so the saved video matches the preview.
+        if let connection = movieOutput.connection(with: .video) {
+            if connection.isVideoMirroringSupported {
+                connection.automaticallyAdjustsVideoMirroring = false
+                connection.isVideoMirrored = (cameraPosition == .front)
+            }
+            if connection.isVideoOrientationSupported {
+                connection.videoOrientation = .portrait
+            }
+        }
+
         // Start recording
         movieOutput.startRecording(to: tempURL, recordingDelegate: self)
-        
+
         isRecording = true
         recordingStartTime = Date()
-        
+
         // Start timer
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.updateRecordingDuration()
             }
         }
-        
+
         HapticManager.shared.impact(style: .medium)
     }
     
     func stopRecording() async -> URL? {
         guard isRecording else { return nil }
-        
-        movieOutput.stopRecording()
-        
-        isRecording = false
+
         recordingTimer?.invalidate()
         recordingTimer = nil
-        recordingDuration = 0
-        
+
         HapticManager.shared.impact(style: .light)
-        
-        return recordedVideoURL
+
+        // Wait for the recording delegate to deliver the finished file URL.
+        // The file is only valid once `didFinishRecordingTo` fires, so we
+        // suspend here until the delegate resumes the continuation.
+        let url: URL? = await withCheckedContinuation { continuation in
+            recordingContinuation = continuation
+            movieOutput.stopRecording()
+        }
+
+        isRecording = false
+        recordingDuration = 0
+
+        return url
     }
     
     private func updateRecordingDuration() {
@@ -341,12 +377,31 @@ extension ProCameraEngine: AVCaptureFileOutputRecordingDelegate {
         error: Error?
     ) {
         Task { @MainActor in
+            let resultURL: URL?
             if let error = error {
-                print("🚨 Recording error: \(error)")
+                // AVFoundation may still finish writing a usable file even when it
+                // reports a non-fatal error (e.g. recording stopped early). Accept
+                // the file if it exists and is non-empty; otherwise report failure.
+                let attrs = try? FileManager.default.attributesOfItem(atPath: outputFileURL.path)
+                let size = (attrs?[.size] as? UInt64) ?? 0
+                if size > 0 {
+                    print("⚠️ Recording finished with non-fatal error, file is usable: \(error.localizedDescription)")
+                    recordedVideoURL = outputFileURL
+                    resultURL = outputFileURL
+                } else {
+                    print("🚨 Recording error: \(error)")
+                    recordedVideoURL = nil
+                    resultURL = nil
+                }
             } else {
                 recordedVideoURL = outputFileURL
+                resultURL = outputFileURL
                 print("✅ Video recorded: \(outputFileURL)")
             }
+
+            // Resume the awaiting stopRecording() call (if any)
+            recordingContinuation?.resume(returning: resultURL)
+            recordingContinuation = nil
         }
     }
 }

@@ -16,84 +16,82 @@ struct LiveShoppingView: View {
     @State private var showCheckout = false
     @State private var selectedFilter: LiveShoppingFilter = .live
     @State private var animateMetrics = false
+    @State private var showNotifications = false
+    @State private var showSearch = false
     @Environment(\.dismiss) private var dismiss
     
-    private let metrics = ShoppingMetric.defaultMetrics
-    
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .bottom) {
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
-                        // Premium Header
-                        liveShoppingHeader
-                        
-                        // Live Now Hero
-                        heroSection
-                            .padding(.top, 8)
-                        
-                        // Real-time Metrics Dashboard
-                        metricsSection
-                            .padding(.top, 24)
-                        
-                        // Quick Filters
-                        filtersSection
-                            .padding(.top, 28)
-                        
-                        // Trending Merch
-                        trendingProductsSection
-                            .padding(.top, 24)
-                        
-                        // Shop by Category
-                        categoriesSection
-                            .padding(.top, 28)
-                        
-                        // Creator Spotlight
-                        creatorSpotlightSection
-                            .padding(.top, 28)
-                        
-                        // Flash Deals
-                        flashDealsSection
-                            .padding(.top, 28)
-                        
-                        // Go Live CTA for creators
-                        goLiveCTA
-                            .padding(.top, 32)
-                        
-                        Spacer(minLength: 100)
-                    }
-                    .padding(.horizontal, 16)
+        // 🔥 FIX: No nested NavigationStack — this view is always pushed from
+        // ProfileView's stack. A second stack rendered its own nav bar, which
+        // produced the double back-button (chevron) seen on the feature card.
+        // We now rely on the parent stack's automatic back button.
+        ZStack(alignment: .bottom) {
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(spacing: 0) {
+                    // Premium Header
+                    liveShoppingHeader
+
+                    // Live Now Hero
+                    heroSection
+                        .padding(.top, 8)
+
+                    // Real-time Metrics Dashboard
+                    metricsSection
+                        .padding(.top, 24)
+
+                    // Quick Filters
+                    filtersSection
+                        .padding(.top, 28)
+
+                    // Trending Merch
+                    trendingProductsSection
+                        .padding(.top, 24)
+
+                    // Shop by Category
+                    categoriesSection
+                        .padding(.top, 28)
+
+                    // Creator Spotlight
+                    creatorSpotlightSection
+                        .padding(.top, 28)
+
+                    // Flash Deals
+                    flashDealsSection
+                        .padding(.top, 28)
+
+                    // Go Live CTA for creators
+                    goLiveCTA
+                        .padding(.top, 32)
+
+                    Spacer(minLength: 100)
                 }
-                .background(AppTheme.Colors.background.ignoresSafeArea())
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button { dismiss() } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(AppTheme.Colors.textPrimary)
-                                .frame(width: 36, height: 36)
-                                .background(AppTheme.Colors.surface, in: Circle())
-                        }
+                .padding(.horizontal, 16)
+            }
+            .background(AppTheme.Colors.background.ignoresSafeArea())
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // Leading back button is provided automatically by the parent
+            // NavigationStack — do not add a second one here.
+            ToolbarItem(placement: .navigationBarTrailing) {
+                HStack(spacing: 12) {
+                    Button { showNotifications = true } label: {
+                        Image(systemName: "bell.badge.fill")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .frame(width: 36, height: 36)
+                            .background(AppTheme.Colors.surface, in: Circle())
                     }
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        HStack(spacing: 12) {
-                            Button { } label: {
-                                Image(systemName: "bell.badge.fill")
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                    .frame(width: 36, height: 36)
-                                    .background(AppTheme.Colors.surface, in: Circle())
-                            }
-                            Button { } label: {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                    .frame(width: 36, height: 36)
-                                    .background(AppTheme.Colors.surface, in: Circle())
-                            }
-                        }
+                    .accessibilityLabel("Shopping notifications")
+
+                    Button { showSearch = true } label: {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .frame(width: 36, height: 36)
+                            .background(AppTheme.Colors.surface, in: Circle())
                     }
+                    .accessibilityLabel("Search merch")
                 }
             }
         }
@@ -105,6 +103,15 @@ struct LiveShoppingView: View {
                 ARTryOnView(product: product)
             }
         }
+        .sheet(isPresented: $showSearch) {
+            LiveShoppingSearchView(viewModel: viewModel) { product in
+                showSearch = false
+                selectedProduct = product
+            }
+        }
+        .sheet(isPresented: $showNotifications) {
+            LiveShoppingNotificationsView()
+        }
         .onAppear {
             Task {
                 await viewModel.loadLiveShops()
@@ -112,6 +119,9 @@ struct LiveShoppingView: View {
             withAnimation(.easeOut(duration: 0.6).delay(0.3)) {
                 animateMetrics = true
             }
+        }
+        .refreshable {
+            await viewModel.loadLiveShops()
         }
     }
     
@@ -185,7 +195,7 @@ struct LiveShoppingView: View {
     // MARK: - Metrics Dashboard
     private var metricsSection: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-            ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
+            ForEach(Array(viewModel.metrics.enumerated()), id: \.element.id) { index, metric in
                 ShoppingMetricCard(metric: metric)
                     .opacity(animateMetrics ? 1 : 0)
                     .offset(y: animateMetrics ? 0 : 20)

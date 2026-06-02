@@ -148,6 +148,11 @@ struct WatchHistoryView: View {
         .sheet(isPresented: $showAddToPlaylist) {
             AddToPlaylistSheet(videoId: playlistVideoId)
         }
+        .task {
+            // 🔥 PARITY: Always reconcile with the cloud when History opens so it
+            // matches what the user sees on other devices (like YouTube).
+            await refreshFromCloud()
+        }
     }
 
     @ViewBuilder
@@ -198,19 +203,56 @@ struct WatchHistoryView: View {
     }
     
     private func handleItemTap(_ item: WatchHistoryItem) {
+        HapticManager.shared.impact(style: .light)
+        // Dismiss first so the destination cover/sheet presents cleanly over the tab hierarchy.
+        dismiss()
         switch item.contentType {
         case .video, .flick:
-            NotificationCenter.default.post(name: .openVideoFromHistory, object: item)
-            dismiss()
+            // 🔥 PARITY FIX: Resolve the FULL video (with playable videoURL) before opening.
+            // The history item only stores lightweight metadata, so playing it directly
+            // would have no media. Fall back to the lightweight item if the lookup fails.
+            Task {
+                let resolved = await resolveVideo(for: item)
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .openVideoFromHistory, object: resolved)
+                }
+            }
         case .story:
-            Foundation.NotificationCenter.default.post(name: .openStoryFromHistory, object: item)
-            dismiss()
+            postAfterDismiss(name: .openStoryFromHistory, object: item)
         case .liveTV:
-            Foundation.NotificationCenter.default.post(name: .openLiveTVFromHistory, object: item)
-            dismiss()
+            postAfterDismiss(name: .openLiveTVFromHistory, object: item)
         case .post:
-            Foundation.NotificationCenter.default.post(name: Notification.Name("openPostFromHistory"), object: item)
-            dismiss()
+            postAfterDismiss(name: Notification.Name("openPostFromHistory"), object: item)
+        }
+    }
+
+    private func resolveVideo(for item: WatchHistoryItem) async -> Video {
+        if let full = try? await VideoFirestoreService.shared.fetchMultipleVideos(videoIds: [item.contentId]).first {
+            // Carry over the last watched position so playback can resume YouTube-style.
+            return full
+        }
+        return item.toVideo()
+    }
+
+    private func postAfterDismiss(name: Notification.Name, object: Any?) {
+        Task {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            await MainActor.run {
+                NotificationCenter.default.post(name: name, object: object)
+            }
+        }
+    }
+
+    private func refreshFromCloud() async {
+        guard let userId = appState.currentUser?.id else { return }
+        await historyService.loadPauseState(userId: userId)
+        let items = await HistoryService.shared.fetch(userId: userId, limit: 100)
+        guard !items.isEmpty else { return }
+        await MainActor.run {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                appState.watchHistory = items
+            }
         }
     }
     

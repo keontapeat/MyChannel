@@ -115,7 +115,7 @@ final class MatchVerificationService: ObservableObject {
     /// Verify match by comparing both players' submissions
     /// - Parameter matchId: Match identifier
     /// - Returns: Verification result
-    func verifyMatch(matchId: String) async throws -> VerificationResult {
+    func verifyMatch(matchId: String) async throws -> MatchVerificationResult {
         print("🔍 [MatchVerification] Verifying match: \(matchId)")
         
         isVerifying = true
@@ -142,7 +142,7 @@ final class MatchVerificationService: ObservableObject {
             submission2: submission2
         )
         
-        var verificationResult: VerificationResult
+        var verificationResult: MatchVerificationResult
         
         if canAutoApprove {
             // Auto-approve
@@ -221,7 +221,7 @@ final class MatchVerificationService: ObservableObject {
         submission1: MatchSubmission,
         submission2: MatchSubmission,
         autoApproved: Bool
-    ) async throws -> VerificationResult {
+    ) async throws -> MatchVerificationResult {
         // Determine winner
         let player1Score = submission1.selfReportedScore
         let player2Score = submission2.selfReportedScore
@@ -245,7 +245,8 @@ final class MatchVerificationService: ObservableObject {
         
         print("💰 [MatchVerification] Payout: $\(winnerPayout) (fee: $\(platformFee))")
         
-        // Step 1: Release escrow to winner
+        // Step 1: Release escrow to winner (real Stripe Connect payout, settled
+        // server-side via the authenticated /create-transfer Cloud Function).
         try await escrowService.releaseFunds(
             matchId: matchId,
             winnerId: winnerId,
@@ -253,12 +254,10 @@ final class MatchVerificationService: ObservableObject {
             totalPot: winnerPayout
         )
         
-        // Step 2: Update winner's wallet
-        try await walletService.depositFunds(
-            userId: winnerId,
-            amount: winnerPayout,
-            paymentMethodId: "match_win_\(matchId)"
-        )
+        // Step 2: Winner crediting is handled SERVER-SIDE by the escrow settlement
+        // above (Stripe Connect transfer + audit ledger). We intentionally do NOT
+        // credit the in-app wallet from the client here — that would double-pay and
+        // is blocked by Firestore rules (wallets are admin/server-write only).
         
         // Step 3: Update match status
         try await updateMatchStatus(
@@ -291,7 +290,7 @@ final class MatchVerificationService: ObservableObject {
             payout: winnerPayout
         )
         
-        return VerificationResult(
+        return MatchVerificationResult(
             status: .completed,
             winnerId: winnerId,
             confidence: verification.confidence,
@@ -313,7 +312,7 @@ final class MatchVerificationService: ObservableObject {
         submission1: MatchSubmission,
         submission2: MatchSubmission,
         reason: String
-    ) async throws -> VerificationResult {
+    ) async throws -> MatchVerificationResult {
         print("🚩 [MatchVerification] Flagging match for review: \(reason)")
         
         // Save verification record with pending review status
@@ -336,7 +335,7 @@ final class MatchVerificationService: ObservableObject {
         // Notify admins
         await notifyAdminsForReview(matchId: matchId, reason: reason)
         
-        return VerificationResult(
+        return MatchVerificationResult(
             status: .disputed,
             winnerId: nil,
             confidence: verification.confidence,
@@ -382,7 +381,7 @@ final class MatchVerificationService: ObservableObject {
         let platformFee = totalWager * 0.1
         let winnerPayout = totalWager - platformFee
         
-        // Release escrow
+        // Release escrow (real Stripe Connect payout, settled server-side).
         try await escrowService.releaseFunds(
             matchId: matchId,
             winnerId: winnerId,
@@ -390,12 +389,8 @@ final class MatchVerificationService: ObservableObject {
             totalPot: winnerPayout
         )
         
-        // Update wallet
-        try await walletService.depositFunds(
-            userId: winnerId,
-            amount: winnerPayout,
-            paymentMethodId: "match_win_\(matchId)"
-        )
+        // Winner crediting handled server-side by the escrow settlement above.
+        // No client-side wallet self-credit (blocked by rules; avoids double-pay).
         
         // Update match status
         try await updateMatchStatus(
@@ -665,7 +660,7 @@ struct SubmissionResult {
     let awaitingOpponent: Bool
 }
 
-struct VerificationResult {
+struct MatchVerificationResult {
     let status: MatchStatus
     let winnerId: String?
     let confidence: Double

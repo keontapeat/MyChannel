@@ -61,6 +61,19 @@ struct AssetStoriesPagerView: View {
     @State private var showingArchiveSheet: Bool = false
     @State private var showingHighlightPrompt: Bool = false
     @State private var highlightTitle: String = "Favorites"
+
+    // Interactive stickers (loaded from the full Story doc for the current item)
+    @State private var currentFullStory: Story?
+    @State private var loadedStoryCache: [String: Story] = [:]
+    @State private var activePoll: StoryPoll?
+    @State private var activeQuestionPrompt: String?
+    @State private var activeQuestionId: String?
+    @State private var questionResponse: String = ""
+    @State private var activeSlider: (id: String, prompt: String, emoji: String)?
+    @State private var sliderValue: Double = 0.5
+    @State private var showSeenBySheet: Bool = false
+    @State private var seenByViewers: [User] = []
+    @State private var isLoadingSeenBy: Bool = false
     @State private var archivedStories: [Story] = []
 
     @EnvironmentObject private var appState: AppState
@@ -259,6 +272,9 @@ struct AssetStoriesPagerView: View {
                         }
                     }
 
+                // 📊 INTERACTIVE STICKERS (live, tappable) — above tap regions
+                interactiveStickerOverlay(size: geo.size)
+
                 // Pause indicator
                 if isPaused {
                     Image(systemName: "pause.fill")
@@ -318,10 +334,15 @@ struct AssetStoriesPagerView: View {
                 }
                 configurePlaybackForCurrentStory()
                 startTimer()
+                Task { await loadFullStoryForCurrent() }
+                if let storyId = currentStory?.stableStoryId {
+                    Task { await StoryViewTracker.shared.startTracking(storyId: storyId) }
+                }
             }
             .onDisappear {
                 stopTimer()
                 tearDownPlayer()
+                StoryViewTracker.shared.stopTracking()
             }
         }
         .statusBarHidden()
@@ -345,9 +366,19 @@ struct AssetStoriesPagerView: View {
         }
         .onChange(of: userIndex) { _ in
             configurePlaybackForCurrentStory()
+            currentFullStory = nil
+            Task { await loadFullStoryForCurrent() }
+            if let storyId = currentStory?.stableStoryId {
+                Task { await StoryViewTracker.shared.startTracking(storyId: storyId) }
+            }
         }
         .onChange(of: storyIndex) { _ in
             configurePlaybackForCurrentStory()
+            currentFullStory = nil
+            Task { await loadFullStoryForCurrent() }
+            if let storyId = currentStory?.stableStoryId {
+                Task { await StoryViewTracker.shared.startTracking(storyId: storyId) }
+            }
         }
         .sheet(isPresented: $showingShareSheet) {
             if let story = currentStory {
@@ -447,6 +478,31 @@ struct AssetStoriesPagerView: View {
                     .environmentObject(AuthenticationManager.shared)
                     .environmentObject(appState)
             }
+        }
+        // ❓ Question response composer
+        .sheet(isPresented: Binding(
+            get: { activeQuestionPrompt != nil },
+            set: { if !$0 { activeQuestionPrompt = nil; activeQuestionId = nil; resume() } }
+        )) {
+            StoryQuestionComposer(
+                prompt: activeQuestionPrompt ?? "Ask me anything",
+                response: $questionResponse,
+                isSubmitting: isSubmittingReply,
+                onSend: { Task { await submitQuestionResponse() } }
+            )
+        }
+        // 👁 Seen by sheet (owner only)
+        .sheet(isPresented: $showSeenBySheet, onDismiss: { resume() }) {
+            StorySeenBySheet(
+                viewers: seenByViewers,
+                likedUserIds: [],
+                isLoading: isLoadingSeenBy,
+                onTapViewer: { user in
+                    showSeenBySheet = false
+                    presentedProfile = StoryProfilePresentation(id: user.id, user: user)
+                }
+            )
+            .presentationDetents([.medium, .large])
         }
         .alert("Add to Highlight", isPresented: $showingHighlightPrompt) {
             TextField("Highlight title", text: $highlightTitle)
@@ -657,7 +713,56 @@ struct AssetStoriesPagerView: View {
         }
     }
 
+    private var isOwnStory: Bool {
+        currentStory?.creatorId == appState.currentUser?.id
+    }
+
+    @ViewBuilder
     private var bottomActions: some View {
+        if isOwnStory {
+            ownerBottomActions
+        } else {
+            viewerBottomActions
+        }
+    }
+
+    private var ownerBottomActions: some View {
+        HStack {
+            Button {
+                HapticManager.shared.selection()
+                pause()
+                Task { await loadSeenBy() }
+                showSeenBySheet = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "eye.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text(seenByLabel)
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+            }
+            Spacer()
+            Button {
+                HapticManager.shared.selection()
+                pause()
+                showingShareSheet = true
+            } label: {
+                Image(systemName: "paperplane")
+                    .font(.system(size: 24, weight: .regular))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.3), radius: 2)
+            }
+        }
+    }
+
+    private var seenByLabel: String {
+        let count = StoryViewTracker.shared.viewerCount
+        if count <= 0 { return "Activity" }
+        return "Seen by \(count.abbreviated)"
+    }
+
+    private var viewerBottomActions: some View {
         HStack(spacing: 16) {
             HStack {
                 Text("Send message")
@@ -876,6 +981,178 @@ struct AssetStoriesPagerView: View {
         StorySeenTracker.shared.markSeen(userId: userId, storyId: story.stableStoryId, creatorId: story.creatorId)
     }
 
+    // MARK: - Interactive Stickers
+
+    @ViewBuilder
+    private func interactiveStickerOverlay(size: CGSize) -> some View {
+        if let story = currentFullStory, story.id == currentStory?.originalStoryId {
+            ZStack {
+                // Polls (and quizzes encoded as polls with [QUIZ:n] prefix)
+                ForEach(story.polls) { poll in
+                    StoryInteractivePollView(
+                        poll: poll,
+                        myVote: StoryInteractionService.shared.pollVotes[poll.id],
+                        onVote: { optionId in
+                            Task { await voteOnPoll(story: story, poll: poll, optionId: optionId) }
+                        }
+                    )
+                    .position(x: poll.x * size.width, y: poll.y * size.height)
+                }
+
+                // Sticker-encoded interactives (question / slider / countdown / mention / location / hashtag)
+                ForEach(story.stickers) { sticker in
+                    interactiveStickerView(sticker, story: story, size: size)
+                }
+
+                // Links (swipe-up style chip)
+                ForEach(story.links) { link in
+                    Button {
+                        Task { await openStoryLink(story: story, link: link) }
+                    } label: {
+                        InteractiveStickerBadge(kind: .link(url: link.url, title: link.title))
+                    }
+                    .buttonStyle(.plain)
+                    .position(x: link.x * size.width, y: link.y * size.height)
+                }
+            }
+            .allowsHitTesting(true)
+        }
+    }
+
+    @ViewBuilder
+    private func interactiveStickerView(_ sticker: StorySticker, story: Story, size: CGSize) -> some View {
+        let pos = CGPoint(x: sticker.x * size.width, y: sticker.y * size.height)
+        switch sticker.data {
+        case .hashtag(let raw) where raw.hasPrefix("Q:"):
+            // Question sticker
+            let prompt = String(raw.dropFirst(2))
+            Button {
+                pause()
+                activeQuestionId = sticker.id
+                activeQuestionPrompt = prompt
+            } label: {
+                InteractiveStickerBadge(kind: .question(prompt: prompt))
+            }
+            .buttonStyle(.plain)
+            .position(pos)
+        case .emoji(let raw) where raw.hasPrefix("SLIDER:"):
+            // Emoji slider: "SLIDER:<emoji>:<prompt>"
+            let parts = raw.components(separatedBy: ":")
+            let emoji = parts.count > 1 ? parts[1] : "😍"
+            let prompt = parts.count > 2 ? parts[2...].joined(separator: ":") : ""
+            StoryInteractiveSliderView(
+                prompt: prompt,
+                emoji: emoji,
+                onSubmit: { value in
+                    Task { await submitSlider(story: story, sliderId: sticker.id, value: value) }
+                }
+            )
+            .position(pos)
+        case .countdown(let title, let endTime):
+            InteractiveStickerBadge(kind: .countdown(title: title, endTime: endTime))
+                .onTapGesture {
+                    Task {
+                        if let userId = appState.currentUser?.id {
+                            await StoryInteractionService.shared.setCountdownReminder(storyId: story.id, countdownId: sticker.id, userId: userId)
+                            HapticManager.shared.notification(type: .success)
+                        }
+                    }
+                }
+                .position(pos)
+        case .hashtag(let raw) where raw.hasPrefix("@"):
+            InteractiveStickerBadge(kind: .mention(username: String(raw.dropFirst())))
+                .onTapGesture { Task { await openMention(username: String(raw.dropFirst())) } }
+                .position(pos)
+        case .location(let name, _, _):
+            InteractiveStickerBadge(kind: .location(name: name))
+                .position(pos)
+        case .hashtag(let tag):
+            InteractiveStickerBadge(kind: .hashtag(tag: tag))
+                .position(pos)
+        default:
+            EmptyView()
+        }
+    }
+
+    private func loadFullStoryForCurrent() async {
+        guard let storyId = currentStory?.originalStoryId else {
+            currentFullStory = nil
+            return
+        }
+        if let cached = loadedStoryCache[storyId] {
+            currentFullStory = cached
+            await preloadMyInteractions(story: cached)
+            return
+        }
+        #if canImport(FirebaseFirestore)
+        do {
+            let doc = try await Firestore.firestore().collection("stories").document(storyId).getDocument()
+            if let story = DatabaseService.shared.storyFromFirestoreData(doc.data() ?? [:], id: doc.documentID) {
+                loadedStoryCache[storyId] = story
+                if currentStory?.originalStoryId == storyId {
+                    currentFullStory = story
+                    await preloadMyInteractions(story: story)
+                }
+            }
+        } catch {
+            print("⚠️ [AssetStoriesPagerView] Failed to load full story: \(error.localizedDescription)")
+        }
+        #endif
+    }
+
+    private func preloadMyInteractions(story: Story) async {
+        guard let userId = appState.currentUser?.id else { return }
+        for poll in story.polls {
+            await StoryInteractionService.shared.loadMyPollVote(storyId: story.id, pollId: poll.id, userId: userId)
+        }
+    }
+
+    private func voteOnPoll(story: Story, poll: StoryPoll, optionId: String) async {
+        guard let userId = appState.currentUser?.id else { return }
+        await StoryInteractionService.shared.votePoll(storyId: story.id, pollId: poll.id, optionId: optionId, userId: userId)
+        HapticManager.shared.impact(style: .medium)
+    }
+
+    private func submitSlider(story: Story, sliderId: String, value: Double) async {
+        guard let userId = appState.currentUser?.id else { return }
+        await StoryInteractionService.shared.submitSlider(storyId: story.id, sliderId: sliderId, value: value, userId: userId)
+        HapticManager.shared.impact(style: .soft)
+    }
+
+    private func openStoryLink(story: Story, link: StoryLink) async {
+        guard let url = URL(string: link.url) else { return }
+        if let userId = appState.currentUser?.id {
+            await StoryInteractionService.shared.trackLinkTap(storyId: story.id, linkURL: link.url, userId: userId)
+        }
+        await MainActor.run {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    private func openMention(username: String) async {
+        pause()
+        if let user = await UserLookupService.shared.resolveUser(usernameOrDisplayName: username) {
+            await MainActor.run { presentedProfile = StoryProfilePresentation(id: user.id, user: user) }
+        } else {
+            await MainActor.run { resume() }
+        }
+    }
+
+    private func submitQuestionResponse() async {
+        guard let story = currentFullStory,
+              let questionId = activeQuestionId,
+              let userId = appState.currentUser?.id else { return }
+        let username = appState.currentUser?.username ?? "Someone"
+        await StoryInteractionService.shared.answerQuestion(storyId: story.id, questionId: questionId, response: questionResponse, userId: userId, username: username)
+        await MainActor.run {
+            questionResponse = ""
+            activeQuestionId = nil
+            activeQuestionPrompt = nil
+            HapticManager.shared.notification(type: .success)
+            resume()
+        }
+    }
+
     private func fillWidth(for barIndex: Int, totalWidth: CGFloat) -> CGFloat {
         if barIndex < storyIndex { return totalWidth }
         if barIndex > storyIndex { return 0 }
@@ -1033,6 +1310,28 @@ struct AssetStoriesPagerView: View {
             await MainActor.run {
                 archivedStories = stories.filter { $0.isExpired }
             }
+        }
+    }
+
+    // MARK: - Seen By (owner)
+
+    private func loadSeenBy() async {
+        guard let story = currentStory else { return }
+        await MainActor.run { isLoadingSeenBy = true; seenByViewers = [] }
+        let viewerIds = await StoryViewTracker.shared.getViewers(for: story.stableStoryId)
+        let myId = appState.currentUser?.id
+        let filtered = viewerIds.filter { $0 != myId }
+        let users: [User] = await withTaskGroup(of: User?.self) { group in
+            for id in filtered.prefix(200) {
+                group.addTask { try? await UserFirestoreService.shared.fetchUser(id: id) }
+            }
+            var result: [User] = []
+            for await u in group { if let u { result.append(u) } }
+            return result
+        }
+        await MainActor.run {
+            seenByViewers = users
+            isLoadingSeenBy = false
         }
     }
 

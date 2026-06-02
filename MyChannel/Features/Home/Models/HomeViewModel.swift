@@ -53,6 +53,15 @@ class HomeViewModel: ObservableObject {
     #endif
     private var hasMoreVideos: Bool = true
     
+    /// 🔥 YOUTUBE PARITY: Instantly show a freshly uploaded video at the top of the
+    /// feed without waiting for a Firestore round-trip. Called when the upload flow
+    /// posts `RefreshHomeFeed`. De-dupes so a later refresh won't show it twice.
+    func insertUploadedVideoAtTop(_ video: Video) {
+        guard video.isPublic else { return }
+        feedVideos.removeAll { $0.id == video.id }
+        feedVideos.insert(video, at: 0)
+    }
+
     func fetchFeedVideos(refresh: Bool = false) async {
         guard !isLoadingFeed else { return }
         if refresh {
@@ -141,7 +150,9 @@ class HomeViewModel: ObservableObject {
                 // In a real app we'd fetch these recommended videos and inject them, but for now we just trigger the engine.
             }
             
-            self.feedVideos.append(contentsOf: newVideos)
+            self.feedVideos.append(contentsOf: newVideos.filter { newVideo in
+                !self.feedVideos.contains(where: { $0.id == newVideo.id })
+            })
         } catch {
             print("🚨 [HomeViewModel] Error fetching feed videos: \(error)")
         }

@@ -109,7 +109,7 @@ extension LiveTVChannel {
         LiveTVChannel(
             id: "pet-collective",
             name: "The Pet Collective",
-            logoURL: "https://i.ytimg.com/vi/mRf3-JkwqfU/hqdefault.jpg",
+            logoURL: "https://is1-ssl.mzstatic.com/image/thumb/Video125/v4/7f/a5/5d/7fa55da5-e941-8864-5849-c2c7a29a0a57/pr_source.lsr/600x600bb.jpg",
             streamURL: s_doc1,
             category: .lifestyle,
             description: "Cute animals 24/7 🐾",

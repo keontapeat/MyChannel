@@ -47,6 +47,8 @@ struct MainTabView: View {
     @State private var presentFullHistory: Bool = false
     @State private var presentHistoryManagement: Bool = false
     @State private var historyVideoToOpen: Video? = nil
+    @State private var historyLiveTVToOpen: LiveTVChannel? = nil
+    @State private var historyCreatorToOpen: User? = nil
     @State private var showAuthGate: Bool = false
     
     // Creator Studio (for video analytics)
@@ -159,6 +161,35 @@ struct MainTabView: View {
                 historyVideoToOpen = video
             }
         }
+        // 🔥 PARITY FIX: History items for Live TV / Stories / Posts previously posted
+        // notifications that had no observer, so tapping them did nothing. Wire them up.
+        .onReceive(NotificationCenter.default.publisher(for: .openLiveTVFromHistory)) { note in
+            guard let item = note.object as? WatchHistoryItem else { return }
+            let channels = LiveTVManager.shared.channels.isEmpty ? LiveTVChannel.sampleChannels : LiveTVManager.shared.channels
+            if let channel = channels.first(where: { $0.id == item.contentId }) {
+                historyLiveTVToOpen = channel
+            } else {
+                NotificationCenter.default.post(name: NSNotification.Name("SwitchToHomeTab"), object: nil)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openStoryFromHistory)) { note in
+            guard let item = note.object as? WatchHistoryItem else { return }
+            Task {
+                let creator = try? await UserFirestoreService.shared.fetchUser(id: item.creatorId)
+                await MainActor.run {
+                    if let creator { historyCreatorToOpen = creator }
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("openPostFromHistory"))) { note in
+            guard let item = note.object as? WatchHistoryItem else { return }
+            Task {
+                let creator = try? await UserFirestoreService.shared.fetchUser(id: item.creatorId)
+                await MainActor.run {
+                    if let creator { historyCreatorToOpen = creator }
+                }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToVideo"))) { notification in
             if let video = notification.object as? Video {
                 // Open video directly to play it
@@ -204,6 +235,26 @@ struct MainTabView: View {
         }
         .fullScreenCover(item: $historyVideoToOpen) { video in
             VideoDetailView(video: video)
+        }
+        .fullScreenCover(item: $historyLiveTVToOpen) { channel in
+            LiveTVPlayerView(channel: channel)
+                .environmentObject(appState)
+        }
+        .fullScreenCover(item: $historyCreatorToOpen) { creator in
+            NavigationStack {
+                PublicProfileView(user: creator)
+                    .environmentObject(authManager)
+                    .environmentObject(appState)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                historyCreatorToOpen = nil
+                            } label: {
+                                Image(systemName: "xmark")
+                            }
+                        }
+                    }
+            }
         }
         // Auth gate: if user selects profile while unauthenticated
         .fullScreenCover(isPresented: $showAuthGate, onDismiss: {

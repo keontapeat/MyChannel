@@ -17,9 +17,41 @@ struct NuclearVideoPlayerView: View {
     @State private var duration: Double = 30
     @State private var isDraggingScrubber = false
     @State private var timer: Timer?
+
+    // 🔥 Auto-captions (YouTube Shorts parity)
+    @AppStorage("flicks_captions") private var captionsEnabled: Bool = false
+    @State private var captionCues: [CaptionCue] = []
+    @State private var captionsRequested = false
     
     private var videoUnavailable: Bool {
         playerManager.hasError || loadingTimedOut
+    }
+
+    /// The caption cue active at the current playback time.
+    private var activeCue: CaptionCue? {
+        captionCues.first { $0.isActive(at: currentTime) }
+    }
+
+    /// Generates auto-captions on demand (once) for YouTube-style captions.
+    private func loadCaptionsIfNeeded() {
+        guard captionsEnabled, !captionsRequested else { return }
+        guard flick.contentSource != .youtube else { return } // YouTube provides its own captions
+        captionsRequested = true
+        Task {
+            if let cached = FlicksCaptionService.shared.cachedCaptions(for: flick.id) {
+                await MainActor.run { captionCues = cached }
+                return
+            }
+            do {
+                let cues = try await FlicksCaptionService.shared.generateCaptions(
+                    for: flick.id,
+                    videoURL: flick.videoURL
+                )
+                await MainActor.run { captionCues = cues }
+            } catch {
+                print("⚠️ [Flicks] Caption generation failed: \(error.localizedDescription)")
+            }
+        }
     }
     
     var body: some View {
@@ -133,6 +165,28 @@ struct NuclearVideoPlayerView: View {
                     }
                 }
                 
+                // 🔥 Auto-captions overlay
+                if captionsEnabled, let cue = activeCue {
+                    VStack {
+                        Spacer()
+                        Text(cue.text)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.black.opacity(0.6))
+                            )
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, geo.size.height * 0.28)
+                            .transition(.opacity)
+                            .allowsHitTesting(false)
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                }
+
                 // Loading: white spinner only while actively loading (with timeout)
                 if playerManager.isLoading && !videoUnavailable && !playerManager.isPlaying {
                     ProgressView()
@@ -147,6 +201,7 @@ struct NuclearVideoPlayerView: View {
             if isActive && !hasSetup {
                 setupPlayer()
             }
+            loadCaptionsIfNeeded()
         }
         .onDisappear {
             playerManager.pause()
@@ -155,6 +210,7 @@ struct NuclearVideoPlayerView: View {
         }
         .onChange(of: isActive) { active in
             if active {
+                loadCaptionsIfNeeded()
                 if !hasSetup {
                     setupPlayer()
                 } else if !videoUnavailable {
@@ -167,6 +223,9 @@ struct NuclearVideoPlayerView: View {
                 timer?.invalidate()
                 timer = nil
             }
+        }
+        .onChange(of: captionsEnabled) { enabled in
+            if enabled { loadCaptionsIfNeeded() }
         }
         .onChange(of: isMuted) { muted in
             playerManager.player?.isMuted = muted

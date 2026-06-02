@@ -125,7 +125,7 @@ struct HomeView: View {
                         )
                         
                         // 🔥 REAL-TIME PAGINATED FIRESTORE FEED (Phase 102)
-                        feedSection
+                        feedSection(width: geo.size.width)
 
                         Color.clear.frame(height: 100)
                     }
@@ -257,6 +257,23 @@ struct HomeView: View {
         // Auto-scroll removed: hero section only changes on manual swipe
         .onReceive(NotificationCenter.default.publisher(for: .storiesDidChange)) { _ in
             loadUserStories()
+        }
+        // 🔥🔥🔥 YOUTUBE PARITY: When a video finishes uploading, the upload flow posts
+        // "RefreshHomeFeed" with the new Video. Insert it at the top instantly (optimistic)
+        // and reconcile with Firestore so the creator sees their post immediately — just
+        // like YouTube. Falls back to a full refresh if no object is attached.
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshHomeFeed"))) { notification in
+            Task {
+                // Pull the latest from Firestore first, then guarantee the new upload is
+                // on top (de-dupe means no double entry once Firestore catches up).
+                await viewModel.fetchFeedVideos(refresh: true)
+                if let video = notification.object as? Video {
+                    viewModel.insertUploadedVideoAtTop(video)
+                }
+            }
+            // Refresh featured + "New from creators" surfaces too.
+            setupContent()
+            NotificationCenter.default.post(name: NSNotification.Name("RefreshHomeContentSections"), object: nil)
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenFullProfile"))) { notification in
             if let user = notification.object as? User {
@@ -400,7 +417,11 @@ struct HomeView: View {
         }
     }
     
-    @ViewBuilder private var feedSection: some View {
+    @ViewBuilder private func feedSection(width: CGFloat) -> some View {
+        // Full-bleed vertical feed: cards span the screen width (minus the 20pt
+        // side gutters) instead of the fixed 180pt carousel width, which had left
+        // the cards looking like small floating tiles centered in the list.
+        let cardWidth = max(0, width - 40)
         LazyVStack(spacing: 24) {
             if !viewModel.feedVideos.isEmpty {
                 HStack {
@@ -418,9 +439,10 @@ struct HomeView: View {
                         action: {
                             openVideo(video)
                         },
-                        useLivePreview: true
+                        useLivePreview: true,
+                        cardWidth: cardWidth
                     )
-                    .padding(.horizontal, 20)
+                    .frame(maxWidth: .infinity)
                     .onAppear {
                         // Infinite scroll trigger
                         if video.id == viewModel.feedVideos.last?.id {
@@ -465,14 +487,37 @@ struct HomeView: View {
     }
 
     private func setupContent() {
-        // 🔥 FEATURED VIDEOS: Same intro as Featured Edit (1/3) so counts match; current user as creator for profile/subscribe
-        let ownerFeatured = FeaturedStore.shared.toVideos()
+        // 🎯 FEATURE CARD = 10 ranked slots. FeaturedStore already returns videos
+        // sorted by priority (paid Feature Card slots #1–#10 first, then owner pins),
+        // so we must NOT reorder here.
+        //
+        // The Shot By Keonta intro is PERMANENTLY pinned at slot #1 — it is the
+        // owner's signature card and always rides at the top of the carousel.
+        // The ONLY thing that bumps it is a paid Feature Card booking that owns the
+        // #1 slot (the $5K top slot). The moment that paid #1 booking expires and
+        // nobody is already booked into #1, the intro automatically reclaims the
+        // top spot. Owner pins and lower paid slots (#2–#10) sit BEHIND the intro;
+        // they never hide it.
+        let totalSlots = FeatureSlotTier.totalSlots // 10
         let intro = FeaturedStore.ownerIntroVideo() ?? shotByKeontaIntro()
-        
-        var content: [Video] = [intro]
-        // Show up to 10 featured videos (besides intro) so new pins appear immediately
-        content.append(contentsOf: Array(ownerFeatured.filter { $0.id != intro.id }.prefix(10)))
-        
+
+        // Rank-ordered featured videos (paid slots first), intro excluded so it
+        // isn't double-counted if it happens to also be pinned. Both the current
+        // and legacy intro IDs are excluded.
+        let introIds: Set<String> = [intro.id, FeaturedStore.ownerIntroVideoId, "shot_by_keonta_intro"]
+        let ranked = FeaturedStore.shared.toVideos().filter { !introIds.contains($0.id) }
+
+        // The intro shows at #1 UNLESS a paid booking owns the top slot. When the
+        // top slot is paid, that booking leads and the intro is hidden entirely
+        // until the slot frees up again.
+        let content: [Video]
+        if FeaturedStore.shared.isTopSlotPaid {
+            content = Array(ranked.prefix(totalSlots))
+        } else {
+            // Intro is always first; real featured content fills the slots behind it.
+            content = Array(([intro] + ranked).prefix(totalSlots))
+        }
+
         viewModel.featuredContent = content
         viewModel.heroVideoIndex = 0
         
@@ -482,7 +527,7 @@ struct HomeView: View {
             _ = LoopAssetCache.shared.asset(for: video.videoURL)
         }
         
-        print("📺 Featured content loaded: \(viewModel.featuredContent.count) videos")
+        print("📺 Featured content loaded: \(viewModel.featuredContent.count) videos (max \(totalSlots) slots, top slot paid: \(FeaturedStore.shared.isTopSlotPaid))")
     }
     
     // 🔥 Shot By Keonta intro video - Streams from Firebase Storage

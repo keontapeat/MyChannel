@@ -39,6 +39,13 @@ class UltimateStoryViewModel: ObservableObject {
     @Published var isProcessing: Bool = false
     @Published var processingMessage: String = ""
     @Published var processingProgress: Double = 0.0
+    @Published var isUploading: Bool = false
+    @Published var uploadProgress: Double = 0.0
+    @Published var uploadWasCancelled: Bool = false
+
+    #if canImport(FirebaseStorage)
+    private var activeUploadTask: StorageUploadTask?
+    #endif
     
     // Text editing
     @Published var currentText: String = ""
@@ -55,6 +62,10 @@ class UltimateStoryViewModel: ObservableObject {
     // Music
     @Published var selectedMusic: MusicTrack?
     @Published var musicVolume: Double = 1.0
+
+    // Interactive stickers (poll/quiz/question/slider/countdown/link/mention/location/hashtag)
+    // These are NOT baked into the media — they stay live so viewers can interact.
+    @Published var interactiveStickers: [PlacedInteractiveSticker] = []
     
     // Templates
     @Published var appliedTemplate: StoryTemplate?
@@ -124,6 +135,41 @@ class UltimateStoryViewModel: ObservableObject {
         editableElements.append(element)
         HapticManager.shared.impact(style: .medium)
     }
+
+    /// Adds a fully-configured text element (used by the text composer).
+    @discardableResult
+    func addTextElement(text: String, color: Color, font: StoryFont, background: TextBackgroundStyle) -> EditableElement {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let element = EditableElement(
+            type: .text(trimmed.isEmpty ? " " : trimmed),
+            position: CGPoint(x: 0.5, y: 0.5),
+            scale: 1.0,
+            rotation: 0,
+            color: color,
+            font: font,
+            backgroundStyle: background
+        )
+        editableElements.append(element)
+        HapticManager.shared.impact(style: .medium)
+        return element
+    }
+
+    /// Updates the content/style of an existing text element in place.
+    func updateTextElement(id: UUID, text: String, color: Color, font: StoryFont, background: TextBackgroundStyle) {
+        guard let index = editableElements.firstIndex(where: { $0.id == id }) else { return }
+        let old = editableElements[index]
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        editableElements[index] = EditableElement(
+            id: old.id,
+            type: .text(trimmed.isEmpty ? " " : trimmed),
+            position: old.position,
+            scale: old.scale,
+            rotation: old.rotation,
+            color: color,
+            font: font,
+            backgroundStyle: background
+        )
+    }
     
     func addStickerElement(_ sticker: Sticker) {
         let element = EditableElement(
@@ -161,6 +207,109 @@ class UltimateStoryViewModel: ObservableObject {
     
     func removeElement(_ id: UUID) {
         editableElements.removeAll { $0.id == id }
+    }
+
+    // MARK: - Interactive Stickers
+    func addInteractiveSticker(_ kind: PlacedInteractiveSticker.Kind) {
+        interactiveStickers.append(PlacedInteractiveSticker(kind: kind))
+        HapticManager.shared.impact(style: .medium)
+    }
+
+    func updateInteractiveSticker(id: String, offset: CGSize) {
+        guard let index = interactiveStickers.firstIndex(where: { $0.id == id }) else { return }
+        let sticker = interactiveStickers[index]
+        let newX = sticker.position.x + (offset.width / canvasSize.width)
+        let newY = sticker.position.y + (offset.height / canvasSize.height)
+        interactiveStickers[index].position = CGPoint(x: min(1, max(0, newX)), y: min(1, max(0, newY)))
+    }
+
+    func updateInteractiveSticker(id: String, scale: CGFloat) {
+        guard let index = interactiveStickers.firstIndex(where: { $0.id == id }) else { return }
+        interactiveStickers[index].scale = max(0.5, min(2.5, scale))
+    }
+
+    func removeInteractiveSticker(id: String) {
+        interactiveStickers.removeAll { $0.id == id }
+        HapticManager.shared.impact(style: .light)
+    }
+
+    /// Converts placed interactive stickers into the Story model's polls/links/stickers.
+    private func buildInteractiveStoryData() -> (polls: [StoryPoll], links: [StoryLink], stickers: [StorySticker]) {
+        var polls: [StoryPoll] = []
+        var links: [StoryLink] = []
+        var stickers: [StorySticker] = []
+
+        for item in interactiveStickers {
+            switch item.kind {
+            case .poll(let question, let options):
+                let pollOptions = options.map { StoryPoll.PollOption(text: $0) }
+                polls.append(StoryPoll(
+                    id: item.id,
+                    question: question,
+                    options: pollOptions,
+                    x: Double(item.position.x),
+                    y: Double(item.position.y)
+                ))
+            case .quiz(let question, let options, let correctIndex):
+                // Store quiz as a poll plus a sticker carrying correct-answer metadata.
+                let pollOptions = options.map { StoryPoll.PollOption(text: $0) }
+                polls.append(StoryPoll(
+                    id: item.id,
+                    question: "[QUIZ:\(correctIndex)] \(question)",
+                    options: pollOptions,
+                    x: Double(item.position.x),
+                    y: Double(item.position.y)
+                ))
+            case .question(let prompt):
+                stickers.append(StorySticker(
+                    id: item.id, type: .hashtag,
+                    x: Double(item.position.x), y: Double(item.position.y),
+                    scale: Double(item.scale), rotation: item.rotation,
+                    data: .hashtag("Q:\(prompt)")
+                ))
+            case .slider(let prompt, let emoji):
+                stickers.append(StorySticker(
+                    id: item.id, type: .emoji,
+                    x: Double(item.position.x), y: Double(item.position.y),
+                    scale: Double(item.scale), rotation: item.rotation,
+                    data: .emoji("SLIDER:\(emoji):\(prompt)")
+                ))
+            case .countdown(let title, let endTime):
+                stickers.append(StorySticker(
+                    id: item.id, type: .countdown,
+                    x: Double(item.position.x), y: Double(item.position.y),
+                    scale: Double(item.scale), rotation: item.rotation,
+                    data: .countdown(title: title, endTime: endTime)
+                ))
+            case .link(let url, let title):
+                links.append(StoryLink(
+                    id: item.id, url: url, title: title,
+                    x: Double(item.position.x), y: Double(item.position.y)
+                ))
+            case .mention(let username):
+                stickers.append(StorySticker(
+                    id: item.id, type: .mention,
+                    x: Double(item.position.x), y: Double(item.position.y),
+                    scale: Double(item.scale), rotation: item.rotation,
+                    data: .hashtag("@\(username)")
+                ))
+            case .location(let name):
+                stickers.append(StorySticker(
+                    id: item.id, type: .location,
+                    x: Double(item.position.x), y: Double(item.position.y),
+                    scale: Double(item.scale), rotation: item.rotation,
+                    data: .location(name, 0, 0)
+                ))
+            case .hashtag(let tag):
+                stickers.append(StorySticker(
+                    id: item.id, type: .hashtag,
+                    x: Double(item.position.x), y: Double(item.position.y),
+                    scale: Double(item.scale), rotation: item.rotation,
+                    data: .hashtag(tag)
+                ))
+            }
+        }
+        return (polls, links, stickers)
     }
     
     // MARK: - Drawing
@@ -255,11 +404,12 @@ class UltimateStoryViewModel: ObservableObject {
         processingMessage = "Creating your story..."
         processingProgress = 0.0
         
-        // 1. Upload media (20%)
-        print("📸 [CreateStory] Step 1: Uploading media...")
+        // 1. Upload media (20%) — bake overlays in first (WYSIWYG, Instagram parity)
+        print("📸 [CreateStory] Step 1: Compositing overlays + uploading media...")
+        let composedMedia = await composeMediaWithOverlays(media)
         let mediaURL: String
         do {
-            mediaURL = try await uploadMedia(media)
+            mediaURL = try await uploadMedia(composedMedia)
             print("✅ [CreateStory] Step 1 DONE: Media uploaded to \(mediaURL)")
         } catch {
             print("🚨 [CreateStory] Step 1 FAILED (upload): \(error)")
@@ -293,22 +443,29 @@ class UltimateStoryViewModel: ObservableObject {
             )
         }()
         
-        // Convert processed elements to stickers
-        let stickers: [StorySticker] = processedElements.compactMap { element in
+        // Convert processed elements to stickers (preserve actual emoji/content)
+        let emojiStickers: [StorySticker] = processedElements.compactMap { element in
             switch element.type {
             case .sticker(let sticker):
+                let stickerData: StickerData = sticker.category == .emoji && !sticker.imageName.isEmpty
+                    ? .emoji(sticker.imageName)
+                    : .emoji("⭐️")
                 return StorySticker(
-                    type: .emoji, // Default, adjust based on sticker type
+                    type: .emoji,
                     x: Double(element.position.x),
                     y: Double(element.position.y),
                     scale: Double(element.scale),
                     rotation: element.rotation,
-                    data: .emoji("😀") // Default, adjust based on sticker
+                    data: stickerData
                 )
             default:
                 return nil
             }
         }
+
+        // Merge interactive stickers (polls/links/quizzes/etc.) into the story.
+        let interactive = buildInteractiveStoryData()
+        let stickers = emojiStickers + interactive.stickers
         
         let story = Story(
             id: UUID().uuidString,
@@ -330,7 +487,9 @@ class UltimateStoryViewModel: ObservableObject {
             createdAt: Date(),
             expiresAt: Date().addingTimeInterval(86400), // 24 hours
             music: storyMusic,
-            stickers: stickers
+            stickers: stickers,
+            polls: interactive.polls,
+            links: interactive.links
         )
         processingProgress = 0.8
         
@@ -352,6 +511,31 @@ class UltimateStoryViewModel: ObservableObject {
         return story
     }
     
+    /// Bakes the on-canvas overlays (text, stickers, drawings) onto the media so
+    /// the uploaded story matches what the user composed (Instagram WYSIWYG).
+    private func composeMediaWithOverlays(_ media: CapturedMedia) async -> CapturedMedia {
+        let plan = StoryOverlayPlan(
+            elements: editableElements,
+            drawingPaths: drawingPaths,
+            canvasSize: canvasSize
+        )
+        guard !plan.isEmpty else { return media }
+
+        switch media {
+        case .image(let image):
+            let composed = StoryCompositor.composeImage(baseImage: image, plan: plan)
+            return .image(composed)
+        case .video(let url):
+            do {
+                let composed = try await StoryCompositor.composeVideo(url: url, plan: plan)
+                return .video(composed)
+            } catch {
+                print("⚠️ [CreateStory] Video overlay compositing failed, using original: \(error)")
+                return media
+            }
+        }
+    }
+
     private func uploadMedia(_ media: CapturedMedia) async throws -> String {
         #if canImport(FirebaseStorage) && canImport(FirebaseAuth)
         guard let userId = Auth.auth().currentUser?.uid else {
@@ -359,34 +543,106 @@ class UltimateStoryViewModel: ObservableObject {
         }
         let storage = Storage.storage()
         let storageRef = storage.reference()
-        
+
         switch media {
         case .image(let image):
-            guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            guard let imageData = image.jpegData(compressionQuality: 0.85) else {
                 throw StoryError.processingFailed("Failed to compress image")
             }
-            let imagePath = "stories/\(userId)/\(UUID().uuidString).jpg"
-            let imageRef = storageRef.child(imagePath)
+            let imageRef = storageRef.child("stories/\(userId)/\(UUID().uuidString).jpg")
             let metadata = StorageMetadata()
             metadata.contentType = "image/jpeg"
-            _ = try await imageRef.putDataAsync(imageData, metadata: metadata)
-            let downloadURL = try await imageRef.downloadURL()
-            print("✅ [UltimateStory] Image uploaded: \(downloadURL.absoluteString)")
-            return downloadURL.absoluteString
-            
+            return try await uploadWithProgress(ref: imageRef, data: imageData, fileURL: nil, metadata: metadata)
+
         case .video(let url):
-            let videoPath = "stories/\(userId)/\(UUID().uuidString).mp4"
-            let videoRef = storageRef.child(videoPath)
+            let videoRef = storageRef.child("stories/\(userId)/\(UUID().uuidString).mp4")
             let metadata = StorageMetadata()
             metadata.contentType = "video/mp4"
-            _ = try await videoRef.putFileAsync(from: url, metadata: metadata)
-            let downloadURL = try await videoRef.downloadURL()
-            print("✅ [UltimateStory] Video uploaded: \(downloadURL.absoluteString)")
-            return downloadURL.absoluteString
+            return try await uploadWithProgress(ref: videoRef, data: nil, fileURL: url, metadata: metadata)
         }
         #else
         throw StoryError.processingFailed("Firebase Storage not available")
         #endif
+    }
+
+    #if canImport(FirebaseStorage)
+    /// Uploads with live progress and supports cancellation via `cancelUpload()`.
+    private func uploadWithProgress(ref: StorageReference, data: Data?, fileURL: URL?, metadata: StorageMetadata) async throws -> String {
+        await MainActor.run {
+            self.isUploading = true
+            self.uploadProgress = 0.0
+            self.uploadWasCancelled = false
+        }
+
+        let downloadURL: String = try await withCheckedThrowingContinuation { continuation in
+            let task: StorageUploadTask
+            if let data {
+                task = ref.putData(data, metadata: metadata)
+            } else if let fileURL {
+                task = ref.putFile(from: fileURL, metadata: metadata)
+            } else {
+                continuation.resume(throwing: StoryError.processingFailed("Nothing to upload"))
+                return
+            }
+
+            self.activeUploadTask = task
+
+            task.observe(.progress) { snapshot in
+                guard let progress = snapshot.progress else { return }
+                let fraction = progress.totalUnitCount > 0
+                    ? Double(progress.completedUnitCount) / Double(progress.totalUnitCount)
+                    : 0
+                Task { @MainActor in
+                    self.uploadProgress = fraction
+                    // Upload occupies the 0%→20% slice of overall processing.
+                    self.processingProgress = fraction * 0.2
+                }
+            }
+
+            task.observe(.success) { _ in
+                Task {
+                    do {
+                        let url = try await ref.downloadURL()
+                        continuation.resume(returning: url.absoluteString)
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+            }
+
+            task.observe(.failure) { snapshot in
+                let error = snapshot.error ?? StoryError.processingFailed("Upload failed")
+                let nsError = error as NSError
+                if nsError.domain == StorageErrorDomain && nsError.code == StorageErrorCode.cancelled.rawValue {
+                    continuation.resume(throwing: StoryError.uploadCancelled)
+                } else {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+
+        await MainActor.run {
+            self.isUploading = false
+            self.activeUploadTask = nil
+        }
+        print("✅ [UltimateStory] Media uploaded: \(downloadURL)")
+        return downloadURL
+    }
+    #endif
+
+    /// Cancels an in-flight story upload (Instagram "X" on the upload ring).
+    func cancelUpload() {
+        #if canImport(FirebaseStorage)
+        activeUploadTask?.cancel()
+        activeUploadTask = nil
+        #endif
+        uploadWasCancelled = true
+        isUploading = false
+        isProcessing = false
+        processingMessage = ""
+        processingProgress = 0
+        uploadProgress = 0
+        HapticManager.shared.impact(style: .rigid)
     }
     
     private func processElements() async throws -> [ProcessedElement] {
@@ -451,7 +707,7 @@ enum MediaType: String, Codable {
 
 // MARK: - Editable Element
 struct EditableElement: Identifiable {
-    let id = UUID()
+    let id: UUID
     let type: ElementType
     var position: CGPoint // Normalized 0...1
     var scale: CGFloat
@@ -459,7 +715,27 @@ struct EditableElement: Identifiable {
     var color: Color?
     var font: StoryFont?
     var backgroundStyle: TextBackgroundStyle?
-    
+
+    init(
+        id: UUID = UUID(),
+        type: ElementType,
+        position: CGPoint,
+        scale: CGFloat,
+        rotation: Double,
+        color: Color? = nil,
+        font: StoryFont? = nil,
+        backgroundStyle: TextBackgroundStyle? = nil
+    ) {
+        self.id = id
+        self.type = type
+        self.position = position
+        self.scale = scale
+        self.rotation = rotation
+        self.color = color
+        self.font = font
+        self.backgroundStyle = backgroundStyle
+    }
+
     enum ElementType {
         case text(String)
         case sticker(Sticker)
@@ -529,6 +805,44 @@ struct Sticker: Identifiable, Codable {
         case emoji
         case animated
         case custom
+    }
+}
+
+// MARK: - Placed Interactive Sticker
+// A poll / quiz / question / slider / countdown / link / mention / location / hashtag
+// placed on the canvas. Carries its own normalized position + payload and stays live
+// (NOT baked into media) so viewers can interact with it.
+struct PlacedInteractiveSticker: Identifiable, Equatable {
+    let id: String
+    var kind: Kind
+    var position: CGPoint   // normalized 0...1
+    var scale: CGFloat
+    var rotation: Double
+
+    enum Kind: Equatable {
+        case poll(question: String, options: [String])
+        case quiz(question: String, options: [String], correctIndex: Int)
+        case question(prompt: String)
+        case slider(prompt: String, emoji: String)
+        case countdown(title: String, endTime: Date)
+        case link(url: String, title: String)
+        case mention(username: String)
+        case location(name: String)
+        case hashtag(tag: String)
+    }
+
+    init(
+        id: String = UUID().uuidString,
+        kind: Kind,
+        position: CGPoint = CGPoint(x: 0.5, y: 0.5),
+        scale: CGFloat = 1.0,
+        rotation: Double = 0
+    ) {
+        self.id = id
+        self.kind = kind
+        self.position = position
+        self.scale = scale
+        self.rotation = rotation
     }
 }
 

@@ -41,6 +41,22 @@ final class UserCollectionsFirestoreService: ObservableObject {
             } else {
                 try await ref.delete()
             }
+
+            // 🔥 RANKING FIX: roll the subscribe/unsubscribe up to the creator's
+            // users/{creatorId}.subscriberCount so TopRankMLService re-ranks them
+            // as their audience grows. Mirror it into the creator's subscribers
+            // sub-collection too, so counts can be reconciled if they ever drift.
+            let delta: Int64 = add ? 1 : -1
+            try await db.collection("users").document(creatorId).setData([
+                "subscriberCount": FieldValue.increment(delta)
+            ], merge: true)
+
+            let subRef = db.collection("users").document(creatorId).collection("subscribers").document(userId)
+            if add {
+                try await subRef.setData(["subscribedAt": FieldValue.serverTimestamp()], merge: true)
+            } else {
+                try? await subRef.delete()
+            }
         } catch { print("subscription sync error: \(error)") }
         #endif
     }

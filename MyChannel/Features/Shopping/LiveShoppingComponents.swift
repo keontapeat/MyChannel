@@ -2,6 +2,13 @@
 // All card/component structs compile in parallel with the main LiveShoppingView struct.
 import SwiftUI
 
+/// Identifiable wrapper so an external storefront URL can drive a `.sheet(item:)`
+/// presentation for App Store–compliant external checkout (physical goods).
+struct ShoppingCheckoutLink: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
 
 struct LiveShowHeroCard: View {
     let show: LiveShoppingShow
@@ -286,6 +293,7 @@ struct ShoppingCategoryButton: View {
 
 struct CreatorSpotlightCard: View {
     let shop: CreatorShop
+    @State private var storeLink: ShoppingCheckoutLink?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -354,7 +362,11 @@ struct CreatorSpotlightCard: View {
                 
                 Spacer()
                 
-                Button { } label: {
+                Button {
+                    if let urlStr = shop.storefrontURL, let url = URL(string: urlStr) {
+                        storeLink = ShoppingCheckoutLink(url: url)
+                    }
+                } label: {
                     Text("Visit Shop")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(.white)
@@ -362,6 +374,8 @@ struct CreatorSpotlightCard: View {
                         .padding(.vertical, 8)
                         .background(AppTheme.Colors.textPrimary, in: Capsule())
                 }
+                .opacity(shop.storefrontURL == nil ? 0.5 : 1)
+                .disabled(shop.storefrontURL == nil)
             }
         }
         .frame(width: 270)
@@ -373,6 +387,10 @@ struct CreatorSpotlightCard: View {
                 .stroke(AppTheme.Colors.divider.opacity(0.3), lineWidth: 0.8)
         )
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .sheet(item: $storeLink) { link in
+            SafariView(url: link.url)
+                .ignoresSafeArea()
+        }
     }
 }
 
@@ -619,6 +637,8 @@ struct ProductDetailSheet: View {
     @Binding var showARTryOn: Bool
     @Binding var showCheckout: Bool
     @Environment(\.dismiss) private var dismiss
+    @State private var checkoutURL: ShoppingCheckoutLink?
+    @State private var showNoStoreAlert = false
     
     var body: some View {
         NavigationStack {
@@ -760,22 +780,42 @@ struct ProductDetailSheet: View {
                         }
                         
                         // Buy Now Button
-                        // 🔥 FIX 2.1/3.1.1: Checkout not yet implemented — show coming soon
+                        // 🔥 REAL & WIRED: Physical merch is purchased on the creator's
+                        // external storefront (App Store Guideline 3.1.5(a) compliant —
+                        // physical goods must NOT use Apple IAP). We open the storefront
+                        // URL in SafariView and log the checkout intent to Firestore.
                         Button {
-                            showCheckout = true
+                            if let urlStr = product.storefrontURL, let url = URL(string: urlStr) {
+                                checkoutURL = ShoppingCheckoutLink(url: url)
+                                Task { await LiveShoppingService.shared.trackCheckoutTap(productId: product.id) }
+                            } else {
+                                showNoStoreAlert = true
+                            }
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "bag.fill")
                                     .font(.system(size: 16, weight: .bold))
-                                Text("Shop Coming Soon")
+                                Text(product.storefrontURL != nil ? "Buy Now" : "Store Coming Soon")
                                     .font(.system(size: 16, weight: .bold))
+                                if product.storefrontURL != nil {
+                                    Image(systemName: "arrow.up.forward")
+                                        .font(.system(size: 12, weight: .bold))
+                                }
                             }
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 17)
-                            .background(Color.gray.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .background(
+                                product.storefrontURL != nil
+                                    ? AnyShapeStyle(AppTheme.Colors.premiumGradient)
+                                    : AnyShapeStyle(Color.gray.opacity(0.5)),
+                                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            )
                         }
-                        .disabled(true)
+                        .disabled(product.storefrontURL == nil)
+                        .onAppear {
+                            Task { await LiveShoppingService.shared.trackProductView(productId: product.id) }
+                        }
                     }
                     .padding(.horizontal, 20)
                 }
@@ -792,6 +832,15 @@ struct ProductDetailSheet: View {
                             .foregroundStyle(AppTheme.Colors.textTertiary)
                     }
                 }
+            }
+            .sheet(item: $checkoutURL) { link in
+                SafariView(url: link.url)
+                    .ignoresSafeArea()
+            }
+            .alert("Store Coming Soon", isPresented: $showNoStoreAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("This creator hasn't connected their storefront yet. Check back soon to buy \(product.name).")
             }
         }
     }
@@ -849,6 +898,8 @@ struct LiveShoppingStreamView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showProducts = true
     @State private var chatMessage = ""
+    @State private var streamProducts: [ShoppingProduct] = []
+    @State private var selectedProduct: ShoppingProduct?
     
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -980,8 +1031,16 @@ struct LiveShoppingStreamView: View {
                     
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(0..<4, id: \.self) { i in
-                                StreamProductCard(index: i)
+                            if streamProducts.isEmpty {
+                                ForEach(0..<3, id: \.self) { _ in
+                                    StreamProductCardSkeleton()
+                                }
+                            } else {
+                                ForEach(streamProducts) { product in
+                                    StreamProductCard(product: product) {
+                                        selectedProduct = product
+                                    }
+                                }
                             }
                         }
                         .padding(.horizontal, 20)
@@ -998,52 +1057,103 @@ struct LiveShoppingStreamView: View {
             }
         }
         .navigationBarHidden(true)
+        .task {
+            await loadStreamProducts()
+        }
+        .sheet(item: $selectedProduct) { product in
+            ProductDetailSheet(
+                product: product,
+                showARTryOn: .constant(false),
+                showCheckout: .constant(false)
+            )
+        }
+    }
+
+    private func loadStreamProducts() async {
+        // Pull the products featured for this specific live show from the catalog.
+        let all = await LiveShoppingService.shared.fetchTrendingProducts(limit: 100)
+        if !show.featuredProducts.isEmpty {
+            let featured = all.filter { show.featuredProducts.contains($0.id) }
+            streamProducts = featured.isEmpty ? all.filter { $0.creatorId == show.creator.id } : featured
+        } else {
+            streamProducts = all.filter { $0.creatorId == show.creator.id }
+        }
+        if streamProducts.isEmpty && AppConfig.Features.enableMockData {
+            // Keep the demo lively in DEBUG when nothing is seeded yet.
+            streamProducts = Array(all.prefix(4))
+        }
     }
 }
 
 // MARK: - Stream Product Card
 
 struct StreamProductCard: View {
-    let index: Int
+    let product: ShoppingProduct
+    let action: () -> Void
     
-    private var productNames: [String] {
-        ["Creator Hoodie", "Logo Tee", "Snapback Cap", "Signature Sneakers"]
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                AsyncImage(url: URL(string: product.imageURL)) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(AppTheme.Colors.backgroundSecondary)
+                        .overlay(
+                            Image(systemName: product.category.icon)
+                                .font(.system(size: 28))
+                                .foregroundColor(AppTheme.Colors.textTertiary)
+                        )
+                }
+                .frame(width: 130, height: 130)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                
+                Text(product.name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineLimit(1)
+                
+                Text("$\(String(format: "%.2f", product.price))")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "bag.fill")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("Shop")
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(AppTheme.Colors.textPrimary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .frame(width: 130)
+        }
+        .buttonStyle(.plain)
     }
-    
-    private var productPrices: [String] {
-        ["$59.99", "$34.99", "$29.99", "$149.99"]
-    }
-    
+}
+
+// MARK: - Stream Product Card Skeleton
+
+struct StreamProductCardSkeleton: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(AppTheme.Colors.backgroundSecondary)
                 .frame(width: 130, height: 130)
-                .overlay(
-                    Image(systemName: "tshirt.fill")
-                        .font(.system(size: 28))
-                        .foregroundColor(AppTheme.Colors.textTertiary)
-                )
-            
-            Text(productNames[index % productNames.count])
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-                .lineLimit(1)
-            
-            Text(productPrices[index % productPrices.count])
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-            
-            Button { } label: {
-                Text("Add to Bag")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(AppTheme.Colors.textPrimary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
+            RoundedRectangle(cornerRadius: 4)
+                .fill(AppTheme.Colors.backgroundSecondary)
+                .frame(width: 100, height: 12)
+            RoundedRectangle(cornerRadius: 4)
+                .fill(AppTheme.Colors.backgroundSecondary)
+                .frame(width: 60, height: 14)
+            RoundedRectangle(cornerRadius: 8)
+                .fill(AppTheme.Colors.backgroundSecondary)
+                .frame(width: 130, height: 32)
         }
         .frame(width: 130)
+        .redacted(reason: .placeholder)
     }
 }
 

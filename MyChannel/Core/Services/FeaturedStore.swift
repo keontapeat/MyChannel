@@ -36,6 +36,14 @@ final class FeaturedStore: ObservableObject {
         featured.count
     }
 
+    /// True when a paid Feature Card booking currently occupies the #1 (top) slot.
+    /// While this is true the owner intro steps aside; when the paid #1 booking
+    /// expires (and `syncLiveBookingsToFeaturedCard` removes it) this flips back to
+    /// false and the intro reclaims the top slot.
+    var isTopSlotPaid: Bool {
+        featured.contains { $0.source == "paid_slot" && ($0.priority ?? Int.max) == 1 }
+    }
+
     func load() {
         guard let data = UserDefaults.standard.data(forKey: key),
               let decoded = try? decoder.decode([StoredFeatured].self, from: data) else {
@@ -92,6 +100,17 @@ final class FeaturedStore: ObservableObject {
         // Get video IDs from Firestore
         let videoIds = snap.documents.compactMap { doc in
             doc.data()["videoId"] as? String
+        }
+
+        // Map videoId → (priority, source) from the featured_videos docs so we can
+        // preserve the ranked order. Paid slots carry source == "paid_slot" and a
+        // priority equal to the purchased rank (#1 → 1 … #10 → 10).
+        var orderingByVideoId: [String: (priority: Int, source: String?)] = [:]
+        for doc in snap.documents {
+            guard let vid = doc.data()["videoId"] as? String else { continue }
+            let priority = (doc.data()["priority"] as? Int) ?? Int.max
+            let source = doc.data()["source"] as? String
+            orderingByVideoId[vid] = (priority, source)
         }
         
         // Clear local cache and load fresh from Firestore
@@ -156,15 +175,31 @@ final class FeaturedStore: ObservableObject {
                 if hasBlockedTitle {
                     print("🚫 [FeaturedStore] Filtering out: '\(video.title)' by '\(video.creator.displayName)'")
                 } else {
-                    loadedVideos.append(StoredFeatured(from: video))
+                    let ordering = orderingByVideoId[videoId]
+                    loadedVideos.append(StoredFeatured(
+                        from: video,
+                        priority: ordering?.priority,
+                        source: ordering?.source
+                    ))
                 }
             } catch {
                 print("❌ Error loading video \(videoId): \(error)")
             }
         }
         
-        // Use Firestore as the source of truth, removing deleted items correctly
-        featured = loadedVideos
+        // Use Firestore as the source of truth, removing deleted items correctly.
+        // Sort by priority ascending (#1 → 1 shows first); paid slots win ties over
+        // owner pins; entries with no priority sink to the bottom but keep their
+        // relative order (stable).
+        featured = loadedVideos.enumerated().sorted { lhs, rhs in
+            let lp = lhs.element.priority ?? Int.max
+            let rp = rhs.element.priority ?? Int.max
+            if lp != rp { return lp < rp }
+            let lPaid = lhs.element.source == "paid_slot"
+            let rPaid = rhs.element.source == "paid_slot"
+            if lPaid != rPaid { return lPaid }
+            return lhs.offset < rhs.offset
+        }.map { $0.element }
         persist()
         
         isLoading = false
@@ -475,8 +510,16 @@ struct StoredFeatured: Codable, Identifiable, Hashable {
     let duration: TimeInterval
     let creatorName: String
     let category: String
+    /// Ordering key mirrored from the `featured_videos` doc. For paid slots this
+    /// equals the purchased rank (#1 → 1 … #10 → 10); for owner-pinned videos it
+    /// is the manual pin index. `nil` for legacy cached entries. Optional so old
+    /// UserDefaults JSON (written before these fields existed) still decodes.
+    var priority: Int?
+    /// `"paid_slot"` when this entry came from a paid Feature Card booking,
+    /// otherwise `nil` (owner pin / intro). Lets paid slots win ordering ties.
+    var source: String?
 
-    init(from v: Video) {
+    init(from v: Video, priority: Int? = nil, source: String? = nil) {
         id = v.id
         title = v.title
         desc = v.description
@@ -485,6 +528,8 @@ struct StoredFeatured: Codable, Identifiable, Hashable {
         duration = v.duration
         creatorName = v.creator.displayName
         category = v.category.rawValue
+        self.priority = priority
+        self.source = source
     }
 
     func toVideo() -> Video {
