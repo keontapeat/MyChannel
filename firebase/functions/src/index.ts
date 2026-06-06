@@ -330,7 +330,9 @@ export const agentProxy = onCall(
 // the payout basis. This closes the "mint your own streams → cash out" exploit.
 // ============================================
 
-export const incrementStreamCountOnPlay = onDocumentCreated('music_plays/{playId}', async (event) => {
+// Renamed from incrementStreamCountOnPlay to avoid Cloud Run service name collision
+// (old function was deployed as HTTPS, new one is Firestore trigger — same name not allowed)
+export const onMusicPlayCreated = onDocumentCreated('music_plays/{playId}', async (event) => {
   const snap = event.data;
   if (!snap) return;
   const data = snap.data();
@@ -569,7 +571,7 @@ export const notifyFollowersOnStoryCreated = onDocumentCreated('stories/{storyId
 // Processes up to 500 subscribers per invocation (safe batch limit).
 // ============================================
 
-export const notifySubscribersOnVideoCreated = onDocumentCreated(
+export const onVideoCreatedNotifySubscribers = onDocumentCreated(
   'videos/{videoId}',
   async (event) => {
     const snap = event.data;
@@ -645,7 +647,7 @@ export const notifySubscribersOnVideoCreated = onDocumentCreated(
 // Skips self-comments (creator commenting on own video).
 // ============================================
 
-export const notifyCreatorOnComment = onDocumentCreated(
+export const onCommentCreatedNotifyCreator = onDocumentCreated(
   'videos/{videoId}/comments/{commentId}',
   async (event) => {
     const snap = event.data;
@@ -699,7 +701,7 @@ export const notifyCreatorOnComment = onDocumentCreated(
 // accumulate and run up the Storage bill.
 // ============================================
 
-export const cleanupVideoOnDelete = onDocumentDeleted(
+export const onVideoDeletedCleanup = onDocumentDeleted(
   'videos/{videoId}',
   async (event) => {
     const snap = event.data;
@@ -843,7 +845,7 @@ export const aggregateChannelStats = onSchedule(
 // correct number without a full scan.
 // ============================================
 
-export const onSubscribe = onDocumentCreated(
+export const onUserSubscribed = onDocumentCreated(
   'users/{userId}/subscriptions/{creatorId}',
   async (event) => {
     const creatorId = event.params.creatorId;
@@ -859,7 +861,7 @@ export const onSubscribe = onDocumentCreated(
   }
 );
 
-export const onUnsubscribe = onDocumentDeleted(
+export const onUserUnsubscribed = onDocumentDeleted(
   'users/{userId}/subscriptions/{creatorId}',
   async (event) => {
     const creatorId = event.params.creatorId;
