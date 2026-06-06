@@ -5,8 +5,12 @@
 import { useState, useRef } from 'react';
 import { Upload, X, Film, Image as ImageIcon } from 'lucide-react';
 import { StorageService } from '@/lib/firebase/storage';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase/config';
+import { useRouter } from 'next/navigation';
 
 const UploadPage = () => {
+  const router = useRouter();
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
@@ -112,17 +116,34 @@ const UploadPage = () => {
         thumbnailURL = await StorageService.uploadThumbnail(thumbnailFile, videoId);
       }
 
-      // TODO: Save video metadata to Firestore
-      console.log('Video uploaded:', {
-        videoId,
+      // Save video metadata to Firestore
+      const uid = auth?.currentUser?.uid ?? 'anonymous';
+      const docRef = await addDoc(collection(db, 'videos'), {
+        id: videoId,
         title,
         description,
         category,
         tags,
         isPublic,
         videoURL,
-        thumbnailURL,
+        thumbnailURL: thumbnailURL || '',
+        creatorId: uid,
+        viewCount: 0,
+        likeCount: 0,
+        dislikeCount: 0,
+        commentCount: 0,
+        shareCount: 0,
+        duration: 0,
+        ageRestricted: false,
+        madeForKids: false,
+        commentsEnabled: true,
+        likesEnabled: true,
+        downloadsEnabled: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
+
+      console.log('✅ Video saved to Firestore:', docRef.id);
 
       // Reset form
       setVideoFile(null);
@@ -133,7 +154,7 @@ const UploadPage = () => {
       setUploadProgress(0);
       setIsUploading(false);
 
-      alert('Video uploaded successfully!');
+      router.push(`/watch/${docRef.id}`);
     } catch (error) {
       console.error('Upload error:', error);
       setError('Upload failed. Please try again.');

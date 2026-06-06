@@ -1,260 +1,328 @@
 'use client';
 
-// 🔥 YOUTUBE-LEVEL PROFESSIONAL WATCH PAGE 🔥
-
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ThumbsUp, ThumbsDown, Share2, MoreHorizontal, ChevronDown, Bell, CheckCircle } from 'lucide-react';
-import VideoCard from '@/components/video/VideoCard';
-import { CompactVideoCardSkeleton } from '@/components/skeletons/VideoSkeleton';
+import {
+  Bell, CheckCircle, ChevronDown,
+} from 'lucide-react';
+import {
+  doc, getDoc, collection, query, where, orderBy, limit, getDocs,
+  updateDoc, increment, setDoc, deleteDoc, serverTimestamp,
+} from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase/config';
+import VideoPlayer from '@/components/video/VideoPlayer';
+import VideoEngagement from '@/components/video/VideoEngagement';
+import CommentSection from '@/components/comments/CommentSection';
+import type { Video } from '@/types';
 
 interface WatchPageClientProps {
   videoId: string;
 }
 
+// Skeleton while video loads
+function PlayerSkeleton() {
+  return (
+    <div className="aspect-video w-full bg-[rgb(var(--color-surface))] rounded-xl animate-pulse" />
+  );
+}
+
+// Compact suggested video row (YouTube sidebar style)
+function SuggestedVideoRow({ v }: { v: Partial<Video> & { id: string; title: string; thumbnailURL: string } }) {
+  return (
+    <Link href={`/watch/${v.id}`} className="flex gap-2 group">
+      <div className="relative w-[168px] h-[94px] rounded-xl overflow-hidden bg-[rgb(var(--color-surface))] flex-shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={v.thumbnailURL}
+          alt={v.title}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+        />
+        {(v.duration ?? 0) > 0 && (
+          <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/90 text-white text-[11px] font-semibold rounded">
+            {Math.floor((v.duration ?? 0) / 60)}:{String((v.duration ?? 0) % 60).padStart(2, '0')}
+          </div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <h3 className="text-[13px] font-semibold text-[rgb(var(--color-text-primary))] line-clamp-2 mb-1 group-hover:text-[rgb(var(--color-primary))] transition-colors leading-tight">
+          {v.title}
+        </h3>
+        <p className="text-[12px] text-[rgb(var(--color-text-secondary))] truncate">
+          {(v as any).channelName ?? (v as any).creator?.displayName ?? 'Creator'}
+        </p>
+        <p className="text-[11px] text-[rgb(var(--color-text-tertiary))]">
+          {(v.viewCount ?? 0).toLocaleString()} views
+        </p>
+      </div>
+    </Link>
+  );
+}
+
 export default function WatchPageClient({ videoId }: WatchPageClientProps) {
+  const [video, setVideo] = useState<Video | null>(null);
+  const [loading, setLoading] = useState(true);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [likeCount, setLikeCount] = useState(1234);
-  const [isLiked, setIsLiked] = useState(false);
-  const [isDisliked, setIsDisliked] = useState(false);
+  const [suggested, setSuggested] = useState<Video[]>([]);
 
-  // Mock video data - replace with actual fetch
-  const video = {
-    id: videoId,
-    title: 'Amazing Video Title - This is a longer title to show how YouTube handles multiline titles on the watch page',
-    videoURL: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    views: '1.2M',
-    uploadDate: 'Jan 15, 2025',
-    likes: likeCount,
-    channel: {
-      name: 'Creator Name',
-      avatar: 'https://i.pravatar.cc/150?img=1',
-      subscribers: '250K',
-      isVerified: true,
-    },
-    description: `This is the video description. It can be quite long and contain multiple paragraphs.
+  // Record watch history + increment view count (once per mount)
+  useEffect(() => {
+    if (!videoId || videoId === '_fallback') return;
 
-This video demonstrates the premium YouTube-level watch page experience.
+    const recordView = async () => {
+      try {
+        await updateDoc(doc(db, 'videos', videoId), {
+          viewCount: increment(1),
+        });
 
-🔗 Links:
-• Website: https://example.com
-• Twitter: @example
-• Instagram: @example
-
-📝 Chapters:
-0:00 - Introduction
-1:30 - Main Content
-5:45 - Conclusion
-
-#tag1 #tag2 #tag3`,
-  };
-
-  // Mock suggested videos
-  const suggestedVideos = Array.from({ length: 12 }, (_, i) => ({
-    id: `suggested-${i + 1}`,
-    title: `Suggested Video ${i + 1} - Interesting content you might like`,
-    channel: 'Channel Name',
-    channelIcon: `https://i.pravatar.cc/150?img=${(i % 10) + 2}`,
-    views: `${Math.floor(Math.random() * 1000 + 100)}K`,
-    timeAgo: `${Math.floor(Math.random() * 30 + 1)} days ago`,
-    duration: `${Math.floor(Math.random() * 20 + 5)}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`,
-    thumbnailURL: `https://picsum.photos/seed/suggested${i + 1}/336/188`,
-    isVerified: Math.random() > 0.5,
-  }));
-
-  const handleLike = () => {
-    if (isLiked) {
-      setIsLiked(false);
-      setLikeCount(likeCount - 1);
-    } else {
-      setIsLiked(true);
-      setIsDisliked(false);
-      setLikeCount(likeCount + (isDisliked ? 2 : 1));
-    }
-  };
-
-  const handleDislike = () => {
-    if (isDisliked) {
-      setIsDisliked(false);
-      if (isLiked) setLikeCount(likeCount - 1);
-    } else {
-      setIsDisliked(true);
-      if (isLiked) {
-        setIsLiked(false);
-        setLikeCount(likeCount - 2);
+        const uid = auth?.currentUser?.uid;
+        if (uid) {
+          await setDoc(doc(db, 'users', uid, 'watchHistory', videoId), {
+            videoId,
+            watchedAt: serverTimestamp(),
+          });
+        }
+      } catch {
+        // non-fatal
       }
+    };
+
+    recordView();
+  }, [videoId]);
+
+  // Fetch video doc
+  useEffect(() => {
+    if (!videoId || videoId === '_fallback') {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'videos', videoId));
+        if (cancelled) return;
+        if (snap.exists()) {
+          const data = snap.data();
+          setVideo({
+            id: snap.id,
+            ...data,
+            createdAt: data.createdAt?.toDate?.() ?? new Date(),
+            updatedAt: data.updatedAt?.toDate?.() ?? new Date(),
+          } as Video);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [videoId]);
+
+  // Load suggested videos (same category, excluding current)
+  useEffect(() => {
+    if (!video) return;
+    const loadSuggested = async () => {
+      try {
+        const q = query(
+          collection(db, 'videos'),
+          where('isPublic', '==', true),
+          orderBy('viewCount', 'desc'),
+          limit(15)
+        );
+        const snap = await getDocs(q);
+        const vids = snap.docs
+          .map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ...data,
+              createdAt: data.createdAt?.toDate?.() ?? new Date(),
+              updatedAt: data.updatedAt?.toDate?.() ?? new Date(),
+            } as Video;
+          })
+          .filter((v) => v.id !== videoId);
+        setSuggested(vids);
+      } catch {
+        // non-fatal
+      }
+    };
+    loadSuggested();
+  }, [video, videoId]);
+
+  // Check subscription state
+  useEffect(() => {
+    if (!video?.creatorId) return;
+    const uid = auth?.currentUser?.uid;
+    if (!uid) return;
+    let cancelled = false;
+    getDoc(doc(db, 'users', uid, 'subscriptions', video.creatorId))
+      .then((snap) => { if (!cancelled) setIsSubscribed(snap.exists()); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [video?.creatorId]);
+
+  const handleSubscribe = async () => {
+    if (!video?.creatorId) return;
+    const uid = auth?.currentUser?.uid;
+    const next = !isSubscribed;
+    setIsSubscribed(next);
+    if (!uid) return;
+    try {
+      const ref = doc(db, 'users', uid, 'subscriptions', video.creatorId);
+      if (next) {
+        await setDoc(ref, { channelId: video.creatorId, subscribedAt: serverTimestamp() });
+        await updateDoc(doc(db, 'users', video.creatorId), { subscriberCount: increment(1) });
+      } else {
+        await deleteDoc(ref);
+        await updateDoc(doc(db, 'users', video.creatorId), { subscriberCount: increment(-1) });
+      }
+    } catch {
+      setIsSubscribed(!next);
     }
   };
+
+  const creatorName = (video as any)?.creator?.displayName ?? (video as any)?.channelName ?? 'Creator';
+  const creatorAvatar = (video as any)?.creator?.profileImageURL ?? `https://i.pravatar.cc/150?u=${video?.creatorId}`;
+  const subscriberCount = (video as any)?.creator?.subscriberCount ?? 0;
+
+  // Format upload date
+  const uploadDate = video?.createdAt
+    ? new Date(video.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+    : '';
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[rgb(var(--color-background))] pt-14">
-      <div className="max-w-[1800px] mx-auto px-6 py-6">
-        <div className="flex gap-6">
-          {/* Left: Video Player and Info (70%) */}
-          <div className="flex-1 max-w-[1280px]">
-            {/* Video Player */}
-            <div className="aspect-video w-full bg-black rounded-xl overflow-hidden mb-4">
-              <video
-                controls
-                className="w-full h-full"
-                src={video.videoURL}
-              >
-                Your browser does not support the video tag.
-              </video>
-            </div>
+    <div className="min-h-screen bg-[rgb(var(--color-background))] pt-14">
+      <div className="max-w-[1800px] mx-auto px-4 md:px-6 py-4 md:py-6">
+        <div className="flex flex-col lg:flex-row gap-6">
 
-            {/* Video Title */}
-            <h1 className="text-xl font-semibold text-[rgb(var(--color-text-primary))] mb-3 leading-tight">
-              {video.title}
+          {/* ── Left column: player + info ── */}
+          <div className="flex-1 min-w-0 max-w-[1280px]">
+
+            {/* Player */}
+            {loading ? (
+              <PlayerSkeleton />
+            ) : video ? (
+              <div className="aspect-video w-full bg-black rounded-xl overflow-hidden">
+                <VideoPlayer
+                  src={video.videoURL}
+                  poster={video.thumbnailURL}
+                  autoplay={false}
+                  controls
+                />
+              </div>
+            ) : (
+              <div className="aspect-video w-full bg-[rgb(var(--color-surface))] rounded-xl flex items-center justify-center">
+                <p className="text-[rgb(var(--color-text-secondary))] text-sm">Video not found</p>
+              </div>
+            )}
+
+            {/* Title */}
+            <h1 className="text-[18px] md:text-xl font-semibold text-[rgb(var(--color-text-primary))] mt-3 mb-3 leading-snug">
+              {loading ? (
+                <span className="block h-6 w-3/4 bg-[rgb(var(--color-surface))] rounded animate-pulse" />
+              ) : (
+                video?.title ?? 'Video not found'
+              )}
             </h1>
 
-            {/* Channel Info and Actions */}
-            <div className="flex items-center justify-between mb-4 pb-4 border-b border-[rgb(var(--color-border))]">
-              {/* Channel Info */}
-              <div className="flex items-center gap-4">
-                <img
-                  src={video.channel.avatar}
-                  alt={video.channel.name}
-                  className="w-10 h-10 rounded-full"
-                />
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-[rgb(var(--color-text-primary))]">
-                      {video.channel.name}
-                    </h3>
-                    {video.channel.isVerified && (
-                      <CheckCircle size={14} className="text-[rgb(var(--color-text-secondary))]" fill="currentColor" />
-                    )}
+            {/* Channel row + actions */}
+            {video && (
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 pb-4 border-b border-[rgb(var(--color-border))]">
+                {/* Channel */}
+                <div className="flex items-center gap-3">
+                  <Link href={`/profile/${video.creatorId}`}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={creatorAvatar}
+                      alt={creatorName}
+                      className="w-10 h-10 rounded-full hover:opacity-90 transition-opacity"
+                    />
+                  </Link>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <Link
+                        href={`/profile/${video.creatorId}`}
+                        className="text-[14px] font-semibold text-[rgb(var(--color-text-primary))] hover:text-[rgb(var(--color-primary))] transition-colors"
+                      >
+                        {creatorName}
+                      </Link>
+                      {(video as any)?.creator?.isVerified && (
+                        <CheckCircle size={14} className="text-[rgb(var(--color-text-secondary))]" fill="currentColor" />
+                      )}
+                    </div>
+                    <p className="text-[12px] text-[rgb(var(--color-text-secondary))]">
+                      {subscriberCount > 0 ? `${subscriberCount.toLocaleString()} subscribers` : ''}
+                    </p>
                   </div>
-                  <p className="text-xs text-[rgb(var(--color-text-secondary))]">
-                    {video.channel.subscribers} subscribers
-                  </p>
-                </div>
-                <button
-                  onClick={() => setIsSubscribed(!isSubscribed)}
-                  className={`
-                    flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all
-                    ${
+                  <button
+                    onClick={handleSubscribe}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-medium transition-all ${
                       isSubscribed
                         ? 'bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))]'
-                        : 'bg-[rgb(var(--color-text-primary))] text-white hover:opacity-90'
-                    }
-                  `}
-                >
-                  {isSubscribed ? (
-                    <>
-                      <Bell size={16} />
-                      Subscribed
-                    </>
-                  ) : (
-                    'Subscribe'
-                  )}
-                </button>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2">
-                <div className="flex items-center bg-[rgb(var(--color-surface))] rounded-full overflow-hidden">
-                  <button
-                    onClick={handleLike}
-                    className={`flex items-center gap-2 px-4 py-2 hover:bg-[rgb(var(--color-surface-hover))] transition-colors border-r border-[rgb(var(--color-border))] ${isLiked ? 'text-[rgb(var(--color-primary))]' : ''}`}
+                        : 'bg-[rgb(var(--color-text-primary))] text-[rgb(var(--color-background))] hover:opacity-90'
+                    }`}
                   >
-                    <ThumbsUp size={18} fill={isLiked ? 'currentColor' : 'none'} />
-                    <span className="text-sm font-medium">{likeCount.toLocaleString()}</span>
-                  </button>
-                  <button
-                    onClick={handleDislike}
-                    className={`px-4 py-2 hover:bg-[rgb(var(--color-surface-hover))] transition-colors ${isDisliked ? 'text-[rgb(var(--color-primary))]' : ''}`}
-                  >
-                    <ThumbsDown size={18} fill={isDisliked ? 'currentColor' : 'none'} />
+                    {isSubscribed ? <><Bell size={15} /> Subscribed</> : 'Subscribe'}
                   </button>
                 </div>
 
-                <button className="flex items-center gap-2 px-4 py-2 bg-[rgb(var(--color-surface))] hover:bg-[rgb(var(--color-surface-hover))] rounded-full transition-colors">
-                  <Share2 size={18} />
-                  <span className="text-sm font-medium">Share</span>
-                </button>
-
-                <button className="p-2 bg-[rgb(var(--color-surface))] hover:bg-[rgb(var(--color-surface-hover))] rounded-full transition-colors">
-                  <MoreHorizontal size={18} />
-                </button>
+                {/* Engagement actions */}
+                <VideoEngagement video={video} />
               </div>
-            </div>
+            )}
 
             {/* Description */}
-            <div className="bg-[rgb(var(--color-surface))] rounded-xl p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-[rgb(var(--color-text-primary))] mb-2">
-                <span>{video.views} views</span>
-                <span>•</span>
-                <span>{video.uploadDate}</span>
-              </div>
-              <div className={`text-sm text-[rgb(var(--color-text-primary))] whitespace-pre-wrap ${!showFullDescription ? 'line-clamp-3' : ''}`}>
-                {video.description}
-              </div>
-              <button
-                onClick={() => setShowFullDescription(!showFullDescription)}
-                className="flex items-center gap-1 text-sm font-medium text-[rgb(var(--color-text-primary))] mt-2 hover:text-[rgb(var(--color-text-secondary))] transition-colors"
-              >
-                {showFullDescription ? 'Show less' : 'Show more'}
-                <ChevronDown size={16} className={`transition-transform ${showFullDescription ? 'rotate-180' : ''}`} />
-              </button>
-            </div>
-
-            {/* Comments Section (Placeholder) */}
-            <div className="mt-6">
-              <h2 className="text-lg font-semibold text-[rgb(var(--color-text-primary))] mb-4">
-                Comments
-              </h2>
-              <div className="text-sm text-[rgb(var(--color-text-secondary))]">
-                Comments coming soon...
-              </div>
-            </div>
-          </div>
-
-          {/* Right: Suggested Videos (30%) */}
-          <div className="w-full max-w-[402px] space-y-2">
-            {suggestedVideos.map((suggestedVideo) => (
-              <Link
-                key={suggestedVideo.id}
-                href={`/watch/${suggestedVideo.id}`}
-                className="flex gap-2 group"
-              >
-                {/* Compact Thumbnail */}
-                <div className="relative w-[168px] h-[94px] rounded-lg overflow-hidden bg-[rgb(var(--color-surface))] flex-shrink-0">
-                  <img
-                    src={suggestedVideo.thumbnailURL}
-                    alt={suggestedVideo.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+            {video && (
+              <div className="bg-[rgb(var(--color-surface))] rounded-xl p-4 mb-6">
+                <div className="flex items-center gap-2 text-[13px] font-medium text-[rgb(var(--color-text-primary))] mb-2">
+                  <span>{(video.viewCount ?? 0).toLocaleString()} views</span>
+                  {uploadDate && <><span>•</span><span>{uploadDate}</span></>}
+                  {video.tags?.slice(0, 5).map((t) => (
+                    <Link key={t} href={`/search?q=%23${t}`} className="text-[rgb(var(--color-primary))] hover:underline">
+                      #{t}
+                    </Link>
+                  ))}
+                </div>
+                <div
+                  className={`text-[13.5px] text-[rgb(var(--color-text-primary))] whitespace-pre-wrap leading-relaxed ${
+                    !showFullDescription ? 'line-clamp-3' : ''
+                  }`}
+                >
+                  {video.description || 'No description provided.'}
+                </div>
+                <button
+                  onClick={() => setShowFullDescription((v) => !v)}
+                  className="flex items-center gap-1 text-[13px] font-semibold text-[rgb(var(--color-text-primary))] mt-2 hover:text-[rgb(var(--color-text-secondary))] transition-colors"
+                >
+                  {showFullDescription ? 'Show less' : 'Show more'}
+                  <ChevronDown
+                    size={15}
+                    className={`transition-transform ${showFullDescription ? 'rotate-180' : ''}`}
                   />
-                  <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/90 text-white text-xs font-semibold rounded">
-                    {suggestedVideo.duration}
-                  </div>
-                </div>
+                </button>
+              </div>
+            )}
 
-                {/* Compact Info */}
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-[rgb(var(--color-text-primary))] line-clamp-2 mb-1 group-hover:text-[rgb(var(--color-primary))] transition-colors leading-tight">
-                    {suggestedVideo.title}
-                  </h3>
-                  <p className="text-xs text-[rgb(var(--color-text-secondary))] truncate mb-0.5">
-                    {suggestedVideo.channel}
-                  </p>
-                  <p className="text-xs text-[rgb(var(--color-text-tertiary))]">
-                    {suggestedVideo.views} views • {suggestedVideo.timeAgo}
-                  </p>
-                </div>
-              </Link>
-            ))}
+            {/* Comments */}
+            {video && (
+              <CommentSection videoId={videoId} commentCount={video.commentCount ?? 0} />
+            )}
           </div>
+
+          {/* ── Right column: suggested ── */}
+          <aside className="w-full lg:w-[402px] space-y-2 flex-shrink-0">
+            {suggested.map((v) => (
+              <SuggestedVideoRow key={v.id} v={v} />
+            ))}
+            {suggested.length === 0 && !loading && (
+              <p className="text-[13px] text-[rgb(var(--color-text-secondary))] py-8 text-center">
+                No suggestions yet
+              </p>
+            )}
+          </aside>
         </div>
       </div>
     </div>
   );
 }
-
-
-
-
-
-

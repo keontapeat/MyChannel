@@ -30,7 +30,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
       <main
         className={`
           pt-14 transition-all duration-200 ease-in-out
-          ${isSidebarCollapsed ? 'pl-16' : 'pl-56'}
+          ${isSidebarCollapsed ? 'pl-[74px]' : 'pl-60'}
         `}
       >
         <div className="min-h-[calc(100vh-3.5rem)]">
