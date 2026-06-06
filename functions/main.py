@@ -8,8 +8,12 @@ import requests
 import json
 from typing import List, Dict, Any
 
+# --- Reduce cold-start time: heavy imports are deferred to function bodies ---
+# google-cloud-aiplatform takes ~8s to import; keep it lazy.
+aiplatform = None  # imported on first use inside ai_rank
+
 # --- Common headers helpers for performance ---
-options.set_global_options(cpu="gcf_gen1", max_instances=3)
+options.set_global_options(cpu="gcf_gen1", max_instances=3, region="us-east1")
 
 def cache_headers_public(seconds: int = 300) -> Dict[str, str]:
     return {
@@ -24,14 +28,8 @@ def cache_headers_no_store() -> Dict[str, str]:
         "Vary": "Accept-Encoding",
         "Access-Control-Allow-Origin": "*",
     }
-
-try:
-    # Vertex AI optional import; functions can still run without this configured
-    from google.cloud import aiplatform
-except Exception:
-    aiplatform = None
 # --- HTTPS: Report content (callable-like via POST) ---
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def report_content(req: https_fn.Request) -> https_fn.Response:
     """Report a video or user. Body: {type: 'video'|'user', id: string, reason: string}."""
     try:
@@ -70,7 +68,7 @@ def report_content(req: https_fn.Request) -> https_fn.Response:
         return https_fn.Response({'error': str(e)}, status=500, headers=cache_headers_no_store())
 
 # --- HTTPS Proxies ---
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def ai_rank(req: https_fn.Request) -> https_fn.Response:
     """Rank a list of items using Vertex AI (optional). Expects JSON: {items:[{id, title, tags, views, createdAt}], user:{id}}.
     If Vertex isn't configured, returns items unchanged with uniform scores.
@@ -88,6 +86,12 @@ def ai_rank(req: https_fn.Request) -> https_fn.Response:
         location = os.environ.get("VERTEX_LOCATION", "us-central1")
         model_name = os.environ.get("VERTEX_RANKING_MODEL")  # optional custom model
 
+        if aiplatform is None or not project:
+            try:
+                from google.cloud import aiplatform as _aip
+                globals()['aiplatform'] = _aip
+            except Exception:
+                pass
         if aiplatform is None or not project:
             scored = [{**it, "score": 1.0} for it in items]
             return https_fn.Response({"items": scored}, status=200, headers=cache_headers_no_store())
@@ -134,7 +138,8 @@ def _safe_firestore_client():
 
 db = _safe_firestore_client()
 # --- Firestore Triggers: counters ---
-@firestore_fn.on_document_created(document="videos/{videoId}/comments/{commentId}")
+@firestore_fn.on_document_created(document="videos/{videoId}/comments/{commentId}",
+    region="us-east1")
 def on_comment_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
     try:
         params = event.params
@@ -144,7 +149,8 @@ def on_comment_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot])
     except Exception:
         logging.exception('on_comment_created')
 
-@firestore_fn.on_document_deleted(document="videos/{videoId}/comments/{commentId}")
+@firestore_fn.on_document_deleted(document="videos/{videoId}/comments/{commentId}",
+    region="us-east1")
 def on_comment_deleted(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
     try:
         params = event.params
@@ -154,7 +160,8 @@ def on_comment_deleted(event: firestore_fn.Event[firestore_fn.DocumentSnapshot])
     except Exception:
         logging.exception('on_comment_deleted')
 
-@firestore_fn.on_document_created(document="videos/{videoId}/likes/{uid}")
+@firestore_fn.on_document_created(document="videos/{videoId}/likes/{uid}",
+    region="us-east1")
 def on_like_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
     try:
         video_id = event.params["videoId"]
@@ -162,7 +169,8 @@ def on_like_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) ->
     except Exception:
         logging.exception('on_like_created')
 
-@firestore_fn.on_document_deleted(document="videos/{videoId}/likes/{uid}")
+@firestore_fn.on_document_deleted(document="videos/{videoId}/likes/{uid}",
+    region="us-east1")
 def on_like_deleted(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
     try:
         video_id = event.params["videoId"]
@@ -170,7 +178,8 @@ def on_like_deleted(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) ->
     except Exception:
         logging.exception('on_like_deleted')
 
-@firestore_fn.on_document_created(document="video_analytics/{videoId}/views/{viewId}")
+@firestore_fn.on_document_created(document="video_analytics/{videoId}/views/{viewId}",
+    region="us-east1")
 def on_video_view_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
     try:
         video_id = event.params["videoId"]
@@ -189,7 +198,8 @@ def on_video_view_created(event: firestore_fn.Event[firestore_fn.DocumentSnapsho
     except Exception:
         logging.exception('on_video_view_created')
 
-@firestore_fn.on_document_created(document="flicks/{shortId}/events/{eventId}")
+@firestore_fn.on_document_created(document="flicks/{shortId}/events/{eventId}",
+    region="us-east1")
 def on_short_event_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
     try:
         short_id = event.params["shortId"]
@@ -217,7 +227,8 @@ def on_short_event_created(event: firestore_fn.Event[firestore_fn.DocumentSnapsh
     except Exception:
         logging.exception('on_short_event_created')
 
-@firestore_fn.on_document_created(document="stories/{storyId}/events/{eventId}")
+@firestore_fn.on_document_created(document="stories/{storyId}/events/{eventId}",
+    region="us-east1")
 def on_story_event_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
     try:
         story_id = event.params["storyId"]
@@ -245,7 +256,8 @@ def on_story_event_created(event: firestore_fn.Event[firestore_fn.DocumentSnapsh
     except Exception:
         logging.exception('on_story_event_created')
 
-@firestore_fn.on_document_created(document="users/{creatorId}/subscribers/{uid}")
+@firestore_fn.on_document_created(document="users/{creatorId}/subscribers/{uid}",
+    region="us-east1")
 def on_subscribe_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
     try:
         creator = event.params['creatorId']
@@ -253,7 +265,8 @@ def on_subscribe_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot
     except Exception:
         logging.exception('on_subscribe_created')
 
-@firestore_fn.on_document_deleted(document="users/{creatorId}/subscribers/{uid}")
+@firestore_fn.on_document_deleted(document="users/{creatorId}/subscribers/{uid}",
+    region="us-east1")
 def on_subscribe_deleted(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
     try:
         creator = event.params['creatorId']
@@ -276,7 +289,8 @@ FREE_PROVIDERS = {
 }
 
 if ENABLE_EMAIL_TRIGGERS:
-    @firestore_fn.on_document_created(document="users/{userId}")
+    @firestore_fn.on_document_created(document="users/{userId}",
+    region="us-east1")
     def send_welcome_email(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
         """Trigger when a new user is created"""
         try:
@@ -309,7 +323,8 @@ if ENABLE_EMAIL_TRIGGERS:
             logging.error(f"❌ Error processing welcome email: {str(e)}")
 
 if ENABLE_EMAIL_TRIGGERS:
-    @firestore_fn.on_document_updated(document="users/{userId}")
+    @firestore_fn.on_document_updated(document="users/{userId}",
+    region="us-east1")
     def on_email_verified(event: firestore_fn.Event[firestore_fn.Change[firestore_fn.DocumentSnapshot]]) -> None:
         """Send thank you email when user verifies their email"""
         try:
@@ -346,7 +361,7 @@ if ENABLE_EMAIL_TRIGGERS:
 
 
 # --- HTTPS Proxies ---
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def tmdb_popular(req: https_fn.Request) -> https_fn.Response:
     """Proxy to fetch popular movies from TMDB without exposing API key to clients."""
     try:
@@ -387,7 +402,7 @@ def tmdb_popular(req: https_fn.Request) -> https_fn.Response:
 
 
 # --- HTTPS: Free/Ads-supported movies (US) ---
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def tmdb_free_ads(req: https_fn.Request) -> https_fn.Response:
     """Discover movies available free/ad-supported in a given region (default US)."""
     try:
@@ -450,7 +465,7 @@ def tmdb_free_ads(req: https_fn.Request) -> https_fn.Response:
         return https_fn.Response({"error": str(e)}, status=500, headers=cache_headers_no_store())
 
 
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def tmdb_trending(req: https_fn.Request) -> https_fn.Response:
     """Get trending movies and TV shows from TMDB."""
     try:
@@ -493,7 +508,7 @@ def tmdb_trending(req: https_fn.Request) -> https_fn.Response:
 
 
 # --- HTTPS: reCAPTCHA v3 verification ---
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def recaptcha_verify(req: https_fn.Request) -> https_fn.Response:
     """Verify reCAPTCHA v3 token server-side. Expects JSON {token, action}.
     Reads secret from env RECAPTCHA_SECRET.
@@ -541,7 +556,7 @@ def recaptcha_verify(req: https_fn.Request) -> https_fn.Response:
         return https_fn.Response({'success': False, 'error': str(e)}, status=200, headers={"Access-Control-Allow-Origin": "*"})
 
 
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def tmdb_details(req: https_fn.Request) -> https_fn.Response:
     """Get detailed movie/TV show information including watch providers."""
     try:
@@ -606,7 +621,7 @@ def tmdb_details(req: https_fn.Request) -> https_fn.Response:
         return https_fn.Response({"error": str(e)}, status=500, headers=cache_headers_no_store())
 
 
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def events_view(req: https_fn.Request) -> https_fn.Response:
     """Increment sharded view counter for a video. Expects JSON {videoId}."""
     try:
@@ -628,7 +643,8 @@ def events_view(req: https_fn.Request) -> https_fn.Response:
 # New Stubs for Parity Features
 # =============================
 
-@firestore_fn.on_document_created(document="uploads/{uploadId}")
+@firestore_fn.on_document_created(document="uploads/{uploadId}",
+    region="us-east1")
 def on_upload_created_trigger(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
     """Start a transcode job when an upload record is created.
     Expects uploads/{uploadId}: { videoId, ownerUid, sourcePath }
@@ -653,7 +669,8 @@ def on_upload_created_trigger(event: firestore_fn.Event[firestore_fn.DocumentSna
         logging.exception('on_upload_created')
 
 
-@firestore_fn.on_document_updated(document="videos/{videoId}")
+@firestore_fn.on_document_updated(document="videos/{videoId}",
+    region="us-east1")
 def on_video_ready(event: firestore_fn.Event[firestore_fn.Change[firestore_fn.DocumentSnapshot]]) -> None:
     """When a video's status transitions to ready, notify subscribers and enqueue follow-ups."""
     try:
@@ -722,7 +739,8 @@ def on_video_ready(event: firestore_fn.Event[firestore_fn.Change[firestore_fn.Do
         logging.exception('on_video_ready')
 
 
-@firestore_fn.on_document_created(document="tips/{tipId}")
+@firestore_fn.on_document_created(document="tips/{tipId}",
+    region="us-east1")
 def on_tip_received(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
     """Accrue tip into earnings for the creator's channel."""
     try:
@@ -749,7 +767,8 @@ def on_tip_received(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) ->
         logging.exception('on_tip_received')
 
 
-@firestore_fn.on_document_created(document="memberships/{membershipId}/payments/{paymentId}")
+@firestore_fn.on_document_created(document="memberships/{membershipId}/payments/{paymentId}",
+    region="us-east1")
 def on_membership_renew(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
     """Update entitlements on membership renewal."""
     try:
@@ -767,7 +786,7 @@ def on_membership_renew(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]
         logging.exception('on_membership_renew')
 
 
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def referral_create(req: https_fn.Request) -> https_fn.Response:
     """Create a referral code for the authenticated user."""
     try:
@@ -799,7 +818,7 @@ def referral_create(req: https_fn.Request) -> https_fn.Response:
         return https_fn.Response({'error': str(e)}, status=500, headers=cache_headers_no_store())
 
 
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def reviews_eligibility(req: https_fn.Request) -> https_fn.Response:
     """Return whether the user is eligible for in-app review prompt.
     Placeholder: wire to analytics thresholds (watch time + sessions).
@@ -815,7 +834,7 @@ def reviews_eligibility(req: https_fn.Request) -> https_fn.Response:
         return https_fn.Response({'eligible': False, 'error': str(e)}, status=200, headers={"Access-Control-Allow-Origin": "*"})
 
 
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def growth_aso_sync(req: https_fn.Request) -> https_fn.Response:
     try:
         # TODO: pull keywords from store APIs and update growth/keyword_bank
@@ -824,7 +843,7 @@ def growth_aso_sync(req: https_fn.Request) -> https_fn.Response:
         return https_fn.Response({'error': str(e)}, status=500, headers=cache_headers_no_store())
 
 
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def growth_aso_publish(req: https_fn.Request) -> https_fn.Response:
     try:
         # TODO: publish winning ASO variants
@@ -833,7 +852,7 @@ def growth_aso_publish(req: https_fn.Request) -> https_fn.Response:
         return https_fn.Response({'error': str(e)}, status=500, headers=cache_headers_no_store())
 
 
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def ads_serve(req: https_fn.Request) -> https_fn.Response:
     """Proxy to Ads service /ads/serve if configured by ADS_BASE_URL env.
     Body passthrough.
@@ -1073,7 +1092,8 @@ def _db():
 # when a notification doc is written.
 # =============================================================================
 
-@firestore_fn.on_document_created(document="notifications/{notificationId}")
+@firestore_fn.on_document_created(document="notifications/{notificationId}",
+    region="us-east1")
 def deliver_push_on_notification_created(
     event: firestore_fn.Event[firestore_fn.DocumentSnapshot],
 ) -> None:
@@ -1174,7 +1194,7 @@ def deliver_push_on_notification_created(
         logging.exception("deliver_push_on_notification_created")
 
 
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def register_fcm_token(req: https_fn.Request) -> https_fn.Response:
     """
     iOS/Android/Web call this after obtaining an FCM token.
@@ -1229,7 +1249,7 @@ def register_fcm_token(req: https_fn.Request) -> https_fn.Response:
 # Clients call POST /record_view { videoId, userId?, watchDuration }
 # =============================================================================
 
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def record_view(req: https_fn.Request) -> https_fn.Response:
     """
     Dedup-safe view counter. One credit per (user, video) per 24 h.
@@ -1349,7 +1369,8 @@ def _tokenize(text: str) -> set:
     return tokens
 
 
-@firestore_fn.on_document_created(document="videos/{videoId}")
+@firestore_fn.on_document_created(document="videos/{videoId}",
+    region="us-east1")
 def index_video_on_create(
     event: firestore_fn.Event[firestore_fn.DocumentSnapshot],
 ) -> None:
@@ -1364,7 +1385,8 @@ def index_video_on_create(
         logging.exception("index_video_on_create")
 
 
-@firestore_fn.on_document_updated(document="videos/{videoId}")
+@firestore_fn.on_document_updated(document="videos/{videoId}",
+    region="us-east1")
 def index_video_on_update(
     event: firestore_fn.Event[firestore_fn.Change[firestore_fn.DocumentSnapshot]],
 ) -> None:
@@ -1594,7 +1616,8 @@ def cleanup_stale_live_streams(event: scheduler_fn.ScheduledEvent) -> None:
 #   - FCM tokens (so no further pushes land on a dead account)
 # =============================================================================
 
-@firestore_fn.on_document_deleted(document="users/{userId}")
+@firestore_fn.on_document_deleted(document="users/{userId}",
+    region="us-east1")
 def on_user_document_deleted(
     event: firestore_fn.Event[firestore_fn.DocumentSnapshot],
 ) -> None:
@@ -1668,7 +1691,7 @@ def on_user_document_deleted(
         logging.exception("on_user_document_deleted")
 
 
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def delete_account(req: https_fn.Request) -> https_fn.Response:
     """
     iOS/Android/Web: POST with Bearer token to delete the authenticated account.
@@ -1712,7 +1735,8 @@ def delete_account(req: https_fn.Request) -> https_fn.Response:
 # Updates video.status: 'processing' → 'ready' on job completion.
 # =============================================================================
 
-@firestore_fn.on_document_created(document="video_transcode_jobs/{jobId}")
+@firestore_fn.on_document_created(document="video_transcode_jobs/{jobId}",
+    region="us-east1")
 def start_transcode_job(
     event: firestore_fn.Event[firestore_fn.DocumentSnapshot],
 ) -> None:
@@ -1848,7 +1872,7 @@ def start_transcode_job(
         logging.exception("start_transcode_job")
 
 
-@https_fn.on_request()
+@https_fn.on_request(region="us-east1")
 def transcode_webhook(req: https_fn.Request) -> https_fn.Response:
     """
     Pub/Sub push subscription webhook from Cloud Transcoder.
@@ -1933,7 +1957,8 @@ def transcode_webhook(req: https_fn.Request) -> https_fn.Response:
 # Falls back to writing placeholder URLs from the sprite sheet.
 # =============================================================================
 
-@firestore_fn.on_document_updated(document="videos/{videoId}")
+@firestore_fn.on_document_updated(document="videos/{videoId}",
+    region="us-east1")
 def extract_thumbnails_on_ready(
     event: firestore_fn.Event[firestore_fn.Change[firestore_fn.DocumentSnapshot]],
 ) -> None:
@@ -2243,7 +2268,8 @@ def reset_daily_wager_limits(event: scheduler_fn.ScheduledEvent) -> None:
 # Handles up to 10K subscribers via batched writes.
 # =============================================================================
 
-@firestore_fn.on_document_updated(document="videos/{videoId}")
+@firestore_fn.on_document_updated(document="videos/{videoId}",
+    region="us-east1")
 def fanout_to_subscription_feeds(
     event: firestore_fn.Event[firestore_fn.Change[firestore_fn.DocumentSnapshot]],
 ) -> None:
@@ -2332,7 +2358,8 @@ def fanout_to_subscription_feeds(
 # Also writes channel_stats/{uid} for public channel page display.
 # =============================================================================
 
-@firestore_fn.on_document_updated(document="videos/{videoId}")
+@firestore_fn.on_document_updated(document="videos/{videoId}",
+    region="us-east1")
 def update_channel_stats_on_video_change(
     event: firestore_fn.Event[firestore_fn.Change[firestore_fn.DocumentSnapshot]],
 ) -> None:
@@ -2383,7 +2410,8 @@ TOXICITY_HOLD_THRESHOLD = 0.80   # Hold for review
 TOXICITY_AUTO_DELETE_THRESHOLD = 0.98  # Auto-delete (extreme content only)
 
 
-@firestore_fn.on_document_created(document="videos/{videoId}/comments/{commentId}")
+@firestore_fn.on_document_created(document="videos/{videoId}/comments/{commentId}",
+    region="us-east1")
 def screen_comment_toxicity(
     event: firestore_fn.Event[firestore_fn.DocumentSnapshot],
 ) -> None:
@@ -2493,7 +2521,8 @@ def _send_email(to: str, subject: str, html: str) -> bool:
         return False
 
 
-@firestore_fn.on_document_created(document="users/{userId}")
+@firestore_fn.on_document_created(document="users/{userId}",
+    region="us-east1")
 def send_welcome_email_real(
     event: firestore_fn.Event[firestore_fn.DocumentSnapshot],
 ) -> None:
@@ -2640,7 +2669,8 @@ def send_reengagement_push(event: scheduler_fn.ScheduledEvent) -> None:
 # Mirrors YouTube's 3-strike policy exactly.
 # =============================================================================
 
-@firestore_fn.on_document_created(document="strikeCases/{caseId}")
+@firestore_fn.on_document_created(document="strikeCases/{caseId}",
+    region="us-east1")
 def on_strike_issued(
     event: firestore_fn.Event[firestore_fn.DocumentSnapshot],
 ) -> None:
