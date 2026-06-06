@@ -18,9 +18,6 @@
     {
       "source": "firebase/functions",
       "codebase": "story-functions",
-      "predeploy": [
-        "npm --prefix firebase/functions run build"
-      ],
       "runtime": "nodejs20"
     },
     {
