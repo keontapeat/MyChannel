@@ -1670,13 +1670,9 @@ service cloud.firestore {
     }
 
     // ✅ User activity tracking (lastActiveAt update from clients)
-    // Any user can update only their own lastActiveAt
-    match /users/{userId} {
-      // This extends the main /users/{userId} rule above for lastActiveAt updates
-      // The main rule already covers this via the engagement counters allowlist,
-      // but we add lastActiveAt explicitly for clarity.
-      // (The main rule handles it — this comment is for documentation only.)
-    }
+    // Any user can update only their own lastActiveAt — covered by the main
+    // /users/{userId} rule's engagement counters allowlist which now includes
+    // 'lastActiveAt'. No separate match block needed.
 
     // ✅ STUDIO PARITY: per-video analytics events (impressions, CTR signals)
     // Clients append events; only the video's creator or admin can read.

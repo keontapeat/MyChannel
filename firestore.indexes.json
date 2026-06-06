@@ -1538,14 +1538,6 @@
       "density": "SPARSE_ALL"
     },
     {
-      "collectionGroup": "view_dedup",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "lastViewAt", "order": "ASCENDING" }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
       "collectionGroup": "videos",
       "queryScope": "COLLECTION",
       "fields": [
@@ -1595,14 +1587,6 @@
       "collectionGroup": "video_transcode_jobs",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "gcpJobName", "order": "ASCENDING" }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "video_transcode_jobs",
-      "queryScope": "COLLECTION",
-      "fields": [
         { "fieldPath": "creatorId", "order": "ASCENDING" },
         { "fieldPath": "submittedAt", "order": "DESCENDING" }
       ],
@@ -1615,30 +1599,6 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "issuedAt", "order": "DESCENDING" }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "account_deletions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "deletedAt", "order": "DESCENDING" }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "users",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "lastActiveAt", "order": "ASCENDING" }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "users",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "dailyWagerTotal", "order": "ASCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -1661,43 +1621,11 @@
       "density": "SPARSE_ALL"
     },
     {
-      "collectionGroup": "feeds",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "videoId", "order": "ASCENDING" }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
       "collectionGroup": "comment_moderation",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         { "fieldPath": "toxicityScore", "order": "DESCENDING" },
         { "fieldPath": "removedAt", "order": "DESCENDING" }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "fcmTokens",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "updatedAt", "order": "ASCENDING" }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "watchHistory",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "watchedAt", "order": "DESCENDING" }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "daily",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "date", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     }
