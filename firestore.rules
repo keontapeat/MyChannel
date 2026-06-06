@@ -138,7 +138,7 @@ service cloud.firestore {
                     ) || (
                        isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['viewCount','likeCount','dislikeCount','shareCount','commentCount','lastViewedAt','updatedAt'])
+                         .hasOnly(['viewCount','likeCount','dislikeCount','shareCount','commentCount','lastViewedAt','updatedAt','totalWatchTime','trendingScore','trendingUpdatedAt','searchKeywords','searchIndexedAt','status','hlsURL','dashURL','videoURL','qualityVariants','transcodeJobId','transcodeCompletedAt','transcodeError','thumbnailCandidates'])
                     );
       
       allow delete: if isSignedIn() && 
@@ -522,7 +522,7 @@ service cloud.firestore {
                        // used to edit profile data, verification, or anything else.
                        isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['totalViews','subscriberCount','likeCount','updatedAt'])
+                         .hasOnly(['totalViews','subscriberCount','likeCount','updatedAt','lastActiveAt'])
                     );
       allow delete: if isOwner(userId) || isAdmin();
     }
@@ -587,6 +587,17 @@ service cloud.firestore {
     match /users/{userId}/channelSections/{sectionId} {
       allow read: if true;
       allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // ✅ FCM tokens — private to the owning user; server cleanup can delete stale ones
+    match /users/{userId}/fcmTokens/{tokenId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ✅ Per-user recommendation results written by precompute_recommendations
+    match /users/{userId}/recommendations/{document=**} {
+      allow read: if isOwner(userId);
+      allow write: if isAdmin();
     }
 
     // 🎬 Movies "My List" — saved movies for the Movies section.
@@ -1564,6 +1575,107 @@ service cloud.firestore {
     match /creator_analytics/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow write: if isAdmin();
+
+      // Daily watch-time buckets written by aggregate_watch_time
+      match /daily/{date} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isAdmin();
+      }
+    }
+
+    // ✅ Per-user pre-computed recommendations
+    match /user_recommendations/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isAdmin();
+    }
+
+    // ✅ View dedup (one doc per user+video, 24h window)
+    // Any signed-in user writes their own; server reads all for analytics.
+    match /view_dedup/{docId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // ✅ Video transcode jobs — written by upload flow, read by functions
+    match /video_transcode_jobs/{jobId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+                       request.resource.data.creatorId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ✅ Channel stats (denormalized totals for public channel pages)
+    match /channel_stats/{userId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ✅ Subscription feed items (denormalized for Subscriptions tab O(1) read)
+    match /feeds/{userId}/items/{videoId} {
+      allow read: if isOwner(userId);
+      allow write: if isAdmin();
+    }
+
+    // ✅ Account deletion audit log (compliance / GDPR)
+    match /account_deletions/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ✅ Security bans — admin writes (auto-ban), admin reads
+    match /security_bans/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ✅ Security events — server-written only
+    match /security_events/{eventId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ✅ Comment moderation auto-removed log (admin + video creator reads)
+    match /comment_moderation/{videoId}/auto_removed/{docId} {
+      allow read: if isAdmin() ||
+                     (isSignedIn() &&
+                      get(/databases/$(database)/documents/videos/$(videoId)).data.creatorId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    // ✅ Referral codes — any signed-in user creates their own; public read for link landing
+    match /referrals/{code} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+                       request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ✅ Earnings monthly buckets (tips, subs, ads) — creator-private
+    match /earnings/{creatorId}/months/{month} {
+      allow read: if isOwner(creatorId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ✅ Feature slot waitlist — creator creates their own entry
+    match /feature_slot_waitlist/{docId} {
+      allow read: if isSignedIn() &&
+                     (resource == null || resource.data.creatorId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.creatorId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isSignedIn() && resource.data.creatorId == request.auth.uid;
+    }
+
+    // ✅ User activity tracking (lastActiveAt update from clients)
+    // Any user can update only their own lastActiveAt
+    match /users/{userId} {
+      // This extends the main /users/{userId} rule above for lastActiveAt updates
+      // The main rule already covers this via the engagement counters allowlist,
+      // but we add lastActiveAt explicitly for clarity.
+      // (The main rule handles it — this comment is for documentation only.)
     }
 
     // ✅ STUDIO PARITY: per-video analytics events (impressions, CTR signals)

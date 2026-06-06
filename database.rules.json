@@ -2,74 +2,160 @@
   "rules": {
     ".read": false,
     ".write": false,
-    
-    "real_time_views": {
-      "$videoId": {
-        ".read": true,
-        ".write": "auth != null",
-        "count": {
-          ".validate": "newData.isNumber()"
-        },
-        "viewers": {
-          "$userId": {
-            ".write": "auth != null && auth.uid == $userId"
-          }
-        }
-      }
-    },
-    
+
     "live_chat": {
       "$streamId": {
         ".read": true,
-        ".write": "auth != null",
         "messages": {
           "$messageId": {
-            ".validate": "newData.hasChildren(['text', 'userId', 'timestamp'])"
+            ".write": "auth != null",
+            ".validate": "newData.hasChildren(['text','userId','displayName','timestamp']) && newData.child('userId').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length <= 500 && newData.child('timestamp').val() <= now + 5000"
           }
+        },
+        "pinnedMessage": {
+          ".read": true,
+          ".write": "auth != null"
         }
       }
     },
-    
-    "presence": {
-      "$userId": {
-        ".read": true,
-        ".write": "auth != null && auth.uid == $userId"
-      }
-    },
-    
+
     "live_viewers": {
       "$streamId": {
         ".read": true,
-        "$userId": {
-          ".write": "auth != null && auth.uid == $userId"
+        "viewers": {
+          "$userId": {
+            ".write": "auth != null && auth.uid === $userId",
+            ".validate": "newData.hasChildren(['joinedAt','displayName']) && newData.child('joinedAt').isNumber()"
+          }
+        },
+        "viewerCount": {
+          ".read": true,
+          ".write": "auth != null"
         }
       }
     },
-    
+
+    "live_stream_health": {
+      "$streamId": {
+        ".read": true,
+        "lastHeartbeat": {
+          ".write": "auth != null",
+          ".validate": "newData.isNumber()"
+        },
+        "bitrate": {
+          ".write": "auth != null",
+          ".validate": "newData.isNumber()"
+        },
+        "fps": {
+          ".write": "auth != null",
+          ".validate": "newData.isNumber()"
+        },
+        "droppedFrames": {
+          ".write": "auth != null",
+          ".validate": "newData.isNumber()"
+        },
+        "latencyMs": {
+          ".write": "auth != null",
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+
+    "presence": {
+      "$userId": {
+        ".read": true,
+        ".write": "auth != null && auth.uid === $userId",
+        ".validate": "newData.hasChildren(['status','lastSeen']) && newData.child('status').val() === 'online' || newData.child('status').val() === 'away' || newData.child('status').val() === 'offline'"
+      }
+    },
+
     "typing_indicators": {
       "$streamId": {
         ".read": true,
         "$userId": {
-          ".write": "auth != null && auth.uid == $userId"
+          ".write": "auth != null && auth.uid === $userId",
+          ".validate": "newData.isBoolean()"
         }
       }
     },
-    
-    "live_stream_health": {
-      "$streamId": {
+
+    "real_time_views": {
+      "$videoId": {
         ".read": true,
-        ".write": "auth != null"
+        "count": {
+          ".write": "auth != null",
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "viewers": {
+          "$userId": {
+            ".write": "auth != null && auth.uid === $userId"
+          }
+        }
       }
     },
-    
+
     "real_time_analytics": {
       "$userId": {
-        ".read": "auth != null && auth.uid == $userId",
-        ".write": "auth != null && auth.uid == $userId"
+        ".read": "auth != null && auth.uid === $userId",
+        ".write": "auth != null && auth.uid === $userId"
+      }
+    },
+
+    "super_chat_queue": {
+      "$streamId": {
+        ".read": true,
+        "$messageId": {
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['userId','displayName','message','amountDisplay','color','timestamp']) && newData.child('userId').val() === auth.uid && newData.child('timestamp').val() <= now + 5000"
+        }
+      }
+    },
+
+    "live_polls": {
+      "$streamId": {
+        "$pollId": {
+          ".read": true,
+          "votes": {
+            "$userId": {
+              ".write": "auth != null && auth.uid === $userId",
+              ".validate": "newData.isString()"
+            }
+          },
+          "counts": {
+            "$option": {
+              ".write": "auth != null",
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            }
+          }
+        }
+      }
+    },
+
+    "direct_messages": {
+      "$threadId": {
+        ".read": "auth != null && ($threadId.contains(auth.uid))",
+        "messages": {
+          "$messageId": {
+            ".write": "auth != null && ($threadId.contains(auth.uid))",
+            ".validate": "newData.hasChildren(['text','senderId','timestamp']) && newData.child('senderId').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length <= 2000 && newData.child('timestamp').val() <= now + 5000"
+          }
+        }
+      }
+    },
+
+    "notification_badges": {
+      "$userId": {
+        ".read": "auth != null && auth.uid === $userId",
+        ".write": "auth != null && auth.uid === $userId",
+        ".validate": "newData.isNumber() && newData.val() >= 0"
+      }
+    },
+
+    "active_sessions": {
+      "$userId": {
+        ".read": "auth != null && auth.uid === $userId",
+        ".write": "auth != null && auth.uid === $userId"
       }
     }
   }
 }
-
-
-
