@@ -5,7 +5,7 @@
  */
 
 import {onSchedule} from 'firebase-functions/v2/scheduler';
-import {onDocumentCreated} from 'firebase-functions/v2/firestore';
+import {onDocumentCreated, onDocumentDeleted} from 'firebase-functions/v2/firestore';
 import {onCall, HttpsError, onRequest} from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import {GoogleAuth} from 'google-auth-library';
@@ -560,3 +560,317 @@ export const notifyFollowersOnStoryCreated = onDocumentCreated('stories/{storyId
     await batch.commit();
     console.log(`✅ [notifyFollowers] Sent ${notificationCount} notifications`);
   });
+
+// ============================================
+// 📺 VIDEO UPLOAD — Notify Subscribers
+// Triggered when a creator uploads a new video.
+// Fans who subscribed via users/{uid}/subscriptions/{creatorId}
+// get a notification doc so their bell lights up.
+// Processes up to 500 subscribers per invocation (safe batch limit).
+// ============================================
+
+export const notifySubscribersOnVideoCreated = onDocumentCreated(
+  'videos/{videoId}',
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+
+    // Only notify for public videos
+    if (data.isPublic === false) return;
+
+    const creatorId: string = data.creatorId;
+    const videoId = snap.id;
+    if (!creatorId) return;
+
+    const db = admin.firestore();
+
+    console.log(`[notifySubscribers] New video ${videoId} from creator ${creatorId}`);
+
+    try {
+      // Fetch subscribers from users/{creatorId}/subscribers sub-collection
+      const subsSnap = await db
+        .collection('users')
+        .doc(creatorId)
+        .collection('subscribers')
+        .limit(500)
+        .get();
+
+      if (subsSnap.empty) {
+        console.log('[notifySubscribers] No subscribers found');
+        return;
+      }
+
+      // Get creator display name for the notification copy
+      const creatorSnap = await db.collection('users').doc(creatorId).get();
+      const creatorName: string = creatorSnap.exists
+        ? (creatorSnap.data()?.displayName ?? 'A creator')
+        : 'A creator';
+      const thumbnailURL: string = data.thumbnailURL ?? '';
+
+      const batch = db.batch();
+      let count = 0;
+
+      for (const subDoc of subsSnap.docs) {
+        const subscriberId = subDoc.id;
+        if (subscriberId === creatorId) continue; // don't notify yourself
+
+        const notifRef = db.collection('notifications').doc();
+        batch.set(notifRef, {
+          userId: subscriberId,
+          type: 'video_upload',
+          creatorId,
+          videoId,
+          title: `${creatorName} uploaded a new video`,
+          message: data.title ?? 'New video',
+          thumbnailURL,
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        count++;
+      }
+
+      await batch.commit();
+      console.log(`[notifySubscribers] Sent ${count} notifications for video ${videoId}`);
+    } catch (err) {
+      console.error('[notifySubscribers] Error:', err);
+    }
+  }
+);
+
+// ============================================
+// 💬 COMMENT CREATED — Notify Video Creator
+// When a viewer posts a comment on a video,
+// the creator gets a notification.
+// Skips self-comments (creator commenting on own video).
+// ============================================
+
+export const notifyCreatorOnComment = onDocumentCreated(
+  'videos/{videoId}/comments/{commentId}',
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+
+    const videoId = event.params.videoId;
+    const commenterId: string = data.userId ?? '';
+
+    const db = admin.firestore();
+
+    try {
+      const videoSnap = await db.collection('videos').doc(videoId).get();
+      if (!videoSnap.exists) return;
+
+      const videoData = videoSnap.data()!;
+      const creatorId: string = videoData.creatorId ?? '';
+
+      // Don't notify creator of their own comment
+      if (!creatorId || creatorId === commenterId) return;
+
+      const commenterName: string = data.displayName ?? 'Someone';
+      const commentText: string = data.text ?? '';
+
+      await db.collection('notifications').add({
+        userId: creatorId,
+        type: 'comment_reply',
+        videoId,
+        commentId: snap.id,
+        commenterId,
+        title: `${commenterName} commented on your video`,
+        message: commentText.length > 100
+          ? commentText.slice(0, 97) + '…'
+          : commentText,
+        thumbnailURL: videoData.thumbnailURL ?? '',
+        read: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`[notifyCreatorOnComment] Notified creator ${creatorId} of comment on ${videoId}`);
+    } catch (err) {
+      console.error('[notifyCreatorOnComment] Error:', err);
+    }
+  }
+);
+
+// ============================================
+// 🗑️ VIDEO DELETED — Clean Up Storage Assets
+// When a video doc is deleted (from Studio content manager),
+// the corresponding Storage files are removed so they don't
+// accumulate and run up the Storage bill.
+// ============================================
+
+export const cleanupVideoOnDelete = onDocumentDeleted(
+  'videos/{videoId}',
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    const videoId = event.params.videoId;
+
+    const storage = admin.storage();
+    const filesToDelete: string[] = [];
+
+    // Collect video file path
+    if (data.videoURL && data.videoURL.includes('firebasestorage')) {
+      try {
+        const url = new URL(data.videoURL);
+        const match = url.pathname.match(/\/o\/(.+?)(\?|$)/);
+        if (match) filesToDelete.push(decodeURIComponent(match[1]));
+      } catch { /* invalid URL — skip */ }
+    }
+
+    // Collect thumbnail path
+    if (data.thumbnailURL && data.thumbnailURL.includes('firebasestorage')) {
+      try {
+        const url = new URL(data.thumbnailURL);
+        const match = url.pathname.match(/\/o\/(.+?)(\?|$)/);
+        if (match) filesToDelete.push(decodeURIComponent(match[1]));
+      } catch { /* invalid URL — skip */ }
+    }
+
+    for (const path of filesToDelete) {
+      try {
+        await storage.bucket().file(path).delete();
+        console.log(`[cleanupVideoOnDelete] Deleted ${path}`);
+      } catch (err) {
+        // File may already be gone — log and continue
+        console.warn(`[cleanupVideoOnDelete] Could not delete ${path}:`, err);
+      }
+    }
+
+    console.log(`[cleanupVideoOnDelete] Cleanup done for video ${videoId}`);
+  }
+);
+
+// ============================================
+// 📊 AGGREGATE CHANNEL STATS — Runs Every 6 Hours
+// Rolls up a creator's total views, watch time,
+// subscriber count, video count, and revenue estimate
+// into creator_analytics/{uid} so the Studio dashboard
+// can read a single doc instead of scanning all videos.
+// Only processes channels that have at least one video.
+// ============================================
+
+export const aggregateChannelStats = onSchedule(
+  {
+    schedule: 'every 6 hours',
+    region: 'us-central1',
+    memory: '512MiB',
+    timeoutSeconds: 300,
+  },
+  async () => {
+    const db = admin.firestore();
+    console.log('[aggregateChannelStats] Starting rollup...');
+
+    try {
+      // Get distinct creator IDs from recent videos (last 10K uploads)
+      const videosSnap = await db
+        .collection('videos')
+        .orderBy('createdAt', 'desc')
+        .limit(10000)
+        .get();
+
+      // Group by creatorId
+      const creatorMap: Record<string, {
+        views: number;
+        likes: number;
+        comments: number;
+        videoCount: number;
+        totalDuration: number;
+      }> = {};
+
+      for (const vDoc of videosSnap.docs) {
+        const d = vDoc.data();
+        const cid: string = d.creatorId;
+        if (!cid) continue;
+
+        if (!creatorMap[cid]) {
+          creatorMap[cid] = {views: 0, likes: 0, comments: 0, videoCount: 0, totalDuration: 0};
+        }
+        creatorMap[cid].views += d.viewCount ?? 0;
+        creatorMap[cid].likes += d.likeCount ?? 0;
+        creatorMap[cid].comments += d.commentCount ?? 0;
+        creatorMap[cid].videoCount += 1;
+        creatorMap[cid].totalDuration += d.duration ?? 0;
+      }
+
+      const batch = db.batch();
+      let written = 0;
+
+      for (const [creatorId, stats] of Object.entries(creatorMap)) {
+        // Estimate watch time: average ~55% completion × total duration of all videos × views
+        // Use per-view average: assume avg video is (totalDuration / videoCount) seconds,
+        // watched 55%, scaled by view count → total watch-seconds / 3600 = hours
+        const avgDuration = stats.videoCount > 0 ? stats.totalDuration / stats.videoCount : 0;
+        const watchTimeHours = Math.round((stats.views * avgDuration * 0.55) / 3600);
+
+        // Revenue estimate: $1.85 RPM
+        const revenueEstimate = Math.round((stats.views / 1000) * 185) / 100;
+
+        const ref = db.collection('creator_analytics').doc(creatorId);
+        batch.set(ref, {
+          creatorId,
+          totalViews: stats.views,
+          totalLikes: stats.likes,
+          totalComments: stats.comments,
+          totalVideos: stats.videoCount,
+          watchTimeHours,
+          revenueEstimate,
+          rpm: 1.85,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, {merge: true});
+        written++;
+
+        // Firestore batch limit is 500
+        if (written % 499 === 0) {
+          await batch.commit();
+        }
+      }
+
+      await batch.commit();
+      console.log(`[aggregateChannelStats] Rolled up stats for ${written} creators`);
+    } catch (err) {
+      console.error('[aggregateChannelStats] Error:', err);
+    }
+  }
+);
+
+// ============================================
+// 🔔 SUBSCRIBE / UNSUBSCRIBE — Keep Counts Consistent
+// When a user's subscriptions/{creatorId} doc is created
+// or deleted, atomically increment/decrement the creator's
+// subscriberCount so the Studio dashboard always shows the
+// correct number without a full scan.
+// ============================================
+
+export const onSubscribe = onDocumentCreated(
+  'users/{userId}/subscriptions/{creatorId}',
+  async (event) => {
+    const creatorId = event.params.creatorId;
+    const db = admin.firestore();
+    try {
+      await db.collection('users').doc(creatorId).update({
+        subscriberCount: admin.firestore.FieldValue.increment(1),
+      });
+      console.log(`[onSubscribe] +1 subscriber for ${creatorId}`);
+    } catch (err) {
+      console.error('[onSubscribe] Error:', err);
+    }
+  }
+);
+
+export const onUnsubscribe = onDocumentDeleted(
+  'users/{userId}/subscriptions/{creatorId}',
+  async (event) => {
+    const creatorId = event.params.creatorId;
+    const db = admin.firestore();
+    try {
+      await db.collection('users').doc(creatorId).update({
+        subscriberCount: admin.firestore.FieldValue.increment(-1),
+      });
+      console.log(`[onUnsubscribe] -1 subscriber for ${creatorId}`);
+    } catch (err) {
+      console.error('[onUnsubscribe] Error:', err);
+    }
+  }
+);

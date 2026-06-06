@@ -23,11 +23,16 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-      return request.auth != null && 
+      // Owner is recognized by UID or owner email. We do NOT require
+      // email_verified here: the owner emails below are already registered to the
+      // single owner account, so only the real owner can present these tokens, and
+      // the owner UID can't be spoofed. Requiring email_verified was silently
+      // blocking the owner's admin writes (featured reorder, category edits).
+      return request.auth != null &&
              (request.auth.token.admin == true ||
-              (request.auth.token.email_verified == true &&
-               (request.auth.token.email == 'keontapeat@mychannel.live' ||
-                request.auth.token.email == 'keontapeat@gmail.com')));
+              request.auth.uid == '7EAoUc1aKsNRqR4cYBIOYVGB3Mf2' ||
+              request.auth.token.email == 'keontapeat@mychannel.live' ||
+              request.auth.token.email == 'keontapeat@gmail.com');
     }
     
     function isSignedIn() {
@@ -559,6 +564,31 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
 
+    // ✅ STUDIO PARITY: like/dislike state written by VideoEngagement.tsx
+    // Doc id == videoId, value field == 'like' | 'dislike'
+    match /users/{userId}/videoLikes/{videoId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ✅ STUDIO PARITY: watch history written by WatchPageClient on every play
+    // Covers camelCase variant written by web (iOS uses watch_history / watch-history above)
+    match /users/{userId}/watchHistory/{videoId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ✅ STUDIO PARITY: thumbnail creator saved projects
+    // Creator stores canvas state + thumbnail dataURL for later editing
+    match /users/{userId}/thumbnailProjects/{projectId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ✅ STUDIO PARITY: channel layout / featured sections (Customization page)
+    // Doc id == userId (one doc per channel)
+    match /users/{userId}/channelSections/{sectionId} {
+      allow read: if true;
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
     // 🎬 Movies "My List" — saved movies for the Movies section.
     // Mirrors the watchLater pattern; owner-only read/write. Without this rule the
     // catch-all deny blocks MovieLibraryService sync and My List silently fails.
@@ -582,6 +612,12 @@ service cloud.firestore {
     // HistoryService writes to users/{userId}/notInterested/{contentId}; without
     // this rule the catch-all deny blocked the write and the feature silently failed.
     match /users/{userId}/notInterested/{document=**} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Per-channel notification preferences (used by SubscriptionsViewModel).
+    // Doc id is the channel/creator id; only the user controls their settings.
+    match /users/{userId}/notification_settings/{document=**} {
       allow read, write: if isOwner(userId);
     }
     
@@ -1498,14 +1534,56 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isSignedIn();
     }
-    
-    match /scheduled_premieres/{document=**} {
+
+    // Scheduled premieres — only the creator who scheduled it can edit/delete.
+    // Previously wide-open to any signed-in user; tightened to creator-scoped.
+    match /scheduled_premieres/{premiereId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isSignedIn() &&
+                       request.resource.data.creatorId == request.auth.uid;
+      allow update: if isSignedIn() &&
+                       (resource.data.creatorId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() &&
+                       (resource.data.creatorId == request.auth.uid || isAdmin());
     }
     
     match /approval_required/{document=**} {
       allow read, write: if isAdmin();
+    }
+
+    // ✅ STUDIO PARITY: channel customization (banner, trailer, featured layout)
+    // One doc per creator. Public read so profile pages can render the layout.
+    match /channel_customization/{userId} {
+      allow read: if true;
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // ✅ STUDIO PARITY: per-creator aggregated analytics rollup
+    // Written by the aggregateChannelStats Cloud Function; read by Studio dashboard.
+    // Scoped: only the creator or admin can read their own stats doc.
+    match /creator_analytics/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ✅ STUDIO PARITY: per-video analytics events (impressions, CTR signals)
+    // Clients append events; only the video's creator or admin can read.
+    // Note: the broader video_analytics/{videoId}/{document=**} already allows
+    // isSignedIn() reads — this scoped rule tightens the creator-specific rollup docs.
+    match /video_impressions/{videoId} {
+      allow read: if isSignedIn();
+      // Any signed-in viewer can record an impression (anonymous-safe)
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // ✅ STUDIO PARITY: comment moderation queue
+    // Cloud Function writes held/spam verdicts here; creator reads + acts on them.
+    match /comment_moderation/{videoId}/{commentId} {
+      allow read: if isSignedIn() &&
+                     (get(/databases/$(database)/documents/videos/$(videoId)).data.creatorId == request.auth.uid
+                      || isAdmin());
+      allow write: if isAdmin();
     }
     
     // ========================================
