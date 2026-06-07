@@ -41,6 +41,9 @@ LocalSecrets.plist# Ignore vendor and ephemeral dirs
 **/venv/**
 services/dist/
 .DS_Store
+# macOS AppleDouble metadata junk
+._*
+**/._*
 
 # Large media files
 *.MP4
