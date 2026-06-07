@@ -1857,6 +1857,50 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ✅ Verification applications
+    match /verification_applications/{appId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+    }
+
+    // ✅ Stream keys — owner reads own key hash; write is server-only
+    match /stream_keys/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isAdmin();
+    }
+
+    // ✅ A/B thumbnail tests — creator owns their test
+    match /ab_thumbnail_tests/{videoId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ✅ Collab invites
+    match /collab_invites/{inviteId} {
+      allow read: if isSignedIn() &&
+                     (resource.data.senderId == request.auth.uid ||
+                      resource.data.targetId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.targetId == request.auth.uid;
+    }
+
+    // ✅ Comment rate limits — owner only
+    match /comment_rate_limits/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ✅ Clips — public read, creator creates
+    match /clips/{clipId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.creatorId == request.auth.uid;
+      allow update: if isSignedIn() &&
+                       (resource.data.creatorId == request.auth.uid || isAdmin() ||
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['viewCount','likeCount','updatedAt']));
+      allow delete: if isSignedIn() && (resource.data.creatorId == request.auth.uid || isAdmin());
+    }
+
     // ✅ STUDIO PARITY: per-video analytics events (impressions, CTR signals)
     // Clients append events; only the video's creator or admin can read.
     // Note: the broader video_analytics/{videoId}/{document=**} already allows
