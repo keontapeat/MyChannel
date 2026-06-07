@@ -13,6 +13,9 @@ import Combine
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
 
 /// Real-time view tracker with AI monitoring integration
 @MainActor
@@ -34,7 +37,19 @@ class RealtimeViewTracker: ObservableObject {
     private let aiService = MyChannelAI.shared
     
     #if canImport(FirebaseFirestore)
-    private var db: Firestore { Firestore.firestore() }
+    /// Returns the Firestore instance ONLY when FirebaseApp is configured.
+    /// `Firestore.firestore()` traps (hard crash) if `FirebaseApp.app() == nil`,
+    /// which happened when a video started playing before Firebase finished
+    /// configuring. Returning nil here makes every call site fail safe instead.
+    private var db: Firestore? {
+        #if canImport(FirebaseCore)
+        guard FirebaseApp.app() != nil else {
+            print("⚠️ [ViewTracker] Firestore access skipped — FirebaseApp not configured yet")
+            return nil
+        }
+        #endif
+        return Firestore.firestore()
+    }
     private var viewListeners: [String: ListenerRegistration] = [:]
     #endif
     
@@ -183,6 +198,7 @@ class RealtimeViewTracker: ObservableObject {
     
     private func incrementViewCount(videoId: String, userId: String?, creatorId: String? = nil) async {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return }
         do {
             print("🔥🔥🔥 [ViewTracker] ⚡ INCREMENTING VIEW COUNT for: \(videoId)")
             print("🔥 [ViewTracker] User ID: \(userId ?? "anonymous")")
@@ -302,6 +318,7 @@ class RealtimeViewTracker: ObservableObject {
     // Helper to get video creator ID for analytics
     private func getVideoCreatorId(videoId: String) async -> String? {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return nil }
         do {
             let doc = try await db.collection("videos").document(videoId).getDocument()
             return doc.data()?["userId"] as? String
@@ -330,7 +347,7 @@ class RealtimeViewTracker: ObservableObject {
     /// line and an accurate "views today" number.
     private func incrementDailyViews(creatorId: String) async {
         #if canImport(FirebaseFirestore)
-        guard !creatorId.isEmpty else { return }
+        guard !creatorId.isEmpty, let db = db else { return }
         let key = dayKey()
         do {
             try await db.collection("creator_analytics")
@@ -356,7 +373,7 @@ class RealtimeViewTracker: ObservableObject {
     /// session ends or goes stale.
     private func registerLivePresence(creatorId: String?) async {
         #if canImport(FirebaseFirestore)
-        guard let creatorId, !creatorId.isEmpty else { return }
+        guard let creatorId, !creatorId.isEmpty, let db = db else { return }
         do {
             let sessionId = AnalyticsSessionID.current
             try await db.collection("creator_presence")
@@ -378,7 +395,7 @@ class RealtimeViewTracker: ObservableObject {
     /// Removes the presence heartbeat for a creator when a viewer leaves.
     private func clearLivePresence(creatorId: String?) async {
         #if canImport(FirebaseFirestore)
-        guard let creatorId, !creatorId.isEmpty else { return }
+        guard let creatorId, !creatorId.isEmpty, let db = db else { return }
         let sessionId = AnalyticsSessionID.current
         try? await db.collection("creator_presence")
             .document(creatorId)
@@ -391,6 +408,7 @@ class RealtimeViewTracker: ObservableObject {
     
     private func updateWatchTime(videoId: String, duration: TimeInterval) async {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return }
         do {
             try await db.collection("video_analytics")
                 .document(videoId)
@@ -419,6 +437,7 @@ class RealtimeViewTracker: ObservableObject {
         #if canImport(FirebaseFirestore)
         // Avoid duplicate listeners
         guard viewListeners[videoId] == nil else { return }
+        guard let db = db else { return }
         
         let listener = db.collection("videos").document(videoId)
             .addSnapshotListener { [weak self] snapshot, error in
@@ -642,6 +661,7 @@ class RealtimeViewTracker: ObservableObject {
     /// 🔥 FIX: ALWAYS fetch from Firestore to ensure persistence across app refreshes
     func getViewCount(for videoId: String) async -> Int {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return viewCountsByVideo[videoId] ?? 0 }
         do {
             // 🔥 FIX: Always fetch from Firestore (source of truth)
             // Don't rely on cache alone - cache can be stale after app refresh
@@ -709,7 +729,9 @@ class RealtimeViewTracker: ObservableObject {
     /// Studio "watching now" number is truthful instead of hardcoded 0.
     func fetchWatchingNow(creatorId: String) async -> Int {
         #if canImport(FirebaseFirestore)
-        guard !creatorId.isEmpty else { return 0 }
+        guard !creatorId.isEmpty, let db = db else {
+            return activeViewSessions.values.filter { $0.creatorId == creatorId }.count
+        }
         do {
             let cutoff = Date().addingTimeInterval(-45)
             let snap = try await db.collection("creator_presence")
@@ -732,7 +754,7 @@ class RealtimeViewTracker: ObservableObject {
     /// Powers the real trend chart and an accurate "views today" figure.
     func fetchDailyViews(creatorId: String, days: Int = 28) async -> [(date: Date, views: Int)] {
         #if canImport(FirebaseFirestore)
-        guard !creatorId.isEmpty else { return [] }
+        guard !creatorId.isEmpty, let db = db else { return [] }
         let cal = Calendar(identifier: .gregorian)
         var utc = cal
         utc.timeZone = TimeZone(identifier: "UTC") ?? .current
@@ -778,7 +800,7 @@ class RealtimeViewTracker: ObservableObject {
     /// Views recorded for the current UTC day.
     func fetchViewsToday(creatorId: String) async -> Int {
         #if canImport(FirebaseFirestore)
-        guard !creatorId.isEmpty else { return 0 }
+        guard !creatorId.isEmpty, let db = db else { return 0 }
         do {
             let doc = try await db.collection("creator_analytics")
                 .document(creatorId)

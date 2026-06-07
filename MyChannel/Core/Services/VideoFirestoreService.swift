@@ -9,17 +9,32 @@ import Foundation
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
 
 @MainActor
 final class VideoFirestoreService: ObservableObject {
     static let shared = VideoFirestoreService()
     private init() {}
+
+    enum ServiceError: Error { case firebaseNotConfigured }
     #if canImport(FirebaseFirestore)
-    private var db: Firestore { Firestore.firestore() }
+    /// Firestore handle, but only once FirebaseApp is configured.
+    /// `Firestore.firestore()` traps if `FirebaseApp.app() == nil`, which could
+    /// crash the app if a video screen touched Firestore before Firebase
+    /// finished configuring. Returning nil makes callers fail safe.
+    private var db: Firestore? {
+        #if canImport(FirebaseCore)
+        guard FirebaseApp.app() != nil else { return nil }
+        #endif
+        return Firestore.firestore()
+    }
     #endif
 
     func toggleLike(videoId: String, userId: String, add: Bool) async {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return }
         let ref = db.collection("videos").document(videoId).collection("likes").document(userId)
         do {
             if add { try await ref.setData(["likedAt": FieldValue.serverTimestamp()]) }
@@ -43,6 +58,7 @@ final class VideoFirestoreService: ObservableObject {
 
     func saveVideo(_ video: Video) async throws {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { throw ServiceError.firebaseNotConfigured }
         print("💾 [VideoFirestoreService] Saving video to Firestore:")
         print("  - ID: \(video.id)")
         print("  - Title: \(video.title)")
@@ -117,6 +133,7 @@ final class VideoFirestoreService: ObservableObject {
     
     func deleteVideo(videoId: String) async throws {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { throw ServiceError.firebaseNotConfigured }
         let ref = db.collection("videos").document(videoId)
         try await ref.delete()
         #endif
@@ -124,6 +141,7 @@ final class VideoFirestoreService: ObservableObject {
     
     func updateVideoVisibility(videoId: String, visibility: Video.VisibilityStatus) async throws {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { throw ServiceError.firebaseNotConfigured }
         let ref = db.collection("videos").document(videoId)
         try await ref.updateData([
             "visibility": visibility.rawValue,
@@ -146,6 +164,7 @@ final class VideoFirestoreService: ObservableObject {
         allowComments: Bool? = nil
     ) async throws {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { throw ServiceError.firebaseNotConfigured }
         var updateData: [String: Any] = [
             "updatedAt": FieldValue.serverTimestamp()
         ]
@@ -188,6 +207,7 @@ final class VideoFirestoreService: ObservableObject {
     // MARK: - 💰 Update Monetization Settings (YouTube-style ads)
     func updateMonetization(videoId: String, monetization: Video.MonetizationSettings) async throws {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { throw ServiceError.firebaseNotConfigured }
         var monetizationData: [String: Any] = [
             "isMonetized": monetization.isMonetized,
             "donationEnabled": monetization.donationEnabled,
@@ -247,6 +267,7 @@ final class VideoFirestoreService: ObservableObject {
     // 🔥 THERMONUCLEAR: Batch operations for 10x faster writes
     func saveMultipleVideos(_ videos: [Video]) async throws {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { throw ServiceError.firebaseNotConfigured }
         let batch = db.batch()
         
         // Firestore batch limit is 500 operations
@@ -279,6 +300,7 @@ final class VideoFirestoreService: ObservableObject {
     // 🔥 THERMONUCLEAR: Batch increment view counts
     func incrementMultipleViewCounts(_ videoIds: [String]) async throws {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { throw ServiceError.firebaseNotConfigured }
         let batch = db.batch()
         
         for videoId in videoIds.prefix(500) {
@@ -295,6 +317,7 @@ final class VideoFirestoreService: ObservableObject {
     func fetchMultipleVideos(videoIds: [String]) async throws -> [Video] {
         #if canImport(FirebaseFirestore)
         guard !videoIds.isEmpty else { return [] }
+        guard let db = db else { return [] }
         
         // Firestore 'in' query limit is 10
         var allVideos: [Video] = []
@@ -319,6 +342,7 @@ final class VideoFirestoreService: ObservableObject {
 
     func fetchVideosByCreator(creatorId: String, limit: Int = 24, startAfter: DocumentSnapshot? = nil) async -> [Video] {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return [] }
         do {
             print("📺 [VideoFirestoreService] Fetching videos for creator: \(creatorId), limit: \(limit)")
             var query: Query = db.collection("videos")
@@ -475,6 +499,7 @@ final class VideoFirestoreService: ObservableObject {
     // This powers the home feed with REAL videos from your beta testers
     func fetchAllPublicVideos(limit: Int = 24) async -> [Video] {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return [] }
         do {
             print("🔥 [VideoFirestoreService] Fetching ALL public videos for home feed (limit: \(limit))")
             
@@ -502,10 +527,22 @@ final class VideoFirestoreService: ObservableObject {
                     continue
                 }
                 
-                // Skip records that are not yet ready (processing or missing URL)
+                // Skip records that don't actually have a playable URL yet.
+                // Some old documents have processingStatus="completed" but never
+                // got a videoUrl written, so the misleading log spam was burying
+                // the real issue. Be explicit about the actual reason.
                 let processingStatus = (d["processingStatus"] as? String)?.lowercased() ?? "completed"
                 let rawVideoUrl = (d["videoUrl"] as? String) ?? (d["videoURL"] as? String) ?? ""
-                if rawVideoUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || processingStatus != "completed" {
+                let trimmedUrl = rawVideoUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmedUrl.isEmpty {
+                    print("  ⏭️ Skipping video without videoUrl id=\(doc.documentID)")
+                    continue
+                }
+                // Only skip if the doc explicitly says it is still processing.
+                // ("completed", "ready", "" / nil all mean playable.)
+                let isStillProcessing = ["pending", "uploading", "processing", "transcoding", "failed"]
+                    .contains(processingStatus)
+                if isStillProcessing {
                     print("  ⏭️ Skipping not-ready video (processingStatus=\(processingStatus)) id=\(doc.documentID)")
                     continue
                 }
@@ -598,6 +635,7 @@ final class VideoFirestoreService: ObservableObject {
     // ⚡ PERFORMANCE: Paginated fetch with last document tracking
     func fetchVideosByCreatorPaginated(creatorId: String, limit: Int = 24, lastDocument: DocumentSnapshot? = nil) async throws -> (videos: [Video], lastDocument: DocumentSnapshot?) {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return ([], nil) }
         do {
             var query: Query = db.collection("videos")
                 .whereField("userId", isEqualTo: creatorId)
@@ -718,6 +756,7 @@ final class VideoFirestoreService: ObservableObject {
     // MARK: - Real-time View Count Updates
     func incrementViewCount(videoId: String) async {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return }
         do {
             print("👁️ [VideoFirestoreService] Incrementing view count for video: \(videoId)")
             let ref = db.collection("videos").document(videoId)
