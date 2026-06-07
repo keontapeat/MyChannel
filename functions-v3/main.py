@@ -8,6 +8,7 @@ import logging
 import os
 import re as _re
 import hashlib as _hashlib
+import hmac as _hmac
 import requests
 from datetime import datetime, timezone, timedelta
 
@@ -417,9 +418,25 @@ def validate_stream_key(req: https_fn.Request) -> https_fn.Response:
     Called by the media server to validate an ingest stream key.
     POST { streamKey } — returns { valid: bool, userId, streamId }
     Internal use only — called by streaming infrastructure.
+
+    SECURITY: requires a shared secret so only the media server can probe
+    stream keys (the response leaks userId/streamId, and an open endpoint
+    would let attackers brute-force valid ingest keys). Set env
+    STREAM_KEY_VALIDATOR_SECRET and send it as the X-Internal-Secret header
+    (or Authorization: Bearer <secret>). Fails closed when the env is unset.
     """
     h = {"Access-Control-Allow-Origin": "*"}
     try:
+        expected = (os.environ.get("STREAM_KEY_VALIDATOR_SECRET") or "").strip()
+        provided = (req.headers.get("X-Internal-Secret") or "").strip()
+        if not provided:
+            bearer = (req.headers.get("Authorization") or "").strip()
+            if bearer.lower().startswith("bearer "):
+                provided = bearer.split(" ", 1)[1].strip()
+        if not expected or not _hmac.compare_digest(provided, expected):
+            logging.warning("[validate_stream_key] unauthorized request rejected")
+            return https_fn.Response({"valid": False}, 401, headers=h)
+
         body      = req.get_json(silent=True) or {}
         raw_key   = (body.get("streamKey") or "").strip()
         if not raw_key:
