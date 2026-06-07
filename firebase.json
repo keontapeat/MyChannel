@@ -34,6 +34,11 @@
       "source": "functions-v3",
       "codebase": "platform-functions-v3",
       "runtime": "python312"
+    },
+    {
+      "source": "functions-v4",
+      "codebase": "platform-functions-v4",
+      "runtime": "python312"
     }
   ],
   "hosting": {

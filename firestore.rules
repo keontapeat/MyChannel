@@ -1975,6 +1975,46 @@ service cloud.firestore {
                        || isAdmin());
     }
 
+    // ✅ Content ID claims
+    match /content_id_claims/{claimId} {
+      allow read: if isSignedIn() &&
+                     (resource.data.videoCreatorId == request.auth.uid ||
+                      resource.data.rightsHolderId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ✅ Scheduled publishes — creator owns
+    match /scheduled_publishes/{videoId} {
+      allow read: if isSignedIn() &&
+                     (resource.data.creatorId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ✅ Channel demographics — creator + admin
+    match /channel_demographics/{creatorId} {
+      allow read: if isOwner(creatorId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ✅ Video impressions — server-written
+    match /video_impressions/{videoId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ✅ Login events — user can create their own, admin reads
+    match /login_events/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ✅ Known logins — owner only
+    match /users/{userId}/knownLogins/{docId} {
+      allow read: if isOwner(userId);
+      allow write: if isAdmin();
+    }
+
     // ✅ STUDIO PARITY: per-video analytics events (impressions, CTR signals)
     // Clients append events; only the video's creator or admin can read.
     // Note: the broader video_analytics/{videoId}/{document=**} already allows
