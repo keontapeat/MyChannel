@@ -1878,8 +1878,44 @@ def transcode_webhook(req: https_fn.Request) -> https_fn.Response:
     Pub/Sub push subscription webhook from Cloud Transcoder.
     Called when a job finishes. Updates video status to 'ready' and
     writes the HLS master playlist URL back to the video doc.
+
+    SECURITY: This endpoint mutates video state, so it is authenticated.
+    Configure the Pub/Sub push subscription with EITHER:
+      1. An OIDC service-account token (recommended). Set env
+         TRANSCODE_WEBHOOK_SA_EMAIL to the pushing service account email;
+         the bearer JWT is verified and the email must match.
+      2. A shared-secret query token. Set env TRANSCODE_WEBHOOK_TOKEN and
+         append ?token=<value> to the push endpoint URL.
+    If neither env is set the endpoint fails closed (401) so it can never
+    run unauthenticated in production.
     """
     try:
+        import os as _os
+        sa_email   = (_os.environ.get("TRANSCODE_WEBHOOK_SA_EMAIL") or "").strip()
+        shared_tok = (_os.environ.get("TRANSCODE_WEBHOOK_TOKEN") or "").strip()
+
+        authed = False
+        # Path 1: OIDC bearer token from Pub/Sub push
+        bearer = (req.headers.get("Authorization") or "").strip()
+        if sa_email and bearer.lower().startswith("bearer "):
+            try:
+                import google.auth.transport.requests as _gr
+                from google.oauth2 import id_token as _idt
+                claims = _idt.verify_oauth2_token(bearer.split(" ", 1)[1].strip(), _gr.Request())
+                if (claims.get("email") == sa_email) and claims.get("email_verified", False):
+                    authed = True
+            except Exception as _e:
+                logging.warning(f"[transcode_webhook] OIDC verify failed: {_e}")
+
+        # Path 2: shared-secret query token
+        if not authed and shared_tok:
+            if (req.args.get("token") or "") == shared_tok:
+                authed = True
+
+        if not authed:
+            logging.warning("[transcode_webhook] unauthenticated request rejected")
+            return https_fn.Response({"error": "unauthorized"}, status=401)
+
         import base64, json as _json
         envelope = req.get_json(silent=True) or {}
         msg_data = envelope.get("message", {}).get("data", "")
