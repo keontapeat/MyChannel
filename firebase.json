@@ -24,6 +24,11 @@
       "source": "cloud-functions/music-payouts",
       "codebase": "music-payouts",
       "runtime": "nodejs20"
+    },
+    {
+      "source": "functions-v2",
+      "codebase": "platform-functions",
+      "runtime": "python312"
     }
   ],
   "hosting": {

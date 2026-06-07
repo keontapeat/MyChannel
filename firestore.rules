@@ -1674,6 +1674,50 @@ service cloud.firestore {
     // /users/{userId} rule's engagement counters allowlist which now includes
     // 'lastActiveAt'. No separate match block needed.
 
+    // ✅ VS Match escrow — server-settle only, users can read own records
+    // (escrow/{matchId} already exists above; adding compliance collections)
+    match /super_chat_idempotency/{key} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow write: if isAdmin();
+    }
+
+    match /view_fraud_flags/{flagId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /live_chat_flags/{flagId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /video_fingerprints/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /milestones/{docId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isAdmin();
+    }
+
+    match /platform_revenue/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /chat_bans/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /videos/{videoId}/chapters/{chapterId} {
+      allow read: if true;
+      allow write: if isSignedIn() &&
+                      (get(/databases/$(database)/documents/videos/$(videoId)).data.creatorId == request.auth.uid
+                       || isAdmin());
+    }
+
     // ✅ STUDIO PARITY: per-video analytics events (impressions, CTR signals)
     // Clients append events; only the video's creator or admin can read.
     // Note: the broader video_analytics/{videoId}/{document=**} already allows
