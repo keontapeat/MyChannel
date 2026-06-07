@@ -1901,6 +1901,80 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (resource.data.creatorId == request.auth.uid || isAdmin());
     }
 
+    // ✅ DM threads + messages
+    match /dm_threads/{threadId} {
+      allow read: if isSignedIn() && (resource.data.participants.hasAny([request.auth.uid]) || isAdmin());
+      allow write: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/dm_threads/$(threadId)).data.participants.hasAny([request.auth.uid])
+          || isAdmin()
+        );
+        allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // ✅ Promo / affiliate codes
+    match /promo_codes/{code} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.creatorId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.creatorId == request.auth.uid || isAdmin());
+    }
+
+    // ✅ Spam flags — admin only reads
+    match /spam_flags/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ✅ Video heatmaps — public read (used by player for chapters highlight)
+    match /video_heatmaps/{videoId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ✅ Video quality signals — server-written
+    match /video_quality_signals/{videoId} {
+      allow read: if isSignedIn() &&
+                     (get(/databases/$(database)/documents/videos/$(videoId)).data.creatorId == request.auth.uid
+                      || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ✅ Creator fund members
+    match /creator_fund_members/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ✅ Creator standing
+    match /creator_standing/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ✅ Platform health — admin only
+    match /platform_health/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ✅ Wallet deposits — owner reads own
+    match /wallet_deposits/{intentId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isAdmin();
+    }
+
+    // ✅ End screens — public read (player needs them)
+    match /endScreens/{videoId} {
+      allow read: if true;
+      allow write: if isSignedIn() &&
+                      (get(/databases/$(database)/documents/videos/$(videoId)).data.creatorId == request.auth.uid
+                       || isAdmin());
+    }
+
     // ✅ STUDIO PARITY: per-video analytics events (impressions, CTR signals)
     // Clients append events; only the video's creator or admin can read.
     // Note: the broader video_analytics/{videoId}/{document=**} already allows
