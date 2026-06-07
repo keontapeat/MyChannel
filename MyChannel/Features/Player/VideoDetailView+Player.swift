@@ -173,14 +173,47 @@ extension VideoDetailView {
     
     @ViewBuilder
     var avPlayerView: some View {
+        // 🔥 FIX: Split into sub-views to prevent stack overflow crash.
+        // The original single-body getter required ~42KB of stack frame —
+        // exceeding iOS's 512KB main-thread limit — causing EXC_BAD_ACCESS (code=2).
+        avPlayerVideoLayer
+        
+        // Paid promotion badge (first 8s)
+        if (video.isSponsored ?? false) && playerManager.currentTime < 8 {
+            paidPromotionBadge
+        }
+        
+        // Overlay controls (MUST be above tap area to receive taps)
+        avPlayerControls
+        
+        // Invisible tap/drag area (disabled when controls visible so buttons work)
+        videoTapArea
+            .allowsHitTesting(!controlsCoordinator.showControls)
+
+        // Ad overlay
+        if showingAd, let url = prerollURL {
+            adOverlay(url: url)
+        }
+        
+        // End-screen overlay
+        if showUpNext, let next = (upNextVideo ?? recommendedVideos.first(where: { $0.id != video.id })) {
+            endScreenOverlay(next: next)
+        }
+        
+        // Loading / error overlays + seek/dubbing/status indicators
+        avPlayerStatusOverlays
+    }
+    
+    // MARK: - avPlayerView split: video layer
+    /// The actual video frame + pinch-to-zoom + long-press debug HUD toggle.
+    @ViewBuilder
+    private var avPlayerVideoLayer: some View {
         Group {
             if let player = activePlayer {
-                // 🔥 FIX: Use PiPEnabledVideoPlayer to allow manual PiP activation
                 PiPEnabledVideoPlayer(player: player)
                     .frame(maxWidth: .infinity)
                     .aspectRatio(16.0/9.0, contentMode: .fit)
                     .background(Color.black)
-                    // 🔥 PHASE 141: Pinch-to-zoom on video player
                     .scaleEffect(pinchScale)
                     .gesture(
                         MagnificationGesture()
@@ -195,10 +228,8 @@ extension VideoDetailView {
                             }
                     )
                     .clipped()
-                    // 🔥 YOUTUBE PARITY: Fade the video in once it's ready instead of a hard cut
                     .transition(.opacity)
             } else {
-                // 🔥 FIX: Show black background while player loads (prevents white screen)
                 Color.black
                     .frame(maxWidth: .infinity)
                     .aspectRatio(16.0/9.0, contentMode: .fit)
@@ -213,48 +244,38 @@ extension VideoDetailView {
         .onLongPressGesture(minimumDuration: 0.5) {
             withAnimation(.spring()) { showDebugHUD.toggle() }
         }
-        
-        // Paid promotion badge (first 8s)
-        if (video.isSponsored ?? false) && playerManager.currentTime < 8 {
-            paidPromotionBadge
-        }
-        
-        // Overlay controls (MUST be above tap area to receive taps)
-        avPlayerControls
-        
-        // Invisible tap/drag area (disabled when controls visible so buttons work)
-        videoTapArea
-            .allowsHitTesting(!controlsCoordinator.showControls)  // 🔥 FIX: Disable tap area when controls visible
-        
-        // Ad overlay
-        if showingAd, let url = prerollURL {
-            adOverlay(url: url)
-        }
-        
-        // End-screen overlay
-        if showUpNext, let next = (upNextVideo ?? recommendedVideos.first(where: { $0.id != video.id })) {
-            endScreenOverlay(next: next)
-        }
-        
-        // Loading indicator
+    }
+    
+    // MARK: - avPlayerView split: status overlays
+    /// Loading indicator, error overlay, seek ripples, speed indicator, seek scrub
+    /// overlay, dubbing banners, brightness/volume overlays, heatmap badge,
+    /// silence skip, and timestamped comment bubble.
+    @ViewBuilder
+    private var avPlayerStatusOverlays: some View {
+        avPlayerLoadingAndErrorOverlays
+        avPlayerGestureIndicators
+        avPlayerBrightnessVolumeOverlays
+        avPlayerSmartOverlays
+    }
+    
+    @ViewBuilder
+    private var avPlayerLoadingAndErrorOverlays: some View {
         if playerManager.isLoading {
             loadingIndicator
         }
-        
-        // 🔥 FIX: Error overlay (shows when video fails to load)
         if playerManager.hasError, let errorMsg = playerManager.errorMessage {
             errorOverlay(message: errorMsg)
         }
-        
-        // 🔥 YOUTUBE PARITY: Double-tap seek visual feedback
+    }
+    
+    @ViewBuilder
+    private var avPlayerGestureIndicators: some View {
         if showSeekRippleBackward {
             seekRippleVisual(isForward: false)
         }
         if showSeekRippleForward {
             seekRippleVisual(isForward: true)
         }
-        
-        // 🔥 YOUTUBE PARITY: Long-press 2x speed indicator
         if showSpeedUpIndicator {
             HStack(spacing: 6) {
                 Image(systemName: "forward.fill")
@@ -272,8 +293,6 @@ extension VideoDetailView {
             .transition(.scale.combined(with: .opacity))
             .allowsHitTesting(false)
         }
-        
-        // 🔥 YOUTUBE PARITY: Horizontal swipe-to-seek overlay
         if controlsCoordinator.showSeekOverlay {
             let targetTime = max(0, min(playerManager.duration, seekStartTime + seekDeltaSeconds))
             VStack(spacing: 4) {
@@ -294,53 +313,16 @@ extension VideoDetailView {
             .zIndex(350)
             .allowsHitTesting(false)
         }
-        
-        // 🔥 BEAST MODE: AI Synthesized Dubbing Banner
-        if currentAudioTrack != "English (Original)" && !isDubSynthesizing {
-            HStack(spacing: 6) {
-                Image(systemName: "waveform.circle.fill")
-                    .foregroundColor(.green)
-                Text("\(currentAudioTrack) • AI Dubbed")
-                    .font(.system(size: 12, weight: .bold))
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(Capsule().fill(Color.black.opacity(0.7)))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            .padding(.top, 60)
-            .padding(.trailing, 20)
-            .zIndex(340)
-            .allowsHitTesting(false)
-            .transition(.scale.combined(with: .opacity))
-        }
-        
-        if isDubSynthesizing {
-            HStack(spacing: 8) {
-                ProgressView().tint(.green).scaleEffect(0.8)
-                Text("Synthesizing \(currentAudioTrack)...")
-                    .font(.system(size: 12, weight: .bold))
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(Capsule().fill(Color.black.opacity(0.7)))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            .padding(.top, 60)
-            .padding(.trailing, 20)
-            .zIndex(340)
-            .allowsHitTesting(false)
-            .transition(.scale.combined(with: .opacity))
-        }
-        
-        // 🔥 YOUTUBE PARITY: Brightness overlay (left side vertical swipe)
+    }
+    
+    @ViewBuilder
+    private var avPlayerBrightnessVolumeOverlays: some View {
         if controlsCoordinator.showBrightnessOverlay {
             HStack(spacing: 12) {
                 Image(systemName: UIScreen.main.brightness > 0.5 ? "sun.max.fill" : "sun.min.fill")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(width: 24)
-                
                 VStack(alignment: .leading, spacing: 4) {
                     ProgressView(value: Double(UIScreen.main.brightness), total: 1.0)
                         .progressViewStyle(LinearProgressViewStyle(tint: .white))
@@ -360,8 +342,72 @@ extension VideoDetailView {
             .allowsHitTesting(false)
             .transition(.scale.combined(with: .opacity))
         }
-        
-        // 🔥 PHASE 154: Sentiment heatmap "Most replayed" indicator
+        if controlsCoordinator.showVolumeOverlay {
+            HStack(spacing: 12) {
+                VStack(alignment: .trailing, spacing: 4) {
+                    ProgressView(value: Double(playerManager.player?.volume ?? 0), total: 1.0)
+                        .progressViewStyle(LinearProgressViewStyle(tint: .white))
+                        .frame(width: 120)
+                    Text("\(Int((playerManager.player?.volume ?? 0) * 100))%")
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+                Image(systemName: (playerManager.player?.volume ?? 0) > 0.5 ? "speaker.wave.3.fill" : "speaker.wave.1.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 24)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(Capsule().fill(Color.black.opacity(0.75)))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            .padding(.trailing, 24)
+            .padding(.vertical, 100)
+            .zIndex(350)
+            .allowsHitTesting(false)
+            .transition(.scale.combined(with: .opacity))
+        }
+    }
+    
+    @ViewBuilder
+    private var avPlayerSmartOverlays: some View {
+        // AI Dubbing banner
+        if currentAudioTrack != "English (Original)" && !isDubSynthesizing {
+            HStack(spacing: 6) {
+                Image(systemName: "waveform.circle.fill")
+                    .foregroundColor(.green)
+                Text("\(currentAudioTrack) • AI Dubbed")
+                    .font(.system(size: 12, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(Color.black.opacity(0.7)))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .padding(.top, 60)
+            .padding(.trailing, 20)
+            .zIndex(340)
+            .allowsHitTesting(false)
+            .transition(.scale.combined(with: .opacity))
+        }
+        if isDubSynthesizing {
+            HStack(spacing: 8) {
+                ProgressView().tint(.green).scaleEffect(0.8)
+                Text("Synthesizing \(currentAudioTrack)...")
+                    .font(.system(size: 12, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(Color.black.opacity(0.7)))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .padding(.top, 60)
+            .padding(.trailing, 20)
+            .zIndex(340)
+            .allowsHitTesting(false)
+            .transition(.scale.combined(with: .opacity))
+        }
+        // Heatmap "Most replayed" badge
         if !heatmapService.mostReplayed.isEmpty, let top = heatmapService.mostReplayed.first {
             HStack(spacing: 6) {
                 Image(systemName: "flame.fill")
@@ -385,8 +431,7 @@ extension VideoDetailView {
             }())
             .animation(.easeInOut, value: playerManager.currentTime)
         }
-
-        // 🔥 PHASE 145: Auto-skip silence indicator
+        // Auto-skip silence indicator
         if showSilenceSkipIndicator {
             HStack(spacing: 6) {
                 Image(systemName: "waveform.slash")
@@ -404,8 +449,7 @@ extension VideoDetailView {
             .allowsHitTesting(false)
             .transition(.opacity)
         }
-
-        // 🔥 PHASE 146: Timestamped comment bubble
+        // Timestamped comment bubble
         if let bubble = timestampedCommentsService.commentsAt(timestampSec: playerManager.currentTime, toleranceSec: 1.5).first {
             HStack(spacing: 8) {
                 Image(systemName: "bubble.left.fill")
@@ -424,34 +468,6 @@ extension VideoDetailView {
             .padding(.leading, 16)
             .padding(.bottom, 80)
             .zIndex(345)
-            .allowsHitTesting(false)
-            .transition(.scale.combined(with: .opacity))
-        }
-
-        // 🔥 YOUTUBE PARITY: Volume overlay (right side vertical swipe)
-        if controlsCoordinator.showVolumeOverlay {
-            HStack(spacing: 12) {
-                VStack(alignment: .trailing, spacing: 4) {
-                    ProgressView(value: Double(playerManager.player?.volume ?? 0), total: 1.0)
-                        .progressViewStyle(LinearProgressViewStyle(tint: .white))
-                        .frame(width: 120)
-                    Text("\(Int((playerManager.player?.volume ?? 0) * 100))%")
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.9))
-                }
-                
-                Image(systemName: (playerManager.player?.volume ?? 0) > 0.5 ? "speaker.wave.3.fill" : "speaker.wave.1.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 24)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
-            .background(Capsule().fill(Color.black.opacity(0.75)))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-            .padding(.trailing, 24)
-            .padding(.vertical, 100)
-            .zIndex(350)
             .allowsHitTesting(false)
             .transition(.scale.combined(with: .opacity))
         }
@@ -632,11 +648,9 @@ extension VideoDetailView {
                 }
 
                 if !isHorizontalSeeking && !controlsCoordinator.showBrightnessOverlay && !controlsCoordinator.showVolumeOverlay {
-                    if translation.y > 60 {
-                        Task { await minimizeToMiniPlayer() }
-                    } else if translation.y < -60 {
-                        presentFullscreenPlayer()
-                    }
+                    // 🔥 NOTE: Swipe-up (fullscreen) and swipe-down (minimize) are now
+                    // handled by the fluid playerExpandGesture on the outer videoPlayerSection.
+                    // No duplicate action needed here.
                 }
 
                 isHorizontalSeeking = false
@@ -1295,17 +1309,117 @@ extension VideoDetailView {
         .transition(.opacity)
     }
 
+    // MARK: - Fluid Slide-to-Fullscreen Gesture (YouTube parity)
+    // Drag UP on the player → it expands toward fullscreen with a live elastic feel.
+    // Drag DOWN → elastic resistance, release → snaps back (or past threshold → mini/PiP).
+    private func playerExpandGesture(playerHeight: CGFloat, screenHeight: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                // Only activate on primarily-vertical movement; horizontal is handled by seek gesture
+                let isVertical = abs(value.translation.height) > abs(value.translation.width)
+                guard isVertical else { return }
+
+                // Don't compete with the horizontal seek overlay or brightness/volume overlays
+                guard !isHorizontalSeeking,
+                      !controlsCoordinator.showBrightnessOverlay,
+                      !controlsCoordinator.showVolumeOverlay else { return }
+
+                isExpandingPlayer = true
+                let raw = value.translation.height  // negative = dragging up
+
+                if raw < 0 {
+                    // Dragging UP toward fullscreen — elastic resistance so it feels springy
+                    let resistance: CGFloat = 0.55
+                    playerExpandOffset = raw * resistance
+                } else {
+                    // Dragging DOWN — slight elastic resist (minimize territory)
+                    let resistance: CGFloat = 0.3
+                    playerExpandOffset = raw * resistance
+                }
+            }
+            .onEnded { value in
+                guard isExpandingPlayer else { return }
+                isExpandingPlayer = false
+                let velocity = value.predictedEndTranslation.height - value.translation.height
+
+                // Threshold: 80pt upward OR fast upward flick velocity
+                let shouldExpand = value.translation.height < -80 || velocity < -200
+
+                // Threshold: 60pt downward → minimize (existing behavior kept)
+                let shouldMinimize = value.translation.height > 60
+
+                if shouldExpand {
+                    // Snap to fullscreen with a snappy spring before presenting
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.78)) {
+                        playerExpandOffset = -(screenHeight - playerHeight) / 2
+                    }
+                    HapticManager.shared.impact(style: .medium)
+                    // Small delay so the spring has time to register before the cover appears
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 80_000_000)
+                        playerExpandOffset = 0
+                        isExpandingPlayer = false
+                        presentFullscreenPlayer()
+                    }
+                } else if shouldMinimize {
+                    // Animate the player sliding DOWN off screen, then hand off to mini player.
+                    // The whole VStack also needs to slide — drive via the view offset below.
+                    HapticManager.shared.impact(style: .medium)
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.88)) {
+                        // Push the player down toward bottom of screen
+                        playerExpandOffset = screenHeight * 0.6
+                    }
+                    Task { @MainActor in
+                        // Brief pause so the animation is visible (≈ 200ms)
+                        try? await Task.sleep(nanoseconds: 200_000_000)
+                        // Reset offset before we dismiss (the view is going away anyway)
+                        playerExpandOffset = 0
+                        isExpandingPlayer = false
+                        await minimizeToMiniPlayer()
+                    }
+                } else {
+                    // Snap back to inline
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                        playerExpandOffset = 0
+                    }
+                }
+            }
+    }
+
+    // How far (0…1) the player is into its expansion toward fullscreen
+    private func expandProgress(playerHeight: CGFloat, screenHeight: CGFloat) -> CGFloat {
+        guard playerHeight > 0, screenHeight > playerHeight else { return 0 }
+        let maxTravel = (screenHeight - playerHeight) / 2
+        return min(1, max(0, -playerExpandOffset / maxTravel))
+    }
+
     var mainContent: some View {
         GeometryReader { geometry in
+            let screenH = geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom
+            // Estimated player height based on 16:9 ratio of the screen width
+            let playerH = geometry.size.width / (16.0 / 9.0)
+            let progress = expandProgress(playerHeight: playerH, screenHeight: screenH)
+
             VStack(spacing: 0) {
                 // 🔥 iOS STATUS BAR: Reserve space for status bar with black background
                 Color.black
                     .frame(height: geometry.safeAreaInsets.top)
-                
-                // ALL-IN-ONE Video Player with YouTube-style controls
-                videoPlayerSection
 
-                // Video metadata and controls (with Up Next autoplay)
+                // ALL-IN-ONE Video Player with YouTube-style controls
+                // 🔥 YOUTUBE PARITY: Fluid slide-to-fullscreen gesture lives here.
+                // As the user drags up the player scales/translates toward filling the screen.
+                videoPlayerSection
+                    .offset(y: playerExpandOffset)
+                    // Corner radius collapses from 12→0 as it nears fullscreen
+                    .clipShape(RoundedRectangle(cornerRadius: 12 * (1 - progress), style: .continuous))
+                    // Subtle scale-up so the video visually "grows" toward fullscreen
+                    .scaleEffect(1.0 + progress * 0.05)
+                    // Darken the rest of the screen as player expands
+                    .shadow(color: .black.opacity(progress * 0.4), radius: 20)
+                    .gesture(playerExpandGesture(playerHeight: playerH, screenHeight: screenH))
+                    .zIndex(isExpandingPlayer ? 10 : 0)
+
+                // Video metadata and controls
                 VideoDetailMetaView(video: video,
                                     isSubscribed: $isSubscribed,
                                     isWatchLater: $isWatchLater,
@@ -1329,26 +1443,54 @@ extension VideoDetailView {
                                     },
                                     onChannelTap: { channelName in handleChannelTap(channelName) },
                                     onHashtagTap: { hashtag in handleHashtagTap(hashtag) },
-                                    dynamicViewCount: currentViewCount, // 🔥 REAL-TIME: Pass reactive view count
-                                    relatedVideos: recommendedVideos, // 🔥 YOUTUBE PARITY: Related videos rail
+                                    dynamicViewCount: currentViewCount,
+                                    relatedVideos: recommendedVideos,
                                     onSelectRelated: { next in
                                         trackRecommendationClick(next)
                                         playNext(next)
                                     },
-                                    onShowTranscript: { showingTranscript = true }) // 🔥 YOUTUBE PARITY: Open transcript sheet
-                .overlay(alignment: .bottom) {
-                    // Simple Up Next bar with autoplay toggle
-                    if let next = recommendedVideos.first(where: { $0.id != video.id }) {
-                        VideoDetailUpNextBar(
-                            sourceVideo: video,
-                            next: next,
-                            autoplayEnabled: $autoplayEnabled,
-                            onTap: { playNext(next) },
-                            onImpression: { trackRecommendationImpression(next) }
-                        )
-                    }
+                                    onShowTranscript: { showingTranscript = true })
+
+                // 🔥 UP NEXT BAR — pinned at bottom of screen (outside scroll), YouTube parity
+                if let next = recommendedVideos.first(where: { $0.id != video.id }) {
+                    VideoDetailUpNextBar(
+                        sourceVideo: video,
+                        next: next,
+                        autoplayEnabled: $autoplayEnabled,
+                        onTap: {
+                            HapticManager.shared.impact(style: .medium)
+                            playNext(next)
+                        },
+                        onDismiss: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                // Remove the first recommendation so the bar hides.
+                                // The bar re-appears if recommendations reload.
+                                if let idx = recommendedVideos.firstIndex(where: { $0.id == next.id }) {
+                                    recommendedVideos.remove(at: idx)
+                                }
+                            }
+                        },
+                        onImpression: { trackRecommendationImpression(next) }
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(response: 0.38, dampingFraction: 0.88), value: recommendedVideos.count)
                 }
             }
+            // 🔥 YOUTUBE PARITY: Scrim darkens behind the player as it expands toward fullscreen
+            .overlay {
+                if isExpandingPlayer && progress > 0 {
+                    Color.black
+                        .opacity(progress * 0.55)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                        .animation(.linear(duration: 0.05), value: progress)
+                }
+            }
+            // 🔥 YOUTUBE PARITY: When sliding DOWN to mini player, the whole view
+            // translates and fades together — not just the player strip.
+            // playerExpandOffset > 0 means downward drag (minimize direction).
+            .offset(y: playerExpandOffset > 0 ? playerExpandOffset * 0.45 : 0)
+            .opacity(playerExpandOffset > 0 ? max(0.5, 1 - playerExpandOffset / (screenH * 0.5)) : 1)
             .background(Color.black)
             .ignoresSafeArea(edges: .top) // 🔥 Extend black background under status bar
         }
@@ -1357,7 +1499,54 @@ extension VideoDetailView {
     var primaryOverlays: some View {
         mainContent
             .statusBarHidden(false) // 🔥 Ensure status bar is always visible
-            // When user returns from fullscreen by dismissing, ensure state is consistent
+            // 🔥 YOUTUBE PARITY: Whole-screen drag-down-to-minimize gesture.
+            // YouTube lets you start the dismiss swipe from anywhere on the screen,
+            // not just the player strip.  We use simultaneousGesture so the ScrollView
+            // inside VideoDetailMetaView can still scroll — this only triggers on
+            // clear downward drags that begin near the top half of the screen.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 20)
+                    .onChanged { value in
+                        // Only fire on dominant downward movement and no other gesture active
+                        let isDownward = value.translation.height > 0
+                        let isDominantlyVertical = abs(value.translation.height) > abs(value.translation.width) * 1.5
+                        guard isDownward, isDominantlyVertical,
+                              !isHorizontalSeeking,
+                              !controlsCoordinator.showBrightnessOverlay,
+                              !controlsCoordinator.showVolumeOverlay,
+                              // Don't re-drive if the player gesture already took it
+                              playerExpandOffset <= 0 else { return }
+
+                        isExpandingPlayer = true
+                        // Gentle resistance — the view should feel tethered, not 1:1
+                        playerExpandOffset = value.translation.height * 0.38
+                    }
+                    .onEnded { value in
+                        guard isExpandingPlayer, playerExpandOffset > 0 else { return }
+                        let dy = value.translation.height
+                        let vy = value.predictedEndTranslation.height - dy
+                        let shouldMinimize = dy > 80 || vy > 280
+
+                        if shouldMinimize {
+                            HapticManager.shared.impact(style: .medium)
+                            // Animate the whole view down before dismissing
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) {
+                                playerExpandOffset = UIScreen.main.bounds.height * 0.55
+                            }
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 200_000_000)
+                                playerExpandOffset = 0
+                                isExpandingPlayer = false
+                                await minimizeToMiniPlayer()
+                            }
+                        } else {
+                            isExpandingPlayer = false
+                            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                                playerExpandOffset = 0
+                            }
+                        }
+                    }
+            )
         .sheet(isPresented: $showingCommentComposer) {
             RealTimeCommentsView(video: video)
                 .presentationDetents([.large])
