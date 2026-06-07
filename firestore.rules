@@ -1718,6 +1718,61 @@ service cloud.firestore {
                        || isAdmin());
     }
 
+    // ✅ Live betting
+    match /live_bets/{betId} {
+      allow read: if isSignedIn() &&
+                     (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /live_bet_idempotency/{key} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow write: if isAdmin();
+    }
+
+    // ✅ Premiere scheduling
+    match /scheduled_premieres/{premiereId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+                       request.resource.data.creatorId == request.auth.uid;
+      allow update: if isSignedIn() &&
+                       (resource.data.creatorId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() &&
+                       (resource.data.creatorId == request.auth.uid || isAdmin());
+    }
+
+    // ✅ Playlists (extended — public read already covered, adding create)
+    match /playlists/{playlistId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+                       request.resource.data.creatorId == request.auth.uid;
+      allow update: if isSignedIn() &&
+                       (resource.data.creatorId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() &&
+                       (resource.data.creatorId == request.auth.uid || isAdmin());
+    }
+
+    // ✅ Creator payouts (monthly ad revenue)
+    match /creator_payouts/{payoutId} {
+      allow read: if isSignedIn() &&
+                     (resource.data.creatorId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ✅ VS Match leaderboards — public read
+    match /leaderboards/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ✅ Flicks personalized feed — owner only
+    match /user_flicks_feed/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isAdmin();
+    }
+
     // ✅ STUDIO PARITY: per-video analytics events (impressions, CTR signals)
     // Clients append events; only the video's creator or admin can read.
     // Note: the broader video_analytics/{videoId}/{document=**} already allows
