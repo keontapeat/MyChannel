@@ -1773,6 +1773,90 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ✅ Watch progress — private cross-device resume
+    match /users/{userId}/watchProgress/{videoId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ✅ Channel memberships
+    match /memberships/{docId} {
+      allow read: if isSignedIn() &&
+                     (resource.data.userId == request.auth.uid ||
+                      resource.data.channelId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ✅ Membership gifts
+    match /membership_gifts/{docId} {
+      allow read: if isSignedIn() &&
+                     (resource.data.senderId == request.auth.uid ||
+                      resource.data.recipientId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ✅ Community posts
+    match /community_posts/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() &&
+                       (resource.data.creatorId == request.auth.uid || isAdmin() ||
+                        // Allow vote count updates from any signed-in user
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['pollOptions','totalVotes','likeCount','commentCount','updatedAt']));
+      allow delete: if isSignedIn() && (resource.data.creatorId == request.auth.uid || isAdmin());
+
+      match /votes/{userId} {
+        allow read: if true;
+        allow create: if isOwner(userId);
+        allow update, delete: if false;
+      }
+    }
+
+    // ✅ Tips
+    match /tips/{tipId} {
+      allow read: if isSignedIn() &&
+                     (resource.data.senderId == request.auth.uid ||
+                      resource.data.creatorId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ✅ VS Match disputes
+    match /match_disputes/{disputeId} {
+      allow read: if isSignedIn() &&
+                     (resource.data.filedBy == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.filedBy == request.auth.uid;
+      allow update: if isAdmin();
+    }
+
+    // ✅ Watch parties
+    match /watch_parties/{partyId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() &&
+                       (resource.data.hostId == request.auth.uid || isAdmin() ||
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['guestCount','updatedAt']));
+      allow delete: if isSignedIn() && resource.data.hostId == request.auth.uid;
+    }
+
+    // ✅ Search autocomplete index
+    match /search_autocomplete/{videoId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ✅ Trending hashtags
+    match /trending_hashtags/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ✅ Admin alerts — admin only
+    match /admin_alerts/{docId} {
+      allow read, write: if isAdmin();
+    }
+
     // ✅ STUDIO PARITY: per-video analytics events (impressions, CTR signals)
     // Clients append events; only the video's creator or admin can read.
     // Note: the broader video_analytics/{videoId}/{document=**} already allows
