@@ -51,9 +51,39 @@ def content_id_scan_on_ready(
         title      = (after.get("title") or "").lower()
         tags       = [t.lower() for t in (after.get("tags") or [])]
         isrc       = (after.get("isrc") or "").strip().upper()
+        audio_url  = after.get("hlsURL") or after.get("videoURL") or ""
 
         db = _db()
 
+        # ── Acoustic fingerprint scan (preferred) ──────────────────────────
+        # Call the protect Cloud Run service for real Chromaprint matching.
+        # If it's reachable, it writes the claim itself and we're done.
+        protect_url = os.environ.get("PROTECT_SERVICE_URL", "")
+        if protect_url and audio_url:
+            try:
+                import google.auth
+                import google.auth.transport.requests as _gr
+                from google.oauth2 import id_token as _idt
+
+                target = f"{protect_url.rstrip('/')}/protect/scan"
+                auth_req = _gr.Request()
+                token = _idt.fetch_id_token(auth_req, protect_url.rstrip('/'))
+                resp = requests.post(
+                    target,
+                    json={"videoId": video_id, "audioUrl": audio_url, "creatorId": creator_id},
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                    timeout=60,
+                )
+                if resp.ok:
+                    # protect service already wrote scan result + any claim
+                    logging.info(f"[content_id] acoustic scan done for {video_id}: {resp.json()}")
+                    return
+                logging.warning(f"[content_id] protect service {resp.status_code}; "
+                                f"falling back to metadata match")
+            except Exception as e:
+                logging.warning(f"[content_id] protect call failed ({e}); metadata fallback")
+
+        # ── Metadata-level match (fallback) ────────────────────────────────
         # Metadata-level match: ISRC exact match, or title/tag overlap with reference
         matched_ref = None
         match_method = ""

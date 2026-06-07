@@ -3647,6 +3647,27 @@ def register_content_id_reference(req: https_fn.Request) -> https_fn.Response:
             "createdAt":  firestore.SERVER_TIMESTAMP,
         })
 
+        # Kick off acoustic fingerprint registration on the protect service.
+        # If unreachable, the doc stays "pending_scan" and a later batch job
+        # can pick it up. Non-blocking — registration still succeeds.
+        protect_url = os.environ.get("PROTECT_SERVICE_URL", "")
+        if protect_url and storage_url:
+            try:
+                import google.auth.transport.requests as _gr
+                from google.oauth2 import id_token as _idt
+                base = protect_url.rstrip('/')
+                token = _idt.fetch_id_token(_gr.Request(), base)
+                requests.post(
+                    f"{base}/protect/register",
+                    json={"referenceId": ref.id, "audioUrl": storage_url,
+                          "ownerId": uid, "policy": policy, "title": title},
+                    headers={"Authorization": f"Bearer {token}",
+                             "Content-Type": "application/json"},
+                    timeout=60,
+                )
+            except Exception as e:
+                logging.warning(f"[content_id] register fingerprint deferred: {e}")
+
         logging.info(f"[content_id] registered '{title}' by {uid} policy={policy}")
         return https_fn.Response({"ok": True, "referenceId": ref.id}, 200,
                                  headers={"Access-Control-Allow-Origin": "*"})
