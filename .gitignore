@@ -65,3 +65,4 @@ gcloud-sdk.tar.gz
 
 # Local build/verify artifacts (SwiftPM checkouts, derived data)
 build-verify/
+__pycache__/
