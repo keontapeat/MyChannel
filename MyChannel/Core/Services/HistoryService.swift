@@ -2,6 +2,9 @@ import Foundation
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
 
 @MainActor
 final class HistoryService: ObservableObject {
@@ -10,12 +13,21 @@ final class HistoryService: ObservableObject {
     @Published var isWatchHistoryPaused: Bool = false
 
     #if canImport(FirebaseFirestore)
-    private var db: Firestore { Firestore.firestore() }
+    /// 🔥 FIX: Optional accessor — `Firestore.firestore()` traps (hard crash) when
+    /// `FirebaseApp.app() == nil`. Guard so the play path (logStart → addOrUpdate)
+    /// can't crash if it runs before Firebase finishes configuring.
+    private var db: Firestore? {
+        #if canImport(FirebaseCore)
+        guard FirebaseApp.app() != nil else { return nil }
+        #endif
+        return Firestore.firestore()
+    }
     #endif
 
     func addOrUpdateHistoryItem(_ item: WatchHistoryItem, userId: String) async {
         guard !isWatchHistoryPaused else { return }
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return }
         do {
             let ref = db.collection("history").document(userId).collection("items").document(item.id)
             try await ref.setData([
@@ -39,6 +51,7 @@ final class HistoryService: ObservableObject {
     func updateProgress(itemId: String, userId: String, progress: Double, position: TimeInterval) async {
         guard !isWatchHistoryPaused else { return }
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return }
         do {
             let ref = db.collection("history").document(userId).collection("items").document(itemId)
             try await ref.updateData([
@@ -59,6 +72,7 @@ final class HistoryService: ObservableObject {
 
     func fetch(userId: String, limit: Int = 100) async -> [WatchHistoryItem] {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return [] }
         do {
             let snap = try await db.collection("history").document(userId).collection("items")
                 .order(by: "watchedAt", descending: true)
@@ -106,6 +120,7 @@ final class HistoryService: ObservableObject {
     
     func removeItem(itemId: String, userId: String) async {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return }
         do {
             let ref = db.collection("history").document(userId).collection("items").document(itemId)
             try await ref.delete()
@@ -117,6 +132,7 @@ final class HistoryService: ObservableObject {
     
     func clearAll(userId: String) async {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return }
         do {
             let snap = try await db.collection("history").document(userId).collection("items").getDocuments()
             // 🔥 FIX: Use batch delete instead of sequential deletes (up to 500 per batch)
@@ -134,6 +150,7 @@ final class HistoryService: ObservableObject {
     func clearItems(userId: String, matching predicate: @escaping (WatchHistoryItem) -> Bool) async {
         let items = await fetch(userId: userId, limit: 500)
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return }
         do {
             let batch = db.batch()
             for item in items where predicate(item) {
@@ -149,6 +166,7 @@ final class HistoryService: ObservableObject {
     
     func saveNotInterested(_ item: WatchHistoryItem, userId: String) async {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return }
         do {
             try await db.collection("users").document(userId).collection("notInterested").document(item.contentId).setData([
                 "contentId": item.contentId,
@@ -165,6 +183,7 @@ final class HistoryService: ObservableObject {
     
     func loadPauseState(userId: String) async {
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return }
         do {
             let snap = try await db.collection("history").document(userId).getDocument()
             isWatchHistoryPaused = snap.data()?["isPaused"] as? Bool ?? false
@@ -177,6 +196,7 @@ final class HistoryService: ObservableObject {
     func setPaused(_ paused: Bool, userId: String) async {
         isWatchHistoryPaused = paused
         #if canImport(FirebaseFirestore)
+        guard let db = db else { return }
         do {
             try await db.collection("history").document(userId).setData([
                 "isPaused": paused,

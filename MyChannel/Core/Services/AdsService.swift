@@ -2,6 +2,9 @@ import Foundation
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
 
 struct VMAPResponse: Codable {
     let prerollUrl: String?
@@ -310,6 +313,13 @@ extension AdsService {
         print("💰 [AdsService] Tracking ad revenue: $\(String(format: "%.4f", adRevenue)) for video \(videoId)")
         
         #if canImport(FirebaseFirestore)
+        #if canImport(FirebaseCore)
+        guard FirebaseApp.app() != nil else {
+            print("⚠️ [AdsService] Firebase not configured — revenue tracked locally only")
+            await AdvancedAnalyticsService.shared.trackRevenue(videoId: videoId, amount: adRevenue, source: "ads")
+            return
+        }
+        #endif
         let db = Firestore.firestore()
         
         do {
@@ -364,6 +374,9 @@ extension AdsService {
     // 🔥 GET CREATOR EARNINGS
     static func getCreatorEarnings(creatorId: String) async -> (pending: Double, total: Double, adRevenue: Double)? {
         #if canImport(FirebaseFirestore)
+        #if canImport(FirebaseCore)
+        guard FirebaseApp.app() != nil else { return nil }
+        #endif
         do {
             let doc = try await Firestore.firestore()
                 .collection("creator_earnings")
@@ -389,6 +402,11 @@ extension AdsService {
     // 🔥 REQUEST PAYOUT (when creator wants to cash out)
     static func requestPayout(creatorId: String, amount: Double) async throws {
         #if canImport(FirebaseFirestore)
+        #if canImport(FirebaseCore)
+        guard FirebaseApp.app() != nil else {
+            throw NSError(domain: "AdsService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Firebase not configured"])
+        }
+        #endif
         let db = Firestore.firestore()
         
         // Create payout request

@@ -8,6 +8,9 @@
 
 import Foundation
 import FirebaseFirestore
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
 
 struct WatchProgress: Codable, Identifiable {
     let id: String
@@ -25,24 +28,38 @@ final class WatchProgressService: ObservableObject {
     static let shared = WatchProgressService()
     private init() {}
     @Published private(set) var progress: [String: WatchProgress] = [:]
-    private let db = Firestore.firestore()
+
+    /// 🔥 FIX: Lazily resolve Firestore only when Firebase is configured.
+    /// A stored `let db = Firestore.firestore()` traps (hard crash) when
+    /// `FirebaseApp.app() == nil`, which can happen if a caller (e.g.
+    /// VideoDetailView.onDisappear → saveProgress) touches this singleton
+    /// before Firebase finishes configuring.
+    private var db: Firestore? {
+        #if canImport(FirebaseCore)
+        guard FirebaseApp.app() != nil else { return nil }
+        #endif
+        return Firestore.firestore()
+    }
 
     func saveProgress(userId: String, videoId: String, position: Double, duration: Double) async throws {
         let pct = duration > 0 ? min(1.0, position / duration) : 0
         let docId = "\(userId)_\(videoId)"
         let data: [String: Any] = ["userId": userId, "videoId": videoId, "position": position, "duration": duration, "pct": pct, "lastWatched": FieldValue.serverTimestamp()]
-        do {
-            try await db.collection("watch_progress").document(docId).setData(data, merge: true)
-        } catch {
-            #if DEBUG
-            print("⚠️ [WatchProgress] saveProgress skipped: \(error.localizedDescription)")
-            #endif
+        if let db = db {
+            do {
+                try await db.collection("watch_progress").document(docId).setData(data, merge: true)
+            } catch {
+                #if DEBUG
+                print("⚠️ [WatchProgress] saveProgress skipped: \(error.localizedDescription)")
+                #endif
+            }
         }
         let wp = WatchProgress(id: docId, userId: userId, videoId: videoId, positionSec: position, durationSec: duration, completionPct: pct, lastWatchedAt: Date())
         progress[videoId] = wp
     }
 
     func fetchProgress(userId: String, videoId: String) async throws -> WatchProgress? {
+        guard let db = db else { return progress[videoId] }
         let docId = "\(userId)_\(videoId)"
         let snapshot = try await db.collection("watch_progress").document(docId).getDocument()
         guard let data = snapshot.data() else { return nil }
@@ -53,6 +70,7 @@ final class WatchProgressService: ObservableObject {
     }
 
     func fetchAllInProgress(userId: String) async throws {
+        guard let db = db else { return }
         let snapshot = try await db.collection("watch_progress")
             .whereField("userId", isEqualTo: userId)
             .whereField("pct", isLessThan: 0.9)
