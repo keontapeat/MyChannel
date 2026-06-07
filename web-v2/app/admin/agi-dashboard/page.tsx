@@ -42,7 +42,7 @@ interface AGIAgent {
 
 export default function AGIDashboardPage() {
   // All 30 AGI agents
-  const [agents, setAgents] = useState<AGIAgent[]>([
+  const [agents, setAgents] = useState<AGIAgent[]>(() => [
     // Money Maker Agents (5)
     {
       id: 'dynamic-pricing',

@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // macOS AppleDouble metadata files — not real source.
+    "**/._*",
+    ".storybook/**",
   ]),
 ]);
 
