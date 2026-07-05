@@ -53,7 +53,7 @@ struct NuclearYouTubeStudioDashboard: View {
                         newsCard
                     }
                     .padding(16)
-                    .padding(.bottom, 100)
+                    .padding(.bottom, 32)
                     .frame(maxWidth: 1200)
                 } else {
                     // 🔥 LIST LAYOUT FOR IPHONE
@@ -81,7 +81,7 @@ struct NuclearYouTubeStudioDashboard: View {
                         newsCard
                             .padding(.horizontal, 16)
                             .padding(.top, 16)
-                            .padding(.bottom, 100)
+                            .padding(.bottom, 32)
                     }
                 }
             }
@@ -386,6 +386,7 @@ struct NuclearYouTubeStudioDashboard: View {
                 .padding(.vertical, 32)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(AppTheme.Colors.surface)
         .cornerRadius(12)

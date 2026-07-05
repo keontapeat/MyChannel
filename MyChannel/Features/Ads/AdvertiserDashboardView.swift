@@ -243,7 +243,10 @@ struct AdvertiserDashboardView: View {
                     title: "Upload Creative",
                     color: .green
                 ) {
-                    // TODO
+                    NotificationCenter.default.post(
+                        name: Notification.Name("PresentCreativeFilePicker"),
+                        object: nil
+                    )
                 }
                 
                 AdvertiserQuickActionButton(

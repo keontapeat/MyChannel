@@ -97,7 +97,7 @@ class VideoStreamingService: ObservableObject {
                 duration: videoInfo.duration,
                 viewCount: 0,
                 likeCount: 0,
-                creator: User.sampleUsers[0], // TODO: Use actual current user
+                creator: AuthenticationManager.shared.currentUser ?? User.sampleUsers[0],
                 category: category,
                 tags: tags,
                 isPublic: isPublic

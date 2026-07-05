@@ -256,6 +256,7 @@ final class PlatformMonitorService: ObservableObject {
                     let uid = data["userId"] as? String ?? "unknown"
                     let displayTitle = data["title"] as? String ?? "Untitled"
                     let creatorName = data["channelName"] as? String ?? "Unknown Creator"
+                    let thumbnailURL = data["thumbnailURL"] as? String ?? data["thumbnail"] as? String
 
                     // Check for violation keywords
                     if let violation = self.detectViolation(in: combined) {
@@ -266,7 +267,8 @@ final class PlatformMonitorService: ObservableObject {
                                 creatorName: creatorName,
                                 creatorId: uid,
                                 violationType: violation.type,
-                                confidence: violation.confidence
+                                confidence: violation.confidence,
+                                thumbnailURL: thumbnailURL
                             )
                         }
                     }
@@ -380,7 +382,7 @@ final class PlatformMonitorService: ObservableObject {
         }
     }
 
-    private func writeContentFlag(videoId: String, videoTitle: String, creatorName: String, creatorId: String, violationType: String, confidence: Int) async {
+    private func writeContentFlag(videoId: String, videoTitle: String, creatorName: String, creatorId: String, violationType: String, confidence: Int, thumbnailURL: String? = nil) async {
         // Dedup: don't flag the same video twice
         let existing = try? await db.collection("contentFlags")
             .whereField("videoId", isEqualTo: videoId)
@@ -405,6 +407,22 @@ final class PlatformMonitorService: ObservableObject {
             contentFlagged += 1
             print("🚩 [Content] \(violationType) — '\(videoTitle.prefix(40))'")
 
+            // Write the evidence record the 3-Strike review sheet actually displays
+            // (StrikeCaseReviewSheet queries `flaggedContent` by userId) — without this,
+            // "FLAGGED CONTENT EVIDENCE" is always empty for AI-detected violations.
+            if !creatorId.isEmpty {
+                var evidence: [String: Any] = [
+                    "userId": creatorId,
+                    "title": videoTitle,
+                    "reason": violationType,
+                    "flaggedAt": Timestamp(date: Date()),
+                    "reportCount": 1,
+                    "source": "PlatformMonitorService"
+                ]
+                if let thumbnailURL { evidence["imageURL"] = thumbnailURL }
+                try? await db.collection("flaggedContent").addDocument(data: evidence)
+            }
+
             // Auto-queue for 3-Strike review if confidence is high enough
             if confidence >= 85 && !creatorId.isEmpty {
                 await autoQueueStrikeCase(
@@ -412,7 +430,8 @@ final class PlatformMonitorService: ObservableObject {
                     creatorName: creatorName,
                     violationType: violationType,
                     videoTitle: videoTitle,
-                    confidence: confidence
+                    confidence: confidence,
+                    thumbnailURL: thumbnailURL
                 )
             }
         } catch {
@@ -422,7 +441,7 @@ final class PlatformMonitorService: ObservableObject {
 
     // MARK: - Auto Strike Queue
 
-    private func autoQueueStrikeCase(userId: String, creatorName: String, violationType: String, videoTitle: String, confidence: Int) async {
+    private func autoQueueStrikeCase(userId: String, creatorName: String, violationType: String, videoTitle: String, confidence: Int, thumbnailURL: String? = nil) async {
         // Look up user details
         let userSnap = try? await db.collection("users").document(userId).getDocument()
         let username = userSnap?.data()?["username"] as? String
@@ -436,7 +455,7 @@ final class PlatformMonitorService: ObservableObject {
             .whereField("status", in: [StrikeCaseStatus.active.rawValue, StrikeCaseStatus.pendingReview.rawValue])
             .getDocuments()
 
-        let violation: [String: Any] = [
+        var violation: [String: Any] = [
             "id": UUID().uuidString,
             "type": violationType,
             "detail": "AI detected '\(violationType)' in: \"\(videoTitle)\" — \(confidence)% confidence.",
@@ -445,6 +464,7 @@ final class PlatformMonitorService: ObservableObject {
             "severity": confidence >= 95 ? "critical" : "high",
             "source": "ai"
         ]
+        if let thumbnailURL { violation["thumbnailURL"] = thumbnailURL }
 
         if let existingDoc = existing?.documents.first {
             let currentStrikes = existingDoc.data()["strikeCount"] as? Int ?? 0

@@ -72,6 +72,11 @@ class VideoUploadManager: ObservableObject {
     // 🔥 NUCLEAR FIX #1: Upload cancellation support
     private var uploadTask: Task<Video, Error>?
     @Published var isCancelling: Bool = false
+    // 🔥 FIX #2: Track the live Firebase Storage transfer(s) so cancelUpload()
+    // actually stops the network upload instead of only abandoning the Swift Task.
+    #if canImport(FirebaseStorage)
+    private var activeStorageUploadTasks: [StorageUploadTask] = []
+    #endif
     
     // 🔥 Flicks/Shorts mode - when true, saves to "shorts" collection
     @Published var isFlicksMode: Bool = false
@@ -272,6 +277,9 @@ class VideoUploadManager: ObservableObject {
         
         do {
             uploadedVideo = try await uploadTask?.value
+            #if canImport(FirebaseStorage)
+            activeStorageUploadTasks.removeAll()
+            #endif
             if let uploadedVideo {
                 // 🔥 SAVE TO FIRESTORE: Ensure video is saved to Firestore for profile display
                 // 🔥 FIX: Ensure viewCount is initialized to 0 in Firestore
@@ -496,8 +504,14 @@ class VideoUploadManager: ObservableObject {
             // 🔥 NUCLEAR FIX #1: Handle cancellation gracefully
             uploadError = "Upload cancelled by user"
             print("🚫 [VideoUploadManager] Upload cancelled by user")
+            #if canImport(FirebaseStorage)
+            activeStorageUploadTasks.removeAll()
+            #endif
         } catch {
             uploadError = error.localizedDescription
+            #if canImport(FirebaseStorage)
+            activeStorageUploadTasks.removeAll()
+            #endif
         }
         
         isUploading = false
@@ -514,6 +528,16 @@ class VideoUploadManager: ObservableObject {
         print("🚫 [VideoUploadManager] Cancelling upload...")
         isCancelling = true
         uploadTask?.cancel()
+        
+        // 🔥 FIX #2: Actually stop the in-flight Firebase Storage network transfer(s),
+        // not just the Swift Task wrapping them — otherwise the file keeps
+        // uploading in the background after the user "cancels".
+        #if canImport(FirebaseStorage)
+        for task in activeStorageUploadTasks {
+            task.cancel()
+        }
+        activeStorageUploadTasks.removeAll()
+        #endif
         
         // Reset state
         isUploading = false
@@ -608,6 +632,7 @@ class VideoUploadManager: ObservableObject {
             } else {
                 uploadTask = videoRef.putData(data, metadata: storageMetadata)
             }
+            activeStorageUploadTasks.append(uploadTask)
             
             // Observe progress
             let progressObserver = uploadTask.observe(.progress) { [weak self] snapshot in
@@ -646,6 +671,7 @@ class VideoUploadManager: ObservableObject {
                     "videoId": videoId
                 ]
                 let thumbTask = thumbRef.putData(thumbData, metadata: thumbMeta)
+                activeStorageUploadTasks.append(thumbTask)
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                     thumbTask.observe(.success) { _ in
                         continuation.resume()

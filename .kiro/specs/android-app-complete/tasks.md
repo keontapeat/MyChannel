@@ -56,7 +56,7 @@ Build the complete MyChannel Android app in 17 sequential/parallel tasks, progre
   - **Acceptance:** Home screen displays real data from Firestore with skeleton loading, filter chips work, pull-to-refresh works
   - **Depends on:** 2, 3
 
-- [ ] 5. Video Player Screen
+- [x] 5. Video Player Screen
   - Create `VideoPlayerViewModel.kt` owning an `ExoPlayer` instance; manage `VideoPlayerUiState`; implement `loadVideo(videoId)`, `togglePlayPause()`, `seekTo()`, `setQuality()`, `setSpeed()`, `toggleLike()`, `toggleSave()`, `postComment()`, `loadComments()`; release player in `onCleared()`
   - Create `ui/screens/video/VideoPlayerScreen.kt` with: full-width `AndroidView` wrapping `PlayerView`, custom overlay controls (play/pause, seek bar, time, quality, speed, fullscreen, PiP, cast), video metadata section, like/dislike/share/save action row, expandable description, comments `LazyColumn` with nested replies, related videos list
   - Implement quality selection and playback speed `ModalBottomSheet` dialogs
@@ -68,7 +68,7 @@ Build the complete MyChannel Android app in 17 sequential/parallel tasks, progre
   - **Acceptance:** Videos play with HLS, controls work, PiP works, background audio works, comments load
   - **Depends on:** 2, 4
 
-- [ ] 6. Floating Mini Player
+- [x] 6. Floating Mini Player
   - Create `MiniPlayerState.kt` data class and `LocalMiniPlayer` `CompositionLocalProvider` at the nav root
   - Update `FloatingMiniPlayer.kt` to use Media3 `ExoPlayer` (fix legacy ExoPlayer2 imports), add proper swipe-to-dismiss with `Animatable` offset, add tap-to-expand navigation back to `VideoPlayerScreen`
   - Integrate `FloatingMiniPlayer` into the main `Scaffold` above the `NavigationBar` — show only when `MiniPlayerState.isVisible`
@@ -77,7 +77,7 @@ Build the complete MyChannel Android app in 17 sequential/parallel tasks, progre
   - **Acceptance:** Mini player appears when navigating away from a playing video, tap expands back to player, swipe dismisses
   - **Depends on:** 5
 
-- [ ] 7. Flicks (Shorts) Screen
+- [x] 7. Flicks (Shorts) Screen
   - Create `FlicksViewModel.kt` with a `Pager` backed by a Firestore `PagingSource` querying `isShort == true`; manage current index, like state, follow state
   - Create `ui/screens/flicks/FlicksScreen.kt` using `VerticalPager` for full-screen swipe navigation; each page hosts an `ExoPlayer` instance that auto-plays when active and pauses when not; overlay: creator avatar + username + follow button, like/comment/share buttons, caption text, audio attribution row
   - Implement like action updating Firestore atomically
@@ -87,7 +87,7 @@ Build the complete MyChannel Android app in 17 sequential/parallel tasks, progre
   - **Acceptance:** Flicks feed loads, videos auto-play on swipe, like/share/comment work
   - **Depends on:** 4, 5
 
-- [ ] 8. Search Screen
+- [x] 8. Search Screen
   - Create `SearchViewModel.kt` with `SearchUiState`; implement `search(query)` with 300ms debounce using `Flow.debounce`; implement `saveToHistory()`, `clearHistory()`, `loadTrending()`
   - Create `ui/screens/search/SearchScreen.kt` with: `SearchBar` composable at top, history list (with delete per item + clear all), trending searches section, results `LazyColumn` with filter tabs (All, Videos, Channels, Playlists, Live) using `TabRow`
   - Create `ui/components/ChannelCard.kt` — channel avatar, name, subscriber count, subscribe button
@@ -96,7 +96,7 @@ Build the complete MyChannel Android app in 17 sequential/parallel tasks, progre
   - **Acceptance:** Search returns results, history persists, voice search works, filter tabs filter results
   - **Depends on:** 2, 4
 
-- [ ] 9. Profile & Channel Screen
+- [x] 9. Profile & Channel Screen
   - Create `ProfileViewModel.kt` with `ProfileUiState`; implement `loadProfile(userId)`, `subscribe()`, `unsubscribe()`, `editProfile()`, `uploadAvatar()`
   - Create `ui/screens/profile/ProfileScreen.kt` with: banner image, circular avatar, username + verified badge, subscriber/video counts, bio, Subscribe/Edit Profile button (context-aware), tab row (Videos, Playlists, About), `LazyVerticalGrid` for videos tab
   - Implement subscribe/unsubscribe with optimistic UI update and Firestore atomic increment
@@ -106,7 +106,7 @@ Build the complete MyChannel Android app in 17 sequential/parallel tasks, progre
   - **Acceptance:** Profile loads, subscribe/unsubscribe works, own profile shows edit option, avatar upload works
   - **Depends on:** 2, 4
 
-- [ ] 10. Upload & Creator Studio
+- [x] 10. Upload & Creator Studio
   - Create `UploadViewModel.kt` managing upload state (idle, selecting, uploading with progress, processing, complete, error); implement `selectVideo()`, `startUpload()`, `cancelUpload()`
   - Create `services/UploadWorker.kt` extending `CoroutineWorker`; implement chunked Firebase Storage upload with `setProgress()` for progress reporting; on completion write Firestore video document with `status: "processing"`
   - Create `ui/screens/upload/UploadScreen.kt` with: video picker (gallery intent), thumbnail selector, form fields (title, description, tags, category, privacy), upload progress `LinearProgressIndicator`, cancel button
@@ -115,7 +115,7 @@ Build the complete MyChannel Android app in 17 sequential/parallel tasks, progre
   - **Acceptance:** Video can be selected and uploaded with progress, WorkManager job survives app backgrounding, Studio shows video list
   - **Depends on:** 2, 3
 
-- [ ] 11. Subscriptions & Library Screens
+- [x] 11. Subscriptions & Library Screens
   - Create `SubscriptionsViewModel.kt` loading videos from followed channels sorted by `uploadedAt` desc using Paging 3
   - Create `ui/screens/subscriptions/SubscriptionsScreen.kt` with: `LazyColumn` of `VideoCard` items, "Manage Subscriptions" bottom sheet with unsubscribe and notification bell toggle per channel
   - Create `LibraryViewModel.kt` managing watch history, saved videos, playlists, and downloads
@@ -125,7 +125,7 @@ Build the complete MyChannel Android app in 17 sequential/parallel tasks, progre
   - **Acceptance:** Subscriptions feed shows latest videos from followed channels, Library tabs all load correct data, offline playback works
   - **Depends on:** 4, 5
 
-- [ ] 12. Live Streaming Viewer & Creator
+- [x] 12. Live Streaming Viewer & Creator
   - Create `LiveViewModel.kt` managing `LiveUiState` (stream metadata, chat messages, viewer count, isLive); implement `loadStream(streamId)`, `sendMessage(text)`, `sendSuperChat(text, amount)`, `startStream()`, `endStream()`
   - Create `ui/screens/live/LiveScreen.kt` with: full-width `PlayerView` for HLS live stream, LIVE badge + viewer count overlay, real-time chat panel (`LazyColumn` with `reverseLayout = true`), chat input row with send and Super Chat buttons, creator end-stream button
   - Implement real-time chat via Firebase Realtime Database listener using `callbackFlow`
@@ -135,7 +135,7 @@ Build the complete MyChannel Android app in 17 sequential/parallel tasks, progre
   - **Acceptance:** Live streams play, chat updates in real-time, Super Chat flow works, stream creation returns ingest URL
   - **Depends on:** 5, 3
 
-- [ ] 13. VS Match Screen
+- [x] 13. VS Match Screen
   - Create `VSMatchViewModel.kt` with `VSMatchUiState`; implement `loadOpenMatches()`, `createMatch(wagerAmount)`, `acceptMatch(matchId)`, `loadMyMatches()`; all match creation/acceptance calls go through Cloud Function `createVSMatch` callable
   - Create `ui/screens/vsmatch/VSMatchScreen.kt` with: tab row (Open Challenges, My Matches, Leaderboard), open challenges `LazyColumn` with match cards (challenger avatar, wager amount, division belt icon, accept button), My Matches list with status chips, Leaderboard with belt rankings
   - Implement compliance gate: check `user.age >= 18` and `user.termsAccepted` before showing create/accept UI; show age verification dialog if needed; show KYC prompt for wagers ≥ $500 (50000 cents)
@@ -145,7 +145,7 @@ Build the complete MyChannel Android app in 17 sequential/parallel tasks, progre
   - **Acceptance:** Open matches load, compliance checks fire correctly, match creation calls Cloud Function, result screen shows correct payout
   - **Depends on:** 2, 3
 
-- [ ] 14. Notifications
+- [x] 14. Notifications
   - Create `services/MyChannelMessagingService.kt` extending `FirebaseMessagingService`; handle `onMessageReceived` for foreground notifications using `NotificationCompat`; handle `onNewToken` to update Firestore user document
   - Create `NotificationViewModel.kt` loading notifications from Firestore `notifications/{uid}/items` ordered by `createdAt` desc; implement `markAsRead(notifId)`, `markAllAsRead()`, `deleteNotification(notifId)`
   - Create `ui/screens/notifications/NotificationsScreen.kt` with `LazyColumn` of notification items (icon by type, title, body, timestamp, unread indicator); swipe-to-delete; "Mark all read" action in top bar
@@ -155,7 +155,7 @@ Build the complete MyChannel Android app in 17 sequential/parallel tasks, progre
   - **Acceptance:** FCM notifications arrive and display, tapping navigates to correct screen, in-app center shows notification history
   - **Depends on:** 1, 3
 
-- [ ] 15. Settings Screen
+- [x] 15. Settings Screen
   - Create `SettingsViewModel.kt` reading/writing `DataStore<Preferences>`; manage: `themeMode` (Light/Dark/System), `videoQuality` (Auto/144p/.../1080p), `dataSaverEnabled`, `downloadQuality`, `notificationPreferences` map, `autoplayEnabled`
   - Create `ui/screens/settings/SettingsScreen.kt` with grouped `LazyColumn` sections: Appearance (theme selector), Playback (quality, autoplay, data saver toggles), Downloads (quality, storage info), Notifications (per-type toggles), Account (edit profile link, privacy policy, terms, sign out with confirmation dialog)
   - Apply `themeMode` change immediately by passing it to `MyChannelTheme` via a `StateFlow` observed at the root
@@ -163,7 +163,7 @@ Build the complete MyChannel Android app in 17 sequential/parallel tasks, progre
   - **Acceptance:** Theme changes apply immediately, data saver caps quality, sign out works, all preferences persist across restarts
   - **Depends on:** 1, 3
 
-- [ ] 16. AdMob Integration & Monetization
+- [x] 16. AdMob Integration & Monetization
   - Add AdMob dependency and initialize `MobileAds` in `MyChannelApp`
   - Create `AdManager.kt` singleton (Hilt `@Singleton`) managing banner, interstitial, and rewarded ad loading and display
   - Integrate banner ad in `HomeScreen` between feed sections (hidden for premium users)
@@ -229,3 +229,11 @@ Build the complete MyChannel Android app in 17 sequential/parallel tasks, progre
 - The existing `MyChannelNavigation.kt` references `FlicksScreen`, `UploadScreen`, `SubscriptionsScreen`, `LibraryScreen` which don't exist yet — stub implementations are acceptable until their respective tasks run.
 - VS Match money handling: all amounts in integer cents, all mutations via Cloud Functions, never direct Firestore writes from the client for money fields.
 - The `google-services.json` file must be placed at `android/app/google-services.json` before the app can connect to Firebase. This is a manual step outside the scope of these tasks.
+
+## Status Notes (implementation reconciliation)
+
+- Tasks 1–16 are implemented and wired into `MyChannelNavigation.kt` (verified by source inspection, not yet by a Gradle build — no JDK in the agent environment). Owner should confirm with:
+  `cd android && ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`
+- Task 5 PiP: manual PiP button + auto-PiP on `onUserLeaveHint` are done. `MainActivity` now declares `android:supportsPictureInPicture="true"` and reads `com.mychannel.ui.PipController.isVideoActive`, which `VideoPlayerScreen` toggles from the ExoPlayer `isPlaying` state.
+- Task 17 remaining: unit tests for `HomeViewModel`, `AuthViewModel`, `UploadViewModel`, `SearchViewModel`, and `VideoPlayerViewModel` now exist (stale test fakes for `VideoRepository`/`AuthRepository` were repaired so the unit-test source compiles again). Still open: full accessibility audit (contentDescription/touch-target sweep), `ConnectivityObserver` snackbar, and a clean `lintDebug` + ProGuard verification pass — all need an owner build to confirm.
+- Pre-production: `NetworkModule.kt` ships placeholder TLS certificate pins — replace with real SHA-256 pins before release.

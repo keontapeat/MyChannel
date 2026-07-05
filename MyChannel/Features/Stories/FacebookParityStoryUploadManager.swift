@@ -11,6 +11,9 @@ import SwiftUI
 import AVFoundation
 import Photos
 import Combine
+#if canImport(FirebaseStorage)
+import FirebaseStorage
+#endif
 
 @MainActor
 class FacebookParityStoryUploadManager: ObservableObject {
@@ -497,7 +500,8 @@ class FacebookParityStoryUploadManager: ObservableObject {
             
             // Step 4: Upload to storage (80%)
             uploadProgress = 0.8
-            let uploadedURL = try await uploadMediaToStorage(finalMedia.url)
+            let storageMediaType: StoryMediaType = (finalMedia.type == .video) ? .video : .image
+            let uploadedURL = try await uploadMediaToStorage(finalMedia.url, type: storageMediaType)
             
             // Step 5: Create story metadata (90%)
             uploadProgress = 0.9
@@ -658,9 +662,40 @@ class FacebookParityStoryUploadManager: ObservableObject {
         return media
     }
     
-    private func uploadMediaToStorage(_ url: URL) async throws -> String {
-        // Upload to cloud storage and return public URL
-        return "https://example.com/story_media.jpg"
+    private func uploadMediaToStorage(_ url: URL, type: StoryMediaType) async throws -> String {
+        // Upload to Firebase Storage under the owner-scoped stories path that the
+        // Storage security rules allow: stories/{userId}/{storyId}. Returns the
+        // public download URL. No placeholder/local fallback — a failure here must
+        // surface so the creator sees a real error instead of a dead story.
+        #if canImport(FirebaseStorage)
+        guard let userId = AuthenticationManager.shared.currentUser?.id else {
+            throw StoryUploadError.notAuthenticated
+        }
+
+        let isVideo = (type == .video)
+        let ext: String = {
+            let raw = url.pathExtension.lowercased()
+            if !raw.isEmpty { return raw }
+            return isVideo ? "mp4" : "jpg"
+        }()
+        let storyId = "\(UUID().uuidString).\(ext)"
+
+        let ref = Storage.storage().reference().child("stories/\(userId)/\(storyId)")
+        let metadata = StorageMetadata()
+        metadata.contentType = isVideo ? "video/mp4" : "image/jpeg"
+        metadata.customMetadata = ["ownerUid": userId]
+
+        do {
+            _ = try await ref.putFileAsync(from: url, metadata: metadata)
+            let downloadURL = try await ref.downloadURL()
+            return downloadURL.absoluteString
+        } catch {
+            print("🚨 [StoryUpload] Firebase Storage upload failed for user \(userId): \(error)")
+            throw StoryUploadError.uploadFailed(error.localizedDescription)
+        }
+        #else
+        throw StoryUploadError.uploadFailed("Firebase Storage is unavailable in this build")
+        #endif
     }
     
     private func createStoryMetadata(
@@ -852,6 +887,8 @@ enum StoryUploadError: LocalizedError {
     case exportFailed
     case facebookComplianceFailure([String])
     case autoFixFailed([String])
+    case notAuthenticated
+    case uploadFailed(String)
     
     var errorDescription: String? {
         switch self {
@@ -867,6 +904,10 @@ enum StoryUploadError: LocalizedError {
             return "Facebook compliance failed: \(issues.joined(separator: ", "))"
         case .autoFixFailed(let issues):
             return "Auto-fix failed: \(issues.joined(separator: ", "))"
+        case .notAuthenticated:
+            return "You must be signed in to upload a story."
+        case .uploadFailed(let message):
+            return "Story upload failed: \(message)"
         }
     }
 }

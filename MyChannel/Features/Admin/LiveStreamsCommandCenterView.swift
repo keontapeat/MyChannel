@@ -17,28 +17,29 @@ struct LiveStreamsCommandCenterView: View {
                 VStack(spacing: 10) {
                     Text("LIVE STREAM MONITORING")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(CCTheme.textSecondary)
                     HStack(spacing: 20) {
                         VStack {
                             Text("\(service.activeStreams.count)")
-                                .font(.system(size: 28, weight: .black)).foregroundColor(.cyan)
-                            Text("Active").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+                                .font(.system(size: 28, weight: .black, design: .monospaced)).foregroundColor(CCTheme.textPrimary)
+                            Text("Active").font(.system(size: 10, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         }
                         VStack {
                             Text("\(service.totalViewers)")
-                                .font(.system(size: 28, weight: .black)).foregroundColor(.green)
-                            Text("Viewers").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+                                .font(.system(size: 28, weight: .black, design: .monospaced)).foregroundColor(CCTheme.good)
+                            Text("Viewers").font(.system(size: 10, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         }
                         VStack {
                             Text("\(service.unhealthyStreams)")
-                                .font(.system(size: 28, weight: .black)).foregroundColor(service.unhealthyStreams > 0 ? .red : .green)
-                            Text("Issues").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+                                .font(.system(size: 28, weight: .black, design: .monospaced)).foregroundColor(service.unhealthyStreams > 0 ? CCTheme.critical : CCTheme.good)
+                            Text("Issues").font(.system(size: 10, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         }
                     }
                 }
                 .padding(16)
-                .background(Color.cyan.opacity(0.08))
+                .background(CCTheme.panel)
                 .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(CCTheme.panelBorder, lineWidth: 1))
                 
                 // Stream List
                 ForEach(service.activeStreams) { stream in
@@ -63,13 +64,14 @@ private struct LiveStreamCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Circle().fill(stream.isHealthy ? Color.green : Color.orange).frame(width: 8, height: 8)
+                Circle().fill(stream.isHealthy ? CCTheme.good : CCTheme.warning).frame(width: 7, height: 7)
                 Text(stream.creatorName)
                     .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(CCTheme.textPrimary)
                 Spacer()
                 Text(stream.statusColor.uppercased())
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(stream.isHealthy ? .green : .orange)
+                    .foregroundColor(stream.isHealthy ? CCTheme.good : CCTheme.warning)
             }
             
             HStack(spacing: 16) {
@@ -80,7 +82,7 @@ private struct LiveStreamCard: View {
                 Label("\(Int(stream.latency))ms", systemImage: "clock")
                     .font(.system(size: 11, design: .monospaced))
             }
-            .foregroundColor(.secondary)
+            .foregroundColor(CCTheme.textSecondary)
             
             Divider()
             
@@ -92,7 +94,7 @@ private struct LiveStreamCard: View {
                     } else {
                         Image(systemName: "timer")
                             .font(.system(size: 12))
-                            .foregroundColor(stream.isSlowModeEnabled ? .orange : .secondary)
+                            .foregroundColor(stream.isSlowModeEnabled ? CCTheme.textPrimary : CCTheme.textSecondary)
                     }
                     Toggle("Slow", isOn: Binding(
                         get: { stream.isSlowModeEnabled },
@@ -105,11 +107,11 @@ private struct LiveStreamCard: View {
                         }
                     ))
                     .labelsHidden()
-                    .toggleStyle(SwitchToggleStyle(tint: .orange))
+                    .toggleStyle(SwitchToggleStyle(tint: CCTheme.textPrimary))
                     .scaleEffect(0.8)
                     Text("Slow")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(CCTheme.textSecondary)
                 }
                 
                 Spacer()
@@ -121,7 +123,7 @@ private struct LiveStreamCard: View {
                     } else {
                         Image(systemName: "person.2.badge.key.fill")
                             .font(.system(size: 12))
-                            .foregroundColor(stream.isSubscriberOnlyEnabled ? .purple : .secondary)
+                            .foregroundColor(stream.isSubscriberOnlyEnabled ? CCTheme.textPrimary : CCTheme.textSecondary)
                     }
                     Toggle("Sub-Only", isOn: Binding(
                         get: { stream.isSubscriberOnlyEnabled },
@@ -134,11 +136,11 @@ private struct LiveStreamCard: View {
                         }
                     ))
                     .labelsHidden()
-                    .toggleStyle(SwitchToggleStyle(tint: .purple))
+                    .toggleStyle(SwitchToggleStyle(tint: CCTheme.textPrimary))
                     .scaleEffect(0.8)
                     Text("Sub-Only")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(CCTheme.textSecondary)
                 }
                 
                 Spacer()
@@ -159,16 +161,16 @@ private struct LiveStreamCard: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color.red)
+                    .background(CCTheme.critical)
                     .cornerRadius(6)
                 }
                 .disabled(isTerminating)
             }
         }
         .padding(12)
-        .background(Color(.systemBackground))
+        .background(CCTheme.panel)
         .cornerRadius(10)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 1)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(CCTheme.panelBorder, lineWidth: 1))
         .alert("Terminate Stream?", isPresented: $showKillConfirm) {
             Button("Kill Stream", role: .destructive) {
                 Task {

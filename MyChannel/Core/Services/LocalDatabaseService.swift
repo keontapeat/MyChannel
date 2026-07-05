@@ -13,7 +13,7 @@ import SwiftData
 final class LocalDatabaseService {
     static let shared = LocalDatabaseService()
     
-    let container: ModelContainer
+    let container: ModelContainer?
     
     private init() {
         do {
@@ -22,11 +22,15 @@ final class LocalDatabaseService {
             self.container = try ModelContainer(for: schema, configurations: [modelConfiguration])
             print("💾 [LocalDatabase] SwiftData Container initialized successfully")
         } catch {
-            fatalError("🚨 [LocalDatabase] Could not initialize SwiftData container: \(error)")
+            // 🔥 FIX 2.1(a): Never fatalError on container init — degrade gracefully.
+            // A reviewer's fresh iPad install can hit schema migration issues.
+            print("🚨 [LocalDatabase] Could not initialize SwiftData container (non-fatal): \(error)")
+            self.container = nil
         }
     }
     
     func saveVideosToOfflineCache(_ videos: [Video]) {
+        guard let container = container else { return }
         let context = container.mainContext
         
         for video in videos {
@@ -63,6 +67,7 @@ final class LocalDatabaseService {
     }
     
     func fetchOfflineVideos() -> [OfflineVideo] {
+        guard let container = container else { return [] }
         let context = container.mainContext
         var descriptor = FetchDescriptor<OfflineVideo>(sortBy: [SortDescriptor(\.savedAt, order: .reverse)])
         descriptor.fetchLimit = 50

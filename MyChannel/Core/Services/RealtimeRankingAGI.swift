@@ -9,6 +9,12 @@
 
 import Foundation
 import Combine
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
+#if canImport(FirebaseDatabase)
+import FirebaseDatabase
+#endif
 
 @MainActor
 final class RealtimeRankingAGI: ObservableObject {
@@ -65,10 +71,26 @@ final class RealtimeRankingAGI: ObservableObject {
         if let cached = await cache.get("rankings:current", type: [CreatorRanking].self) {
             return cached
         }
-        
-        // TODO: Fetch from Firestore + calculate scores
-        // For now, return empty
+        // Fetch from Firestore leaderboards collection
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        guard let snap = try? await db.collection("leaderboards")
+            .order(by: "score", descending: true).limit(to: 100).getDocuments() else { return [] }
+        let result = snap.documents.compactMap { doc -> CreatorRanking? in
+            let d = doc.data()
+            return CreatorRanking(
+                creatorId: doc.documentID,
+                rank: (d["rank"] as? Int) ?? 0,
+                score: (d["score"] as? Double) ?? 0,
+                change: (d["change"] as? Int) ?? 0,
+                timestamp: (d["updatedAt"] as? Timestamp)?.dateValue() ?? Date()
+            )
+        }
+        await cache.set("rankings:current", value: result, ttl: 5)
+        return result
+        #else
         return []
+        #endif
     }
     
     private func detectRankingChanges(old: [CreatorRanking], new: [CreatorRanking]) -> [RankingChange] {
@@ -94,11 +116,19 @@ final class RealtimeRankingAGI: ObservableObject {
     }
     
     private func broadcastChanges(_ changes: [RankingChange]) {
-        // TODO: Broadcast via WebSocket
-        
+        // Broadcast via Firebase Realtime Database (WebSocket-backed)
+        #if canImport(FirebaseDatabase)
+        let rtdb = Database.database()
         for change in changes {
+            rtdb.reference(withPath: "ranking_changes/\(change.creatorId)").setValue([
+                "oldRank": change.oldRank,
+                "newRank": change.newRank,
+                "change": change.change,
+                "timestamp": ServerValue.timestamp()
+            ])
             print("📊 [RankingAGI] Rank change: Creator \(change.creatorId) \(change.change > 0 ? "↑" : "↓")\(abs(change.change))")
         }
+        #endif
     }
     
     // MARK: - 🔮 PREDICTIVE RANKINGS
@@ -124,9 +154,27 @@ final class RealtimeRankingAGI: ObservableObject {
     }
     
     private func fetchHistoricalRankings(days: Int) async -> [HistoricalRanking] {
-        // TODO: Fetch from BigQuery
-        // For now, return empty
+        // Fetch from Firestore leaderboard history collection
+        #if canImport(FirebaseFirestore)
+        let cutoff = Date().addingTimeInterval(Double(-days) * 86400)
+        let db = Firestore.firestore()
+        guard let snap = try? await db.collectionGroup("leaderboard_history")
+            .whereField("timestamp", isGreaterThan: Timestamp(date: cutoff))
+            .order(by: "timestamp", descending: false)
+            .limit(to: 500)
+            .getDocuments() else { return [] }
+        return snap.documents.compactMap { doc -> HistoricalRanking? in
+            let d = doc.data()
+            return HistoricalRanking(
+                creatorId: d["creatorId"] as? String ?? "",
+                rank: d["rank"] as? Int ?? 0,
+                score: d["score"] as? Double ?? 0,
+                timestamp: (d["timestamp"] as? Timestamp)?.dateValue() ?? Date()
+            )
+        }
+        #else
         return []
+        #endif
     }
     
     private func runLSTMPrediction(
@@ -188,17 +236,13 @@ final class RealtimeRankingAGI: ObservableObject {
     }
     
     private func calculateMomentum(_ ranking: CreatorRanking) async -> Double {
-        // Rate of rank change
-        // TODO: Get from time series data
-        
-        return Double.random(in: 0...20)
+        // Rate of rank change — computed from the ranking's built-in `change` field
+        return Double(abs(ranking.change))
     }
     
     private func calculateAcceleration(_ ranking: CreatorRanking) async -> Double {
-        // Rate of momentum change
-        // TODO: Calculate from historical data
-        
-        return Double.random(in: 0...10)
+        // Rate of momentum change — simplified as half of momentum for now
+        return Double(abs(ranking.change)) * 0.5
     }
     
     // MARK: - 📊 REAL-TIME METRICS

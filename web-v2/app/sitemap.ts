@@ -1,57 +1,125 @@
 import { MetadataRoute } from 'next';
+import { collection, getDocs, orderBy, query, limit } from 'firebase/firestore';
+import { firestore } from '@/lib/firebase/config';
 
 /**
  * Sitemap for SEO
- * Generates XML sitemap for search engines
+ * Generates XML sitemap for search engines.
+ *
+ * Static export runs this once at build time, so video/channel routes are
+ * pulled from Firestore at build time rather than hardcoded. Both `videos`
+ * and `users` allow public read in firestore.rules, so no admin credentials
+ * are needed — this uses the same client SDK the rest of the app uses.
  */
 
 export const dynamic = 'force-static';
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://www.mychannel.live';
+const BASE_URL = 'https://www.mychannel.live';
 
-  // In production, fetch dynamic routes from API/Firestore
-  const staticRoutes = [
+// Caps keep the build-time Firestore read bounded and the sitemap a
+// reasonable size. Raise these (or paginate into a sitemap index) once the
+// catalog grows well beyond a few thousand videos.
+const MAX_VIDEOS = 2000;
+const MAX_CHANNELS = 500;
+
+async function fetchVideoRoutes(): Promise<MetadataRoute.Sitemap> {
+  try {
+    const snap = await getDocs(
+      query(collection(firestore, 'videos'), orderBy('createdAt', 'desc'), limit(MAX_VIDEOS))
+    );
+    const routes: MetadataRoute.Sitemap = [];
+    for (const d of snap.docs) {
+      const data = d.data();
+      if (data.isPublic === false) continue;
+      const updatedAt = data.updatedAt?.toDate?.() ?? data.createdAt?.toDate?.() ?? new Date();
+      routes.push({
+        url: `${BASE_URL}/watch/${d.id}`,
+        lastModified: updatedAt,
+        changeFrequency: 'weekly',
+        priority: 0.8,
+      });
+    }
+    return routes;
+  } catch (error) {
+    console.error('🚨 Sitemap: failed to fetch video routes:', error);
+    return [];
+  }
+}
+
+async function fetchChannelRoutes(): Promise<MetadataRoute.Sitemap> {
+  try {
+    const snap = await getDocs(
+      query(collection(firestore, 'users'), orderBy('subscriberCount', 'desc'), limit(MAX_CHANNELS))
+    );
+    const routes: MetadataRoute.Sitemap = [];
+    for (const d of snap.docs) {
+      const data = d.data();
+      if (!data.username) continue;
+      routes.push({
+        url: `${BASE_URL}/profile/${data.username}`,
+        lastModified: data.updatedAt?.toDate?.() ?? new Date(),
+        changeFrequency: 'daily',
+        priority: 0.6,
+      });
+    }
+    return routes;
+  } catch (error) {
+    console.error('🚨 Sitemap: failed to fetch channel routes:', error);
+    return [];
+  }
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const staticRoutes: MetadataRoute.Sitemap = [
     {
-      url: baseUrl,
+      url: BASE_URL,
       lastModified: new Date(),
-      changeFrequency: 'daily' as const,
+      changeFrequency: 'daily',
       priority: 1,
     },
     {
-      url: `${baseUrl}/flicks`,
+      url: `${BASE_URL}/flicks`,
       lastModified: new Date(),
-      changeFrequency: 'hourly' as const,
+      changeFrequency: 'hourly',
       priority: 0.9,
     },
     {
-      url: `${baseUrl}/live`,
+      url: `${BASE_URL}/live`,
       lastModified: new Date(),
-      changeFrequency: 'hourly' as const,
+      changeFrequency: 'hourly',
       priority: 0.9,
     },
     {
-      url: `${baseUrl}/medals`,
+      url: `${BASE_URL}/medals`,
       lastModified: new Date(),
-      changeFrequency: 'daily' as const,
+      changeFrequency: 'daily',
       priority: 0.8,
     },
     {
-      url: `${baseUrl}/studio`,
+      url: `${BASE_URL}/channels`,
       lastModified: new Date(),
-      changeFrequency: 'daily' as const,
+      changeFrequency: 'daily',
       priority: 0.7,
+    },
+    {
+      url: `${BASE_URL}/trending`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly',
+      priority: 0.8,
+    },
+    {
+      url: `${BASE_URL}/premieres`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly',
+      priority: 0.6,
     },
   ];
 
-  // Example dynamic video routes (in production, fetch from Firestore)
-  const videoRoutes = Array.from({ length: 10 }, (_, i) => ({
-    url: `${baseUrl}/watch/video-${i + 1}`,
-    lastModified: new Date(),
-    changeFrequency: 'weekly' as const,
-    priority: 0.8,
-  }));
+  const [videoRoutes, channelRoutes] = await Promise.all([
+    fetchVideoRoutes(),
+    fetchChannelRoutes(),
+  ]);
 
-  return [...staticRoutes, ...videoRoutes];
+  return [...staticRoutes, ...channelRoutes, ...videoRoutes];
 }
 

@@ -395,13 +395,48 @@ struct UniversityCertificateDetailView: View {
     
     private func downloadPDF() {
         print("📄 [Certificate] Download PDF: \(careerPath.name)")
-        // TODO: Generate PDF using PDFKit
-        // Convert certificate card to PDF and save to Files app
+        // Generate PDF using PDFKit
+        let pdfRenderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 612, height: 432))
+        let data = pdfRenderer.pdfData { ctx in
+            ctx.beginPage()
+            // Draw certificate content into the PDF context
+            let title = "MyChannel Certificate of Completion"
+            let titleAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 28, weight: .bold),
+                .foregroundColor: UIColor.black,
+            ]
+            title.draw(at: CGPoint(x: 50, y: 50), withAttributes: titleAttrs)
+            let body = "This certifies that the holder has completed the \(careerPath.name) career path."
+            let bodyAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 16), .foregroundColor: UIColor.darkGray]
+            body.draw(in: CGRect(x: 50, y: 120, width: 512, height: 200), withAttributes: bodyAttrs)
+        }
+        // Save to temporary directory and share
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MyChannel_Certificate_\(careerPath.id).pdf")
+        try? data.write(to: url)
+        let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let root = scene.windows.first?.rootViewController {
+            root.present(activityVC, animated: true)
+        }
     }
     
     private func generateCertificateImage() {
-        // TODO: Render certificate card as UIImage for sharing
-        // Use UIGraphicsImageRenderer to capture SwiftUI view
+        // Render certificate card as UIImage using UIGraphicsImageRenderer
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1280, height: 853))
+        let image = renderer.image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 1280, height: 853))
+            let text = "MyChannel · \(careerPath.name) Certificate"
+            let attrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 48, weight: .bold)]
+            text.draw(at: CGPoint(x: 80, y: 350), withAttributes: attrs)
+        }
+        // Share the image
+        let activityVC = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let root = scene.windows.first?.rootViewController {
+            root.present(activityVC, animated: true)
+        }
     }
 }
 

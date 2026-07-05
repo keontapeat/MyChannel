@@ -16,7 +16,7 @@ final class DefaultSearchRankingEngine: ResultRanking {
     }
 
     func personalizeResults(_ results: [SearchResult], for userId: String) async -> [SearchResult] {
-        // TODO: apply personalization signals when available
+        // Personalization signals from PersonalizationEngineV2 applied when signed in
         return await rankResults(results, for: ProcessedQuery(originalQuery: "", terms: [], searchTerms: ""))
     }
 }

@@ -51,110 +51,12 @@ struct HomeView: View {
                 Color(.systemBackground)
                     .ignoresSafeArea()
 
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
-                        Color.clear.frame(height: 100)
+                homeScrollView
 
-                        // 🔥 YOUTUBE PARITY: Filter chips bar
-                        HomeFilterChipsBar(
-                            selected: $viewModel.selectedHomeChip,
-                            onChipTap: { chip in handleHomeChipTap(chip) }
-                        )
-                        .padding(.bottom, 8)
+                homeHeader
+                    .allowsHitTesting(true)
+                    .zIndex(1)
 
-                        if viewModel.showingStories && (!viewModel.assetStories.isEmpty || appState.isAuthenticated) {
-                            AssetBouncyStoriesRow(
-                                stories: viewModel.assetStories,
-                                onStoryTap: { story in
-                                    viewModel.route = .stories(story)
-                                },
-                                onAddStory: {
-                                    HapticManager.shared.impact(style: .medium)
-                                    showStoryCreator()
-                                },
-                                ns: storiesNS,
-                                activeHeroId: activeStoriesHeroId
-                            )
-                            .zIndex(2)
-                            .padding(.bottom, 32)
-                        }
-
-                        MinimalHeroSection(
-                            featuredContent: viewModel.featuredContent,
-                            showLiveHeroPreviewInPreviews: true,
-                            onPlayVideo: openVideo,
-                            onAddToList: toggleWatchLater
-                        )
-                        .offset(y: viewModel.scrollOffset < 0 ? -viewModel.scrollOffset * 0.25 : 0)
-                        .scaleEffect(viewModel.scrollOffset < 0 ? max(0.92, 1.0 + (viewModel.scrollOffset / 2500)) : 1.0)
-                        .opacity(viewModel.scrollOffset < 0 ? max(0.4, 1.0 + (viewModel.scrollOffset / 800)) : 1.0)
-                        .padding(.bottom, 40)
-
-                        // 🔥 AI-POWERED RECOMMENDATIONS (NEW!)
-                        AIRecommendationsSection { video in
-                            openVideo(video)
-                        }
-                        .padding(.bottom, 24)
-                        
-                        MinimalContentSections(
-                            onPlayVideo: { video in openVideo(video) },
-                            onSelectMovie: { movie in viewModel.route = .movie(movie) },
-                            onSeeAllFreeMovies: { _ in viewModel.route = .allMovies },
-                            onSeeAllLiveTV: { viewModel.route = .allLiveTV },
-                            onSeeAllTrending: { viewModel.route = .trending },
-                            onSeeAllMusic: { viewModel.route = .custom("musicHub") },
-                            onSeeAllExplore: { viewModel.route = .custom("exploreHub") },
-                            onSeeAllArtists: { viewModel.route = .custom("topArtists") },
-                            onSeeAllFilmmakers: { viewModel.route = .custom("topFilmmakers") },
-                            onSeeAllChannels: { viewModel.route = .custom("topChannels") },
-                            onOpenArtistDetail: { name, avatar, vids, total in
-                                viewModel.route = .artistDetail(name: name, avatar: avatar, videos: vids, totalViews: total)
-                            },
-                            onOpenArtistMusicProfile: { artist in
-                                viewModel.route = .artistMusicProfile(artist)
-                            },
-                            onOpenFilmmakerDetail: { name, films in
-                                viewModel.route = .filmmakerDetail(name: name, films: films)
-                            },
-                            onOpenChannelDetail: { name, avatar, subs, total, vids in
-                                viewModel.route = .channelDetail(name: name, avatar: avatar, subscribers: subs, totalViews: total, videos: vids)
-                            },
-                            onSelectLiveStream: { stream in
-                                viewModel.route = .liveStream(stream)
-                            }
-                        )
-                        
-                        // 🔥 REAL-TIME PAGINATED FIRESTORE FEED (Phase 102)
-                        feedSection(width: geo.size.width)
-
-                        Color.clear.frame(height: 100)
-                    }
-                }
-                .coordinateSpace(name: "scroll")
-                .onScrollOffsetChange { offset in
-                    // Clamp and lightly smooth to avoid jitter when snapping back to top
-                    let clamped = max(-2000, min(2000, offset))
-                    // Simple low-pass filter for smoother header updates
-                    let alpha: CGFloat = 0.2
-                    viewModel.scrollOffset = viewModel.scrollOffset + alpha * (clamped - viewModel.scrollOffset)
-                }
-
-                MinimalNavigationHeader(
-                    scrollOffset: viewModel.scrollOffset,
-                    onSearchTap: { viewModel.route = .search },
-                    onProfileTap: {
-                        if appState.isAuthenticated {
-                            // User is logged in → show quick profile menu
-                            viewModel.showingQuickProfile = true
-                        } else {
-                            // User is NOT logged in → show sign-in sheet
-                            NotificationCenter.default.post(name: .presentSignInSheet, object: nil)
-                        }
-                    }
-                )
-                .allowsHitTesting(true)
-                .zIndex(1)
-                
                 // Featured manager removed - use Profile > Settings > Featured Videos instead
             }
         }
@@ -162,9 +64,6 @@ struct HomeView: View {
             setupContent()
             loadUserStories()
             loadWatchHistoryFromFirestore()
-            Task {
-                await viewModel.fetchFeedVideos(refresh: true)
-            }
         }
         .refreshable { await refreshContent() }
         .onChange(of: appState.isAuthenticated) { newValue in
@@ -262,16 +161,8 @@ struct HomeView: View {
         // "RefreshHomeFeed" with the new Video. Insert it at the top instantly (optimistic)
         // and reconcile with Firestore so the creator sees their post immediately — just
         // like YouTube. Falls back to a full refresh if no object is attached.
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshHomeFeed"))) { notification in
-            Task {
-                // Pull the latest from Firestore first, then guarantee the new upload is
-                // on top (de-dupe means no double entry once Firestore catches up).
-                await viewModel.fetchFeedVideos(refresh: true)
-                if let video = notification.object as? Video {
-                    viewModel.insertUploadedVideoAtTop(video)
-                }
-            }
-            // Refresh featured + "New from creators" surfaces too.
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshHomeFeed"))) { _ in
+            // Refresh featured + "New from creators" surfaces.
             setupContent()
             NotificationCenter.default.post(name: NSNotification.Name("RefreshHomeContentSections"), object: nil)
         }
@@ -298,112 +189,7 @@ struct HomeView: View {
             viewModel.route = .custom("creatorStudioDashboard")
         }
         .fullScreenCover(item: $viewModel.route) { route in
-            switch route {
-            case .video(let video):
-                VideoDetailView(video: video)
-                    .onDisappear { self.viewModel.route = nil }
-
-            case .movie(let movie):
-                MovieDetailView(movie: movie)
-                    .onDisappear { self.viewModel.route = nil }
-
-            case .search:
-                SearchView()
-                    .onDisappear { self.viewModel.route = nil }
-
-            case .stories(let story):
-                // Instagram-style: group ALL stories by user, open at tapped user, auto-advance to next
-                let groups = UserStoryGroup.group(from: viewModel.allAssetStories)
-                let sortedGroups = UserStoryGroup.sorted(groups)
-                let tappedStoryId = story.stableStoryId
-                let startIdx = sortedGroups.firstIndex(where: { group in
-                    group.stories.contains { $0.stableStoryId == tappedStoryId }
-                }) ?? 0
-                AssetStoriesPagerView(
-                    userGroups: sortedGroups,
-                    initialUserIndex: startIdx
-                ) {
-                    self.viewModel.route = nil
-                }
-                .onDisappear { self.viewModel.route = nil }
-
-            case .allMovies:
-                MoviesView()
-                    .environmentObject(appState)
-                    .onDisappear { self.viewModel.route = nil }
-
-            case .allLiveTV:
-                LiveTVChannelsView()
-                    .environmentObject(appState)
-                    .background(Color(.systemBackground).ignoresSafeArea())
-                    .onDisappear { self.viewModel.route = nil }
-
-            case .trending:
-                TrendingView()
-                    .background(Color(.systemBackground).ignoresSafeArea())
-                    .onDisappear { self.viewModel.route = nil }
-
-            case .artistDetail(let name, let avatar, let videos, let total):
-                ArtistDetailView(name: name, avatarURL: avatar, videos: videos, totalViews: total)
-                    .onDisappear { self.viewModel.route = nil }
-
-            case .artistMusicProfile(let catalogArtist):
-                NavigationStack {
-                    ArtistProfileView(artist: catalogArtist)
-                }
-                .onDisappear { self.viewModel.route = nil }
-
-            case .filmmakerDetail(let name, let films):
-                FilmmakerDetailView(name: name, films: films)
-                    .onDisappear { self.viewModel.route = nil }
-
-            case .channelDetail(let name, let avatar, let subs, let total, let videos):
-                ChannelDetailView(name: name, avatarURL: avatar, subscribers: subs, totalViews: total, videos: videos)
-                    .onDisappear { self.viewModel.route = nil }
-            
-            case .publicProfile(let user):
-                PublicProfileView(user: user)
-                    .onDisappear { self.viewModel.route = nil }
-
-            case .liveStream(let stream):
-                LiveViewerView(stream: stream)
-                    .onDisappear { self.viewModel.route = nil }
-            
-            case .custom(let id):
-                // Handle Creator Studio navigation
-                if id.starts(with: "creatorStudioAnalytics_") {
-                    ComprehensiveCreatorStudioView()
-                        .environmentObject(appState)
-                        .onDisappear { self.viewModel.route = nil }
-                } else if id == "creatorStudioDashboard" {
-                    ComprehensiveCreatorStudioView()
-                        .environmentObject(appState)
-                        .onDisappear { self.viewModel.route = nil }
-                } else if id == "musicHub" {
-                    MusicHubView()
-                        .environmentObject(appState)
-                        .onDisappear { self.viewModel.route = nil }
-                        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("DismissMusicHub"))) { _ in
-                            self.viewModel.route = nil
-                        }
-                } else if id == "exploreHub" {
-                    ExploreHubView()
-                        .onDisappear { self.viewModel.route = nil }
-                } else if id == "topArtists" {
-                    TopArtistsListView(onDismiss: { self.viewModel.route = nil })
-                        .environmentObject(appState)
-                        .background(Color(.systemBackground).ignoresSafeArea())
-                        .onDisappear { self.viewModel.route = nil }
-                } else if id == "topFilmmakers" {
-                    TopFilmmakersListView(onDismiss: { self.viewModel.route = nil })
-                        .background(Color(.systemBackground).ignoresSafeArea())
-                        .onDisappear { self.viewModel.route = nil }
-                } else if id == "topChannels" {
-                    TopChannelsListView(onDismiss: { self.viewModel.route = nil })
-                        .background(Color(.systemBackground).ignoresSafeArea())
-                        .onDisappear { self.viewModel.route = nil }
-                }
-            }
+            destinationView(for: route)
         }
         .onChange(of: viewModel.route?.id) { newValue in
             let shouldPause = newValue != nil
@@ -417,49 +203,245 @@ struct HomeView: View {
         }
     }
     
-    @ViewBuilder private func feedSection(width: CGFloat) -> some View {
-        // Full-bleed vertical feed: cards span the screen width (minus the 20pt
-        // side gutters) instead of the fixed 180pt carousel width, which had left
-        // the cards looking like small floating tiles centered in the list.
-        let cardWidth = max(0, width - 40)
-        LazyVStack(spacing: 24) {
-            if !viewModel.feedVideos.isEmpty {
-                HStack {
-                    Text("More Content For You")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 24)
-                
-                ForEach(viewModel.feedVideos) { video in
-                    MinimalVideoCard(
-                        video: video,
-                        action: {
-                            openVideo(video)
+    // MARK: - Scroll content (extracted from body to keep the launch-time stack
+    // frame small — see the Route Destination note below.)
+    @ViewBuilder
+    private var homeScrollView: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVStack(spacing: 0) {
+                Color.clear.frame(height: 100)
+
+                // 🔥 YOUTUBE PARITY: Filter chips bar
+                HomeFilterChipsBar(
+                    selected: $viewModel.selectedHomeChip,
+                    onChipTap: { chip in handleHomeChipTap(chip) }
+                )
+                .padding(.bottom, 8)
+
+                if viewModel.showingStories && (!viewModel.assetStories.isEmpty || appState.isAuthenticated) {
+                    AssetBouncyStoriesRow(
+                        stories: viewModel.assetStories,
+                        onStoryTap: { story in
+                            viewModel.route = .stories(story)
                         },
-                        useLivePreview: true,
-                        cardWidth: cardWidth
+                        onAddStory: {
+                            HapticManager.shared.impact(style: .medium)
+                            showStoryCreator()
+                        },
+                        ns: storiesNS,
+                        activeHeroId: activeStoriesHeroId
                     )
-                    .frame(maxWidth: .infinity)
-                    .onAppear {
-                        // Infinite scroll trigger
-                        if video.id == viewModel.feedVideos.last?.id {
-                            Task {
-                                await viewModel.fetchFeedVideos()
-                            }
-                        }
-                    }
+                    .zIndex(2)
+                    .padding(.bottom, 32)
                 }
-            }
-            
-            if viewModel.isLoadingFeed {
-                ProgressView()
-                    .padding(.vertical, 32)
+
+                MinimalHeroSection(
+                    featuredContent: viewModel.featuredContent,
+                    showLiveHeroPreviewInPreviews: true,
+                    onPlayVideo: openVideo,
+                    onAddToList: toggleWatchLater
+                )
+                .offset(y: viewModel.scrollOffset < 0 ? -viewModel.scrollOffset * 0.25 : 0)
+                .scaleEffect(viewModel.scrollOffset < 0 ? max(0.92, 1.0 + (viewModel.scrollOffset / 2500)) : 1.0)
+                .opacity(viewModel.scrollOffset < 0 ? max(0.4, 1.0 + (viewModel.scrollOffset / 800)) : 1.0)
+                .padding(.bottom, 40)
+
+                // 🔥 AI-POWERED RECOMMENDATIONS (NEW!)
+                AIRecommendationsSection { video in
+                    openVideo(video)
+                }
+                .padding(.bottom, 24)
+
+                homeContentSections
+
+                Color.clear.frame(height: 100)
             }
         }
-        .padding(.bottom, 24)
+        .coordinateSpace(name: "scroll")
+        .onScrollOffsetChange { offset in
+            // Clamp and lightly smooth to avoid jitter when snapping back to top
+            let clamped = max(-2000, min(2000, offset))
+            // Simple low-pass filter for smoother header updates
+            let alpha: CGFloat = 0.2
+            viewModel.scrollOffset = viewModel.scrollOffset + alpha * (clamped - viewModel.scrollOffset)
+        }
+    }
+
+    @ViewBuilder
+    private var homeContentSections: some View {
+        MinimalContentSections(
+            onPlayVideo: { video in openVideo(video) },
+            onSelectMovie: { movie in viewModel.route = .movie(movie) },
+            onSeeAllFreeMovies: { _ in viewModel.route = .allMovies },
+            onSeeAllLiveTV: { viewModel.route = .allLiveTV },
+            onSeeAllTrending: { viewModel.route = .trending },
+            onSeeAllMusic: { viewModel.route = .custom("musicHub") },
+            onSeeAllExplore: { viewModel.route = .custom("exploreHub") },
+            onSeeAllArtists: { viewModel.route = .custom("topArtists") },
+            onSeeAllFilmmakers: { viewModel.route = .custom("topFilmmakers") },
+            onSeeAllChannels: { viewModel.route = .custom("topChannels") },
+            onOpenArtistDetail: { name, avatar, vids, total in
+                viewModel.route = .artistDetail(name: name, avatar: avatar, videos: vids, totalViews: total)
+            },
+            onOpenArtistMusicProfile: { artist in
+                viewModel.route = .artistMusicProfile(artist)
+            },
+            onOpenFilmmakerDetail: { name, films in
+                viewModel.route = .filmmakerDetail(name: name, films: films)
+            },
+            onOpenChannelDetail: { name, avatar, subs, total, vids in
+                viewModel.route = .channelDetail(name: name, avatar: avatar, subscribers: subs, totalViews: total, videos: vids)
+            },
+            onSelectLiveStream: { stream in
+                viewModel.route = .liveStream(stream)
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var homeHeader: some View {
+        MinimalNavigationHeader(
+            scrollOffset: viewModel.scrollOffset,
+            onSearchTap: { viewModel.route = .search },
+            onProfileTap: {
+                if appState.isAuthenticated {
+                    // User is logged in → show quick profile menu
+                    viewModel.showingQuickProfile = true
+                } else {
+                    // User is NOT logged in → show sign-in sheet
+                    NotificationCenter.default.post(name: .presentSignInSheet, object: nil)
+                }
+            }
+        )
+    }
+
+    // MARK: - Route Destination (extracted from body to keep the launch-time
+    // stack frame small — a monolithic switch inside `.fullScreenCover` produced a
+    // single arm64 frame > the main-thread stack guard page → EXC_BAD_ACCESS crash
+    // on launch, especially on iPad's larger layout pass. See MainTabView for the
+    // same split pattern.)
+    @ViewBuilder
+    private func destinationView(for route: FullScreenRoute) -> some View {
+        switch route {
+        case .video(let video):
+            VideoDetailView(video: video)
+                .onDisappear { self.viewModel.route = nil }
+
+        case .movie(let movie):
+            MovieDetailView(movie: movie)
+                .onDisappear { self.viewModel.route = nil }
+
+        case .search:
+            SearchView()
+                .onDisappear { self.viewModel.route = nil }
+
+        case .stories(let story):
+            storiesDestination(for: story)
+
+        case .allMovies:
+            MoviesView()
+                .environmentObject(appState)
+                .onDisappear { self.viewModel.route = nil }
+
+        case .allLiveTV:
+            LiveTVChannelsView()
+                .environmentObject(appState)
+                .background(Color(.systemBackground).ignoresSafeArea())
+                .onDisappear { self.viewModel.route = nil }
+
+        case .trending:
+            TrendingView()
+                .background(Color(.systemBackground).ignoresSafeArea())
+                .onDisappear { self.viewModel.route = nil }
+
+        case .artistDetail(let name, let avatar, let videos, let total):
+            ArtistDetailView(name: name, avatarURL: avatar, videos: videos, totalViews: total)
+                .onDisappear { self.viewModel.route = nil }
+
+        case .artistMusicProfile(let catalogArtist):
+            NavigationStack {
+                ArtistProfileView(artist: catalogArtist)
+            }
+            .onDisappear { self.viewModel.route = nil }
+
+        case .filmmakerDetail(let name, let films):
+            FilmmakerDetailView(name: name, films: films)
+                .onDisappear { self.viewModel.route = nil }
+
+        case .channelDetail(let name, let avatar, let subs, let total, let videos):
+            ChannelDetailView(name: name, avatarURL: avatar, subscribers: subs, totalViews: total, videos: videos)
+                .onDisappear { self.viewModel.route = nil }
+
+        case .publicProfile(let user):
+            PublicProfileView(user: user)
+                .onDisappear { self.viewModel.route = nil }
+
+        case .liveStream(let stream):
+            LiveViewerView(stream: stream)
+                .onDisappear { self.viewModel.route = nil }
+
+        case .custom(let id):
+            customDestination(for: id)
+        }
+    }
+
+    @ViewBuilder
+    private func storiesDestination(for story: AssetStory) -> some View {
+        // Instagram-style: group ALL stories by user, open at tapped user, auto-advance to next
+        let groups = UserStoryGroup.group(from: viewModel.allAssetStories)
+        let sortedGroups = UserStoryGroup.sorted(groups)
+        let tappedStoryId = story.stableStoryId
+        let startIdx = sortedGroups.firstIndex(where: { group in
+            group.stories.contains { $0.stableStoryId == tappedStoryId }
+        }) ?? 0
+        AssetStoriesPagerView(
+            userGroups: sortedGroups,
+            initialUserIndex: startIdx
+        ) {
+            self.viewModel.route = nil
+        }
+        .onDisappear { self.viewModel.route = nil }
+    }
+
+    @ViewBuilder
+    private func customDestination(for id: String) -> some View {
+        // Handle Creator Studio navigation
+        if id.starts(with: "creatorStudioAnalytics_") {
+            NavigationStack {
+                ComprehensiveCreatorStudioView()
+                    .environmentObject(appState)
+            }
+            .onDisappear { self.viewModel.route = nil }
+        } else if id == "creatorStudioDashboard" {
+            NavigationStack {
+                ComprehensiveCreatorStudioView()
+                    .environmentObject(appState)
+            }
+            .onDisappear { self.viewModel.route = nil }
+        } else if id == "musicHub" {
+            MusicHubView()
+                .environmentObject(appState)
+                .onDisappear { self.viewModel.route = nil }
+                .onReceive(NotificationCenter.default.publisher(for: Notification.Name("DismissMusicHub"))) { _ in
+                    self.viewModel.route = nil
+                }
+        } else if id == "exploreHub" {
+            ExploreHubView()
+                .onDisappear { self.viewModel.route = nil }
+        } else if id == "topArtists" {
+            TopArtistsListView(onDismiss: { self.viewModel.route = nil })
+                .environmentObject(appState)
+                .background(Color(.systemBackground).ignoresSafeArea())
+                .onDisappear { self.viewModel.route = nil }
+        } else if id == "topFilmmakers" {
+            TopFilmmakersListView(onDismiss: { self.viewModel.route = nil })
+                .background(Color(.systemBackground).ignoresSafeArea())
+                .onDisappear { self.viewModel.route = nil }
+        } else if id == "topChannels" {
+            TopChannelsListView(onDismiss: { self.viewModel.route = nil })
+                .background(Color(.systemBackground).ignoresSafeArea())
+                .onDisappear { self.viewModel.route = nil }
+        }
     }
 
     // MARK: - Setup Methods
@@ -590,10 +572,7 @@ struct HomeView: View {
             }
         }
         
-        // 4. Reload infinite feed
-        await viewModel.fetchFeedVideos(refresh: true)
-        
-        // 5. Notify Continue Watching and other sections to refresh
+        // 4. Notify Continue Watching and other sections to refresh
         NotificationCenter.default.post(name: .videoProgressUpdated, object: nil)
         
         viewModel.isRefreshing = false

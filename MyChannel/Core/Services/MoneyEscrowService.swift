@@ -69,8 +69,8 @@ class MoneyEscrowService: ObservableObject {
             matchId: matchId,
             userId: userId,
             amount: amount,
-            platformFee: amount * platformFeePercent,
-            netAmount: amount * (1 - platformFeePercent),
+            platformFee: MoneyMath.dollars(fromCents: MoneyMath.platformFeeCents(grossCents: MoneyMath.cents(fromDollars: amount))),
+            netAmount: MoneyMath.dollars(fromCents: MoneyMath.winnerPayoutCents(grossCents: MoneyMath.cents(fromDollars: amount))),
             status: .held,
             stripePaymentIntentId: paymentIntentId,
             heldAt: Date()
@@ -109,15 +109,24 @@ class MoneyEscrowService: ObservableObject {
               let loserEscrow = heldFunds[loserEscrowKey] else {
             throw EscrowError.noFundsHeld
         }
+
+        // 🔒 Idempotency: only release funds that are still held. Guards against a
+        // retry double-capturing payment intents or double-transferring to the winner.
+        guard winnerEscrow.status == .held, loserEscrow.status == .held else {
+            print("⚠️ [Escrow] Funds for match \(matchId) already processed (winner: \(winnerEscrow.status.rawValue), loser: \(loserEscrow.status.rawValue)) — skipping to prevent double payout")
+            return
+        }
         
         // 2. Capture both payment intents (finalize the holds)
         try await capturePaymentIntent(paymentIntentId: winnerEscrow.stripePaymentIntentId ?? "")
         try await capturePaymentIntent(paymentIntentId: loserEscrow.stripePaymentIntentId ?? "")
         
-        // 3. Calculate amounts
-        let totalAmount = winnerEscrow.amount + loserEscrow.amount
-        let platformFee = totalAmount * platformFeePercent
-        let winnerPayout = totalAmount - platformFee
+        // 3. Calculate amounts in INTEGER CENTS (rounded) so the recorded audit
+        // values match the server's settlement math. The authoritative transfer
+        // is computed server-side in /create-transfer.
+        let grossCents = MoneyMath.cents(fromDollars: winnerEscrow.amount + loserEscrow.amount)
+        let platformFee = MoneyMath.dollars(fromCents: MoneyMath.platformFeeCents(grossCents: grossCents))
+        let winnerPayout = MoneyMath.dollars(fromCents: MoneyMath.winnerPayoutCents(grossCents: grossCents))
         
         // 4. Get winner's Stripe Connect account ID
         guard let winnerConnectAccountId = await getStripeConnectAccountId(userId: winnerId) else {
@@ -187,6 +196,13 @@ class MoneyEscrowService: ObservableObject {
         guard var escrow = heldFunds[escrowKey] else {
             throw EscrowError.noFundsHeld
         }
+
+        // 🔒 Idempotency: only refund funds still held — never re-cancel a payment
+        // intent that was already released or refunded.
+        guard escrow.status == .held else {
+            print("⚠️ [Escrow] Funds for match \(matchId) user \(userId) already \(escrow.status.rawValue) — skipping refund")
+            return
+        }
         
         // Cancel the payment intent (releases the hold)
         try await cancelPaymentIntent(paymentIntentId: escrow.stripePaymentIntentId ?? "")
@@ -245,7 +261,7 @@ class MoneyEscrowService: ObservableObject {
         
         let body: [String: Any] = [
             "customerId": customerId,
-            "amount": Int(amount * 100), // Stripe uses cents
+            "amount": MoneyMath.cents(fromDollars: amount), // integer cents, rounded
             "matchId": matchId,
             "captureMethod": "manual" // Hold funds, don't capture yet
         ]

@@ -101,9 +101,11 @@ final class LiveTVService {
         }
     }
     
-    /// Get preloaded asset if available
+    /// Get preloaded asset if available.
+    /// Reads through `preloadQueue` to avoid a data race with the async writes
+    /// in `preloadChannel(_:)` / `clearPreloadedAssets()`.
     func getPreloadedAsset(for channelId: String) -> AVURLAsset? {
-        return preloadedAssets[channelId]
+        return preloadQueue.sync { preloadedAssets[channelId] }
     }
     
     /// Clear preloaded assets to free memory

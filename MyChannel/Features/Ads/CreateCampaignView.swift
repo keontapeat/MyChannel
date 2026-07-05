@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct CreateCampaignView: View {
     @Environment(\.dismiss) private var dismiss
@@ -452,7 +455,11 @@ struct CreateCampaignView: View {
             
             // Upload Creative
             Button {
-                // TODO: Show file picker
+                // Present photo/video picker via notification
+                NotificationCenter.default.post(
+                    name: Notification.Name("PresentCreativeFilePicker"),
+                    object: nil
+                )
             } label: {
                 VStack(spacing: 16) {
                     Image(systemName: "photo.on.rectangle.angled")
@@ -896,8 +903,28 @@ class CampaignBuilderViewModel: ObservableObject {
     }
     
     func launchCampaign() {
-        // TODO: Save to Firestore and start campaign
+        // Save to Firestore and start campaign
+        guard let uid = AuthenticationManager.shared.currentUser?.id else { return }
         print("🚀 Launching campaign: \(campaignName)")
+        Task {
+            #if canImport(FirebaseFirestore)
+            let db = Firestore.firestore()
+            let ref = db.collection("advertiser_accounts").document(uid).collection("campaigns").document()
+            try? await ref.setData([
+                "id":           ref.documentID,
+                "name":         campaignName,
+                "objective":    objective?.rawValue ?? "",
+                "budget":       budget,
+                "budgetType":   budgetType == .daily ? "daily" : "lifetime",
+                "startDate":    Timestamp(date: startDate),
+                "endDate":      hasEndDate ? Timestamp(date: endDate) : NSNull(),
+                "status":       "pending_review",
+                "creatorId":    uid,
+                "acceptedTerms": acceptedTerms,
+                "createdAt":    Timestamp(date: Date()),
+            ])
+            #endif
+        }
     }
 }
 

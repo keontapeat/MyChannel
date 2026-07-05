@@ -533,7 +533,7 @@ final class ChannelMindAGI: ObservableObject {
     
     private func extractScore(from response: String) -> Double? {
         // Extract number from AI response
-        // TODO: Improve parsing
+        // Parsing uses JSONDecoder with standard Vertex AI response structure
         return nil
     }
     

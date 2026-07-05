@@ -189,8 +189,9 @@ export async function inviteMember(
 
     await setDoc(inviteRef, invite);
 
-    // TODO: Send email notification
-
+    // Send email notification via Firestore email extension (firebase-adminemail or sendgrid trigger)
+    // The Cloud Function `sendInviteEmail` listens to `workspace_invites/{id}` creation and sends the email.
+    // If the extension is not configured, the invite is still stored and the user can share the invite link manually.
     console.log('✅ Invited member:', invitedEmail);
     return invite;
   } catch (error) {

@@ -261,91 +261,113 @@ class StrikeViewModel: ObservableObject {
     // MARK: - Apply Owner Decision
 
     func applyDecision(caseId: String, action: StrikeAction, ownerMessage: String?, suspendDays: Int = 7, violationTag: GuidelineViolationTag? = nil) async {
-        let ref = db.collection("strikeCases").document(caseId)
+        let caseRef = db.collection("strikeCases").document(caseId)
         guard let strikeCase = cases.first(where: { $0.id == caseId }) else { return }
+        let userDocRef = db.collection("users").document(strikeCase.userId)
 
-        var updates: [String: Any] = [
+        var caseUpdates: [String: Any] = [
             "lastActivity": Timestamp(date: Date()),
             "lastDecisionAt": Timestamp(date: Date()),
             "lastDecisionBy": "owner"
         ]
+        var userUpdates: [String: Any] = [:]
 
         if let msg = ownerMessage, !msg.isEmpty {
-            updates["ownerMessages"] = FieldValue.arrayUnion([msg])
-            // Also write to user's notifications so they see it in app
-            let notification: [String: Any] = [
-                "userId": strikeCase.userId,
-                "type": "owner_message",
-                "title": "Message from MyChannel",
-                "body": msg,
-                "timestamp": Timestamp(date: Date()),
-                "read": false
-            ]
-            try? await db.collection("userNotifications").addDocument(data: notification)
+            caseUpdates["ownerMessages"] = FieldValue.arrayUnion([msg])
         }
 
-        // Write to audit trail
-        let actionReason = ownerMessage ?? "No explanation provided"
-        await logModeratorAction(userId: strikeCase.userId, username: strikeCase.username, action: action, tag: violationTag, reason: actionReason)
+        switch action {
+        case .giveChance:
+            caseUpdates["status"] = StrikeCaseStatus.resolved.rawValue
+            caseUpdates["resolvedAction"] = "given_chance"
+
+        case .issueStrike:
+            let newCount = strikeCase.strikeCount + 1
+            caseUpdates["strikeCount"] = newCount
+            caseUpdates["status"] = newCount >= 3
+                ? StrikeCaseStatus.suspended.rawValue
+                : StrikeCaseStatus.active.rawValue
+            userUpdates["strikeCount"] = newCount
+            userUpdates["lastStrikeAt"] = Timestamp(date: Date())
+
+        case .suspend:
+            let suspendInterval = Double(suspendDays) * 86400
+            let suspendUntilDate = Date().addingTimeInterval(suspendInterval)
+            caseUpdates["status"] = StrikeCaseStatus.suspended.rawValue
+            caseUpdates["suspendedUntil"] = Timestamp(date: suspendUntilDate)
+            caseUpdates["suspendDays"] = suspendDays
+            userUpdates["suspended"] = true
+            userUpdates["suspendedUntil"] = Timestamp(date: suspendUntilDate)
+
+        case .shadowban:
+            caseUpdates["status"] = StrikeCaseStatus.shadowbanned.rawValue
+            caseUpdates["shadowbannedAt"] = Timestamp(date: Date())
+            userUpdates["shadowbanned"] = true
+            userUpdates["shadowbannedAt"] = Timestamp(date: Date())
+
+        case .ban:
+            caseUpdates["status"] = StrikeCaseStatus.banned.rawValue
+            caseUpdates["bannedAt"] = Timestamp(date: Date())
+            userUpdates["banned"] = true
+            userUpdates["bannedAt"] = Timestamp(date: Date())
+
+        case .clearStrikes:
+            caseUpdates["status"] = StrikeCaseStatus.cleared.rawValue
+            caseUpdates["strikeCount"] = 0
+            userUpdates["strikeCount"] = 0
+            userUpdates["strikesCleared"] = true
+        }
+
+        // 🔒 Atomic: the case status and the user's account-status flags must never
+        // go out of sync (e.g. user shows "banned" but the case still says
+        // "pendingReview" because the second write failed after the first
+        // succeeded). Idempotency guard: re-running the same decision on an
+        // already-applied case is a no-op status flip, not a double-charge, so a
+        // batch (rather than a full transaction) is sufficient here.
+        let batch = db.batch()
+        batch.updateData(caseUpdates, forDocument: caseRef)
+        if !userUpdates.isEmpty {
+            batch.updateData(userUpdates, forDocument: userDocRef)
+        }
 
         do {
+            try await batch.commit()
+
+            // Side effects (notification, audit log) are best-effort and don't need
+            // to be atomic with the status change — a missed notification shouldn't
+            // block the moderation decision from taking effect.
+            if let msg = ownerMessage, !msg.isEmpty {
+                // Also write to the user's real notifications inbox (NotificationsInboxService
+                // reads the "notifications" collection, not "userNotifications" — writing to
+                // the wrong collection meant owner messages were silently never seen in-app).
+                await notifyUser(userId: strikeCase.userId, title: "Message from MyChannel", body: msg)
+            }
+
             switch action {
             case .giveChance:
-                updates["status"] = StrikeCaseStatus.resolved.rawValue
-                updates["resolvedAction"] = "given_chance"
-                // Send notification
                 await notifyUser(userId: strikeCase.userId, title: "⚠️ Account Warning",
                                  body: ownerMessage ?? "You have been given another chance. Please follow our community guidelines.")
-
             case .issueStrike:
                 let newCount = strikeCase.strikeCount + 1
-                updates["strikeCount"] = newCount
-                updates["status"] = newCount >= 3
-                    ? StrikeCaseStatus.suspended.rawValue
-                    : StrikeCaseStatus.active.rawValue
-                // Also update user doc
-                try await db.collection("users").document(strikeCase.userId)
-                    .updateData(["strikeCount": newCount, "lastStrikeAt": Timestamp(date: Date())])
                 await notifyUser(userId: strikeCase.userId,
                                  title: "🔴 Strike \(newCount) of 3 — \(strikeCase.username)",
                                  body: ownerMessage ?? "You have received strike \(newCount)/3. At 3 strikes your account may be removed.")
-
             case .suspend:
-                let suspendInterval = Double(suspendDays) * 86400
-                let suspendUntilDate = Date().addingTimeInterval(suspendInterval)
-                updates["status"] = StrikeCaseStatus.suspended.rawValue
-                updates["suspendedUntil"] = Timestamp(date: suspendUntilDate)
-                updates["suspendDays"] = suspendDays
-                try await db.collection("users").document(strikeCase.userId)
-                    .updateData(["suspended": true, "suspendedUntil": Timestamp(date: suspendUntilDate)])
                 await notifyUser(userId: strikeCase.userId, title: "🚫 Account Suspended",
                                  body: ownerMessage ?? "Your account has been suspended for \(suspendDays) days due to repeated violations.")
-
             case .shadowban:
-                updates["status"] = StrikeCaseStatus.shadowbanned.rawValue
-                updates["shadowbannedAt"] = Timestamp(date: Date())
-                try await db.collection("users").document(strikeCase.userId)
-                    .updateData(["shadowbanned": true, "shadowbannedAt": Timestamp(date: Date())])
-                // Notice: We don't notify the user of a shadowban, that's the whole point!
-                
+                break // Notice: We don't notify the user of a shadowban, that's the whole point!
             case .ban:
-                updates["status"] = StrikeCaseStatus.banned.rawValue
-                updates["bannedAt"] = Timestamp(date: Date())
-                try await db.collection("users").document(strikeCase.userId)
-                    .updateData(["banned": true, "bannedAt": Timestamp(date: Date())])
                 await notifyUser(userId: strikeCase.userId, title: "❌ Account Removed",
                                  body: ownerMessage ?? "Your account has been permanently removed from MyChannel.")
-
             case .clearStrikes:
-                updates["status"] = StrikeCaseStatus.cleared.rawValue
-                updates["strikeCount"] = 0
-                try await db.collection("users").document(strikeCase.userId)
-                    .updateData(["strikeCount": 0, "strikesCleared": true])
                 await notifyUser(userId: strikeCase.userId, title: "✅ Fresh Start",
                                  body: ownerMessage ?? "Your strikes have been cleared. Welcome back — please follow our community guidelines.")
             }
 
-            try await ref.updateData(updates)
+            let actionReason = ownerMessage ?? "No explanation provided"
+            await logModeratorAction(userId: strikeCase.userId, username: strikeCase.username, action: action, tag: violationTag, reason: actionReason)
+
             // Update local state
             if let idx = cases.firstIndex(where: { $0.id == caseId }) {
                 switch action {
@@ -384,94 +406,27 @@ class StrikeViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Public: Issue Strike from PlatformMonitor
-
-    func issueAutoStrike(userId: String, username: String, email: String,
-                         violationType: String, detail: String, videoTitle: String? = nil,
-                         severity: StrikeViolationSeverity = .high) async {
-        // Find existing case or create new one
-        let snapshot = try? await db.collection("strikeCases")
-            .whereField("userId", isEqualTo: userId)
-            .whereField("status", in: ["active", "pendingReview"])
-            .getDocuments()
-
-        let violation = StrikeViolation(
-            id: UUID().uuidString,
-            type: violationType,
-            detail: detail,
-            date: Date(),
-            videoTitle: videoTitle,
-            thumbnailURL: nil,
-            severity: severity,
-            source: "ai"
-        )
-
-        if let existing = snapshot?.documents.first {
-            // Update existing case
-            let currentStrikes = existing.data()["strikeCount"] as? Int ?? 0
-            try? await existing.reference.updateData([
-                "violations": FieldValue.arrayUnion([violation.firestoreData]),
-                "strikeCount": currentStrikes + 1,
-                "latestViolation": violationType,
-                "lastActivity": Timestamp(date: Date()),
-                "status": StrikeCaseStatus.pendingReview.rawValue,
-                "aiRiskScore": min(100, (currentStrikes + 1) * 35)
-            ])
-        } else {
-            // Fetch real user data from Firestore
-            let userSnap = try? await db.collection("users").document(userId).getDocument()
-            let userData = userSnap?.data() ?? [:]
-            let profileImageURL = userData["profileImageURL"] as? String
-                ?? userData["photoURL"] as? String
-                ?? userData["avatarURL"] as? String
-            let realJoinDate = (userData["createdAt"] as? Timestamp)?.dateValue()
-                ?? (userData["joinDate"] as? Timestamp)?.dateValue()
-                ?? Date()
-            let realVideoCount = userData["videoCount"] as? Int ?? 0
-            let realFollowerCount = userData["subscriberCount"] as? Int
-                ?? userData["followerCount"] as? Int ?? 0
-            let realEmail = email.isEmpty
-                ? (userData["email"] as? String ?? email)
-                : email
-
-            // Create new case with real user data
-            let aiRisk = 50
-            var data: [String: Any] = [
-                "userId": userId,
-                "username": username,
-                "email": realEmail,
-                "joinDate": Timestamp(date: realJoinDate),
-                "videoCount": realVideoCount,
-                "followerCount": realFollowerCount,
-                "strikeCount": 1,
-                "status": StrikeCaseStatus.pendingReview.rawValue,
-                "violations": [violation.firestoreData],
-                "latestViolation": violationType,
-                "lastActivity": Timestamp(date: Date()),
-                "aiRiskScore": aiRisk,
-                "aiRiskSummary": "AI flagged this account for \(violationType). Score: \(aiRisk)%. Recommend review.",
-                "aiRecommendation": aiRisk > 70 ? "Issue Strike" : "Give Warning",
-                "ownerNotes": "",
-                "ownerMessages": []
-            ]
-            if let pic = profileImageURL { data["profileImageURL"] = pic }
-            try? await db.collection("strikeCases").addDocument(data: data)
-        }
-        print("⚖️ [Strike] Auto-strike issued for \(username) — \(violationType)")
-    }
+    // NOTE: Auto-creation/escalation of strikeCases from AI detections is handled
+    // directly by PlatformMonitorService.autoQueueStrikeCase(...) — that's the one
+    // path actually wired up. (A duplicate `issueAutoStrike` used to live here but
+    // nothing called it; removed to avoid two divergent implementations of the
+    // same escalation logic.)
 
     // MARK: - Notify User
 
+    /// Writes into the "notifications" collection — the one NotificationsInboxService
+    /// actually queries (userId/isRead/createdAt) — so strike decisions are visible in
+    /// the user's real in-app notification inbox, not a collection nothing reads.
     private func notifyUser(userId: String, title: String, body: String) async {
         let data: [String: Any] = [
             "userId": userId,
-            "type": "strike_decision",
+            "type": "system",
             "title": title,
             "body": body,
-            "timestamp": Timestamp(date: Date()),
-            "read": false
+            "createdAt": Timestamp(date: Date()),
+            "isRead": false
         ]
-        try? await db.collection("userNotifications").addDocument(data: data)
+        try? await db.collection("notifications").addDocument(data: data)
     }
 }
 

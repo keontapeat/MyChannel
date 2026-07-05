@@ -8,6 +8,9 @@
 
 import SwiftUI
 import AVKit
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct RefereeDashboardView: View {
     @StateObject private var viewModel = RefereeDashboardViewModel()
@@ -702,11 +705,53 @@ class RefereeDashboardViewModel: ObservableObject {
     func loadDisputedMatches() async {
         isLoading = true
         defer { isLoading = false }
-        
-        // TODO: Load from Firestore
-        // For now, use sample data
+
+        #if canImport(FirebaseFirestore)
+        do {
+            let db = Firestore.firestore()
+            let snap = try await db.collection("match_disputes")
+                .whereField("status", isEqualTo: "pending_review")
+                .order(by: "createdAt", descending: false)
+                .limit(to: 50)
+                .getDocuments()
+
+            disputedMatches = snap.documents.compactMap { doc -> DisputedMatch? in
+                let d = doc.data()
+                guard let game = d["game"] as? String else { return nil }
+                let wager = (d["wagerAmount"] as? Double) ?? (d["wagerAmountCents"] as? Double).map { $0 / 100 } ?? 0
+                return DisputedMatch(
+                    id: doc.documentID,
+                    game: game,
+                    player1Id:   d["player1Id"] as? String ?? "",
+                    player1Name: d["player1Name"] as? String ?? "Player 1",
+                    player1Score: d["player1Score"] as? Int ?? 0,
+                    player1ExtractedScore: d["player1ExtractedScore"] as? Int,
+                    player2Id:   d["player2Id"] as? String ?? "",
+                    player2Name: d["player2Name"] as? String ?? "Player 2",
+                    player2Score: d["player2Score"] as? Int ?? 0,
+                    player2ExtractedScore: d["player2ExtractedScore"] as? Int,
+                    wagerAmount: wager,
+                    aiConfidence: d["aiConfidence"] as? Double ?? 0.5,
+                    scoreboardDetected: d["scoreboardDetected"] as? Bool ?? false,
+                    submittedAt: (d["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
+                    disputeReason: d["reason"] as? String ?? "Disputed",
+                    urgency: {
+                        switch d["urgency"] as? String {
+                        case "high": return .high
+                        case "low": return .low
+                        default: return .medium
+                        }
+                    }()
+                )
+            }
+        } catch {
+            print("❌ [RefereeDashboard] Firestore error: \(error)")
+            disputedMatches = DisputedMatch.sampleMatches
+        }
+        #else
         disputedMatches = DisputedMatch.sampleMatches
-        
+        #endif
+
         print("✅ [RefereeDashboard] Loaded \(disputedMatches.count) disputed matches")
     }
     
@@ -726,8 +771,7 @@ class RefereeDashboardViewModel: ObservableObject {
     }
     
     private func getCurrentRefereeId() -> String {
-        // TODO: Get from AuthenticationManager
-        return "referee-123"
+        AuthenticationManager.shared.currentUser?.id ?? "referee-unknown"
     }
 }
 

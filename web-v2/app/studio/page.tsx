@@ -88,9 +88,15 @@ export default function CreatorStudioPage() {
   const [recentComments, setRecentComments] = useState<RecentComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [channelName, setChannelName] = useState('Your Channel');
+  const [uid, setUid] = useState<string | null>(auth?.currentUser?.uid ?? null);
+
+  // Wait for Firebase auth to resolve before deciding the user is signed out.
+  useEffect(() => {
+    const unsub = auth?.onAuthStateChanged?.((u) => setUid(u?.uid ?? null));
+    return () => { if (typeof unsub === 'function') unsub(); };
+  }, []);
 
   useEffect(() => {
-    const uid = auth?.currentUser?.uid;
     if (!uid) { setLoading(false); return; }
 
     let cancelled = false;
@@ -191,7 +197,7 @@ export default function CreatorStudioPage() {
 
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [uid]);
 
   const s = stats;
 

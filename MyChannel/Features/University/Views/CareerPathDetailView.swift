@@ -349,8 +349,9 @@ struct CareerPathDetailView: View {
                 .stroke(careerPath.color.opacity(0.2), lineWidth: 1)
         )
         .onTapGesture {
-            print("Play video: \(video.title)")
-            // TODO: Play video
+            // Play the university video via GlobalVideoPlayerManager
+            let playerVideo = video.asVideo
+            GlobalVideoPlayerManager.shared.playVideo(playerVideo, showFullscreen: true)
         }
     }
     
@@ -369,8 +370,13 @@ struct CareerPathDetailView: View {
     
     private var shareButton: some View {
         Button(action: {
-            print("Share career path progress")
-            // TODO: Share to social media
+            let shareText = "I'm \(Int(progress.progressPercentage))% through the \(careerPath.name) career path on MyChannel! 🎓"
+            let shareURL = URL(string: "https://mychannel.live/university/\(careerPath.id)")!
+            let activityVC = UIActivityViewController(activityItems: [shareText, shareURL], applicationActivities: nil)
+            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let root = scene.windows.first?.rootViewController {
+                root.present(activityVC, animated: true)
+            }
         }) {
             Image(systemName: "square.and.arrow.up")
                 .font(.system(size: 18, weight: .semibold))

@@ -1,11 +1,20 @@
 // Stripe Payment Service - Professional Implementation
 'use client';
 
-import type { ShoppingCart, Order, PaymentMethod } from '@/types/shopping';
+import type { ShoppingCart } from '@/types/shopping';
 
-// Stripe configuration
-const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || '';
+// Stripe configuration.
+// Env var name matches env.template and Stripe's own naming ("publishable key").
+// Exported so the Stripe.js loader (loadStripe) can consume it.
+export const STRIPE_PUBLISHABLE_KEY =
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+
+// Round a dollar amount to whole cents to avoid floating-point drift.
+// All amounts sent to the payment backend are integer cents (Math.round(x * 100)).
+function roundToCents(dollars: number): number {
+  return Math.round(dollars * 100) / 100;
+}
 
 export interface PaymentIntentResponse {
   clientSecret: string;
@@ -214,7 +223,7 @@ export class StripePaymentService {
     };
 
     const taxRate = taxRates[state] || 0.08; // Default 8%
-    return subtotal * taxRate;
+    return roundToCents(subtotal * taxRate);
   }
 
   // ==================== CALCULATE SHIPPING ====================
@@ -224,7 +233,7 @@ export class StripePaymentService {
     if (subtotal >= 50) return 0;
 
     // $5.99 base + $1 per additional item
-    return 5.99 + Math.max(0, items - 1) * 1.0;
+    return roundToCents(5.99 + Math.max(0, items - 1) * 1.0);
   }
 
   // ==================== VALIDATE CARD ====================

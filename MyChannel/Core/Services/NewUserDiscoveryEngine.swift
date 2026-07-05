@@ -158,20 +158,27 @@ class NewUserDiscoveryEngine: ObservableObject {
     private func getRisingCreatorVideos(limit: Int) async throws -> [Video] {
         #if canImport(FirebaseFirestore)
         
-        // Get videos from creators with < 1K subscribers (rising stars)
-        var query = db.collection("videos")
+        // Get videos from creators with < 1K subscribers (rising stars).
+        //
+        // Firestore does not allow inequality (>, <, !=, range) filters on more
+        // than one field in a single query. The previous version filtered on
+        // both creatorSubscribers < threshold AND viewCount > 100, which Firestore
+        // rejected with FAILED_PRECONDITION every call (see logs). We pick one
+        // server-side inequality (creatorSubscribers) and apply the viewCount
+        // floor client-side after fetching.
+        let snapshot = try await db.collection("videos")
             .whereField("visibility", isEqualTo: "public")
             .whereField("creatorSubscribers", isLessThan: risingCreatorThreshold)
-            .whereField("viewCount", isGreaterThan: 100) // Some traction
             .order(by: "creatorSubscribers", descending: true)
-            .order(by: "engagementRate", descending: true)
-            .limit(to: limit * 3) // Get 3x for better selection
-        
-        let snapshot = try await query.getDocuments()
-        
+            .limit(to: limit * 6) // over-fetch since we filter further client-side
+            .getDocuments()
+
         var videos = snapshot.documents.compactMap { doc -> Video? in
             return parseVideoFromDocument(doc)
         }
+
+        // Client-side: require some traction so we don't surface zero-view content.
+        videos = videos.filter { $0.viewCount > 100 }
         
         // Score by engagement potential
         videos = videos.sorted { video1, video2 in

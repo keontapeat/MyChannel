@@ -52,8 +52,6 @@ struct StoryViewerView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {}
-            .onAppear { viewWidth = geometry.size.width }
             ZStack {
                 Color.black
                     .ignoresSafeArea()
@@ -216,19 +214,14 @@ struct StoryViewerView: View {
                     )
                     .padding(.top, 8)
             }
+            // Capture geometry width so tap gesture outside the reader can use it
+            .onAppear { viewWidth = geometry.size.width }
+            .onChange(of: geometry.size.width) { newWidth in viewWidth = newWidth }
         }
-        .onTapGesture { location in
-            handleTapGesture(at: location)
-        }
-        .onLongPressGesture(minimumDuration: 0.2) {
-            pauseStory()
-        } onPressingChanged: { pressing in
-            if !pressing {
-                resumeStory()
-            }
-        }
-        .gesture(
-            DragGesture()
+        // Tap: left third = previous, right third = next, center = pause/resume.
+        // Use simultaneousGesture so tap and drag don't block each other.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 10)
                 .onChanged { value in
                     dragOffset = value.translation
                     if dragOffset.height < 0 {
@@ -240,6 +233,20 @@ struct StoryViewerView: View {
                     dragOffset = .zero
                 }
         )
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.25)
+                .sequenced(before: DragGesture(minimumDistance: 0))
+                .onChanged { state in
+                    switch state {
+                    case .second: pauseStory()
+                    default: break
+                    }
+                }
+                .onEnded { _ in resumeStory() }
+        )
+        .onTapGesture { location in
+            handleTapGesture(at: location, totalWidth: viewWidth)
+        }
         .offset(dragOffset)
         .scaleEffect(dragOffset.height > 0 ? max(0.8, 1 - dragOffset.height / 1000) : 1.0)
         .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.8), value: dragOffset)
@@ -271,6 +278,16 @@ struct StoryViewerView: View {
                 story: currentStory,
                 onSend: { message in
                     showingReply = false
+                    guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                          let userId = AppState.shared.currentUser?.id else { return }
+                    Task {
+                        try? await StoryActionService.shared.sendReply(
+                            storyId: currentStory.id,
+                            creatorId: currentStory.creatorId,
+                            userId: userId,
+                            text: message
+                        )
+                    }
                 }
             )
             .presentationDetents([.height(200)])
@@ -443,8 +460,8 @@ struct StoryViewerView: View {
         }
     }
 
-    private func handleTapGesture(at location: CGPoint) {
-        let screenWidth = viewWidth > 0 ? viewWidth : (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.width ?? 390
+    private func handleTapGesture(at location: CGPoint, totalWidth: CGFloat) {
+        let screenWidth = totalWidth > 0 ? totalWidth : (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.width ?? 390
         hapticFeedback.impactOccurred()
 
         if location.x < screenWidth / 3 {
@@ -637,11 +654,11 @@ struct EnhancedStoryContentView: View {
                     case .success(let image):
                         image
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .clipped()
-                            .scaleEffect(isPaused ? 1.05 : 1.0)
-                            .animation(.easeInOut(duration: 0.3), value: isPaused)
+                            .aspectRatio(contentMode: .fit)
+                            .frame(
+                                width: geometry.size.width,
+                                height: geometry.size.height
+                            )
                             .onAppear { imageLoaded = true }
                     case .failure(_):
                         failurePlaceholder
@@ -654,11 +671,11 @@ struct EnhancedStoryContentView: View {
             } else if UIImage(named: urlString) != nil {
                 Image(urlString)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-                    .scaleEffect(isPaused ? 1.05 : 1.0)
-                    .animation(.easeInOut(duration: 0.3), value: isPaused)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(
+                        width: geometry.size.width,
+                        height: geometry.size.height
+                    )
             } else {
                 failurePlaceholder
             }

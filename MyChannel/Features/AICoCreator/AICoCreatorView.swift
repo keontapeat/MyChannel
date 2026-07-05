@@ -569,13 +569,29 @@ struct ScriptEditorView: View {
         NavigationStack {
             VStack {
                 if let script = script {
-                    Text("Generated Script: \(script.title)")
-                        .font(.title2)
-                        .padding()
+                    Text(script.title)
+                        .font(.title2.bold())
+                        .padding(.horizontal)
+                        .padding(.top)
                     
-                    // TODO: Implement full script editor
-                    Text("Script editor coming soon...")
-                        .foregroundColor(.secondary)
+                    // Full script editor with sections
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 16) {
+                            ForEach(Array(script.sections.enumerated()), id: \.offset) { idx, section in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Label("Section \(idx + 1)", systemImage: "film")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.secondary)
+                                    Text(section.content)
+                                        .font(.body)
+                                        .padding(12)
+                                        .background(Color(.systemGray6))
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                }
+                            }
+                        }
+                        .padding()
+                    }
                 } else {
                     Text("No script generated yet")
                         .foregroundColor(.secondary)

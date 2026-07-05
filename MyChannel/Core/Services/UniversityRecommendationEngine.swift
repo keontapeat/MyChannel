@@ -281,15 +281,51 @@ final class UniversityRecommendationEngine: ObservableObject {
     // MARK: - Data Fetching
     
     private func getWatchedVideoIds(userId: String, careerPathId: String) async throws -> Set<String> {
-        // TODO: Fetch from Firestore watch history
-        // For now, return empty set
+        #if canImport(FirebaseFirestore)
+        let snap = try await db.collection("university_progress")
+            .document(userId)
+            .collection(careerPathId)
+            .getDocuments()
+        return Set(snap.documents.compactMap { $0.data()["videoId"] as? String })
+        #else
         return Set()
+        #endif
     }
     
     private func getCareerPathVideos(careerPathId: String) async throws -> [UniversityVideo] {
-        // TODO: Fetch from Firestore videos collection filtered by careerPathId
-        // For now, return mock data
+        #if canImport(FirebaseFirestore)
+        let snap = try await db.collection("videos")
+            .whereField("careerPathIds", arrayContains: careerPathId)
+            .whereField("isPublic", isEqualTo: true)
+            .order(by: "sortOrder", descending: false)
+            .limit(to: 100)
+            .getDocuments()
+        return snap.documents.compactMap { doc -> UniversityVideo? in
+            let d = doc.data()
+            guard let title = d["title"] as? String else { return nil }
+            return UniversityVideo(
+                id: doc.documentID,
+                videoId: doc.documentID,
+                title: title,
+                thumbnailURL: d["thumbnailURL"] as? String ?? "",
+                duration: (d["duration"] as? TimeInterval) ?? 0,
+                creatorId: d["creatorId"] as? String ?? "",
+                creatorName: d["instructor"] as? String ?? d["creatorName"] as? String ?? "Instructor",
+                creatorAvatarURL: d["creatorAvatarURL"] as? String ?? "",
+                careerPaths: d["careerPathIds"] as? [String] ?? [careerPathId],
+                skillTags: d["skillTags"] as? [String] ?? [],
+                difficultyLevel: UniversityVideo.DifficultyLevel(rawValue: d["difficultyLevel"] as? String ?? "Beginner") ?? .beginner,
+                isUniversityContent: d["isUniversityContent"] as? Bool ?? true,
+                certificateEligible: d["certificateEligible"] as? Bool ?? false,
+                aiCategorizationScore: (d["aiCategorizationScore"] as? Double) ?? 0.0,
+                watchProgress: (d["watchProgress"] as? Double) ?? 0.0,
+                aiVerificationScore: d["aiVerificationScore"] as? Int,
+                completed: d["completed"] as? Bool ?? false
+            )
+        }
+        #else
         return []
+        #endif
     }
 }
 

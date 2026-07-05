@@ -5,10 +5,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Maximize2, Volume2, VolumeX, Play, Pause } from 'lucide-react';
 
-interface MiniPlayerProps {
-  // These would come from a global video player state management system
-  // For now, we'll use local state as placeholder
-}
+// Props will come from a global video player state system; none for now.
+type MiniPlayerProps = Record<string, never>;
 
 const MiniPlayer = ({}: MiniPlayerProps) => {
   const [isVisible, setIsVisible] = useState(false); // Would be controlled by global state

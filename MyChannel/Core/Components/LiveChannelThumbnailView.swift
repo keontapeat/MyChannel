@@ -161,12 +161,14 @@ final class ThermonuclearThumbnailCache {
         return cache
     }()
     
-    // 🔥 Pre-warmed player cache
+    // 🔥 Pre-warmed player cache (playerOrder tracks insertion order for true LRU eviction)
     private var playerCache: [String: AVPlayer] = [:]
+    private var playerOrder: [String] = []
     private let playerQueue = DispatchQueue(label: "com.mychannel.thermonuclear.players", attributes: .concurrent)
     
-    // 🔥 Asset cache for instant replay
+    // 🔥 Asset cache for instant replay (assetOrder tracks insertion order for true LRU eviction)
     private var assetCache: [String: AVURLAsset] = [:]
+    private var assetOrder: [String] = []
     private let assetQueue = DispatchQueue(label: "com.mychannel.thermonuclear.assets", attributes: .concurrent)
     
     private init() {
@@ -185,9 +187,11 @@ final class ThermonuclearThumbnailCache {
         playerQueue.async(flags: .barrier) { [weak self] in
             self?.playerCache.values.forEach { $0.pause() }
             self?.playerCache.removeAll()
+            self?.playerOrder.removeAll()
         }
         assetQueue.async(flags: .barrier) { [weak self] in
             self?.assetCache.removeAll()
+            self?.assetOrder.removeAll()
         }
     }
     
@@ -208,14 +212,17 @@ final class ThermonuclearThumbnailCache {
     
     func cachePlayer(_ player: AVPlayer, for url: String) {
         playerQueue.async(flags: .barrier) { [weak self] in
-            // Limit player cache to 10
-            if self?.playerCache.count ?? 0 >= 10 {
-                if let oldest = self?.playerCache.keys.first {
-                    self?.playerCache[oldest]?.pause()
-                    self?.playerCache.removeValue(forKey: oldest)
-                }
+            guard let self else { return }
+            // Evict the genuine oldest entry (LRU) once we hit the limit.
+            if self.playerCache[url] == nil {
+                self.playerOrder.append(url)
             }
-            self?.playerCache[url] = player
+            while self.playerCache.count >= 10, let oldest = self.playerOrder.first, oldest != url {
+                self.playerCache[oldest]?.pause()
+                self.playerCache.removeValue(forKey: oldest)
+                self.playerOrder.removeFirst()
+            }
+            self.playerCache[url] = player
         }
     }
     
@@ -223,6 +230,7 @@ final class ThermonuclearThumbnailCache {
         playerQueue.async(flags: .barrier) { [weak self] in
             self?.playerCache[url]?.pause()
             self?.playerCache.removeValue(forKey: url)
+            self?.playerOrder.removeAll { $0 == url }
         }
     }
     
@@ -233,10 +241,16 @@ final class ThermonuclearThumbnailCache {
     
     func cacheAsset(_ asset: AVURLAsset, for url: String) {
         assetQueue.async(flags: .barrier) { [weak self] in
-            if self?.assetCache.count ?? 0 >= 20 {
-                self?.assetCache.removeValue(forKey: self?.assetCache.keys.first ?? "")
+            guard let self else { return }
+            // Evict the genuine oldest entry (LRU) once we hit the limit.
+            if self.assetCache[url] == nil {
+                self.assetOrder.append(url)
             }
-            self?.assetCache[url] = asset
+            while self.assetCache.count >= 20, let oldest = self.assetOrder.first, oldest != url {
+                self.assetCache.removeValue(forKey: oldest)
+                self.assetOrder.removeFirst()
+            }
+            self.assetCache[url] = asset
         }
     }
     
@@ -293,6 +307,11 @@ struct LiveChannelThumbnailView: View {
     var channelId: String?
     var onStreamFailed: (() -> Void)?
     var onStreamReady: (() -> Void)?
+    /// 🔒 PERMANENT THUMBNAIL FIX: passed straight into the embedded AVPlayerLayer
+    /// (see `ThermonuclearPlayerView.cornerRadius`) since a parent `.clipShape` on
+    /// this view cannot mask that native sublayer. Defaults to 0 for call sites that
+    /// clip a plain rectangle; pass the real corner radius for rounded cards.
+    var cornerRadius: CGFloat = 0
 
     @State private var isReady: Bool = false
     @State private var cachedSnapshot: UIImage?
@@ -312,7 +331,8 @@ struct LiveChannelThumbnailView: View {
         channelName: String? = nil,
         channelId: String? = nil,
         onStreamFailed: (() -> Void)? = nil,
-        onStreamReady: (() -> Void)? = nil
+        onStreamReady: (() -> Void)? = nil,
+        cornerRadius: CGFloat = 0
     ) {
         self.streamURL = streamURL
         self.posterURL = posterURL
@@ -325,6 +345,7 @@ struct LiveChannelThumbnailView: View {
         self.channelId = channelId
         self.onStreamFailed = onStreamFailed
         self.onStreamReady = onStreamReady
+        self.cornerRadius = cornerRadius
     }
 
     var body: some View {
@@ -349,7 +370,8 @@ struct LiveChannelThumbnailView: View {
                     initialPlaybackFraction: initialDVRFraction,
                     onReady: { handleReady() },
                     onSnapshot: { handleSnapshot($0) },
-                    onAllFailed: { handleAllFailed() }
+                    onAllFailed: { handleAllFailed() },
+                    cornerRadius: cornerRadius
                 )
                 .opacity(isReady ? 1 : 0)
                 .allowsHitTesting(isReady)
@@ -686,6 +708,8 @@ struct LiveChannelThumbnailView: View {
                urlString.contains("cloudinary.com") ||      // Cloudinary CDN
                urlString.contains("pluto.tv") ||            // Pluto TV
                urlString.contains("googleusercontent.com") || // Google CDN
+               urlString.contains("firebasestorage.googleapis.com") || // 🔥 Firebase Storage thumbnails (uploads)
+               urlString.contains("storage.googleapis.com") || // GCS direct
                urlString.contains("akamaized.net") ||       // Akamai CDN
                urlString.contains("cloudfront.net") ||      // AWS CloudFront
                urlString.contains("twimg.com") ||           // Twitter images

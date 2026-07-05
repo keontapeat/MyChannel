@@ -11,6 +11,7 @@ struct SplashContainer: View {
     @State private var showSplash = true
     @State private var showLaunchMask = false
     @State private var hasAcceptedEULA = UserDefaults.standard.bool(forKey: "hasAcceptedEULA")
+    @ObservedObject private var universityTracking = UniversityWatchTrackingService.shared
 
     private var isRunningInPreviews: Bool {
         ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
@@ -59,6 +60,12 @@ struct SplashContainer: View {
                             .transition(.opacity)
                             .onAppear {
                                 print("🏠 [MainTabView] Appeared successfully!")
+                            }
+                            // 🎓 App-wide University certificate celebration. The listener
+                            // itself is started/stopped by AppState on login/logout, so this
+                            // fires no matter which tab the user is on.
+                            .sheet(item: $universityTracking.newlyEarnedCertificate) { cert in
+                                CertificateCelebrationView(certificate: cert) {}
                             }
                     }
                 }

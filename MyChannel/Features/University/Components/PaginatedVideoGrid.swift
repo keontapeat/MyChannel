@@ -303,8 +303,7 @@ struct VideoGridCard: View {
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
         .onTapGesture {
-            print("Play video: \(video.title)")
-            // TODO: Play video
+            GlobalVideoPlayerManager.shared.playVideo(video.asVideo, showFullscreen: true)
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)

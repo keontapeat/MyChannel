@@ -29,21 +29,6 @@ extension FreeMovie {
             }
         }
     
-        var logoURL: String {
-            switch self {
-            case .tubi: return "https://tubitv.com/assets/images/tubi-logo.png"
-            case .plexFree: return "https://www.plex.tv/wp-content/uploads/2018/01/plex-logo-dark.png"
-            case .crackle: return "https://www.crackle.com/assets/images/crackle-logo.png"
-            case .rokuChannel: return "https://image.roku.com/developer_channels/prod/channel-icon.png"
-            case .internetArchive: return "https://archive.org/images/ia_logo.png"
-            case .imdbTV: return "https://m.media-amazon.com/images/G/01/IMDb/BG_rectangle.png"
-            case .youtube: return "https://www.youtube.com/s/desktop/youtube-logo.png"
-            case .pexels: return "https://images.pexels.com/lib/api/pexels.png"
-            case .pixabay: return "https://pixabay.com/static/img/logo_square.png"
-            case .nasa: return "https://i.ytimg.com/vi/21X5lGlDOfg/hqdefault.jpg"
-            }
-        }
-    
         var color: Color {
             switch self {
             case .tubi: return .orange

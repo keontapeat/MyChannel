@@ -17,7 +17,11 @@ struct VideoLiveThumbnailView: View {
                     autoplay: true,
                     startTime: 0,
                     muted: true,
-                    showControls: false
+                    showControls: false,
+                    // 🔒 Native-layer rounding — see PERMANENT THUMBNAIL FIX note in
+                    // YouTubePlayerView. SwiftUI's clipShape below is kept as a
+                    // belt-and-suspenders mask, but this is what actually holds.
+                    cornerRadius: cornerRadius
                 )
                 .background(Color.black)
             } else {
@@ -25,7 +29,8 @@ struct VideoLiveThumbnailView: View {
                     streamURL: video.videoURL,
                     posterURL: video.thumbnailURL,
                     fallbackStreamURL: nil,
-                    showsLiveBadge: video.isLiveStream
+                    showsLiveBadge: video.isLiveStream,
+                    cornerRadius: cornerRadius
                 )
             }
         }

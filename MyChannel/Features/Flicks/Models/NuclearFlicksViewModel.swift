@@ -28,6 +28,7 @@ class NuclearFlicksViewModel: ObservableObject {
     
     @Published var likedFlickIds: Set<String> = []
     @Published var followedCreatorIds: Set<String> = []
+    @Published var savedFlickIds: Set<String> = []
     
     @Published var commentsFlick: NuclearFlick?
     @Published var shareFlick: NuclearFlick?
@@ -52,6 +53,12 @@ class NuclearFlicksViewModel: ObservableObject {
         startAlbumArtRotation()
         // Load persistent blacklist on init
         invalidURLs = persistentBlacklist
+        // Seed per-user state from the app's persisted collections so likes,
+        // follows, and saves survive relaunch and sync across devices instead of
+        // resetting to empty every time Flicks opens.
+        likedFlickIds = AppState.shared.likedVideos
+        followedCreatorIds = AppState.shared.subscriptions
+        savedFlickIds = AppState.shared.watchLaterVideos
     }
     
     deinit {
@@ -199,32 +206,47 @@ class NuclearFlicksViewModel: ObservableObject {
     // MARK: - Actions
     
     func toggleLike(flick: NuclearFlick) {
-        if likedFlickIds.contains(flick.id) {
-            likedFlickIds.remove(flick.id)
+        let baseId = flick.id.components(separatedBy: "_loop_").first ?? flick.id
+        if likedFlickIds.contains(baseId) {
+            likedFlickIds.remove(baseId)
+            // Mirror into AppState's persisted liked set (auto-saves to
+            // users/{uid} + syncs cross-device) and record an "unlike" event so
+            // the server-side counter decrements too (fixes the like drift).
+            AppState.shared.likedVideos.remove(baseId)
+            Task { await recordFlickEvent(flickId: baseId, type: "unlike") }
         } else {
-            likedFlickIds.insert(flick.id)
-            
-            // Track like analytics
-            Task {
-                await trackLike(flickId: flick.id)
-            }
+            likedFlickIds.insert(baseId)
+            AppState.shared.likedVideos.insert(baseId)
+            Task { await recordFlickEvent(flickId: baseId, type: "like") }
         }
     }
     
     func isLiked(flickId: String) -> Bool {
-        likedFlickIds.contains(flickId)
+        let baseId = flickId.components(separatedBy: "_loop_").first ?? flickId
+        return likedFlickIds.contains(baseId)
     }
     
     func toggleFollow(creator: FlickCreator) {
-        if followedCreatorIds.contains(creator.id) {
-            followedCreatorIds.remove(creator.id)
-        } else {
-            followedCreatorIds.insert(creator.id)
-        }
+        // Route through AppState so the follow persists to
+        // users/{uid}/subscriptions and drives the rest of the app's feeds.
+        AppState.shared.toggleSubscription(for: creator.id)
+        followedCreatorIds = AppState.shared.subscriptions
     }
     
     func isFollowing(creatorId: String) -> Bool {
         followedCreatorIds.contains(creatorId)
+    }
+
+    func toggleSave(flick: NuclearFlick) {
+        let baseId = flick.id.components(separatedBy: "_loop_").first ?? flick.id
+        // "Save" maps to Watch Later, the app's existing persisted collection.
+        AppState.shared.toggleWatchLater(for: baseId)
+        savedFlickIds = AppState.shared.watchLaterVideos
+    }
+
+    func isSaved(flickId: String) -> Bool {
+        let baseId = flickId.components(separatedBy: "_loop_").first ?? flickId
+        return savedFlickIds.contains(baseId)
     }
     
     func openComments(flick: NuclearFlick) {
@@ -262,10 +284,9 @@ class NuclearFlicksViewModel: ObservableObject {
     // MARK: - Preloading
     
     func preloadVideos(around index: Int, count: Int) {
-        let start = max(0, index - 1)
-        let end = min(flicks.count - 1, index + count)  // 🔥 STRONGER: More aggressive range
+        guard let range = FeedMath.preloadRange(around: index, before: 1, after: count, total: flicks.count) else { return }
         
-        for i in start...end {
+        for i in range {
             if !preloadedIndices.contains(i) {
                 preloadedIndices.insert(i)
                 Task {
@@ -302,18 +323,12 @@ class NuclearFlicksViewModel: ObservableObject {
     // MARK: - Analytics
     
     func trackView(flick: NuclearFlick) async {
-        // Track view count
-        #if canImport(FirebaseFirestore)
-        do {
-            let db = Firestore.firestore()
-            try await db.collection("flicks").document(flick.id).updateData([
-                "viewCount": FieldValue.increment(Int64(1))
-            ])
-        } catch {
-            print("🚨 [NuclearFlicks] Error tracking view: \(error)")
-        }
-        #endif
-        
+        // 🔒 Engagement is recorded as a userId-stamped event; the
+        // onFlickEngagementEvent Cloud Function aggregates it into the
+        // server-authoritative viewCount. Clients no longer increment counters
+        // directly, which closes the spoofing/inflation hole.
+        await recordFlickEvent(flickId: flick.id, type: "view")
+
         // Track with RealtimeViewTracker
         if let userId = AppState.shared.currentUser?.id {
             await RealtimeViewTracker.shared.startViewSession(videoId: flick.id, userId: userId)
@@ -321,32 +336,34 @@ class NuclearFlicksViewModel: ObservableObject {
     }
     
     func trackWatchTime(flickId: String, duration: TimeInterval) async {
-        #if canImport(FirebaseFirestore)
-        do {
-            let db = Firestore.firestore()
-            try await db.collection("analytics").document("watch_time").setData([
-                "flicks": [
-                    flickId: [
-                        "totalWatchTime": FieldValue.increment(Int64(duration)),
-                        "lastUpdated": FieldValue.serverTimestamp()
-                    ]
-                ]
-            ], merge: true)
-        } catch {
-            print("🚨 [NuclearFlicks] Error tracking watch time: \(error)")
-        }
-        #endif
+        guard duration > 0 else { return }
+        // Watch time flows through the same event pipeline (no more writes to a
+        // shared, world-writable analytics/watch_time doc).
+        await recordFlickEvent(flickId: flickId, type: "watch_time", extra: [
+            "watchTime": Int(duration.rounded())
+        ])
     }
-    
-    func trackLike(flickId: String) async {
+
+    /// 🔒 Records a userId-stamped engagement event in the flick's /events
+    /// subcollection. The onFlickEngagementEvent Cloud Function aggregates these
+    /// into server-authoritative counters, so clients never write counts directly.
+    private func recordFlickEvent(flickId: String, type: String, extra: [String: Any] = [:]) async {
         #if canImport(FirebaseFirestore)
+        guard let userId = AppState.shared.currentUser?.id else { return }
+        // Duplicate/looped feed entries share one backing doc — strip the suffix.
+        let baseId = flickId.components(separatedBy: "_loop_").first ?? flickId
+        var payload: [String: Any] = [
+            "userId": userId,
+            "type": type,
+            "createdAt": FieldValue.serverTimestamp()
+        ]
+        payload.merge(extra) { _, new in new }
         do {
-            let db = Firestore.firestore()
-            try await db.collection("flicks").document(flickId).updateData([
-                "likeCount": FieldValue.increment(Int64(1))
-            ])
+            _ = try await Firestore.firestore()
+                .collection("flicks").document(baseId)
+                .collection("events").addDocument(data: payload)
         } catch {
-            print("🚨 [NuclearFlicks] Error tracking like: \(error)")
+            print("🚨 [NuclearFlicks] Failed to record \(type) event: \(error.localizedDescription)")
         }
         #endif
     }

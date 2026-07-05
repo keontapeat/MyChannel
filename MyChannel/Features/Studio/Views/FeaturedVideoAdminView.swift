@@ -156,8 +156,7 @@ struct FeaturedVideoAdminView: View {
     private func approveRequest(_ request: FeaturedVideoRequest) async {
         isLoading = true
         do {
-            // Get current user ID (admin)
-            let adminUserId = "admin_user_id" // TODO: Get from auth service
+            let adminUserId = AuthenticationManager.shared.currentUser?.id ?? ""
             try await adminService.approveRequest(request, adminUserId: adminUserId)
         } catch {
             print("❌ Error approving request: \(error)")
@@ -170,7 +169,7 @@ struct FeaturedVideoAdminView: View {
     private func rejectRequest(_ request: FeaturedVideoRequest) async {
         isLoading = true
         do {
-            let adminUserId = "admin_user_id" // TODO: Get from auth service
+            let adminUserId = AuthenticationManager.shared.currentUser?.id ?? ""
             try await adminService.rejectRequest(request, adminUserId: adminUserId, reason: rejectionReason)
         } catch {
             print("❌ Error rejecting request: \(error)")

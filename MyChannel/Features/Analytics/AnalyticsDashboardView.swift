@@ -251,7 +251,10 @@ struct AnalyticsDashboardView: View {
                 Spacer()
                 
                 Button("View All") {
-                    // TODO: Navigate to detailed video analytics
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("OpenCreatorStudio"),
+                        object: nil
+                    )
                 }
                 .font(.subheadline)
                 .foregroundColor(.blue)

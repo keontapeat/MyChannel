@@ -53,6 +53,14 @@ final class FirebaseAppDelegate: NSObject, UIApplicationDelegate {
         
         configureAppCheckIfAvailable()
         FirebaseManager.shared.configureIfPossible()
+
+        // 🔥 Register ALL BGTaskScheduler launch handlers HERE, synchronously, before this
+        // method returns. Apple requires every launch handler to be registered before the
+        // app finishes launching; registering later (e.g. from `App.init()` which SwiftUI
+        // may invoke after launch, or lazily when a view first appears) throws
+        // NSInternalInconsistencyException and crashes the app on launch. Every identifier
+        // used below must also be listed in Info.plist > BGTaskSchedulerPermittedIdentifiers.
+        BackgroundFetchService.shared.register()
         
         // Track app launch performance
         let launchTime = Date().timeIntervalSince(appLaunchStart)

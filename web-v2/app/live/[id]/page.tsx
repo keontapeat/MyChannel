@@ -82,7 +82,7 @@ export default async function LiveStreamPage(props: LiveStreamPageProps) {
 
           {/* Right Column - Live Chat */}
           <div className="h-screen sticky top-0">
-            <LiveChat streamId={stream.id} chatEnabled={stream.chatEnabled} />
+            <LiveChat streamId={stream.id} chatEnabled={stream.chatEnabled} creatorId={stream.streamer.id} />
           </div>
         </div>
       </div>

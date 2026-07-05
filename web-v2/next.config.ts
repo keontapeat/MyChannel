@@ -7,14 +7,14 @@ const nextConfig: NextConfig = {
   /* Fix for Next.js 15 dynamic routes */
   trailingSlash: true,
   
-  /* Skip type checking during build (types are checked by IDE) */
+  /* Fail the build on type errors so broken code can't ship silently. */
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   
-  /* Skip ESLint during build */
+  /* Fail the build on ESLint errors (warnings are allowed). */
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   
   /* Video streaming & media optimization */

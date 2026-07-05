@@ -266,9 +266,14 @@ struct AILiveTVSection: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
                     ForEach(LiveTVChannel.ChannelCategory.allCases, id: \.self) { category in
-                        // Only show categories that have healthy channels
+                        // Only show categories that have healthy channels.
+                        // Use the live LiveTVManager catalog (falls back to sample data)
+                        // so this matches the channels the rest of the app displays.
                         let healthyChannels = StreamHealthMLAgent.shared.healthyChannelIds
-                        let categoryChannels = LiveTVChannel.sampleChannels.filter { 
+                        let sourceChannels = LiveTVManager.shared.channels.isEmpty
+                            ? LiveTVChannel.sampleChannels
+                            : LiveTVManager.shared.channels
+                        let categoryChannels = sourceChannels.filter { 
                             $0.category == category && (healthyChannels.isEmpty || healthyChannels.contains($0.id))
                         }
                         
@@ -395,7 +400,8 @@ private struct AIChannelCard: View {
                         initialDVRFraction: LiveTVPreviewPlaybackStore.shared.dvrFraction(for: channel.id),
                         channelCategory: channel.category,
                         channelName: channel.name,
-                        channelId: channel.id
+                        channelId: channel.id,
+                        cornerRadius: 12
                     )
                     
                     // LIVE badge
@@ -491,7 +497,8 @@ private struct TrendingChannelCard: View {
                         initialDVRFraction: LiveTVPreviewPlaybackStore.shared.dvrFraction(for: item.channel.id),
                         channelCategory: item.channel.category,
                         channelName: item.channel.name,
-                        channelId: item.channel.id
+                        channelId: item.channel.id,
+                        cornerRadius: 12
                     )
                     
                     // Rank badge
@@ -557,7 +564,8 @@ private struct BecauseYouWatchedCard: View {
                         initialDVRFraction: LiveTVPreviewPlaybackStore.shared.dvrFraction(for: item.recommendedChannel.id),
                         channelCategory: item.recommendedChannel.category,
                         channelName: item.recommendedChannel.name,
-                        channelId: item.recommendedChannel.id
+                        channelId: item.recommendedChannel.id,
+                        cornerRadius: 12
                     )
                     
                     // LIVE badge
@@ -614,7 +622,8 @@ private struct TimeBasedCard: View {
                         initialDVRFraction: LiveTVPreviewPlaybackStore.shared.dvrFraction(for: pick.channel.id),
                         channelCategory: pick.channel.category,
                         channelName: pick.channel.name,
-                        channelId: pick.channel.id
+                        channelId: pick.channel.id,
+                        cornerRadius: 10
                     )
                     .frame(width: 140, height: 80)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))

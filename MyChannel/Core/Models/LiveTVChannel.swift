@@ -44,35 +44,14 @@ struct LiveTVChannel: Identifiable, Codable {
          description: String, isLive: Bool, viewerCount: Int, quality: String,
          language: String, country: String, epgURL: String?, previewFallbackURL: String?) {
         
-        // 🚨 NUCLEAR ASSERTION - CRASH IN DEBUG IF WIKIPEDIA URL IS USED
+        // DEBUG-only sanity warning. NEVER crash here: channels may be decoded
+        // from Firestore, and server-controlled data must not be able to
+        // hard-crash the app. Authoring mistakes in bundled sample data are
+        // caught (non-fatally) by validateAllChannelURLs(); server data with a
+        // bad logo is filtered out during decode in LiveTVCatalogService.
         #if DEBUG
-        if logoURL.contains("wikipedia.org") || logoURL.contains("wikimedia.org") {
-            fatalError("""
-                🚨🚨🚨 NUCLEAR ERROR 🚨🚨🚨
-                WIKIPEDIA/WIKIMEDIA URL DETECTED IN CHANNEL: \(name)
-                URL: \(logoURL)
-                
-                ⚠️ WIKIPEDIA URLs ARE BLOCKED AND WILL NOT LOAD!
-                
-                ✅ FIX: Use a YouTube thumbnail instead:
-                   https://i.ytimg.com/vi/{VIDEO_ID}/hqdefault.jpg
-                
-                Search YouTube for "\(name) trailer" to find a video ID.
-                🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
-                """)
-        }
-        if logoURL.hasSuffix(".svg") {
-            fatalError("""
-                🚨🚨🚨 NUCLEAR ERROR 🚨🚨🚨
-                SVG URL DETECTED IN CHANNEL: \(name)
-                URL: \(logoURL)
-                
-                ⚠️ SVG FILES CANNOT BE LOADED BY AsyncImage!
-                
-                ✅ FIX: Use a YouTube thumbnail instead:
-                   https://i.ytimg.com/vi/{VIDEO_ID}/hqdefault.jpg
-                🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
-                """)
+        if logoURL.contains("wikipedia.org") || logoURL.contains("wikimedia.org") || logoURL.hasSuffix(".svg") {
+            print("⚠️ [LiveTVChannel] Non-approved logoURL for \"\(name)\": \(logoURL) — use a ytimg.com/approved-CDN JPG/PNG instead.")
         }
         #endif
         
@@ -149,25 +128,8 @@ struct LiveTVChannel: Identifiable, Codable {
         }
     }
     
-    // Helper to build Pluto TV URLs - Updated December 2024
-    // 🔥 Uses the latest working URL format with proper parameters
-    static func plutoURL(_ channelId: String) -> String {
-        // Generate unique but stable device/session IDs
-        let deviceId = UUID().uuidString.lowercased()
-        let sessionId = UUID().uuidString.lowercased()
-        
-        // Use the stitcher endpoint which is the most reliable for external playback
-        // This format works better than the embed format as of December 2024
-        return "https://service-stitcher.clusters.pluto.tv/stitch/hls/channel/\(channelId)/master.m3u8?advertisingId=\(deviceId)&appName=web&appVersion=5.0&deviceDNT=0&deviceId=\(deviceId)&deviceMake=web&deviceModel=web&deviceType=web&deviceVersion=1.0&includeExtendedEvents=false&sid=\(sessionId)&serverSideAds=false"
-    }
-    
-    // 🔥 Alternative URL format if primary fails (used as fallback)
-    static func plutoURLAlt(_ channelId: String) -> String {
-        let deviceId = UUID().uuidString.lowercased()
-        return "https://service-stitcher.clusters.pluto.tv/v2/stitch/hls/channel/\(channelId)/master.m3u8?deviceId=\(deviceId)&deviceType=web&deviceMake=web&deviceModel=web&deviceVersion=1.0&appName=web&appVersion=5.0&deviceDNT=1"
-    }
-    
-    // 🔥 Reliable fallback streams for when Pluto fails
+    // Reliable HLS fallback streams (Apple test streams). Used as
+    // previewFallbackURL and last-resort playback when a channel stream fails.
     static let reliableFallbackStreams: [String] = [
         "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
         "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
@@ -216,7 +178,10 @@ struct LiveTVChannel: Identifiable, Codable {
                 🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
                 """
             
-            fatalError(errorMessage)
+            // Non-fatal: surface loudly in debug without nuking the dev build.
+            assertionFailure(errorMessage)
+            print(errorMessage)
+            return
         }
         
         print("✅ [LiveTVChannel] All \(sampleChannels.count) channel URLs validated - NO Wikipedia/SVG URLs found!")

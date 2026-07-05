@@ -21,6 +21,12 @@ const RANGE_LABELS: Record<Range, string> = {
   '365d': 'Last year',
 };
 
+// Web has no impression / reach tracking pipeline yet. Views, likes and comments
+// are real (from Firestore); impressions, CTR, watch time, revenue and the
+// audience/traffic breakdowns below are ESTIMATES derived from those real counts.
+const EST_IMPRESSIONS_PER_VIEW = 8.5;
+const EST_CTR = Math.round((100 / EST_IMPRESSIONS_PER_VIEW) * 10) / 10; // ~11.8%
+
 interface VideoStat {
   id: string;
   title: string;
@@ -108,9 +114,15 @@ export default function AnalyticsPage() {
   const [videos, setVideos] = useState<VideoStat[]>([]);
   const [agg, setAgg] = useState<AggStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [uid, setUid] = useState<string | null>(auth?.currentUser?.uid ?? null);
+
+  // Wait for Firebase auth to resolve before deciding the user is signed out.
+  useEffect(() => {
+    const unsub = auth?.onAuthStateChanged?.((u) => setUid(u?.uid ?? null));
+    return () => { if (typeof unsub === 'function') unsub(); };
+  }, []);
 
   useEffect(() => {
-    const uid = auth?.currentUser?.uid;
     if (!uid) { setLoading(false); return; }
     let cancelled = false;
 
@@ -143,11 +155,11 @@ export default function AnalyticsPage() {
             views,
             watchTimeHrs: Math.round((views * 0.12) * 10) / 10,
             avgViewDuration: dur > 0 ? Math.round(dur * 0.55) : 0,
-            ctr: parseFloat((Math.random() * 8 + 4).toFixed(1)),
+            ctr: EST_CTR,
             likes: data.likeCount ?? 0,
             comments: data.commentCount ?? 0,
             revenue: parseFloat(((views / 1000) * 1.85).toFixed(2)),
-            impressions: Math.round(views * 8.5),
+            impressions: Math.round(views * EST_IMPRESSIONS_PER_VIEW),
           };
         });
 
@@ -162,8 +174,8 @@ export default function AnalyticsPage() {
             subscribers: subs,
             revenue: parseFloat(((totalViews / 1000) * 1.85).toFixed(2)),
             avgViewDuration: count > 0 ? Math.round(totalDuration / count * 0.55) : 0,
-            impressions: Math.round(totalViews * 8.5),
-            ctr: parseFloat((Math.random() * 4 + 5).toFixed(1)),
+            impressions: Math.round(totalViews * EST_IMPRESSIONS_PER_VIEW),
+            ctr: EST_CTR,
             likes: totalLikes,
             comments: totalComments,
           });
@@ -177,7 +189,7 @@ export default function AnalyticsPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [range]);
+  }, [uid, range]);
 
   // Generate simple sparkline from video view counts (most recent 7 data points)
   const sparkViews = videos.slice(0, 7).map((v) => v.views).reverse();
@@ -236,6 +248,16 @@ export default function AnalyticsPage() {
         </header>
 
         <main className="px-4 py-5 space-y-7 pb-24">
+
+          {!loading && agg && (
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30">
+              <BarChart3 size={14} className="text-blue-500 mt-0.5 flex-shrink-0" />
+              <p className="text-[11px] leading-snug text-[rgb(var(--color-text-secondary))]">
+                Views, likes and comments are actual. Impressions, CTR, watch time, revenue and the
+                audience &amp; traffic breakdowns are estimates until full analytics tracking is enabled.
+              </p>
+            </div>
+          )}
 
           {loading ? (
             <div className="grid grid-cols-2 gap-2">

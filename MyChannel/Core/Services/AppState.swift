@@ -73,6 +73,9 @@ class AppState: ObservableObject {
             currentUser = authUser
             isAuthenticated = AuthenticationManager.shared.isAuthenticated
             Task { await hydrateCloudCollectionsIfNeeded() }
+            // 🎓 App-wide: celebrate a newly server-issued University certificate
+            // even when the user isn't on the University tab.
+            UniversityWatchTrackingService.shared.startCertificateListener(userId: authUser.id)
         }
         loadUserData()
     }
@@ -104,6 +107,9 @@ class AppState: ObservableObject {
                     do { SearchHistoryService.shared.startListening(userId: user.id) } catch { print("⚠️ [AppState] Non-fatal: SearchHistoryService listen failed") }
                     // Start ML agent notification bridge for this user
                     do { MLAgentNotificationBridge.shared.start(userId: user.id) } catch { print("⚠️ [AppState] Non-fatal: MLAgentNotificationBridge start failed") }
+                    // 🎓 App-wide: celebrate a newly server-issued University certificate
+                    // even when the user isn't on the University tab.
+                    UniversityWatchTrackingService.shared.startCertificateListener(userId: user.id)
                     // Index subscribed content into iOS Spotlight Search
                     Task {
                         let videos = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 50)
@@ -136,6 +142,8 @@ class AppState: ObservableObject {
                 SearchHistoryService.shared.stopListening()
                 // Stop ML agent notification bridge on logout
                 MLAgentNotificationBridge.shared.stop()
+                // Stop the University certificate celebration listener on logout
+                UniversityWatchTrackingService.shared.stopCertificateListener()
                 // Clear observability identities on logout
                 SentryObservabilityService.shared.clearUser()
                 PostHogAnalyticsService.shared.reset()
@@ -322,24 +330,25 @@ class AppState: ObservableObject {
     }
     
     // 🔥 NEW: Track video watch for University
-    func trackUniversityWatch(video: Video, watchTime: TimeInterval, completionPercentage: Double, aiVerificationScore: Int? = nil) {
+    func trackUniversityWatch(video: Video, watchTime: TimeInterval, completionPercentage: Double, aiVerificationScore: Int? = nil, viewToken: String? = nil) {
         guard let userId = currentUser?.id else { return }
         
         Task {
             do {
-                try await UniversityWatchTrackingService.shared.trackVideoWatch(
+                try await UniversityWatchTrackingService.shared.recordWatchEvent(
                     userId: userId,
                     videoId: video.id,
                     title: video.title,
                     duration: video.duration,
                     watchTime: watchTime,
                     completionPercentage: completionPercentage,
-                    aiVerificationScore: aiVerificationScore
+                    aiVerificationScore: aiVerificationScore,
+                    viewToken: viewToken
                 )
                 
-                print("✅ [AppState] Tracked University watch: \(video.title)")
+                print("✅ [AppState] Recorded University watch event: \(video.title)")
             } catch {
-                print("⚠️ [AppState] Failed to track University watch: \(error)")
+                print("⚠️ [AppState] Failed to record University watch event: \(error)")
             }
         }
     }

@@ -238,6 +238,15 @@ class LazyServiceManager: ObservableObject {
                 print("✅ [LazyServiceManager] Low priority services loaded in \(self.elapsedTime())ms")
             }
         }
+
+        // 🔥 Apple Watch: activate WatchConnectivity so the watch gets now-playing updates
+        Task.detached(priority: .low) {
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s delay — after main stack is up
+            await MainActor.run {
+                WatchConnectivityService.shared.activate()
+                print("⌚️ [LazyServiceManager] WatchConnectivity activated")
+            }
+        }
         
         // Phase 5: Deferred (load when needed)
         Task.detached(priority: .background) {

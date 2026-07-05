@@ -40,43 +40,71 @@
 		05AF7A922FB98B1D006D2031 /* GSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 05AF7A912FB98B1D006D2031 /* GSPlayer */; };
 		05E845A52F9B05AF007F7218 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 05E845A42F9B05AF007F7218 /* FirebaseAppCheck */; };
 		09298A69C4F8B319F3A881E1 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F84281F4B13DD13656A7479F /* Supabase */; };
+		0B055FFF5111918487056777 /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 52C9CFD85E87765B8F60357B /* WatchConnectivity.framework */; };
 		15D4FA1AB8525BEDC303178A /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 1D45B6F95725FBCFB630D724 /* Algorithms */; };
 		1C5B861EC89248BA8D7470FF /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = E5BE666A0BCB4CA5E87B7666 /* Alamofire */; };
+		1D2A3739A0B6DFB80878E841 /* FirebaseDatabase in Frameworks */ = {isa = PBXBuildFile; productRef = BD35D1456B08C04DB286ADEC /* FirebaseDatabase */; };
+		1DE2234282CD814F274F835D /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3639C33ECDBCFFB19E412CA7 /* Foundation.framework */; };
 		210AD8E695E2F0E42D8E505A /* IOSSecuritySuite in Frameworks */ = {isa = PBXBuildFile; productRef = D5D0CD39996115F7A7D8A495 /* IOSSecuritySuite */; };
 		240CC39B5093C105C838E855 /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 12F17EB4FE2DED84D709CC50 /* RealmSwift */; };
 		2623A70D6C5B39B2AF566F04 /* ConfettiSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 4169AB0A9E33890E9F1EA9C1 /* ConfettiSwiftUI */; };
 		27D59FC7967572BDEA331230 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = 71106B566EA016B89EBD8451 /* PostHog */; };
 		315408449D135998753DFFB3 /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = 59B5E8E1147CE8F04511254C /* Down */; };
 		381AD48C7DB612878DB75796 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		38DB66AF795D4CCB9DAA52A3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0C42ECB7ACCB2BDF80378BE /* Assets.xcassets */; };
+		3AB51F1A8A2F6FF49E57F1BE /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 52C9CFD85E87765B8F60357B /* WatchConnectivity.framework */; };
+		3ADF8775CDEC87084904ADAC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 5C406A42555525E7423BF30C /* GoogleService-Info.plist */; };
 		3DBACE91F60B12616002C611 /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = F0B493095AF3F4CCE0A09635 /* LiveKit */; };
+		3DDF41BCAA91CFFFD9C9813E /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = BF6580C328440779A888DCCE /* FirebaseCore */; };
 		3ED26F604DBFD1521C7D13B8 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		3F64CA68894FF740CF1E86AE /* TVDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0958D72DD5F9F6EFC8F015C4 /* TVDataService.swift */; };
 		41D9841A2023BB03468C46E9 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
 		436EC755C120E8B4D8DCEF94 /* CryptoSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D8FB5314192BCA2E52B0E6C6 /* CryptoSwift */; };
 		4739903F9E5D3A2A57787480 /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = 12A19D87E0D30B2AE9E90563 /* Starscream */; };
 		47C882EFC55557E288C902B4 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = A0973FB3C8970C4F7BF41205 /* Logging */; };
 		47DA6C0B3BEA64A0931ED835 /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 44A4FEFAC64BEF05E4C1933F /* Collections */; };
+		48426AB85B3CADE5A2315633 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8E746035F266EC0BDB5A4C5 /* NotificationsView.swift */; };
+		4D3BF0C8F9249B0CA4D00B1E /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DFA6E68423A8F9F799E66D9 /* LibraryView.swift */; };
+		4F5F7077968A042E08F7FAAA /* MyChannelTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 596919A0857B00232633D85F /* MyChannelTVApp.swift */; };
 		54E00F785B50768172BEC403 /* SwiftyBeaver in Frameworks */ = {isa = PBXBuildFile; productRef = 82492D397A4B956084C607B2 /* SwiftyBeaver */; };
 		57A42010762A0C6F8AA1E01F /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = C815E7446626DA03227418C7 /* Sentry */; };
+		63AF0ACE0F6F9BD3817BF6FB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02C973C23803CA0BF155AEA /* ContentView.swift */; };
 		646F4E50EEF16144907C3664 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = DC51A64C0631455E28CFAB74 /* ZIPFoundation */; };
+		6897133704CA719DD8A80AD4 /* MyChannelWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CBAB4606CAA7246E8853567 /* MyChannelWatchApp.swift */; };
 		6ACF824EF11DFADF7FAE32AB /* StripeApplePay in Frameworks */ = {isa = PBXBuildFile; productRef = 1A04FE423CF6BBB0D44BA465 /* StripeApplePay */; };
+		76547694E21D0DF4D02007BB /* NowPlayingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C698916E57BD98EE2A2EDE59 /* NowPlayingView.swift */; };
 		79E1DD85508BF0EAA7D716F5 /* SkeletonView in Frameworks */ = {isa = PBXBuildFile; productRef = B7908F18FF9533C2D9F13DD5 /* SkeletonView */; };
 		7B0C898C5340F58CA5BE92B6 /* GoogleGenerativeAI in Frameworks */ = {isa = PBXBuildFile; productRef = 9527345E385F43A686B7548D /* GoogleGenerativeAI */; };
+		842EBF2346F3EDFD06028031 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9353E1FC11064496DD2874F2 /* Assets.xcassets */; };
+		87410878F32D6DD12114EF22 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3C6AD2AE4F871E5BBD7B2784 /* FirebaseCore */; };
 		9377F6DCD9BE671CDB23BE06 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
 		95CD0A7EB52B6C8098E371B5 /* OpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 742D41F31D900887EBA83C85 /* OpenAI */; };
+		95F4BD09EE0CA4BEA041D7D0 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FEA6BC182517F3F29CCCD6F /* FeedView.swift */; };
+		9ADF575455FAE00ADEC8BBE6 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = A60CCDAE34773C7062C486C4 /* FirebaseStorage */; };
 		9B07CB02BA2E614327873FC6 /* SwiftUIIntrospect in Frameworks */ = {isa = PBXBuildFile; productRef = 1138BD2B9AE8417CB089490B /* SwiftUIIntrospect */; };
 		9B0B7A87B9C269DEF94ADAAE /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = D203EE5EDD7DB9A07F96D3B2 /* RevenueCat */; };
 		9C9024285D28CFCCC71EF01D /* DGCharts in Frameworks */ = {isa = PBXBuildFile; productRef = 04C142D5A727AF1BD0852309 /* DGCharts */; };
+		9E997B01F46DB1FB78F67542 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 008D4CEEA61BBC76AFDD6F4D /* GoogleService-Info.plist */; };
+		9F136ABFB895A7FB9B95E81C /* WatchStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1E858057361E9CDBFDD94A /* WatchStore.swift */; };
 		B26334F888019C70F5039C78 /* AsyncAlgorithms in Frameworks */ = {isa = PBXBuildFile; productRef = AFD72B644DA6FF9DDB6EB5FB /* AsyncAlgorithms */; };
+		B3DAD4EA05D1B6A1B6B6E0E4 /* ComplicationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0018AB35156A9F8C3A55B9B1 /* ComplicationController.swift */; };
 		B7C52A4B567934ABA7894DA9 /* RealmSwift in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 12F17EB4FE2DED84D709CC50 /* RealmSwift */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B8031311BA44319E50D92311 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1ADA476B696CA2E60E9BC797 /* Foundation.framework */; };
 		C3705B294F29C3A2299AC4D8 /* Valet in Frameworks */ = {isa = PBXBuildFile; productRef = 3F8C2E2673CEF2DD70097D88 /* Valet */; };
 		C3D382E35A237C913E0A310F /* AlertToast in Frameworks */ = {isa = PBXBuildFile; productRef = B6150DDE322042B1D9B84306 /* AlertToast */; };
 		C9CB1950967DA9379BFED236 /* MessageKit in Frameworks */ = {isa = PBXBuildFile; productRef = 481A251AE841C4A937BC879D /* MessageKit */; };
 		D051D9AB9705EADB133DB6E3 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = A0F8FB98ACEF99B34F55C7A3 /* SwiftSoup */; };
+		DAC895E6AB3E67C7437B991E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97E5292577406B1EA3E981B9 /* ContentView.swift */; };
 		DBA0A1999C93C212FD0D848B /* X509 in Frameworks */ = {isa = PBXBuildFile; productRef = EBC819EC114223C357F4CEA8 /* X509 */; };
 		E64B595CC85E845F9108F677 /* StripePayments in Frameworks */ = {isa = PBXBuildFile; productRef = 26335CC42FFBE77B65A8B8A0 /* StripePayments */; };
+		EDB7D237266158C9FCDB36D4 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 8DBBAA62D52019C5A8683900 /* FirebaseAuth */; };
+		F69275CAB5AF4F5558CDBFA3 /* FirebaseDatabase in Frameworks */ = {isa = PBXBuildFile; productRef = F3D28F097E5B653D6546CF02 /* FirebaseDatabase */; };
 		F835C05BC455334578E5B742 /* GoogleInteractiveMediaAds in Frameworks */ = {isa = PBXBuildFile; productRef = 74BD607AFEDF03E98FD09927 /* GoogleInteractiveMediaAds */; };
+		F9A262E98CC30B04DE75B6B5 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 9393F72AAA025F18B89E276D /* FirebaseAuth */; };
 		FA672CD3A8124FDF35725C70 /* TrustKit in Frameworks */ = {isa = PBXBuildFile; productRef = 50D4A5CC9C57C7663B41670B /* TrustKit */; };
 		FADE48C84CD671EEEFB09A98 /* KeychainSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 9FDE08448B66311716EC91A3 /* KeychainSwift */; };
+		FD485DD725E592C7B51B651F /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = EC1611717E22FC8D80DDC873 /* FirebaseFirestore */; };
+		FE4C2811B9AC5CDC818ED5C5 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 717C3BCD947546E7DBDAC19A /* FirebaseFirestore */; };
 		FFB828D61434955446953656 /* (null) in Frameworks */ = {isa = PBXBuildFile; };
 /* End PBXBuildFile section */
 
@@ -95,7 +123,29 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0018AB35156A9F8C3A55B9B1 /* ComplicationController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ComplicationController.swift; sourceTree = "<group>"; };
+		008D4CEEA61BBC76AFDD6F4D /* GoogleService-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		055B9AC42E1F0BB6004E6282 /* MyChannel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyChannel.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0958D72DD5F9F6EFC8F015C4 /* TVDataService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TVDataService.swift; sourceTree = "<group>"; };
+		1ADA476B696CA2E60E9BC797 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS11.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		1C4EEDF553317EEAA8EB8670 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		1DFA6E68423A8F9F799E66D9 /* LibraryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		3639C33ECDBCFFB19E412CA7 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/AppleTVOS.platform/Developer/SDKs/AppleTVOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		52C9CFD85E87765B8F60357B /* WatchConnectivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WatchConnectivity.framework; path = System/Library/Frameworks/WatchConnectivity.framework; sourceTree = SDKROOT; };
+		596919A0857B00232633D85F /* MyChannelTVApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MyChannelTVApp.swift; sourceTree = "<group>"; };
+		5C406A42555525E7423BF30C /* GoogleService-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		61C8F097DC0313FFE7ECD2C1 /* MyChannelWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyChannelWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7ECEA6E06BB2BF73B1CAF1ED /* MyChannelTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyChannelTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7FEA6BC182517F3F29CCCD6F /* FeedView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedView.swift; sourceTree = "<group>"; };
+		8CBAB4606CAA7246E8853567 /* MyChannelWatchApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MyChannelWatchApp.swift; sourceTree = "<group>"; };
+		9353E1FC11064496DD2874F2 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		97E5292577406B1EA3E981B9 /* ContentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A02C973C23803CA0BF155AEA /* ContentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A0C42ECB7ACCB2BDF80378BE /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AE1E858057361E9CDBFDD94A /* WatchStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchStore.swift; sourceTree = "<group>"; };
+		C698916E57BD98EE2A2EDE59 /* NowPlayingView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
+		C8E746035F266EC0BDB5A4C5 /* NotificationsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
+		FE9AA3C360B52DA0C6945D44 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -198,6 +248,33 @@
 				3DBACE91F60B12616002C611 /* LiveKit in Frameworks */,
 				09298A69C4F8B319F3A881E1 /* Supabase in Frameworks */,
 				7B0C898C5340F58CA5BE92B6 /* GoogleGenerativeAI in Frameworks */,
+				0B055FFF5111918487056777 /* WatchConnectivity.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1AF94103E68CE7D1D9442142 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B8031311BA44319E50D92311 /* Foundation.framework in Frameworks */,
+				3AB51F1A8A2F6FF49E57F1BE /* WatchConnectivity.framework in Frameworks */,
+				3DDF41BCAA91CFFFD9C9813E /* FirebaseCore in Frameworks */,
+				F9A262E98CC30B04DE75B6B5 /* FirebaseAuth in Frameworks */,
+				FD485DD725E592C7B51B651F /* FirebaseFirestore in Frameworks */,
+				1D2A3739A0B6DFB80878E841 /* FirebaseDatabase in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8395BA4C3CEEF65ED2470004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1DE2234282CD814F274F835D /* Foundation.framework in Frameworks */,
+				87410878F32D6DD12114EF22 /* FirebaseCore in Frameworks */,
+				EDB7D237266158C9FCDB36D4 /* FirebaseAuth in Frameworks */,
+				FE4C2811B9AC5CDC818ED5C5 /* FirebaseFirestore in Frameworks */,
+				F69275CAB5AF4F5558CDBFA3 /* FirebaseDatabase in Frameworks */,
+				9ADF575455FAE00ADEC8BBE6 /* FirebaseStorage in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -210,6 +287,8 @@
 				055B9AC62E1F0BB6004E6282 /* MyChannel */,
 				05E845A32F9B05AF007F7218 /* Frameworks */,
 				055B9AC52E1F0BB6004E6282 /* Products */,
+				E203858EB04706E1ED6FBD94 /* MyChannelTV */,
+				BB2C4BF9166A8437091A6CC4 /* MyChannelWatch */,
 			);
 			sourceTree = "<group>";
 		};
@@ -217,6 +296,8 @@
 			isa = PBXGroup;
 			children = (
 				055B9AC42E1F0BB6004E6282 /* MyChannel.app */,
+				7ECEA6E06BB2BF73B1CAF1ED /* MyChannelTV.app */,
+				61C8F097DC0313FFE7ECD2C1 /* MyChannelWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -224,8 +305,58 @@
 		05E845A32F9B05AF007F7218 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				8DA0869C06171BAE79FDF153 /* tvOS */,
+				95CF5453B956E23B7E66B23E /* watchOS */,
+				52C9CFD85E87765B8F60357B /* WatchConnectivity.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		8DA0869C06171BAE79FDF153 /* tvOS */ = {
+			isa = PBXGroup;
+			children = (
+				3639C33ECDBCFFB19E412CA7 /* Foundation.framework */,
+			);
+			name = tvOS;
+			sourceTree = "<group>";
+		};
+		95CF5453B956E23B7E66B23E /* watchOS */ = {
+			isa = PBXGroup;
+			children = (
+				1ADA476B696CA2E60E9BC797 /* Foundation.framework */,
+			);
+			name = watchOS;
+			sourceTree = "<group>";
+		};
+		BB2C4BF9166A8437091A6CC4 /* MyChannelWatch */ = {
+			isa = PBXGroup;
+			children = (
+				8CBAB4606CAA7246E8853567 /* MyChannelWatchApp.swift */,
+				0018AB35156A9F8C3A55B9B1 /* ComplicationController.swift */,
+				1DFA6E68423A8F9F799E66D9 /* LibraryView.swift */,
+				AE1E858057361E9CDBFDD94A /* WatchStore.swift */,
+				C698916E57BD98EE2A2EDE59 /* NowPlayingView.swift */,
+				C8E746035F266EC0BDB5A4C5 /* NotificationsView.swift */,
+				7FEA6BC182517F3F29CCCD6F /* FeedView.swift */,
+				A02C973C23803CA0BF155AEA /* ContentView.swift */,
+				1C4EEDF553317EEAA8EB8670 /* Info.plist */,
+				9353E1FC11064496DD2874F2 /* Assets.xcassets */,
+				5C406A42555525E7423BF30C /* GoogleService-Info.plist */,
+			);
+			path = MyChannelWatch;
+			sourceTree = "<group>";
+		};
+		E203858EB04706E1ED6FBD94 /* MyChannelTV */ = {
+			isa = PBXGroup;
+			children = (
+				0958D72DD5F9F6EFC8F015C4 /* TVDataService.swift */,
+				97E5292577406B1EA3E981B9 /* ContentView.swift */,
+				FE9AA3C360B52DA0C6945D44 /* Info.plist */,
+				596919A0857B00232633D85F /* MyChannelTVApp.swift */,
+				A0C42ECB7ACCB2BDF80378BE /* Assets.xcassets */,
+				008D4CEEA61BBC76AFDD6F4D /* GoogleService-Info.plist */,
+			);
+			path = MyChannelTV;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -317,6 +448,53 @@
 			productReference = 055B9AC42E1F0BB6004E6282 /* MyChannel.app */;
 			productType = "com.apple.product-type.application";
 		};
+		0DD7C70A7B62FE5A6B76EE36 /* MyChannelWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8F3B484BCCE9F1DF7AB36F5A /* Build configuration list for PBXNativeTarget "MyChannelWatch" */;
+			buildPhases = (
+				978A2E59817532592D1E30CB /* Sources */,
+				1AF94103E68CE7D1D9442142 /* Frameworks */,
+				34B03C15D46F9BBA1C84FA8B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MyChannelWatch;
+			packageProductDependencies = (
+				BF6580C328440779A888DCCE /* FirebaseCore */,
+				9393F72AAA025F18B89E276D /* FirebaseAuth */,
+				EC1611717E22FC8D80DDC873 /* FirebaseFirestore */,
+				BD35D1456B08C04DB286ADEC /* FirebaseDatabase */,
+			);
+			productName = MyChannelWatch;
+			productReference = 61C8F097DC0313FFE7ECD2C1 /* MyChannelWatch.app */;
+			productType = "com.apple.product-type.application.watchapp2";
+		};
+		DE9CF024F904ECD53EC34689 /* MyChannelTV */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EEDFA91D5A0F6A13CE736112 /* Build configuration list for PBXNativeTarget "MyChannelTV" */;
+			buildPhases = (
+				D44BD38F2CBCF8F4CD6DF12E /* Sources */,
+				8395BA4C3CEEF65ED2470004 /* Frameworks */,
+				4636223BC53A5E9B40B44CEF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MyChannelTV;
+			packageProductDependencies = (
+				3C6AD2AE4F871E5BBD7B2784 /* FirebaseCore */,
+				8DBBAA62D52019C5A8683900 /* FirebaseAuth */,
+				717C3BCD947546E7DBDAC19A /* FirebaseFirestore */,
+				F3D28F097E5B653D6546CF02 /* FirebaseDatabase */,
+				A60CCDAE34773C7062C486C4 /* FirebaseStorage */,
+			);
+			productName = MyChannelTV;
+			productReference = 7ECEA6E06BB2BF73B1CAF1ED /* MyChannelTV.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -395,6 +573,8 @@
 			projectRoot = "";
 			targets = (
 				055B9AC32E1F0BB6004E6282 /* MyChannel */,
+				DE9CF024F904ECD53EC34689 /* MyChannelTV */,
+				0DD7C70A7B62FE5A6B76EE36 /* MyChannelWatch */,
 			);
 		};
 /* End PBXProject section */
@@ -404,6 +584,24 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		34B03C15D46F9BBA1C84FA8B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				842EBF2346F3EDFD06028031 /* Assets.xcassets in Resources */,
+				3ADF8775CDEC87084904ADAC /* GoogleService-Info.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4636223BC53A5E9B40B44CEF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				38DB66AF795D4CCB9DAA52A3 /* Assets.xcassets in Resources */,
+				9E997B01F46DB1FB78F67542 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -441,6 +639,31 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		978A2E59817532592D1E30CB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6897133704CA719DD8A80AD4 /* MyChannelWatchApp.swift in Sources */,
+				B3DAD4EA05D1B6A1B6B6E0E4 /* ComplicationController.swift in Sources */,
+				4D3BF0C8F9249B0CA4D00B1E /* LibraryView.swift in Sources */,
+				9F136ABFB895A7FB9B95E81C /* WatchStore.swift in Sources */,
+				76547694E21D0DF4D02007BB /* NowPlayingView.swift in Sources */,
+				48426AB85B3CADE5A2315633 /* NotificationsView.swift in Sources */,
+				95F4BD09EE0CA4BEA041D7D0 /* FeedView.swift in Sources */,
+				63AF0ACE0F6F9BD3817BF6FB /* ContentView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D44BD38F2CBCF8F4CD6DF12E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3F64CA68894FF740CF1E86AE /* TVDataService.swift in Sources */,
+				DAC895E6AB3E67C7437B991E /* ContentView.swift in Sources */,
+				4F5F7077968A042E08F7FAAA /* MyChannelTVApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -511,7 +734,7 @@
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_COMPILATION_MODE = incremental;
+				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -674,6 +897,138 @@
 			};
 			name = Release;
 		};
+		0C1690BC5A664541F4A12D12 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = MyChannelTV/MyChannelTV.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMPILER_INDEX_STORE_ENABLE = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 8KPXZ859S7;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				INFOPLIST_FILE = MyChannelTV/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				ONLY_ACTIVE_ARCH = YES;
+				OTHER_SWIFT_FLAGS = "$(inherited)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannelTV;
+				PRODUCT_NAME = MyChannelTV;
+				SDKROOT = appletvos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 15.0;
+				WARNING_CFLAGS = (
+					"-warn-long-function-bodies=100",
+					"-warn-long-expression-type-checking=100",
+				);
+			};
+			name = Debug;
+		};
+		3389F3A17436E497D6604181 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_ENTITLEMENTS = MyChannelWatch/MyChannelWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 8KPXZ859S7;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_TESTABILITY = NO;
+				INFOPLIST_FILE = MyChannelWatch/Info.plist;
+				ONLY_ACTIVE_ARCH = YES;
+				OTHER_SWIFT_FLAGS = "$(inherited)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannelApp.watchkitapp;
+				PRODUCT_NAME = MyChannelWatch;
+				SDKROOT = watchos;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 8.0;
+				WK_APPLICATION_EXTENSION_ALLOWED_APIS_ONLY = NO;
+			};
+			name = Release;
+		};
+		61EEBB2E7587CF1AAAF42224 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				CODE_SIGN_ENTITLEMENTS = MyChannelWatch/MyChannelWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMPILER_INDEX_STORE_ENABLE = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 8KPXZ859S7;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_TESTABILITY = YES;
+				INFOPLIST_FILE = MyChannelWatch/Info.plist;
+				ONLY_ACTIVE_ARCH = YES;
+				OTHER_SWIFT_FLAGS = "$(inherited)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannelApp.watchkitapp;
+				PRODUCT_NAME = MyChannelWatch;
+				SDKROOT = watchos;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 8.0;
+				WK_APPLICATION_EXTENSION_ALLOWED_APIS_ONLY = NO;
+			};
+			name = Debug;
+		};
+		7C171F7FC709A39D3ECC95D6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = MyChannelTV/MyChannelTV.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 8KPXZ859S7;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_TESTABILITY = NO;
+				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
+				INFOPLIST_FILE = MyChannelTV/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_SWIFT_FLAGS = "$(inherited)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannelTV;
+				PRODUCT_NAME = MyChannelTV;
+				SDKROOT = appletvos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 15.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -691,6 +1046,24 @@
 			buildConfigurations = (
 				055B9AD02E1F0BB9004E6282 /* Debug */,
 				055B9AD12E1F0BB9004E6282 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8F3B484BCCE9F1DF7AB36F5A /* Build configuration list for PBXNativeTarget "MyChannelWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3389F3A17436E497D6604181 /* Release */,
+				61EEBB2E7587CF1AAAF42224 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		EEDFA91D5A0F6A13CE736112 /* Build configuration list for PBXNativeTarget "MyChannelTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7C171F7FC709A39D3ECC95D6 /* Release */,
+				0C1690BC5A664541F4A12D12 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1239,6 +1612,11 @@
 			package = 23A6E9F54EF0496A218CF886 /* XCRemoteSwiftPackageReference "stripe-ios" */;
 			productName = StripePayments;
 		};
+		3C6AD2AE4F871E5BBD7B2784 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
 		3F8C2E2673CEF2DD70097D88 /* Valet */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = E43494CBB279037B498829E8 /* XCRemoteSwiftPackageReference "Valet" */;
@@ -1284,6 +1662,11 @@
 			package = 05AF7A9B2FB98F85006D2031 /* XCRemoteSwiftPackageReference "posthog-ios" */;
 			productName = PostHog;
 		};
+		717C3BCD947546E7DBDAC19A /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
 		742D41F31D900887EBA83C85 /* OpenAI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = C445688FB2941338F281AB67 /* XCRemoteSwiftPackageReference "OpenAI" */;
@@ -1298,6 +1681,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C749A76E2BFAE8C97B104AC7 /* XCRemoteSwiftPackageReference "SwiftyBeaver" */;
 			productName = SwiftyBeaver;
+		};
+		8DBBAA62D52019C5A8683900 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		9393F72AAA025F18B89E276D /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
 		};
 		9527345E385F43A686B7548D /* GoogleGenerativeAI */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1319,6 +1712,11 @@
 			package = 71905FEADF61753A2F16F15D /* XCRemoteSwiftPackageReference "SwiftSoup" */;
 			productName = SwiftSoup;
 		};
+		A60CCDAE34773C7062C486C4 /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
+		};
 		AFD72B644DA6FF9DDB6EB5FB /* AsyncAlgorithms */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 550C5AD993F74AA6DB658097 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */;
@@ -1333,6 +1731,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 05AF7A992FB98F1E006D2031 /* XCRemoteSwiftPackageReference "SkeletonView" */;
 			productName = SkeletonView;
+		};
+		BD35D1456B08C04DB286ADEC /* FirebaseDatabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseDatabase;
+		};
+		BF6580C328440779A888DCCE /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
 		};
 		C815E7446626DA03227418C7 /* Sentry */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1369,10 +1777,20 @@
 			package = 589EE864CC9805BD29BBC554 /* XCRemoteSwiftPackageReference "swift-certificates" */;
 			productName = X509;
 		};
+		EC1611717E22FC8D80DDC873 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
 		F0B493095AF3F4CCE0A09635 /* LiveKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 57B7B4C17825D224C65EE026 /* XCRemoteSwiftPackageReference "client-sdk-swift" */;
 			productName = LiveKit;
+		};
+		F3D28F097E5B653D6546CF02 /* FirebaseDatabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseDatabase;
 		};
 		F84281F4B13DD13656A7479F /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;

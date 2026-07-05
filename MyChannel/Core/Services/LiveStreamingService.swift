@@ -96,7 +96,7 @@ class LiveStreamingService: ObservableObject {
             id: UUID().uuidString,
             title: title,
             description: description,
-            streamerId: "current-user-id", // TODO: Use actual user ID
+            streamerId: AuthenticationManager.shared.currentUser?.id ?? "",
             category: category,
             isPrivate: isPrivate,
             startTime: Date(),

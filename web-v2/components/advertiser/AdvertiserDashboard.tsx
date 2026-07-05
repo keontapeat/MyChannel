@@ -22,6 +22,7 @@ import {
 import type { Campaign, CampaignMetrics } from '@/types/ads';
 import { getCampaigns } from '@/services/ads/advertiser-service';
 import { formatCurrency, formatNumber, formatPercentage } from '@/services/ads/advertiser-service';
+import { auth } from '@/lib/firebase/config';
 
 export default function AdvertiserDashboard() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -35,8 +36,8 @@ export default function AdvertiserDashboard() {
   async function loadCampaigns() {
     try {
       setLoading(true);
-      // TODO: Get actual advertiser ID from auth
-      const advertiserId = 'demo-advertiser';
+      // Use authenticated user's uid as the advertiser ID
+      const advertiserId = auth?.currentUser?.uid ?? 'demo-advertiser';
       const data = await getCampaigns(advertiserId);
       setCampaigns(data);
 

@@ -90,8 +90,15 @@ extension ComprehensiveCreatorStudioView {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 0))
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+        .background(
+            // Extend the material through the home-indicator safe area so the
+            // bar is anchored to the screen edge instead of floating.
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea(edges: .bottom)
+        )
         .overlay(
             Rectangle()
                 .fill(AppTheme.Colors.divider.opacity(0.3))

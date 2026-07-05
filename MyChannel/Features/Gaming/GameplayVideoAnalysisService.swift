@@ -363,8 +363,31 @@ final class GameplayVideoAnalysisService: ObservableObject {
     ///   - expected: Expected game name
     /// - Returns: Detected game name
     private func detectGame(from frames: [UIImage], expected: String) async throws -> String? {
-        // For now, return expected game
-        // TODO: Implement game logo detection using Vertex AI Image Detection
+        // Use Vertex AI Vision to detect the game logo in the first frame
+        // Falls back to the expected game name if Vision unavailable
+        guard let firstFrame = frames.first,
+              let jpegData = firstFrame.jpegData(compressionQuality: 0.5) else {
+            return expected
+        }
+        let base64 = jpegData.base64EncodedString()
+        let projectId = ProcessInfo.processInfo.environment["GOOGLE_CLOUD_PROJECT"] ?? ""
+        guard !projectId.isEmpty else { return expected }
+        // Vertex AI Vision label detection endpoint
+        let urlStr = "https://vision.googleapis.com/v1/images:annotate"
+        guard let url = URL(string: urlStr) else { return expected }
+        let body: [String: Any] = ["requests": [["image": ["content": base64], "features": [["type": "LOGO_DETECTION", "maxResults": 5]]]]]
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        if let (data, _) = try? await URLSession.shared.data(for: req),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let responses = (json["responses"] as? [[String: Any]])?.first,
+           let annotations = responses["logoAnnotations"] as? [[String: Any]],
+           let first = annotations.first,
+           let desc = first["description"] as? String {
+            return desc
+        }
         return expected
     }
 }

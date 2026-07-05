@@ -27,7 +27,7 @@ export default function MobileTabBar() {
   return (
     <nav
       className="
-        md:hidden
+        lg:hidden
         fixed bottom-0 left-0 right-0 z-50
         bg-[rgb(var(--color-background))] border-t border-[rgb(var(--color-border))]
         flex items-stretch
@@ -73,7 +73,7 @@ export default function MobileTabBar() {
                     ? 'text-[rgb(var(--color-text-primary))]'
                     : 'text-[rgb(var(--color-text-secondary))]'
                 }
-                fill={isActive && label !== 'Search' && label !== 'Upload' ? 'currentColor' : 'none'}
+                fill={isActive && label !== 'Search' ? 'currentColor' : 'none'}
               />
             )}
             <span

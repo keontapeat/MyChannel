@@ -75,4 +75,19 @@ struct FlickMusicTrack: Identifiable, Hashable {
     let albumArt: String
 }
 
+/// Shared layout constants for the Flicks player so the tap-catcher
+/// (`UIKitFlicksGestureLayer` in FlicksView) and the scrubber it sits above
+/// (in `NuclearVideoPlayerView`) always agree on where the interactive
+/// scrubber strip is. Keeping this in one place avoids the two views
+/// drifting apart and the scrubber becoming untappable again.
+enum FlicksLayout {
+    /// Height of the bottom strip reserved for the scrubber's drag gesture.
+    /// The full-screen tap/double-tap/long-press catcher stops above this
+    /// strip so scrubber touches aren't swallowed before they arrive.
+    static let scrubberHitZoneHeight: CGFloat = 64
+    /// Bottom padding applied to the scrubber itself so it floats above the
+    /// home indicator / custom tab bar instead of being clipped behind it.
+    static let scrubberBottomPadding: CGFloat = 40
+}
+
 

@@ -99,6 +99,11 @@ struct AppConfig {
         static let musicTranscodeBaseURL = "https://music-transcode-fkri6ifojq-uc.a.run.app"
         static let musicContentIDBaseURL = "https://music-contentid-fkri6ifojq-uc.a.run.app"
         static let musicPresaveBaseURL = "https://music-presave-fkri6ifojq-uc.a.run.app"
+        // General-video Content ID (perceptual frame-hash matching, distinct
+        // from the music audio-fingerprint service above). Replace with the
+        // deployed Cloud Run URL once services/video-content-id is deployed
+        // (see services/Dockerfile.video-content-id + cloudbuild-video-content-id.yaml).
+        static let videoContentIDBaseURL = "https://video-content-id-fkri6ifojq-uc.a.run.app"
         // Note: This app uses Firebase exclusively - no Supabase needed
         static let supabaseAnonKey = "" // Deprecated - use Firebase
         

@@ -67,6 +67,34 @@ struct CommunityTabView: View {
             .sheet(isPresented: $showingCreatePost) {
                 CreateCommunityPostView(creator: creator)
             }
+            .sheet(isPresented: $showingShareSheet) {
+                if let url = shareURL {
+                    NativeShareSheet(items: [url])
+                }
+            }
+            .sheet(item: $showingComments) { post in
+                NavigationStack {
+                    CommentsView(video: Video(
+                        id: post.id,
+                        title: post.content,
+                        description: "",
+                        thumbnailURL: post.imageURLs.first ?? "",
+                        videoURL: post.videoURL ?? "",
+                        duration: 0,
+                        viewCount: 0,
+                        likeCount: post.likeCount,
+                        creator: creator,
+                        category: .entertainment
+                    ))
+                        .navigationTitle("Comments")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button("Done") { showingComments = nil }
+                            }
+                        }
+                }
+            }
         }
         .task {
             await loadPosts()
@@ -180,19 +208,25 @@ struct CommunityTabView: View {
         }
     }
     
+    @State private var showingShareSheet: Bool = false
+    @State private var shareURL: URL? = nil
+    @State private var showingComments: CommunityPost? = nil
+    
     private func sharePost(_ post: CommunityPost) {
-        // TODO: Implement share sheet
-        print("Share post: \(post.id)")
+        let deepLink = "https://mychannel.live/community/\(post.id)"
+        shareURL = URL(string: deepLink)
+        showingShareSheet = true
     }
     
     private func deletePost(_ post: CommunityPost) {
-        // TODO: Add deletePost to CommunityPostService
-        print("Delete post: \(post.id)")
+        Task {
+            await CommunityPostService.shared.deletePost(postId: post.id, creatorId: creator.id)
+            posts.removeAll { $0.id == post.id }
+        }
     }
     
     private func showComments(_ post: CommunityPost) {
-        // TODO: Navigate to comments view
-        print("Show comments for post: \(post.id)")
+        showingComments = post
     }
     
     private func addPostToHistory(_ post: CommunityPost) {
@@ -556,13 +590,17 @@ struct CommunityPostCard: View {
     }
     
     private func pinPost() {
-        // TODO: Add pin/unpin to CommunityPostService
-        print("Pin/unpin post: \(post.id)")
+        Task {
+            await CommunityPostService.shared.togglePin(postId: post.id, isPinned: !post.isPinned)
+        }
     }
     
     private func editPost() {
-        // TODO: Navigate to edit post view
-        print("Edit post: \(post.id)")
+        // Navigate to edit post view by posting a notification the parent can handle
+        NotificationCenter.default.post(
+            name: Notification.Name("EditCommunityPost"),
+            object: post
+        )
     }
 }
 

@@ -618,6 +618,93 @@ struct GlobalLeaderboardView: View {
     }
 }
 
+// MARK: - Certificate Celebration
+
+/// Shown the moment the server mints a new certificate for the user (driven by
+/// UniversityWatchTrackingService.newlyEarnedCertificate).
+struct CertificateCelebrationView: View {
+    let certificate: UniversityCertificate
+    var onDismiss: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 22) {
+            Spacer(minLength: 12)
+
+            ZStack {
+                Circle()
+                    .fill(UniversityTheme.Colors.certificateGold.opacity(0.15))
+                    .frame(width: 132, height: 132)
+                Image(systemName: "seal.fill")
+                    .font(.system(size: 92, weight: .bold))
+                    .foregroundColor(UniversityTheme.Colors.certificateGold)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 34, weight: .black))
+                    .foregroundColor(.white)
+            }
+
+            VStack(spacing: 8) {
+                Text("Certificate Earned!")
+                    .font(.system(size: 24, weight: .black, design: .rounded))
+                    .foregroundColor(Color(.label))
+                Text(certificate.careerPathName)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(UniversityTheme.Colors.accent)
+                    .multilineTextAlignment(.center)
+                Text(certificate.certificateCode)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color(.secondaryLabel))
+            }
+            .padding(.horizontal, 24)
+
+            HStack(spacing: 12) {
+                celebrationStat(value: "\(Int(certificate.totalHours))", label: "Hours")
+                celebrationStat(value: "\(certificate.videosCompleted)", label: "Videos")
+                celebrationStat(value: "\(certificate.averageAIScore)", label: "AI Score")
+            }
+            .padding(.horizontal, 24)
+
+            Spacer(minLength: 12)
+
+            Button {
+                onDismiss()
+                dismiss()
+            } label: {
+                Text("View My Credentials")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .background(UniversityTheme.Colors.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 20)
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color(.systemBackground))
+        .presentationDetents([.medium, .large])
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Certificate earned: \(certificate.careerPathName)")
+    }
+
+    private func celebrationStat(value: String, label: String) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(Color(.label))
+            Text(label)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundColor(Color(.secondaryLabel))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
 #Preview {
     UniversityHomeView()
         .environmentObject(AppState())

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Sign in with Apple (tvOS) -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+
+	<!-- Push Notifications (tvOS) -->
+	<key>aps-environment</key>
+	<string>production</string>
+
+	<!-- App Groups — shared data with iOS companion -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.keontapeat.MyChannelApp</string>
+	</array>
+
+	<!-- Associated Domains — Handoff / Universal Links -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:mychannel.live</string>
+		<string>activitycontinuation:mychannel.live</string>
+	</array>
+</dict>
+</plist>

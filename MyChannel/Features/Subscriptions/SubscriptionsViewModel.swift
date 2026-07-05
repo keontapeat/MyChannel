@@ -88,19 +88,23 @@ final class SubscriptionsViewModel: ObservableObject {
     enum FilterOption: String, CaseIterable {
         case all = "All"
         case today = "Today"
-        case continueWatching = "Continue watching"
-        case unwatched = "Unwatched"
+        case videos = "Videos"
+        case shorts = "Shorts"
         case live = "Live"
         case posts = "Posts"
+        case continueWatching = "Continue watching"
+        case unwatched = "Unwatched"
 
         var icon: String {
             switch self {
             case .all: return "square.grid.2x2"
             case .today: return "calendar"
-            case .continueWatching: return "play.circle"
-            case .unwatched: return "circle.dashed"
+            case .videos: return "play.rectangle"
+            case .shorts: return "play.square.stack"
             case .live: return "dot.radiowaves.left.and.right"
             case .posts: return "doc.text"
+            case .continueWatching: return "play.circle"
+            case .unwatched: return "circle.dashed"
             }
         }
     }
@@ -173,10 +177,17 @@ final class SubscriptionsViewModel: ObservableObject {
         // Apply filter
         switch filterOption {
         case .all:
-            break
+            // Live streams get their own full-width cards above the feed
+            // (see `liveNow`) — exclude them here to avoid showing twice.
+            result = result.filter { !$0.isLiveStream }
         case .today:
             let today = Calendar.current.startOfDay(for: Date())
             result = result.filter { $0.createdAt >= today }
+        case .videos:
+            // Long-form only (already the default — just make explicit)
+            break
+        case .shorts:
+            result = []  // Shorts are shown in their own shelf; this filter focuses the shorts grid
         case .continueWatching:
             result = result.filter {
                 let pct = watchProgress[$0.id] ?? 0
@@ -185,7 +196,9 @@ final class SubscriptionsViewModel: ObservableObject {
         case .unwatched:
             result = result.filter { (watchProgress[$0.id] ?? 0) < 0.02 }
         case .live:
-            result = result.filter { $0.isLiveStream }
+            // Live streams are rendered via the full-width `liveNow` cards,
+            // not the "Most relevant" list — avoid showing them twice.
+            result = []
         case .posts:
             result = []
         }

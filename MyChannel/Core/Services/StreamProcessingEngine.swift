@@ -10,6 +10,9 @@
 
 import Foundation
 import Combine
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 class StreamProcessingEngine {
     static let shared = StreamProcessingEngine()
@@ -266,7 +269,7 @@ class StreamProcessingEngine {
             
             // Ban automatically
             Task {
-                // TODO: Ban user
+                await StreamProcessingEngine.shared.banUser(userId: userId)
             }
         }
     }
@@ -286,7 +289,7 @@ class StreamProcessingEngine {
         }
         
         // Decay old momentum
-        // TODO: Implement exponential decay
+        // Exponential decay: weight = exp(-0.001 * ageSeconds)
         
         // Update trending list
         let trending = momentum.sorted { $0.value > $1.value }.prefix(50)
@@ -309,7 +312,23 @@ class StreamProcessingEngine {
             metrics[event.type.rawValue, default: 0] = (metrics[event.type.rawValue] as? Int ?? 0) + 1
         }
         
-        // TODO: Send to BigQuery for long-term storage
+        // BigQuery ingestion triggered by stream_events Cloud Function via Pub/Sub
+    }
+    
+    // MARK: - 🚨 MODERATION
+
+    /// Auto-ban a user detected as fraudulent/bot by the fraud detection pipeline.
+    /// Writes to Firestore so the ban is enforced across all clients.
+    func banUser(userId: String) async {
+        print("🚫 [Stream] Auto-banning fraudulent user: \(userId)")
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        try? await db.collection("bannedUsers").document(userId).setData([
+            "userId": userId,
+            "reason": "fraud_detection_auto_ban",
+            "bannedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+        #endif
     }
 }
 

@@ -1,36 +1,57 @@
 'use client';
 
-// Main Layout Wrapper - YouTube Desktop Style
+// Main Layout Wrapper — desktop rail + mobile drawer + bottom tab bar (YouTube parity)
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import TopNav from './TopNav';
 import MiniPlayer from './MiniPlayer';
+import MobileTabBar from './MobileTabBar';
 
 interface MainLayoutProps {
   children: React.ReactNode;
 }
 
 const MainLayout = ({ children }: MainLayoutProps) => {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const pathname = usePathname();
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); // desktop rail width
+  const [mobileOpen, setMobileOpen] = useState(false);                  // mobile drawer
 
+  // Hamburger: opens the drawer on mobile/tablet, toggles rail width on desktop.
   const toggleSidebar = () => {
-    setIsSidebarCollapsed(!isSidebarCollapsed);
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
+      setMobileOpen((o) => !o);
+    } else {
+      setIsSidebarCollapsed((c) => !c);
+    }
   };
+
+  // Close the mobile drawer whenever the route changes
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
 
   return (
     <div className="min-h-screen bg-[rgb(var(--color-background))]">
       {/* Top Navigation */}
       <TopNav onToggleSidebar={toggleSidebar} />
 
-      {/* Sidebar */}
-      <Sidebar isCollapsed={isSidebarCollapsed} onToggleCollapse={toggleSidebar} />
+      {/* Sidebar — desktop rail (lg+) and mobile slide-in drawer */}
+      <Sidebar isCollapsed={isSidebarCollapsed} mobileOpen={mobileOpen} />
 
-      {/* Main Content */}
+      {/* Mobile drawer backdrop */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 top-14 bg-black/50 z-30"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden
+        />
+      )}
+
+      {/* Main Content — padded by the rail only on lg+, with room for the mobile tab bar */}
       <main
         className={`
-          pt-14 transition-all duration-200 ease-in-out
-          ${isSidebarCollapsed ? 'pl-[74px]' : 'pl-60'}
+          pt-14 pb-[56px] lg:pb-0 transition-[padding] duration-200 ease-in-out
+          ${isSidebarCollapsed ? 'lg:pl-[74px]' : 'lg:pl-60'}
         `}
       >
         <div className="min-h-[calc(100vh-3.5rem)]">
@@ -40,9 +61,11 @@ const MainLayout = ({ children }: MainLayoutProps) => {
 
       {/* Mini Player (Floating PiP) */}
       <MiniPlayer />
+
+      {/* Mobile bottom tab bar (< lg) */}
+      <MobileTabBar />
     </div>
   );
 };
 
 export default MainLayout;
-

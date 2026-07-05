@@ -187,21 +187,30 @@ final class PersonalizedFeedService: ObservableObject {
             videos.append(contentsOf: SeedCatalogService.shared.seedVideos.shuffled().prefix(remainingSlots))
         }
 
-        // 🔥 FINAL SAFETY FILTER: Block owner videos at source
-        let ownerDisplayNames: Set<String> = ["shot by keonta"]
-        let ownerUsernames: Set<String> = ["sbkeonta_", "shotbykeonta", "keontapeat"]
+        // 🔥 SAFETY FILTER: Block legacy/test content from the feed.
+        //
+        // Two important behaviors:
+        // 1. We never exclude the *current* signed-in user's own uploads — when
+        //    the platform's only creator is the signed-in user, doing so leaves
+        //    the For You feed permanently empty. (Owner sees own content.)
+        // 2. We still drop a small list of legacy test titles ("cooking with kya",
+        //    "screen recording 2025") that were posted as dev sanity checks.
         let blockedTitleSubstrings = ["cooking with kya", "screen recording 2025"]
+        let currentUserId = AppState.shared.currentUser?.id ?? ""
+        let currentUsername = (AppState.shared.currentUser?.username ?? "").lowercased()
 
         videos = videos.filter { video in
+            // Always keep videos uploaded by the current user.
+            if !currentUserId.isEmpty, video.creator.id == currentUserId { return true }
+            if !currentUsername.isEmpty, video.creator.username.lowercased() == currentUsername { return true }
+
             let titleLower = video.title.lowercased()
             let hasBlockedTitle = blockedTitleSubstrings.contains { titleLower.contains($0) }
-            let shouldExclude = ownerDisplayNames.contains(video.creator.displayName.lowercased()) ||
-                              ownerUsernames.contains(video.creator.username.lowercased()) ||
-                              hasBlockedTitle
-            if shouldExclude {
-                print("🚫 [PersonalizedFeedService] Filtering out: '\(video.title)' by '\(video.creator.displayName)'")
+            if hasBlockedTitle {
+                print("🚫 [PersonalizedFeedService] Filtering out legacy test title: '\(video.title)'")
+                return false
             }
-            return !shouldExclude
+            return true
         }
 
         // 🏆 FAIR RANKING: refresh real-user count, then re-sort so real uploads

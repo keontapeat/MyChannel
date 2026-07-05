@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct MessageOptionsView<Service: LiveChatServiceProtocol & ObservableObject>: View {
     let message: LiveChatMessage
@@ -237,12 +240,20 @@ struct MessageOptionsView<Service: LiveChatServiceProtocol & ObservableObject>: 
     
     // MARK: - Actions
     private func replyToMessage() {
-        // TODO: Implement reply functionality
+        // Post notification so the chat composer pre-fills with "@username"
+        NotificationCenter.default.post(
+            name: Notification.Name("ChatReplyToMessage"),
+            object: message
+        )
         dismiss()
     }
     
     private func mentionUser() {
-        // TODO: Implement mention functionality
+        // Post notification so the chat composer inserts "@username"
+        NotificationCenter.default.post(
+            name: Notification.Name("ChatMentionUser"),
+            object: message.userId
+        )
         dismiss()
     }
     
@@ -420,7 +431,21 @@ struct ReportMessageView: View {
     }
     
     private func submitReport() {
-        // TODO: Implement report submission
+        // Submit report to Firestore via existing report_content path
+        guard let uid = AppState.shared.currentUser?.id else { dismiss(); return }
+        Task {
+            #if canImport(FirebaseFirestore)
+            try? await Firestore.firestore().collection("reports").addDocument(data: [
+                "type": "chat_message",
+                "itemId": message.id,
+                "reason": selectedReason.rawValue,
+                "reporterUid": uid,
+                "targetUid": message.userId,
+                "messageContent": message.content,
+                "createdAt": Timestamp(date: Date()),
+            ])
+            #endif
+        }
         dismiss()
     }
 }

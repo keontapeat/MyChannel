@@ -68,11 +68,14 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       title: video.title,
       description: video.description,
       images: [video.thumbnailURL],
-      player: {
-        url: `https://www.mychannel.live/watch/${video.id}`,
-        width: 1280,
-        height: 720,
-      },
+      players: [
+        {
+          playerUrl: `https://www.mychannel.live/watch/${video.id}`,
+          streamUrl: video.videoURL,
+          width: 1280,
+          height: 720,
+        },
+      ],
     },
     alternates: {
       canonical: `https://www.mychannel.live/watch/${video.id}`,

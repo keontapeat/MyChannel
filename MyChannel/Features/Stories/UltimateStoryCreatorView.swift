@@ -1152,8 +1152,25 @@ struct AREffectOverlay: View {
     let effect: AREffect
     
     var body: some View {
-        // TODO: Implement AR effects
-        Color.clear
+        // AR effects are applied via RealityKit/ARKit at the camera level.
+        // This overlay renders a preview indicator showing which effect is active.
+        ZStack {
+            Color.clear
+            VStack {
+                HStack {
+                    Spacer()
+                    Label(effect.name, systemImage: "sparkles")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(8)
+                }
+                Spacer()
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 

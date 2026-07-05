@@ -411,7 +411,7 @@ final class AGIMasterOrchestrator: ObservableObject {
             decisionsPerSecond: decisionsPerSecond,
             systemHealth: systemHealth,
             subsystems: subsystems,
-            uptime: Date().timeIntervalSince1970, // TODO: Track actual uptime
+            uptime: ProcessInfo.processInfo.systemUptime,
             version: "AGI-1.0.0"
         )
     }

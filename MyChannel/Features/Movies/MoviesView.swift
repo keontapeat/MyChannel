@@ -20,8 +20,13 @@ struct MoviesView: View {
 
     // MARK: - Catalog
 
-    private var allMovies: [FreeMovie] {
-        deduped(remoteMovies + FreeMovie.sampleMovies)
+    /// Memoized merged catalog (remote + sample). Rebuilt only when `remoteMovies`
+    /// changes — never recomputed inline during `body`, since `sampleMovies`
+    /// re-concatenates 8 arrays on every access.
+    @State private var allMovies: [FreeMovie] = FreeMovie.sampleMovies
+
+    private func rebuildCatalog() {
+        allMovies = deduped(remoteMovies + FreeMovie.sampleMovies)
     }
 
     /// Movies matching the active category filter.
@@ -99,6 +104,7 @@ struct MoviesView: View {
             .environmentObject(appState)
         }
         .task {
+            rebuildCatalog()
             if remoteMovies.isEmpty { await initialFetch() }
             bindLibrary()
         }
@@ -475,14 +481,18 @@ struct MoviesView: View {
     private func initialFetch() async {
         isFetching = true
         defer { isFetching = false }
-        let results = await FreeCatalogService.shared.searchAll(query: "", limitPerSource: 100)
-        let mapped = results.map { $0.toFreeMovie }
+        // Use the purpose-built trending browse endpoint (empty-string search was
+        // fragile and not what the catalog service is designed for).
+        let svc = FreeCatalogService.shared
+        try? await svc.fetchTrending()
+        let mapped = svc.trending.map { $0.toFreeMovie }
         await MainActor.run {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                 let tmdb = mapped.filter { $0.id.hasPrefix("tmdb-") }.sorted(by: { $0.releaseDate > $1.releaseDate })
                 let others = mapped.filter { !$0.id.hasPrefix("tmdb-") }
                 remoteMovies = deduped(tmdb + others)
             }
+            rebuildCatalog()
             library.refreshContinueWatching(from: allMovies)
         }
     }

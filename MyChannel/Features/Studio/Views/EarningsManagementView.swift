@@ -132,7 +132,7 @@ struct EarningsManagementView: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 
-                Text("$\(String(format: "%.2f", totalEarned))")
+                Text(Money(dollars: totalEarned).formatted())
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .foregroundColor(.green)
                 
@@ -714,7 +714,7 @@ struct WithdrawalSheet: View {
                             .font(.system(size: 20, weight: .semibold))
                     }
                     
-                    Text("Available: $\(String(format: "%.2f", availableBalance))")
+                    Text("Available: \(Money(dollars: availableBalance).formatted())")
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
 

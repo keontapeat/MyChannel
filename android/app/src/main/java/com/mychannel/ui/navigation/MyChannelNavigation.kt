@@ -16,11 +16,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import com.mychannel.R
 import com.mychannel.ui.screens.*
 import com.mychannel.ui.screens.auth.ProfileSetupScreen
 import com.mychannel.ui.screens.upload.StudioScreen
 import com.mychannel.ui.screens.upload.UploadScreen
+import com.mychannel.ui.screens.SettingsScreen
 import com.mychannel.viewmodel.AuthStatus
 import com.mychannel.viewmodel.AuthViewModel
 
@@ -105,12 +108,146 @@ private fun MainNavigation() {
             startDestination = Screen.Home.route,
             modifier = Modifier.padding(innerPadding)
         ) {
+            // Bottom-nav tabs
             composable(Screen.Home.route) { HomeScreen(navController) }
             composable(Screen.Flicks.route) { FlicksScreen(navController) }
             composable(Screen.Upload.route) { UploadScreen(navController) }
             composable(Screen.Subscriptions.route) { SubscriptionsScreen(navController) }
             composable(Screen.Library.route) { LibraryScreen(navController) }
+
+            // Full-screen destinations
             composable(STUDIO_ROUTE) { StudioScreen(navController) }
+
+            composable(
+                route = "video/{videoId}",
+                arguments = listOf(navArgument("videoId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                VideoPlayerScreen(
+                    videoId = backStackEntry.arguments?.getString("videoId") ?: "",
+                    navController = navController
+                )
+            }
+
+            composable(
+                route = "channel/{channelId}",
+                arguments = listOf(navArgument("channelId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                ChannelScreen(
+                    channelId = backStackEntry.arguments?.getString("channelId") ?: "",
+                    navController = navController
+                )
+            }
+
+            composable(
+                route = "live/{streamId}",
+                arguments = listOf(navArgument("streamId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                LiveStreamScreen(
+                    streamId = backStackEntry.arguments?.getString("streamId") ?: "",
+                    navController = navController
+                )
+            }
+
+            composable(SEARCH_ROUTE) { SearchScreen(navController) }
+
+            composable(NOTIFICATIONS_ROUTE) { NotificationsScreen(navController) }
+
+            composable(VS_MATCH_ROUTE) { VSMatchScreen(navController) }
+
+            // Profile / Channel
+            composable(PROFILE_ROUTE) { ProfileScreen(navController, channelId = null) }
+            composable(
+                route = PROFILE_CHANNEL_ROUTE,
+                arguments = listOf(navArgument("channelId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                ProfileScreen(
+                    navController = navController,
+                    channelId = backStackEntry.arguments?.getString("channelId")
+                )
+            }
+
+            // Settings
+            composable(SETTINGS_ROUTE) { SettingsScreen(navController) }
+
+            // Clips
+            composable(CLIPS_ROUTE) { ClipsScreen(navController) }
+            composable(
+                route = "clips/{videoId}",
+                arguments = listOf(navArgument("videoId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                ClipsScreen(
+                    navController = navController,
+                    videoId = backStackEntry.arguments?.getString("videoId")
+                )
+            }
+
+            // Watch Party
+            composable(
+                route = "watch_party/{partyId}",
+                arguments = listOf(navArgument("partyId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                WatchPartyScreen(
+                    partyId = backStackEntry.arguments?.getString("partyId") ?: "",
+                    navController = navController
+                )
+            }
+
+            // Downloads (offline)
+            composable(DOWNLOADS_ROUTE) { DownloadsScreen(navController) }
+
+            // History (watch history full page — reuse LibraryScreen with tab param or dedicated)
+            composable("history") {
+                LibraryScreen(navController = navController)
+            }
+
+            // Watch Later
+            composable("watch_later") {
+                LibraryScreen(navController = navController)
+            }
+
+            // Playlists
+            composable("playlists") {
+                LibraryScreen(navController = navController)
+            }
+
+            // Community posts
+            composable(COMMUNITY_ROUTE) { CommunityScreen(navController) }
+
+            // Premieres
+            composable(PREMIERES_ROUTE) { PremieresScreen(navController) }
+
+            // Super Thanks
+            composable(
+                route = "super_thanks/{videoId}/{creatorId}/{creatorName}",
+                arguments = listOf(
+                    navArgument("videoId") { type = NavType.StringType },
+                    navArgument("creatorId") { type = NavType.StringType },
+                    navArgument("creatorName") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                SuperThanksScreen(
+                    videoId = backStackEntry.arguments?.getString("videoId") ?: "",
+                    creatorId = backStackEntry.arguments?.getString("creatorId") ?: "",
+                    creatorName = backStackEntry.arguments?.getString("creatorName") ?: "",
+                    navController = navController
+                )
+            }
+
+            // Per-video analytics
+            composable(
+                route = "video_analytics/{videoId}",
+                arguments = listOf(navArgument("videoId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                VideoAnalyticsScreen(
+                    videoId = backStackEntry.arguments?.getString("videoId") ?: "",
+                    navController = navController
+                )
+            }
+
+            // Geo block manager (from Settings)
+            composable("settings/geo_blocks") {
+                GeoBlockManagerScreen(navController = navController)
+            }
         }
     }
 }
@@ -129,6 +266,16 @@ sealed class Screen(val route: String, val title: String, val icon: Int) {
  * is kept as a plain route constant outside the [Screen] bottom-nav hierarchy.
  */
 const val STUDIO_ROUTE = "studio"
+const val SEARCH_ROUTE = "search"
+const val NOTIFICATIONS_ROUTE = "notifications"
+const val VS_MATCH_ROUTE = "vs_matches"
+const val PROFILE_ROUTE = "profile"
+const val PROFILE_CHANNEL_ROUTE = "profile/{channelId}"
+const val SETTINGS_ROUTE = "settings"
+const val CLIPS_ROUTE = "clips"
+const val DOWNLOADS_ROUTE = "downloads"
+const val COMMUNITY_ROUTE = "community"
+const val PREMIERES_ROUTE = "premieres"
 
 val bottomNavItems = listOf(
     Screen.Home,

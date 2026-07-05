@@ -8,6 +8,11 @@ struct UIKitVideoScrubber: UIViewRepresentable {
     let maximumTrackColor: UIColor
     let onEditingChanged: (Bool) -> Void
     let onScrubChanged: (Double) -> Void
+    /// VoiceOver announces this as "Video progress, adjustable, <accessibilityValueText>".
+    /// Pass a formatted "current time of total time" string (e.g. "1:24 of 10:05")
+    /// rather than letting VoiceOver read the raw 0–1 fraction, which is meaningless
+    /// for a scrubber. Defaults to a generic label if the caller doesn't supply one.
+    var accessibilityValueText: String? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -22,6 +27,7 @@ struct UIKitVideoScrubber: UIViewRepresentable {
         slider.maximumTrackTintColor = maximumTrackColor
         slider.tintColor = tintColor
         slider.isContinuous = true
+        slider.accessibilityLabel = "Video progress"
         slider.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
         slider.addTarget(context.coordinator, action: #selector(Coordinator.touchDown(_:)), for: [.touchDown])
         slider.addTarget(context.coordinator, action: #selector(Coordinator.touchEnded(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
@@ -37,6 +43,7 @@ struct UIKitVideoScrubber: UIViewRepresentable {
         uiView.minimumTrackTintColor = minimumTrackColor
         uiView.maximumTrackTintColor = maximumTrackColor
         uiView.tintColor = tintColor
+        uiView.accessibilityValue = accessibilityValueText
     }
 
     final class Coordinator: NSObject {

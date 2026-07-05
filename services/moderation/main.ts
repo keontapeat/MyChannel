@@ -1,5 +1,48 @@
 import express from 'express';
 import cors from 'cors';
+import admin from 'firebase-admin';
+import jwt from 'jsonwebtoken';
+
+// This endpoint was previously unauthenticated — any caller could hit it.
+// It doesn't touch user data, but per backend-services steering every
+// network-exposed endpoint needs auth, and letting an unauthenticated
+// caller flood it is a free DoS/cost vector. Same dual-auth pattern as
+// services/upload/main.ts: Firebase ID token (web/iOS/Android clients)
+// or an internal JWT (service-to-service calls, e.g. from upload/ingest).
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || '';
+
+async function verifyCaller(authHeader: string | undefined): Promise<boolean> {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return false;
+  const token = authHeader.slice(7).trim();
+  if (!token) return false;
+
+  try {
+    await admin.auth().verifyIdToken(token);
+    return true;
+  } catch {}
+
+  if (!JWT_SECRET) return false;
+  try {
+    jwt.verify(token, JWT_SECRET);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function requireAuth(req: express.Request, res: express.Response): Promise<boolean> {
+  const ok = await verifyCaller(req.headers.authorization);
+  if (!ok) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+  return true;
+}
 
 const adultTerms = ['nude', 'porn', 'xxx', 'onlyfans', 'sex'];
 const violenceTerms = ['kill', 'murder', 'beheading', 'shooting', 'bomb'];
@@ -195,9 +238,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
 // POST /v1/moderate/video { title, description, thumbnailUri }
 app.post('/v1/moderate/video', async (req, res) => {
   try {
+    if (!(await requireAuth(req, res))) return;
     const { title, description, thumbnailUri } = req.body || {};
     const titleResult = evaluateText(String(title || ''));
     const descriptionResult = evaluateText(String(description || ''));

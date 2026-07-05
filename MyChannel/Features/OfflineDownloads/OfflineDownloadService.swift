@@ -32,11 +32,11 @@ class OfflineDownloadService: ObservableObject {
     /// True when the device currently has a Wi-Fi connection. Updated live via NWPathMonitor.
     @Published private(set) var isOnWiFiConnection: Bool = true
     
-    // Download settings
-    @Published var downloadQuality: DownloadQuality = .medium
-    @Published var downloadOnlyOnWiFi = true
-    @Published var autoDeleteWatchedVideos = false
-    @Published var maxStorageLimit: Int64 = 5 * 1024 * 1024 * 1024 // 5GB default
+    // Download settings (persisted across launches)
+    @Published var downloadQuality: DownloadQuality = .medium { didSet { persistSettings() } }
+    @Published var downloadOnlyOnWiFi = true { didSet { persistSettings() } }
+    @Published var autoDeleteWatchedVideos = false { didSet { persistSettings() } }
+    @Published var maxStorageLimit: Int64 = 5 * 1024 * 1024 * 1024 { didSet { persistSettings() } } // 5GB default
     
     private let fileManager = FileManager.default
     private var cancellables = Set<AnyCancellable>()
@@ -52,10 +52,50 @@ class OfflineDownloadService: ObservableObject {
     }
     
     private init() {
+        loadSettings()
         startNetworkMonitoring()
         setupDownloadService()
         loadExistingDownloads()
         updateStorageInfo()
+    }
+
+    // MARK: - Settings Persistence
+
+    private enum SettingsKey {
+        static let quality = "downloads.quality"
+        static let wifiOnly = "downloads.wifiOnly"
+        static let autoDelete = "downloads.autoDeleteWatched"
+        static let maxStorage = "downloads.maxStorageBytes"
+    }
+
+    private var isLoadingSettings = false
+
+    private func loadSettings() {
+        isLoadingSettings = true
+        defer { isLoadingSettings = false }
+        let d = UserDefaults.standard
+        if let raw = d.string(forKey: SettingsKey.quality), let q = DownloadQuality(rawValue: raw) {
+            downloadQuality = q
+        }
+        if d.object(forKey: SettingsKey.wifiOnly) != nil {
+            downloadOnlyOnWiFi = d.bool(forKey: SettingsKey.wifiOnly)
+        }
+        if d.object(forKey: SettingsKey.autoDelete) != nil {
+            autoDeleteWatchedVideos = d.bool(forKey: SettingsKey.autoDelete)
+        }
+        let storedLimit = d.object(forKey: SettingsKey.maxStorage) as? NSNumber
+        if let limit = storedLimit?.int64Value, limit > 0 {
+            maxStorageLimit = limit
+        }
+    }
+
+    private func persistSettings() {
+        guard !isLoadingSettings else { return }
+        let d = UserDefaults.standard
+        d.set(downloadQuality.rawValue, forKey: SettingsKey.quality)
+        d.set(downloadOnlyOnWiFi, forKey: SettingsKey.wifiOnly)
+        d.set(autoDeleteWatchedVideos, forKey: SettingsKey.autoDelete)
+        d.set(NSNumber(value: maxStorageLimit), forKey: SettingsKey.maxStorage)
     }
 
     // MARK: - Network Monitoring
@@ -206,7 +246,7 @@ class OfflineDownloadService: ObservableObject {
 
     /// Total bytes used by completed downloads (sum of file sizes), for quick UI display.
     var totalDownloadedBytes: Int64 {
-        downloads.reduce(0) { $0 + Int64($1.fileSize) }
+        downloads.reduce(0) { $0 + $1.fileSize }
     }
 
     /// Human-readable total storage used by downloads.
@@ -352,7 +392,7 @@ class OfflineDownloadService: ObservableObject {
             if let index = downloads.firstIndex(where: { $0.id == download.id }) {
                 downloads[index].status = .completed
                 downloads[index].progress = 1.0
-                downloads[index].fileSize = try destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                downloads[index].fileSize = Int64(try destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0)
                 persistDownloads()
                 updateStorageInfo()
             }
@@ -407,9 +447,19 @@ class OfflineDownloadService: ObservableObject {
     
     func cleanupWatchedVideos() async {
         guard autoDeleteWatchedVideos else { return }
-        
-        // This would integrate with watch history to identify watched videos
-        // For now, we'll implement a simple cleanup based on last accessed time
+        guard let userId = AuthenticationManager.shared.currentUser?.id else { return }
+
+        // Delete downloads the user has finished (completion ≥ 90%). Prefer the
+        // in-memory progress; fall back to a per-video Firestore lookup.
+        for download in completedDownloads {
+            var progress = WatchProgressService.shared.progress[download.videoId]
+            if progress == nil {
+                progress = try? await WatchProgressService.shared.fetchProgress(userId: userId, videoId: download.videoId)
+            }
+            if progress?.isCompleted == true {
+                try? await deleteDownload(download.id)
+            }
+        }
     }
     
     // MARK: - Utility Methods
@@ -503,7 +553,7 @@ struct OfflineDownload: Identifiable, Codable {
     var progress: Double
     let downloadedAt: Date
     let expiresAt: Date
-    var fileSize: Int
+    var fileSize: Int64
 }
 
 struct DownloadQueueItem: Identifiable {

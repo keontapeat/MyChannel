@@ -10,6 +10,7 @@ import SwiftUI
 
 struct UniversityHomeView: View {
     @StateObject private var viewModel = UniversityViewModel()
+    @ObservedObject private var trackingService = UniversityWatchTrackingService.shared
     @EnvironmentObject private var appState: AppState
     @State private var selectedTab: UniversityTab = .dashboard
     @State private var isInitialLoad = true
@@ -80,6 +81,14 @@ struct UniversityHomeView: View {
                     isInitialLoad = false
                 }
             }
+        }
+        // 🎓 The certificate celebration listener runs app-wide (started/stopped by
+        // AppState on login/logout, presented from SplashContainer) so it fires
+        // regardless of which tab the user is on. Here we just react to a new
+        // certificate to refresh this screen's data and jump to Certificates.
+        .onReceive(trackingService.$newlyEarnedCertificate.compactMap { $0 }) { _ in
+            selectedTab = .certificates
+            Task { await viewModel.loadUserProgress() }
         }
     }
 

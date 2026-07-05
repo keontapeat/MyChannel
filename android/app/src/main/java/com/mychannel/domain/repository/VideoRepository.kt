@@ -47,5 +47,20 @@ interface VideoRepository {
 
     suspend fun toggleLike(videoId: String, like: Boolean): Result<Unit>
 
+    /** Whether the current user has liked this video. */
+    suspend fun isLiked(videoId: String): Result<Boolean>
+
+    /** Whether this video is in the current user's Watch Later. */
+    suspend fun isSaved(videoId: String): Result<Boolean>
+
+    /** Add or remove a video from the current user's Watch Later. */
+    suspend fun setSaved(video: Video, save: Boolean): Result<Unit>
+
     suspend fun incrementViewCount(videoId: String): Result<Unit>
+
+    /** Real-time list of videos downloaded by [userId] for offline playback. */
+    fun observeDownloads(userId: String): Flow<List<Video>>
+
+    /** Remove a downloaded video from the user's offline cache. */
+    suspend fun deleteDownload(userId: String, videoId: String): Result<Unit>
 }

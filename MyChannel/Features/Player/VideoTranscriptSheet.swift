@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct VideoTranscriptSheet: View {
     let video: Video
@@ -8,8 +9,14 @@ struct VideoTranscriptSheet: View {
     @State private var selectedLanguage = "English"
     @State private var autoScroll = true
     @State private var currentTime: TimeInterval = 0
-    
-    private let languages = ["English", "Spanish", "French", "German", "Japanese", "Korean"]
+    @State private var segments: [VideoTranscriptSegment] = []
+    @State private var isLoading = true
+    @State private var shareText: String?
+
+    private var languages: [String] {
+        let subs = (video.subtitles ?? []).map { $0.language }
+        return subs.isEmpty ? ["English"] : Array(Set(subs)).sorted()
+    }
     
     var body: some View {
         NavigationStack {
@@ -51,16 +58,35 @@ struct VideoTranscriptSheet: View {
                 
                 // Transcript Content
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 16) {
-                        ForEach(mockTranscriptSegments, id: \.id) { segment in
-                            TranscriptSegmentView(
-                                segment: segment,
-                                searchText: searchText,
-                                isHighlighted: abs(segment.startTime - currentTime) < 2.0
-                            )
+                    if isLoading {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 60)
+                    } else if segments.isEmpty {
+                        VStack(spacing: 10) {
+                            Image(systemName: "captions.bubble")
+                                .font(.system(size: 40))
+                                .foregroundColor(.secondary)
+                            Text("Transcript not available")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("This video doesn't have captions yet.")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 70)
+                    } else {
+                        LazyVStack(alignment: .leading, spacing: 16) {
+                            ForEach(segments, id: \.id) { segment in
+                                TranscriptSegmentView(
+                                    segment: segment,
+                                    searchText: searchText,
+                                    isHighlighted: abs(segment.startTime - currentTime) < 2.0
+                                )
+                            }
+                        }
+                        .padding()
                     }
-                    .padding()
                 }
                 .background(Color(.systemBackground))
             }
@@ -73,18 +99,30 @@ struct VideoTranscriptSheet: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
-                        Button("Download Transcript") {
-                            // Handle download
+                        Button {
+                            shareText = transcriptPlainText()
+                        } label: {
+                            Label("Download Transcript", systemImage: "square.and.arrow.down")
                         }
-                        Button("Copy All Text") {
-                            // Handle copy
+                        .disabled(segments.isEmpty)
+
+                        Button {
+                            UIPasteboard.general.string = transcriptPlainText()
+                            HapticManager.shared.notification(type: .success)
+                        } label: {
+                            Label("Copy All Text", systemImage: "doc.on.doc")
                         }
-                        Button("Report Issue") {
-                            // Handle report
-                        }
+                        .disabled(segments.isEmpty)
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                }
+            }
+            .task { await loadTranscript() }
+            .onChange(of: selectedLanguage) { _ in Task { await loadTranscript() } }
+            .sheet(isPresented: Binding(get: { shareText != nil }, set: { if !$0 { shareText = nil } })) {
+                if let text = shareText {
+                    NativeShareSheet(items: [text])
                 }
             }
         }
@@ -101,14 +139,70 @@ struct VideoTranscriptSheet: View {
         )
     }
     
-    private var mockTranscriptSegments: [VideoTranscriptSegment] {
-        [
-            VideoTranscriptSegment(id: "1", startTime: 0, endTime: 5, text: "Welcome to this amazing video tutorial where we'll explore the latest features in iOS development."),
-            VideoTranscriptSegment(id: "2", startTime: 5, endTime: 12, text: "Today we're going to dive deep into SwiftUI and learn how to create beautiful, responsive user interfaces."),
-            VideoTranscriptSegment(id: "3", startTime: 12, endTime: 18, text: "First, let's start by understanding the basic concepts of declarative programming in SwiftUI."),
-            VideoTranscriptSegment(id: "4", startTime: 18, endTime: 25, text: "SwiftUI allows us to describe our user interface using a simple, intuitive syntax that's easy to read and maintain."),
-            VideoTranscriptSegment(id: "5", startTime: 25, endTime: 32, text: "One of the key advantages of SwiftUI is its ability to automatically handle state management and view updates.")
-        ]
+    private func transcriptPlainText() -> String {
+        segments.map { "[\(formatTimecode($0.startTime))] \($0.text)" }.joined(separator: "\n")
+    }
+
+    private func formatTimecode(_ t: TimeInterval) -> String {
+        let s = Int(t); return String(format: "%d:%02d", s / 60, s % 60)
+    }
+
+    // MARK: - Real transcript loading (from the video's subtitle track)
+
+    private func loadTranscript() async {
+        isLoading = true
+        let tracks = video.subtitles ?? []
+        // Prefer the selected language, then the default track, then the first.
+        let track = tracks.first(where: { $0.language == selectedLanguage })
+            ?? tracks.first(where: { $0.isDefault })
+            ?? tracks.first
+        guard let track, let url = URL(string: track.url) else {
+            segments = []
+            isLoading = false
+            return
+        }
+        let parsed = await Self.fetchAndParseVTT(url: url)
+        segments = parsed
+        isLoading = false
+    }
+
+    private static func fetchAndParseVTT(url: URL) async -> [VideoTranscriptSegment] {
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let text = String(data: data, encoding: .utf8) else { return [] }
+        return parseVTT(text)
+    }
+
+    private static func parseVTT(_ text: String) -> [VideoTranscriptSegment] {
+        var result: [VideoTranscriptSegment] = []
+        let blocks = text.replacingOccurrences(of: "\r", with: "").components(separatedBy: "\n\n")
+        for block in blocks {
+            let lines = block.split(separator: "\n").map(String.init)
+            guard let arrowLine = lines.first(where: { $0.contains("-->") }) else { continue }
+            let parts = arrowLine.components(separatedBy: "-->")
+            guard parts.count == 2 else { continue }
+            let start = parseTimecode(parts[0])
+            let end = parseTimecode(parts[1].split(separator: " ").first.map(String.init) ?? parts[1])
+            guard let arrowIdx = lines.firstIndex(of: arrowLine) else { continue }
+            let textLines = Array(lines[(arrowIdx + 1)...])
+            let cueText = textLines.joined(separator: " ")
+                .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespaces)
+            if !cueText.isEmpty {
+                result.append(VideoTranscriptSegment(id: "\(result.count)", startTime: start, endTime: end.isNaN ? start + 4 : end, text: cueText))
+            }
+        }
+        return result
+    }
+
+    /// Parses "HH:MM:SS.mmm" or "MM:SS.mmm" into seconds.
+    private static func parseTimecode(_ raw: String) -> TimeInterval {
+        let clean = raw.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        let comps = clean.split(separator: ":").map { Double($0) ?? 0 }
+        switch comps.count {
+        case 3: return comps[0] * 3600 + comps[1] * 60 + comps[2]
+        case 2: return comps[0] * 60 + comps[1]
+        default: return Double(clean) ?? 0
+        }
     }
 }
 

@@ -7,6 +7,9 @@
 
 import Foundation
 import Combine
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 // Import shared agent types
 // AgentMetrics, AgentStatus, PerformanceAlert are now in SharedAgentTypes.swift
@@ -78,21 +81,20 @@ final class CDNOptimizer: ObservableObject {
     }
     
     private func performAgentTask() async throws {
-        // Optimize CDN cache hit ratio
-        // Identify frequently accessed content
-        // Pre-cache popular videos
-        // Purge stale cache entries
-        
+        // Get CDN metrics from Firestore platform_health collection
         print("🌐 [CDN Optimizer] Optimizing CDN performance")
-        
-        // TODO: Get CDN metrics
-        let cacheHitRatio = 0.85 // Placeholder
-        let bandwidth = 1_000_000_000 // Placeholder
-        
-        metrics.revenue = Double(bandwidth) / 1_000_000_000 // GB
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        let snap = try? await db.collection("platform_health").document("cdn").getDocument()
+        let d = snap?.data() ?? [:]
+        let cacheHitRatio = d["cacheHitRatio"] as? Double ?? 0.85
+        let bandwidth = d["bandwidthBytesPerSecond"] as? Int ?? 1_000_000_000
+        metrics.revenue = Double(bandwidth) / 1_000_000_000
         metrics.totalRuns += 1
-        
         print("📊 [CDN] Cache hit ratio: \(String(format: "%.2f%%", cacheHitRatio * 100))")
+        #else
+        metrics.totalRuns += 1
+        #endif
     }
     
     deinit {
@@ -193,13 +195,16 @@ final class DatabasePerformanceMonitor: ObservableObject {
     }
     
     private func notifyAdmins(message: String) async {
-        // TODO: Implement admin notification
         print("⚠️ [Admin Alert] Database: \(message)")
-        // await NotificationManager.shared.sendAdminAlert(
-        //     title: "⚠️ Database Alert",
-        //     message: message,
-        //     priority: .high
-        // )
+        #if canImport(FirebaseFirestore)
+        try? await Firestore.firestore().collection("admin_alerts").addDocument(data: [
+            "type": "database_alert",
+            "message": message,
+            "priority": "medium",
+            "resolved": false,
+            "createdAt": FieldValue.serverTimestamp(),
+        ])
+        #endif
     }
     
     deinit {
@@ -377,13 +382,16 @@ final class BandwidthManager: ObservableObject {
         // Throttle non-critical traffic during peak times
         
         print("📶 [Bandwidth Manager] Optimizing bandwidth usage")
-        
-        // TODO: Get current bandwidth usage
-        let bandwidthUsage = 1000.0 // Placeholder (GB)
+        // Get current bandwidth from Firestore platform_health
+        #if canImport(FirebaseFirestore)
+        let snap = try? await Firestore.firestore().collection("platform_health").document("bandwidth").getDocument()
+        let bandwidthUsage = snap?.data()?["totalGBThisHour"] as? Double ?? 1000.0
+        #else
+        let bandwidthUsage = 1000.0
+        #endif
         totalBandwidth = bandwidthUsage
         metrics.revenue = bandwidthUsage
         metrics.totalRuns += 1
-        
         print("📊 [Bandwidth] Current usage: \(String(format: "%.2f GB", bandwidthUsage))")
     }
     
@@ -466,14 +474,10 @@ final class CacheOptimizer: ObservableObject {
         // Evict stale cache entries
         
         print("💾 [Cache Optimizer] Optimizing cache performance")
-        
-        // TODO: Optimize cache
-        // await SmartCacheService.shared.optimizeCache()
-        
-        // Placeholder stats
-        let hitRate = 0.85
+        // Delegate to SmartCacheService for actual cache optimization
+        await SmartCacheService.shared.optimizeCache()
+        let hitRate = await SmartCacheService.shared.currentHitRate
         print("📊 [Cache] Hit rate: \(String(format: "%.2f%%", hitRate * 100))")
-        
         metrics.totalRuns += 1
     }
     

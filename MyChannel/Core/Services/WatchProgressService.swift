@@ -65,7 +65,7 @@ final class WatchProgressService: ObservableObject {
         guard let data = snapshot.data() else { return nil }
         let wp = WatchProgress(id: docId, userId: userId, videoId: videoId,
             positionSec: data["position"] as? Double ?? 0, durationSec: data["duration"] as? Double ?? 0,
-            completionPct: data["pct"] as? Double ?? 0, lastWatchedAt: Date())
+            completionPct: data["pct"] as? Double ?? 0, lastWatchedAt: Self.lastWatched(from: data))
         progress[videoId] = wp; return wp
     }
 
@@ -82,9 +82,17 @@ final class WatchProgressService: ObservableObject {
             let videoId = data["videoId"] as? String ?? ""
             let wp = WatchProgress(id: doc.documentID, userId: userId, videoId: videoId,
                 positionSec: data["position"] as? Double ?? 0, durationSec: data["duration"] as? Double ?? 0,
-                completionPct: data["pct"] as? Double ?? 0, lastWatchedAt: Date())
+                completionPct: data["pct"] as? Double ?? 0, lastWatchedAt: Self.lastWatched(from: data))
             progress[videoId] = wp
         }
+    }
+
+    /// Read the persisted `lastWatched` server timestamp. Falls back to now so a
+    /// freshly-written doc (before the server timestamp resolves) still sorts sanely.
+    private static func lastWatched(from data: [String: Any]) -> Date {
+        if let ts = data["lastWatched"] as? Timestamp { return ts.dateValue() }
+        if let date = data["lastWatched"] as? Date { return date }
+        return Date()
     }
 
     func resumePosition(videoId: String) -> Double { progress[videoId]?.positionSec ?? 0 }

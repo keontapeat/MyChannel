@@ -23,93 +23,96 @@ struct SystemCommandCenterView: View {
                 VStack(spacing: 10) {
                     Text("SYSTEM HEALTH")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(CCTheme.textSecondary)
                     HStack(spacing: 20) {
                         VStack {
                             Text("\(health.systemStatus.rawValue)")
-                                .font(.system(size: 20, weight: .black))
-                                .foregroundColor(health.systemStatus == .healthy ? .green : health.systemStatus == .degraded ? .orange : .red)
-                            Text("Status").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+                                .font(.system(size: 20, weight: .black, design: .monospaced))
+                                .foregroundColor(health.systemStatus == .healthy ? CCTheme.good : health.systemStatus == .degraded ? CCTheme.warning : CCTheme.critical)
+                            Text("Status").font(.system(size: 10, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         }
                         VStack {
                             Text("\(Int(health.avgLatency))ms")
-                                .font(.system(size: 20, weight: .black)).foregroundColor(.cyan)
-                            Text("Latency").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+                                .font(.system(size: 20, weight: .black, design: .monospaced)).foregroundColor(CCTheme.textPrimary)
+                            Text("Latency").font(.system(size: 10, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         }
                         VStack {
                             Text("\(health.uptime, specifier: "%.1f")%")
-                                .font(.system(size: 20, weight: .black)).foregroundColor(.green)
-                            Text("Uptime").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+                                .font(.system(size: 20, weight: .black, design: .monospaced)).foregroundColor(CCTheme.good)
+                            Text("Uptime").font(.system(size: 10, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         }
                     }
                 }
                 .padding(16)
-                .background(Color.cyan.opacity(0.08))
+                .background(CCTheme.panel)
                 .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(CCTheme.panelBorder, lineWidth: 1))
                 
                 // Transcoding & CDN Telemetry Card
                 VStack(spacing: 12) {
                     Text("TRANSCODING & CDN TELEMETRY")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(CCTheme.textSecondary)
                     
                     HStack(spacing: 15) {
                         VStack(spacing: 4) {
                             Text("\(health.transcodingQueueDepth)")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(.orange)
-                            Text("Queue").font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary)
+                                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                .foregroundColor(CCTheme.textPrimary)
+                            Text("Queue").font(.system(size: 9, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         }
                         .frame(maxWidth: .infinity)
                         
                         VStack(spacing: 4) {
                             Text("\(health.activeTranscoders)")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(.cyan)
-                            Text("Nodes").font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary)
+                                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                .foregroundColor(CCTheme.textPrimary)
+                            Text("Nodes").font(.system(size: 9, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         }
                         .frame(maxWidth: .infinity)
                         
                         VStack(spacing: 4) {
                             Text("\(health.cdnCacheHitRatio, specifier: "%.1f")%")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(.green)
-                            Text("Hit Ratio").font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary)
+                                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                .foregroundColor(CCTheme.good)
+                            Text("Hit Ratio").font(.system(size: 9, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         }
                         .frame(maxWidth: .infinity)
                         
                         VStack(spacing: 4) {
                             Text("\(health.cdnEgressGb, specifier: "%.1f") GB")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(.purple)
-                            Text("Egress").font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary)
+                                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                .foregroundColor(CCTheme.textPrimary)
+                            Text("Egress").font(.system(size: 9, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         }
                         .frame(maxWidth: .infinity)
                     }
                 }
                 .padding(16)
-                .background(Color.purple.opacity(0.06))
+                .background(CCTheme.panel)
                 .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(CCTheme.panelBorder, lineWidth: 1))
                 
                 // Cost Summary
                 VStack(spacing: 10) {
                     Text("INFRASTRUCTURE COSTS")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(CCTheme.textSecondary)
                     Text("$\(cost.totalMonthlyCost, specifier: "%.2f")")
-                        .font(.system(size: 36, weight: .black)).foregroundColor(.orange)
+                        .font(.system(size: 36, weight: .black, design: .monospaced)).foregroundColor(CCTheme.textPrimary)
                     Text("Potential savings: $\(cost.savingsPotential, specifier: "%.2f")")
-                        .font(.system(size: 11, design: .monospaced)).foregroundColor(.green)
+                        .font(.system(size: 11, design: .monospaced)).foregroundColor(CCTheme.good)
                 }
                 .padding(16)
-                .background(Color.orange.opacity(0.08))
+                .background(CCTheme.panel)
                 .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(CCTheme.panelBorder, lineWidth: 1))
                 
                 // FinOps Actions Card
                 VStack(spacing: 12) {
                     Text("ACTIVE COST OPTIMIZATION ACTIONS")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(CCTheme.textSecondary)
                     
                     HStack(spacing: 12) {
                         Button {
@@ -137,7 +140,7 @@ struct SystemCommandCenterView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(Color.orange)
+                            .background(CCTheme.ink)
                             .cornerRadius(8)
                         }
                         .disabled(isArchiving)
@@ -167,15 +170,16 @@ struct SystemCommandCenterView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(Color.green)
+                            .background(CCTheme.ink)
                             .cornerRadius(8)
                         }
                         .disabled(isOptimizing)
                     }
                 }
                 .padding(16)
-                .background(Color.green.opacity(0.06))
+                .background(CCTheme.panel)
                 .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(CCTheme.panelBorder, lineWidth: 1))
                 
                 // Optimization Suggestions
                 ForEach(cost.optimizationSuggestions.prefix(5)) { suggestion in
@@ -193,7 +197,7 @@ struct SystemCommandCenterView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(Color.black.opacity(0.8))
+                    .background(CCTheme.ink)
                     .cornerRadius(20)
                     .padding(.bottom, 20)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -217,19 +221,21 @@ private struct CostOptimizationCard: View {
             HStack {
                 Text(suggestion.category)
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(CCTheme.textSecondary)
                 Spacer()
                 Text("$\(suggestion.potentialSavings, specifier: "%.2f")")
-                    .font(.system(size: 12, weight: .bold)).foregroundColor(.green)
+                    .font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(CCTheme.good)
             }
             Text(suggestion.description)
                 .font(.system(size: 13))
+                .foregroundColor(CCTheme.textPrimary)
             Text(suggestion.priority.uppercased())
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(suggestion.priority == "high" ? .red : .orange)
+                .foregroundColor(suggestion.priority == "high" ? CCTheme.critical : CCTheme.warning)
         }
         .padding(12)
-        .background(Color(.systemBackground))
+        .background(CCTheme.panel)
         .cornerRadius(10)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(CCTheme.panelBorder, lineWidth: 1))
     }
 }

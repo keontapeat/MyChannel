@@ -67,11 +67,8 @@ struct FloatingMiniPlayer: View {
                     .compositingGroup()
                     .allowsHitTesting(true)
             }
-            .allowsHitTesting(false)
-            .allowsHitTesting(true)
-            .zIndex(10000) // 🔥 FIX: ABOVE EVERYTHING for YouTube parity (tab bar is 999)
-            // 🔥 FIX: Ensure mini player doesn't interfere with home feed rendering
-            .background(Color.clear) // Transparent background to avoid blocking
+            .zIndex(10000)
+            .background(Color.clear)
             .onAppear {
                 // 🔥 SYNC INITIAL STATE: Get volume and speed from player
                 if let player = globalPlayer.player {
@@ -196,8 +193,8 @@ struct FloatingMiniPlayer: View {
                     // Settings/PiP button
                     Button(action: {
                         HapticManager.shared.impact(style: .light)
-                        // Toggle PiP or expand
-                        NotificationCenter.default.post(name: NSNotification.Name("PresentVideoDetailFromMiniPlayer"), object: nil)
+                        // Expand back to full VideoDetailView
+                        globalPlayer.expandPlayer()
                     }) {
                         Image(systemName: "pip.enter")
                             .font(.system(size: 16, weight: .semibold))
@@ -529,67 +526,81 @@ struct FloatingMiniPlayer: View {
     
     private var qualityControl: some View {
         ZStack {
-                        Button(action: { 
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                showingQualityMenu.toggle()
-                                if showingQualityMenu {
-                                    showingVolumeSlider = false
-                                    showingSpeedMenu = false
-                                }
-                            }
-                            HapticManager.shared.impact(style: .light) 
-                        }) {
-                            Text(selectedQuality == "Auto" ? "HD" : selectedQuality)
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(showingQualityMenu ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
-                                .padding(6)
-                                .background(showingQualityMenu ? AppTheme.Colors.primary.opacity(0.15) : AppTheme.Colors.textSecondary.opacity(0.08))
-                                .clipShape(Circle())
-                        }
-                        
-                        // Quality menu popup
-                        if showingQualityMenu {
-                            VStack(spacing: 4) {
-                                ForEach(["Auto", "4K", "1080p", "720p", "480p", "360p"], id: \.self) { quality in
-                                    Button(action: {
-                                        selectedQuality = quality
-                                        // TODO: Implement actual quality switching via HLS stream selection
-                                        withAnimation {
-                                            showingQualityMenu = false
-                                        }
-                                        HapticManager.shared.impact(style: .light)
-                                    }) {
-                                        HStack {
-                                            Text(quality)
-                                                .font(.system(size: 12, weight: selectedQuality == quality ? .bold : .regular))
-                                                .foregroundColor(selectedQuality == quality ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary)
-                                            
-                                            Spacer()
-                                            
-                                            if selectedQuality == quality {
-                                                Image(systemName: "checkmark")
-                                                    .font(.system(size: 10, weight: .bold))
-                                                    .foregroundColor(AppTheme.Colors.primary)
-                                            }
-                                        }
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 8)
-                                        .background(selectedQuality == quality ? AppTheme.Colors.primary.opacity(0.1) : Color.clear)
-                                        .cornerRadius(6)
-                                    }
-                                }
-                            }
-                            .padding(8)
-                            .frame(width: 140)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
-                                    .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.Colors.cardBackground.opacity(0.98)))
-                                    .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 4)
-                            )
-                            .offset(x: -75, y: -120)
-                            .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .opacity))
-                        }
+            qualityToggleButton
+            if showingQualityMenu {
+                qualityMenuPopup
+            }
+        }
+    }
+
+    private var qualityToggleButton: some View {
+        let isActive: Bool = showingQualityMenu
+        let labelColor: Color = isActive ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary
+        let bgColor: Color = isActive ? AppTheme.Colors.primary.opacity(0.15) : AppTheme.Colors.textSecondary.opacity(0.08)
+        let label: String = selectedQuality == "Auto" ? "HD" : selectedQuality
+        return Button(action: {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                showingQualityMenu.toggle()
+                if showingQualityMenu {
+                    showingVolumeSlider = false
+                    showingSpeedMenu = false
+                }
+            }
+            HapticManager.shared.impact(style: .light)
+        }) {
+            Text(label)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(labelColor)
+                .padding(6)
+                .background(bgColor)
+                .clipShape(Circle())
+        }
+    }
+
+    private var qualityMenuPopup: some View {
+        VStack(spacing: 4) {
+            ForEach(["Auto", "4K", "1080p", "720p", "480p", "360p"], id: \.self) { quality in
+                qualityMenuRow(quality)
+            }
+        }
+        .padding(8)
+        .frame(width: 140)
+        .background(speedMenuBackground)
+        .offset(x: -75, y: -120)
+        .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .opacity))
+    }
+
+    private func qualityMenuRow(_ quality: String) -> some View {
+        let isSelected: Bool = selectedQuality == quality
+        let textColor: Color = isSelected ? AppTheme.Colors.primary : AppTheme.Colors.textPrimary
+        let rowBackground: Color = isSelected ? AppTheme.Colors.primary.opacity(0.1) : Color.clear
+        return Button(action: {
+            selectedQuality = quality
+            Task { @MainActor in
+                GlobalVideoPlayerManager.shared.setQuality(quality)
+            }
+            withAnimation {
+                showingQualityMenu = false
+            }
+            HapticManager.shared.impact(style: .light)
+        }) {
+            HStack {
+                Text(quality)
+                    .font(.system(size: 12, weight: isSelected ? .bold : .regular))
+                    .foregroundColor(textColor)
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(rowBackground)
+            .cornerRadius(6)
         }
     }
     
@@ -725,10 +736,8 @@ struct FloatingMiniPlayer: View {
                 if verticalSwipe > 100 && value.translation.height < 0 && verticalSwipe > horizontalSwipe {
                     // Swipe up to expand
                     globalPlayer.expandPlayer()
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 50_000_000)
-                        NotificationCenter.default.post(name: NSNotification.Name("PresentVideoDetailFromMiniPlayer"), object: nil)
-                    }
+                    // Swipe up → expand to full VideoDetailView
+                    globalPlayer.expandPlayer()
                     HapticManager.shared.impact(style: .medium)
                     return
                 }

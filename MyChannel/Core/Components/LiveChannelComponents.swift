@@ -11,14 +11,17 @@ struct ThermonuclearPlayer: UIViewRepresentable {
     let onReady: () -> Void
     let onSnapshot: (UIImage) -> Void
     var onAllFailed: (() -> Void)?
+    var cornerRadius: CGFloat = 0
 
     func makeUIView(context: Context) -> ThermonuclearPlayerView {
         let view = ThermonuclearPlayerView()
         view.backgroundColor = .clear
+        view.cornerRadius = cornerRadius
         return view
     }
 
     func updateUIView(_ uiView: ThermonuclearPlayerView, context: Context) {
+        uiView.cornerRadius = cornerRadius
         uiView.configure(urls: urls, initialPlaybackFraction: initialPlaybackFraction, onReady: onReady, onSnapshot: onSnapshot, onAllFailed: onAllFailed)
     }
     
@@ -44,10 +47,29 @@ final class ThermonuclearPlayerView: UIView {
     private var isConfigured = false
     private var configuredURLs: [String] = []
     private var onAllFailedCallback: (() -> Void)?
+    private var hasRegisteredLifecycleObservers = false
     
+    /// 🔒 PERMANENT THUMBNAIL FIX: AVPlayerLayer is a raw CALayer added as a sublayer,
+    /// completely outside SwiftUI's view hierarchy. A parent `.clipShape(RoundedRectangle)`
+    /// only masks the SwiftUI-owned backing layer, NOT this sublayer, so the video can
+    /// visibly bulge past the rounded thumbnail corners (square edges showing through).
+    /// Rounding this layer directly is the only fix that always holds — do not remove
+    /// in favor of relying on the SwiftUI-side clipShape alone.
+    var cornerRadius: CGFloat = 0 {
+        didSet { applyCornerRadius() }
+    }
+
+    private func applyCornerRadius() {
+        layer.cornerRadius = cornerRadius
+        layer.masksToBounds = cornerRadius > 0
+        playerLayer?.cornerRadius = cornerRadius
+        playerLayer?.masksToBounds = cornerRadius > 0
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         playerLayer?.frame = bounds
+        applyCornerRadius()
     }
     
     func configure(urls: [String], initialPlaybackFraction: Double?, onReady: @escaping () -> Void, onSnapshot: @escaping (UIImage) -> Void, onAllFailed: (() -> Void)? = nil) {
@@ -206,11 +228,17 @@ final class ThermonuclearPlayerView: UIView {
         setNeedsLayout()
         layoutIfNeeded()
         
-        // 🔥 Background/foreground handling
-        NotificationCenter.default.addObserver(self, selector: #selector(pause), name: UIApplication.willResignActiveNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(play), name: UIApplication.didBecomeActiveNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(pause), name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(play), name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
+        // 🔥 Background/foreground handling — register ONCE per view instance.
+        // setupPlayer runs again on every fallback (tryNextURL → startPlayer), so
+        // registering here unguarded stacked duplicate observers that fired
+        // duplicate pause/play calls until full teardown.
+        if !hasRegisteredLifecycleObservers {
+            hasRegisteredLifecycleObservers = true
+            NotificationCenter.default.addObserver(self, selector: #selector(pause), name: UIApplication.willResignActiveNotification, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(play), name: UIApplication.didBecomeActiveNotification, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(pause), name: NSNotification.Name("LivePreviewsShouldPause"), object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(play), name: NSNotification.Name("LivePreviewsShouldResume"), object: nil)
+        }
     }
     
     private func notifyReady(_ onReady: @escaping () -> Void) {
@@ -280,6 +308,10 @@ final class ThermonuclearPlayerView: UIView {
         timeControlObserver?.invalidate()
         statusObserver = nil
         timeControlObserver = nil
+        // Remove the per-item end-of-playback observer here so each fallback
+        // attempt (tryNextURL) doesn't leak a new one until full teardown.
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        endObserver = nil
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         player = nil
@@ -291,6 +323,7 @@ final class ThermonuclearPlayerView: UIView {
     
     func teardown() {
         NotificationCenter.default.removeObserver(self)
+        hasRegisteredLifecycleObservers = false
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         endObserver = nil
         teardownPlayerOnly()

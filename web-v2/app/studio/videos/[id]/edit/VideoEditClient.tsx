@@ -27,6 +27,7 @@ interface VideoData {
   createdAt: Date;
   commentsEnabled: boolean;
   madeForKids: boolean;
+  ageRestricted: boolean;
 }
 
 const CATEGORIES = [
@@ -81,6 +82,7 @@ export default function VideoEditClient({ videoId }: { videoId: string }) {
         createdAt: d.createdAt?.toDate?.() ?? new Date(),
         commentsEnabled: d.commentsEnabled !== false,
         madeForKids: d.madeForKids ?? false,
+        ageRestricted: d.ageRestricted ?? false,
       });
       setLoading(false);
     }).catch(() => { if (!cancelled) setLoading(false); });
@@ -135,6 +137,7 @@ export default function VideoEditClient({ videoId }: { videoId: string }) {
         thumbnailURL: data.thumbnailURL,
         commentsEnabled: data.commentsEnabled,
         madeForKids: data.madeForKids,
+        ageRestricted: data.ageRestricted,
         updatedAt: serverTimestamp(),
       });
       setSaved(true);
@@ -397,15 +400,36 @@ export default function VideoEditClient({ videoId }: { videoId: string }) {
                 <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${data.madeForKids ? 'translate-x-5' : 'translate-x-0.5'}`} />
               </button>
             </label>
+            <label className="flex items-center justify-between">
+              <div>
+                <p className="text-[13px] text-[rgb(var(--color-text-primary))]">Age-restrict (18+)</p>
+                <p className="text-[11px] text-[rgb(var(--color-text-tertiary))]">Only viewers 18+ can watch this video</p>
+              </div>
+              <button
+                onClick={() => setData((p) => p ? { ...p, ageRestricted: !p.ageRestricted, madeForKids: !p.ageRestricted ? false : p.madeForKids } : p)}
+                className={`relative w-10 h-5 rounded-full transition-colors ${data.ageRestricted ? 'bg-red-500' : 'bg-[rgb(var(--color-surface-hover))]'}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${data.ageRestricted ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </label>
           </div>
 
           {/* Quick links */}
-          <div className="flex gap-2">
-            <Link href={`/studio/analytics?videoId=${videoId}`} className="flex-1 flex items-center justify-center gap-2 p-3 bg-[rgb(var(--color-surface))] rounded-xl border border-[rgb(var(--color-border))] text-[12px] font-medium text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors">
+          <div className="grid grid-cols-2 gap-2">
+            <Link href={`/studio/analytics?videoId=${videoId}`} className="flex items-center justify-center gap-2 p-3 bg-[rgb(var(--color-surface))] rounded-xl border border-[rgb(var(--color-border))] text-[12px] font-medium text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors">
               <BarChart3 size={14} /> Analytics
             </Link>
-            <Link href={`/studio/comments?videoId=${videoId}`} className="flex-1 flex items-center justify-center gap-2 p-3 bg-[rgb(var(--color-surface))] rounded-xl border border-[rgb(var(--color-border))] text-[12px] font-medium text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors">
+            <Link href={`/studio/comments?videoId=${videoId}`} className="flex items-center justify-center gap-2 p-3 bg-[rgb(var(--color-surface))] rounded-xl border border-[rgb(var(--color-border))] text-[12px] font-medium text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors">
               <Clock size={14} /> Comments
+            </Link>
+            <Link href={`/studio/videos/${videoId}/chapters`} className="flex items-center justify-center gap-2 p-3 bg-[rgb(var(--color-surface))] rounded-xl border border-[rgb(var(--color-border))] text-[12px] font-medium text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors">
+              <Clock size={14} className="text-orange-500" /> Chapters
+            </Link>
+            <Link href={`/studio/videos/${videoId}/captions`} className="flex items-center justify-center gap-2 p-3 bg-[rgb(var(--color-surface))] rounded-xl border border-[rgb(var(--color-border))] text-[12px] font-medium text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors">
+              <Tag size={14} className="text-blue-500" /> Subtitles
+            </Link>
+            <Link href={`/studio/videos/${videoId}/end-screens`} className="flex items-center col-span-2 justify-center gap-2 p-3 bg-[rgb(var(--color-surface))] rounded-xl border border-[rgb(var(--color-border))] text-[12px] font-medium text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors">
+              <Eye size={14} className="text-green-500" /> End screens &amp; cards
             </Link>
           </div>
 

@@ -208,91 +208,94 @@ struct SubscriptionsView: View {
         .buttonStyle(PlainButtonStyle())
     }
     
-    // MARK: - Channel avatars row (focus filter, YouTube parity)
+    // MARK: - Channel avatars row (YouTube parity: avatars + notification dots, "All" right-aligned)
     private var channelAvatarsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
-                // "All" pill
-                allChannelsAvatar
-                
                 ForEach(viewModel.subscribedChannels) { channel in
                     channelAvatar(channel)
                 }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-        }
-    }
-    
-    private var allChannelsAvatar: some View {
-        Button {
-            HapticManager.shared.impact(style: .light)
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                viewModel.focusedChannelId = nil
-            }
-        } label: {
-            VStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(viewModel.focusedChannelId == nil ? AppTheme.Colors.primary : AppTheme.Colors.surface)
-                        .frame(width: 56, height: 56)
-                    Image(systemName: "square.grid.2x2.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(viewModel.focusedChannelId == nil ? .white : AppTheme.Colors.textSecondary)
+                
+                // "All" as right-side text link (YouTube parity)
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        viewModel.focusedChannelId = nil
+                    }
+                } label: {
+                    Text("All")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .frame(minWidth: 44, minHeight: 44)
                 }
-                Text("All")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+                .buttonStyle(.plain)
             }
-            .frame(width: 68)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
-        .buttonStyle(.plain)
     }
     
     private func channelAvatar(_ channel: User) -> some View {
         let isFocused = viewModel.focusedChannelId == channel.id
+        let notifLevel = viewModel.notificationSettings[channel.id] ?? .all
+        let hasNotif = notifLevel != .none
+        
         return Button {
             HapticManager.shared.impact(style: .light)
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 viewModel.focus(on: channel.id)
             }
         } label: {
-            VStack(spacing: 8) {
-                CachedAsyncImage(url: URL(string: channel.profileImageURL ?? "")) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Circle()
-                        .fill(AppTheme.Colors.surface)
-                        .overlay(
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 20, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.textTertiary)
-                        )
+            VStack(spacing: 6) {
+                ZStack(alignment: .bottomTrailing) {
+                    CachedAsyncImage(url: URL(string: channel.profileImageURL ?? "")) { image in
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Circle()
+                            .fill(AppTheme.Colors.surface)
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 20, weight: .medium))
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                            )
+                    }
+                    .frame(width: 48, height: 48)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(isFocused ? AppTheme.Colors.primary : Color.clear, lineWidth: 2.5)
+                            .padding(-3)
+                    )
+                    
+                    // YouTube-style notification dot (blue dot bottom-right)
+                    if hasNotif {
+                        Circle()
+                            .fill(Color(hexString: "3EA6FF"))
+                            .frame(width: 12, height: 12)
+                            .overlay(Circle().stroke(AppTheme.Colors.background, lineWidth: 1.5))
+                            .offset(x: 2, y: 2)
+                    }
                 }
-                .frame(width: 56, height: 56)
-                .clipShape(Circle())
-                .overlay(
-                    Circle()
-                        .stroke(AppTheme.Colors.primary, lineWidth: isFocused ? 2.5 : 0)
-                        .padding(-3)
-                )
                 
                 Text(channel.displayName)
-                    .font(.system(size: 12, weight: isFocused ? .semibold : .medium))
+                    .font(.system(size: 11, weight: isFocused ? .semibold : .regular))
                     .foregroundColor(AppTheme.Colors.textPrimary)
                     .lineLimit(1)
+                    .frame(width: 52)
             }
-            .frame(width: 68)
         }
         .buttonStyle(.plain)
     }
     
-    // MARK: - Filter Chips (YouTube parity)
+    // MARK: - Filter Chips (YouTube parity — no icons, text only)
     private var subsFilterChipsBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(SubscriptionsViewModel.FilterOption.allCases, id: \.self) { option in
-                    // Hide Posts chip if there are no posts
+                // YouTube chip order: All, Today, Videos, Shorts, Live, Posts/Podcasts, Continue watching, Unwatched
+                let chipOrder: [SubscriptionsViewModel.FilterOption] = [
+                    .all, .today, .videos, .shorts, .live, .posts, .continueWatching, .unwatched
+                ]
+                ForEach(chipOrder, id: \.self) { option in
                     if option != .posts || viewModel.hasPosts {
                         Button {
                             HapticManager.shared.impact(style: .light)
@@ -307,7 +310,9 @@ struct SubscriptionsView: View {
                                 .padding(.vertical, 8)
                                 .background(
                                     Capsule()
-                                        .fill(viewModel.filterOption == option ? AppTheme.Colors.textPrimary : AppTheme.Colors.surface)
+                                        .fill(viewModel.filterOption == option
+                                              ? AppTheme.Colors.textPrimary
+                                              : AppTheme.Colors.surface)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -337,21 +342,36 @@ struct SubscriptionsView: View {
                 if viewModel.filterOption == .posts {
                     postsSection
                 } else {
-                    // Live shelf
-                    if viewModel.filterOption == .all, !viewModel.liveNow.isEmpty {
-                        liveShelf
+                    // Live videos — full-width cards at the top of feed (YouTube parity)
+                    if viewModel.filterOption == .all || viewModel.filterOption == .live,
+                       !viewModel.liveNow.isEmpty {
+                        liveVideoCards
                     }
                     
-                    // Shorts shelf
-                    if (viewModel.filterOption == .all), !viewModel.filteredShorts.isEmpty {
+                    // Shorts shelf (compact horizontal rail, shown for All + Shorts filter)
+                    if viewModel.filterOption == .all || viewModel.filterOption == .shorts,
+                       !viewModel.filteredShorts.isEmpty {
                         SubscriptionShortsShelf(shorts: Array(viewModel.filteredShorts.prefix(12))) { short in
                             videoToOpen = short
                         }
-                        Divider().background(AppTheme.Colors.divider).padding(.horizontal, 20)
+                        Divider()
+                            .background(AppTheme.Colors.divider)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 4)
                     }
                     
-                    // Main video feed
-                    videoFeed
+                    // Main video feed (live streams are already shown as full-width
+                    // cards above, so skip the "Most relevant" list for the Live filter)
+                    if viewModel.filterOption != .live {
+                        videoFeed
+                    } else if viewModel.liveNow.isEmpty {
+                        inlineEmptyFilterState
+                    }
+                    
+                    // "Community posts you may like" carousel — inline after videos (YouTube parity)
+                    if viewModel.filterOption == .all, !viewModel.posts.isEmpty {
+                        communityPostsCarousel
+                    }
                 }
             }
             .padding(.bottom, 96)
@@ -365,114 +385,287 @@ struct SubscriptionsView: View {
         if videos.isEmpty {
             inlineEmptyFilterState
         } else {
-            switch viewModel.layout {
-            case .grid:
-                LazyVStack(spacing: 16) {
-                    ForEach(videos) { video in
-                        SubscriptionVideoCard(
-                            video: video,
-                            progress: viewModel.progress(for: video.id),
-                            isNew: viewModel.isNewUpload(video),
-                            onMore: { moreOptionsVideo = video },
-                            onOpenChannel: { channelToOpen = video.creator }
-                        )
-                        .onTapGesture {
-                            HapticManager.shared.impact(style: .light)
-                            videoToOpen = video
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-            case .list:
-                LazyVStack(spacing: 4) {
-                    ForEach(videos) { video in
-                        SubscriptionVideoListRow(
-                            video: video,
-                            progress: viewModel.progress(for: video.id),
-                            isNew: viewModel.isNewUpload(video),
-                            onMore: { moreOptionsVideo = video }
-                        )
-                        .onTapGesture {
-                            HapticManager.shared.impact(style: .light)
-                            videoToOpen = video
-                        }
-                        Divider().background(AppTheme.Colors.divider)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-            }
-        }
-    }
-    
-    // MARK: - Live Shelf
-    private var liveShelf: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "dot.radiowaves.left.and.right")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.red)
-                Text("Live now")
-                    .font(.system(size: 18, weight: .bold))
+            VStack(alignment: .leading, spacing: 0) {
+                // "Most relevant" section label — YouTube parity
+                Text("Most relevant")
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(viewModel.liveNow) { live in
-                        Button {
-                            HapticManager.shared.impact(style: .light)
-                            videoToOpen = live
-                        } label: {
-                            liveCard(live)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 12)
+                
+                switch viewModel.layout {
+                case .grid:
+                    // YouTube-style 2-column grid
+                    let columns = [
+                        GridItem(.flexible(), spacing: 12),
+                        GridItem(.flexible(), spacing: 12)
+                    ]
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(videos) { video in
+                            SubscriptionGridVideoCard(
+                                video: video,
+                                progress: viewModel.progress(for: video.id),
+                                isNew: viewModel.isNewUpload(video),
+                                onMore: { moreOptionsVideo = video }
+                            )
+                            .onTapGesture {
+                                HapticManager.shared.impact(style: .light)
+                                videoToOpen = video
+                            }
                         }
-                        .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, 16)
+                    
+                case .list:
+                    LazyVStack(spacing: 4) {
+                        ForEach(videos) { video in
+                            SubscriptionVideoListRow(
+                                video: video,
+                                progress: viewModel.progress(for: video.id),
+                                isNew: viewModel.isNewUpload(video),
+                                onMore: { moreOptionsVideo = video }
+                            )
+                            .onTapGesture {
+                                HapticManager.shared.impact(style: .light)
+                                videoToOpen = video
+                            }
+                            Divider().background(AppTheme.Colors.divider)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
                 }
-                .padding(.horizontal, 20)
             }
         }
-        .padding(.vertical, 8)
     }
     
-    private func liveCard(_ live: Video) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    // MARK: - Live Video Cards (full-width, YouTube parity)
+    // YouTube shows live streams as full-width cards inline at the top of the feed,
+    // not a horizontal shelf. Each card: 16:9 thumbnail with LIVE badge, channel avatar,
+    // title, channel name · views · time, ⋮ menu.
+    private var liveVideoCards: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(viewModel.liveNow) { live in
+                liveFullWidthCard(live)
+                    .onTapGesture {
+                        HapticManager.shared.impact(style: .light)
+                        videoToOpen = live
+                    }
+                Divider().background(AppTheme.Colors.divider)
+            }
+        }
+        .padding(.top, 8)
+    }
+    
+    private func liveFullWidthCard(_ live: Video) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Full-width 16:9 thumbnail with LIVE badge
             ZStack(alignment: .topLeading) {
                 CachedAsyncImage(url: URL(string: live.thumbnailURL)) { image in
                     image.resizable().aspectRatio(contentMode: .fill)
                 } placeholder: {
                     Rectangle().fill(AppTheme.Colors.surface)
                 }
-                .frame(width: 240, height: 135)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .aspectRatio(16 / 9, contentMode: .fill)
+                .frame(maxWidth: .infinity)
+                .clipped()
                 
+                // LIVE badge top-left
                 HStack(spacing: 4) {
-                    Circle().fill(.white).frame(width: 5, height: 5)
+                    Circle().fill(Color.white).frame(width: 5, height: 5)
                     Text("LIVE")
                         .font(.system(size: 10, weight: .heavy))
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 7)
                 .padding(.vertical, 3)
                 .background(Capsule().fill(Color.red))
                 .padding(8)
             }
             
-            Text(live.title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-                .lineLimit(2)
-                .frame(width: 240, alignment: .leading)
-            
-            Text(live.creator.displayName)
-                .font(.system(size: 12))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .lineLimit(1)
+            // Info row
+            HStack(alignment: .top, spacing: 10) {
+                // Channel avatar
+                CachedAsyncImage(url: URL(string: live.creator.profileImageURL ?? "")) { image in
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Circle().fill(AppTheme.Colors.surface)
+                }
+                .frame(width: 36, height: 36)
+                .clipShape(Circle())
+                
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(live.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(2)
+                    
+                    HStack(spacing: 4) {
+                        Text(live.creator.displayName)
+                        if live.creator.shouldShowVerificationBadge {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.system(size: 10))
+                        }
+                        Text("·")
+                        Text("\(live.formattedViewCount) watching")
+                        Text("·")
+                        Text(live.timeAgo)
+                    }
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .lineLimit(1)
+                }
+                
+                Spacer()
+                
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                    moreOptionsVideo = live
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
-        .frame(width: 240)
+    }
+    
+    // MARK: - Community Posts Carousel (YouTube "Community posts you may like" parity)
+    // Appears inline in the feed after the main video list. Horizontal swipe carousel.
+    private var communityPostsCarousel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Community posts you may like")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(viewModel.posts.prefix(6)) { item in
+                        communityPostCard(item)
+                            .frame(width: UIScreen.main.bounds.width - 64)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 4)
+            }
+        }
+        .padding(.bottom, 12)
+    }
+    
+    private func communityPostCard(_ item: SubscriptionPost) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Header: avatar + name + handle + time + ⋮
+            HStack(alignment: .center, spacing: 10) {
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                    channelToOpen = item.author
+                } label: {
+                    CachedAsyncImage(url: URL(string: item.author.profileImageURL ?? "")) { image in
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Circle().fill(AppTheme.Colors.surface)
+                            .overlay(Image(systemName: "person.fill")
+                                .foregroundColor(AppTheme.Colors.textTertiary))
+                    }
+                    .frame(width: 36, height: 36)
+                    .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.author.displayName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text("@\(item.author.username)")
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        Text("·")
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                        Text(item.post.createdAt.timeAgoDisplay)
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                    .lineLimit(1)
+                }
+                
+                Spacer()
+                
+                Button {
+                    HapticManager.shared.impact(style: .light)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 15))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+            }
+            
+            // Post text content
+            if !item.post.content.isEmpty {
+                Text(item.post.content)
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            
+            // Image attachment
+            if let imageURL = item.post.imageURLs.first, !imageURL.isEmpty {
+                CachedAsyncImage(url: URL(string: imageURL)) { image in
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Rectangle().fill(AppTheme.Colors.surface).overlay(ProgressView())
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 200)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            
+            // Engagement row — thumbs up/down + comment count (YouTube style)
+            HStack(spacing: 20) {
+                HStack(spacing: 6) {
+                    Image(systemName: "hand.thumbsup")
+                        .font(.system(size: 15, weight: .medium))
+                    Text(formatPostCount(item.post.likeCount))
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                
+                Image(systemName: "hand.thumbsdown")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                
+                Spacer()
+                
+                HStack(spacing: 6) {
+                    Image(systemName: "bubble.right")
+                        .font(.system(size: 15, weight: .medium))
+                    Text(formatPostCount(item.post.commentCount))
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+        }
+        .padding(14)
+        .background(AppTheme.Colors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+    
+    private func formatPostCount(_ count: Int) -> String {
+        if count >= 1_000_000 { return String(format: "%.1fM", Double(count) / 1_000_000) }
+        if count >= 1_000 { return String(format: "%.1fK", Double(count) / 1_000) }
+        return "\(count)"
     }
     
     // MARK: - Posts Section
@@ -581,6 +774,8 @@ struct SubscriptionsView: View {
         case .unwatched: return "All caught up"
         case .today: return "Nothing new today"
         case .live: return "No one's live"
+        case .shorts: return "No Shorts yet"
+        case .videos: return "No videos yet"
         default: return "Nothing here yet"
         }
     }
@@ -591,6 +786,8 @@ struct SubscriptionsView: View {
         case .unwatched: return "You've watched everything from your subscriptions. Nice."
         case .today: return "Check back later for fresh uploads."
         case .live: return "When your channels go live, you'll see them here."
+        case .shorts: return "Shorts from your subscriptions will show up here."
+        case .videos: return "New videos from your subscriptions will appear here."
         default: return "Try a different filter or pull to refresh."
         }
     }

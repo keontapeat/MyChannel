@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# pre-commit — last line of defense before committing secrets.
+# Activate once with: ./scripts/install-git-hooks.sh
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+exec bash "$ROOT/scripts/scan-for-secrets.sh" --staged

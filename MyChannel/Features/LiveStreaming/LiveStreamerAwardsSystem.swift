@@ -38,6 +38,7 @@ class LiveStreamerAwardsSystem: ObservableObject {
         currentSeason = AwardSeason.current()
         loadRankings()
         restoreVotes()
+        restoreFollows()
         applyFilters(timeframe: activeTimeframe, category: activeCategory)
     }
     
@@ -163,6 +164,12 @@ class LiveStreamerAwardsSystem: ObservableObject {
             let now = Date()
             return now >= startDate && now <= endDate
         }
+
+        /// The ceremony is "live" from its start time through a ~3 hour broadcast window.
+        var isCurrentlyLive: Bool {
+            let now = Date()
+            return now >= ceremonyDate && now <= ceremonyDate.addingTimeInterval(3 * 60 * 60)
+        }
         
         static func current() -> AwardSeason {
             let now = Date()
@@ -217,6 +224,9 @@ class LiveStreamerAwardsSystem: ObservableObject {
 
         /// Baseline (all-time) points used as the source for timeframe scaling.
         var seasonPoints: Int = 0
+
+        /// True if this streamer currently has an active live stream.
+        var isLiveNow: Bool = false
         
         var rankChange: Int? {
             guard let previous = previousRank else { return nil }
@@ -438,6 +448,40 @@ class LiveStreamerAwardsSystem: ObservableObject {
         var votedNomineeByCategory: [String: String]
         var localVoteBoost: [String: Int]
     }
+
+    // MARK: - 👥 Local Follow State
+    //
+    // Instantly-responsive follow tracking for the leaderboard UI. Persisted
+    // across launches. When full social-graph wiring is available this should
+    // hand off to `SocialGraphService.follow(fromUserId:toUserId:)`.
+
+    @Published private(set) var followedStreamerIds: Set<String> = []
+
+    private static let followsDefaultsKey = "streamerAwards.localFollows.v1"
+
+    func isFollowing(_ streamerId: String) -> Bool {
+        followedStreamerIds.contains(streamerId)
+    }
+
+    func toggleFollow(_ streamerId: String) {
+        if followedStreamerIds.contains(streamerId) {
+            followedStreamerIds.remove(streamerId)
+        } else {
+            followedStreamerIds.insert(streamerId)
+        }
+        persistFollows()
+        HapticManager.shared.impact(style: .light)
+    }
+
+    private func persistFollows() {
+        let ids = Array(followedStreamerIds)
+        UserDefaults.standard.set(ids, forKey: Self.followsDefaultsKey)
+    }
+
+    private func restoreFollows() {
+        guard let ids = UserDefaults.standard.array(forKey: Self.followsDefaultsKey) as? [String] else { return }
+        followedStreamerIds = Set(ids)
+    }
     
     // MARK: - 🏅 AWARD CEREMONY
     
@@ -458,6 +502,7 @@ class LiveStreamerAwardsSystem: ObservableObject {
         let streamer: User
         let acceptanceSpeech: String?
         let clipURL: URL?
+        var acceptanceSpeechVideoId: String? = nil
     }
     
     struct CeremonyHighlight {
@@ -726,7 +771,8 @@ class LiveStreamerAwardsSystem: ObservableObject {
                 categoryScores: categoryScores,
                 achievements: seededAchievements,
                 badges: seededBadges,
-                seasonPoints: item.points
+                seasonPoints: item.points,
+                isLiveNow: index % 3 == 0
             )
         }
 

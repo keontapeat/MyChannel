@@ -9,6 +9,9 @@ import SwiftUI
 #if canImport(FirebaseAuth)
 import FirebaseAuth
 #endif
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct AwardsVotingView: View {
     
@@ -380,10 +383,37 @@ struct CategoryVotingSheet: View {
     private func loadNominees() async {
         isLoading = true
         defer { isLoading = false }
-        
-        // TODO: Fetch nominees from backend
-        // For now, use sample data
-        nominees = User.sampleUsers.prefix(10).map { $0 }
+        #if canImport(FirebaseFirestore)
+        do {
+            let awardId: String = category.id
+            let snap = try await Firestore.firestore().collection("award_nominees")
+                .whereField("awardId", isEqualTo: awardId)
+                .whereField("isActive", isEqualTo: true)
+                .order(by: "voteCount", descending: true)
+                .limit(to: 20)
+                .getDocuments()
+            let fetched = snap.documents.compactMap { doc -> User? in
+                let d = doc.data()
+                guard let displayName = d["displayName"] as? String else { return nil }
+                return User(
+                    id: doc.documentID,
+                    username: d["username"] as? String ?? "",
+                    displayName: displayName,
+                    email: "",
+                    profileImageURL: d["profileImageURL"] as? String ?? "",
+                    subscriberCount: (d["subscriberCount"] as? Int) ?? 0,
+                    videoCount: 0,
+                    isVerified: d["isVerified"] as? Bool ?? false,
+                    createdAt: Date()
+                )
+            }
+            nominees = fetched.isEmpty ? Array(User.sampleUsers.prefix(10)) : fetched
+        } catch {
+            nominees = Array(User.sampleUsers.prefix(10))
+        }
+        #else
+        nominees = Array(User.sampleUsers.prefix(10))
+        #endif
     }
     
     // MARK: - Submit Vote

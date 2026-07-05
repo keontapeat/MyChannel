@@ -5,8 +5,12 @@
 import { useState, useRef } from 'react';
 import { Upload, X, Film, Music, Hash } from 'lucide-react';
 import { StorageService } from '@/lib/firebase/storage';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase/config';
+import { useRouter } from 'next/navigation';
 
 const FlicksUploadPage = () => {
+  const router = useRouter();
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState<string>('');
   const [title, setTitle] = useState('');
@@ -76,6 +80,14 @@ const FlicksUploadPage = () => {
       return;
     }
 
+    // Require an authenticated user — flick uploads are owner-scoped in Storage rules.
+    const uid = auth?.currentUser?.uid;
+    if (!uid) {
+      setError('Please sign in to upload a Flick.');
+      router.push('/login');
+      return;
+    }
+
     setIsUploading(true);
     setError('');
 
@@ -85,21 +97,35 @@ const FlicksUploadPage = () => {
       // Upload Flick video
       const videoURL = await StorageService.uploadFlick(
         videoFile,
+        uid,
         flickId,
         (progress) => {
           setUploadProgress(progress.progress);
         }
       );
 
-      // TODO: Save Flick metadata to Firestore
-      console.log('Flick uploaded:', {
-        flickId,
+      // Save Flick metadata to Firestore
+      const docRef = await addDoc(collection(db, 'flicks'), {
+        id: flickId,
         title,
         description,
         tags,
-        musicTrack,
+        musicTrack: musicTrack || null,
         videoURL,
+        thumbnailURL: '',
+        creatorId: uid,
+        creatorName: auth?.currentUser?.displayName ?? 'Creator',
+        creatorAvatar: auth?.currentUser?.photoURL ?? '',
+        viewCount: 0,
+        likeCount: 0,
+        commentCount: 0,
+        shareCount: 0,
+        isPublic: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
+
+      console.log('✅ Flick saved to Firestore:', docRef.id);
 
       // Reset form
       setVideoFile(null);
@@ -110,8 +136,7 @@ const FlicksUploadPage = () => {
       setMusicTrack('');
       setUploadProgress(0);
       setIsUploading(false);
-
-      alert('Flick uploaded successfully!');
+      router.push('/flicks');
     } catch (error) {
       console.error('Upload error:', error);
       setError('Upload failed. Please try again.');

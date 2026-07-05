@@ -9,6 +9,9 @@ import SwiftUI
 import AVFoundation
 import Photos
 import Combine
+import Vision
+import CoreImage
+import CoreImage.CIFilterBuiltins
 #if canImport(FirebaseCore)
 import FirebaseCore
 #endif
@@ -367,31 +370,45 @@ class UltimateStoryViewModel: ObservableObject {
     
     func enhanceWithAI() async {
         guard hasMedia else { return }
-        
         isProcessing = true
-        processingMessage = "AI is working its magic..."
-        
-        // TODO: Implement AI enhancement
-        // - Auto color correction
-        // - Brightness/contrast optimization
-        // - Noise reduction
-        // - Sharpness enhancement
-        
-        try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s
-        
+        processingMessage = "AI is enhancing your story..."
+        // Apply Core Image filters for auto-enhancement
+        if let currentMedia = currentMedia, let image = currentMedia.image {
+            let ciImage = CIImage(image: image)
+            let filter = CIFilter(name: "CIPhotoEffectChrome") ?? CIFilter(name: "CIColorControls")
+            filter?.setValue(ciImage, forKey: kCIInputImageKey)
+            if let output = filter?.outputImage,
+               let cgImage = CIContext().createCGImage(output, from: output.extent) {
+                let enhanced = UIImage(cgImage: cgImage)
+                // Post notification so the story creator view updates its preview
+                await MainActor.run {
+                    NotificationCenter.default.post(
+                        name: Notification.Name("StoryMediaEnhanced"),
+                        object: enhanced
+                    )
+                }
+            }
+        }
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s visual feedback
         isProcessing = false
         HapticManager.shared.notification(type: .success)
     }
     
     func detectScene() async -> String? {
         guard hasMedia else { return nil }
-        
-        // TODO: Implement AI scene detection
-        // - Detect scene type (outdoor, indoor, sunset, etc.)
-        // - Suggest appropriate filters
-        // - Recommend text styles
-        
-        return nil
+        // Use Vision framework to classify the scene
+        guard let image = currentMedia?.image,
+              let ciImage = CIImage(image: image) else { return nil }
+        return await withCheckedContinuation { cont in
+            let request = VNClassifyImageRequest { req, _ in
+                let top = (req.results as? [VNClassificationObservation])?
+                    .filter { $0.confidence > 0.5 }
+                    .first?.identifier
+                cont.resume(returning: top)
+            }
+            let handler = VNImageRequestHandler(ciImage: ciImage)
+            try? handler.perform([request])
+        }
     }
     
     // MARK: - Story Creation
@@ -696,6 +713,22 @@ enum CapturedMedia: Identifiable {
         switch self {
         case .image: return .image
         case .video: return .video
+        }
+    }
+
+    /// Underlying still image when this media is a captured photo.
+    var image: UIImage? {
+        switch self {
+        case .image(let uiImage): return uiImage
+        case .video: return nil
+        }
+    }
+
+    /// Underlying file URL when this media is a captured video.
+    var videoURL: URL? {
+        switch self {
+        case .video(let url): return url
+        case .image: return nil
         }
     }
 }
@@ -1067,6 +1100,9 @@ class StoryService {
             "viewCount": story.viewCount,
             "isViewed": story.isViewed,
             "isLive": story.isLive,
+            "isActive": true,
+            "isPublic": (story.audience ?? "public") == "public",
+            "audience": story.audience ?? "public",
             "createdAt": Timestamp(date: story.createdAt),
             "expiresAt": Timestamp(date: story.expiresAt)
         ]

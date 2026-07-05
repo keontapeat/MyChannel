@@ -117,7 +117,7 @@ class WebVitalsTracker {
     const metrics = this.getMetrics();
     if (metrics.length === 0) return 0;
 
-    const scores = metrics.map((m) => {
+    const scores = metrics.map((m): number => {
       if (m.rating === 'good') return 100;
       if (m.rating === 'needs-improvement') return 50;
       return 0;

@@ -122,16 +122,20 @@ struct ListeningStatsView: View {
                         .tag(0)
                     
                     // Card 2: Top Artist
-                    StatsTopArtistCard(artist: stats.topArtists.first!, animate: $animateStats)
-                        .tag(1)
+                    if let topArtist = stats.topArtists.first {
+                        StatsTopArtistCard(artist: topArtist, animate: $animateStats)
+                            .tag(1)
+                    }
                     
                     // Card 3: Top 5 Artists
                     TopArtistsListCard(artists: stats.topArtists, animate: $animateStats)
                         .tag(2)
                     
                     // Card 4: Top Track
-                    TopTrackCard(track: stats.topTracks.first!, animate: $animateStats)
-                        .tag(3)
+                    if let topTrack = stats.topTracks.first {
+                        TopTrackCard(track: topTrack, animate: $animateStats)
+                            .tag(3)
+                    }
                     
                     // Card 5: Genre Breakdown
                     GenreBreakdownCard(genres: stats.topGenres, animate: $animateStats)

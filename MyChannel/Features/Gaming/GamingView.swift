@@ -337,88 +337,9 @@ struct TournamentCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Text(tournament.game.emoji)
-                                .font(.system(size: 24))
-                            
-                            Text(tournament.name)
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(AppTheme.Colors.textPrimary)
-                        }
-                        
-                        Text(tournament.game.name)
-                            .font(.system(size: 14))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("$\(tournament.prizePool)")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.green)
-                        
-                        Text("Prize Pool")
-                            .font(.system(size: 11))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                }
-                
-                HStack(spacing: 20) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "person.3.fill")
-                            .font(.system(size: 12))
-                        Text("\(tournament.participants)/\(tournament.maxParticipants)")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    
-                    HStack(spacing: 6) {
-                        Image(systemName: "clock.fill")
-                            .font(.system(size: 12))
-                        Text(tournament.timeRemaining)
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    
-                    HStack(spacing: 6) {
-                        Image(systemName: "calendar")
-                            .font(.system(size: 12))
-                        Text(tournament.format)
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                }
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                
-                if tournament.participants < tournament.maxParticipants {
-                    Button {
-                        // Join tournament
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "person.badge.plus")
-                                .font(.system(size: 14, weight: .bold))
-                            Text("Join Tournament")
-                                .font(.system(size: 15, weight: .bold))
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(AppTheme.Colors.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                } else {
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("Tournament Full")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(AppTheme.Colors.cardBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
+                headerRow
+                statsRow
+                joinButton
             }
             .padding(18)
             .background(AppTheme.Colors.surface)
@@ -427,6 +348,88 @@ struct TournamentCard: View {
                 RoundedRectangle(cornerRadius: 18)
                     .stroke(tournament.game.color.opacity(0.3), lineWidth: 2)
             )
+        }
+    }
+    
+    @ViewBuilder
+    private var headerRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(tournament.game.emoji)
+                        .font(.system(size: 24))
+                    Text(tournament.name)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                }
+                Text(tournament.game.name)
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("$\(tournament.prizePool)")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.green)
+                Text("Prize Pool")
+                    .font(.system(size: 11))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var statsRow: some View {
+        HStack(spacing: 20) {
+            HStack(spacing: 6) {
+                Image(systemName: "person.3.fill").font(.system(size: 12))
+                Text("\(tournament.participants)/\(tournament.maxParticipants)")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            HStack(spacing: 6) {
+                Image(systemName: "clock.fill").font(.system(size: 12))
+                Text(tournament.timeRemaining)
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            HStack(spacing: 6) {
+                Image(systemName: "calendar").font(.system(size: 12))
+                Text(tournament.format)
+                    .font(.system(size: 14, weight: .semibold))
+            }
+        }
+        .foregroundColor(AppTheme.Colors.textSecondary)
+    }
+    
+    @ViewBuilder
+    private var joinButton: some View {
+        if tournament.participants < tournament.maxParticipants {
+            Button {
+                // Join tournament
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 14, weight: .bold))
+                    Text("Join Tournament")
+                        .font(.system(size: 15, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(AppTheme.Colors.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        } else {
+            HStack {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                Text("Tournament Full")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(AppTheme.Colors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
 }

@@ -3,7 +3,7 @@
 // 🔥🎨 BEAUTIFUL YOUTUBE-PREMIUM HEADER 🎨🔥
 // Clean, modern, professional - YouTube level design
 
-import { Search, Video, Bell, User, Menu, X, Upload, Flame } from 'lucide-react';
+import { Search, Video, Bell, User, Menu, X, Upload, Flame, TrendingUp, Award } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
 

@@ -86,7 +86,9 @@ struct DownloadsView: View {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
                     }
+                    .accessibilityLabel("Close")
                 }
 
                 ToolbarItem(placement: .principal) {
@@ -112,9 +114,11 @@ struct DownloadsView: View {
                         Image(systemName: showingSearchBar ? "xmark" : "magnifyingglass")
                             .font(.system(size: 20))
                             .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
                     }
                     .disabled(!hasAnyDownloads)
                     .opacity(hasAnyDownloads ? 1 : 0.4)
+                    .accessibilityLabel(showingSearchBar ? "Close search" : "Search downloads")
 
                     Button {
                         showingSettings = true
@@ -122,7 +126,9 @@ struct DownloadsView: View {
                         Image(systemName: "gearshape")
                             .font(.system(size: 20))
                             .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
                     }
+                    .accessibilityLabel("Download settings")
 
                     // More — sort + manage actions
                     Menu {
@@ -151,7 +157,9 @@ struct DownloadsView: View {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 20))
                             .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
                     }
+                    .accessibilityLabel("More options")
                 }
             }
             .sheet(isPresented: $showingSettings) {
@@ -524,6 +532,7 @@ struct DownloadsView: View {
                     .foregroundColor(.gray)
                     .frame(width: 44, height: 44)
             }
+            .accessibilityLabel("Cancel download of \(download.title)")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -575,14 +584,14 @@ struct DownloadsView: View {
                     .lineLimit(1)
 
                     HStack(spacing: 6) {
-                        Text(ByteCountFormatter.string(fromByteCount: Int64(download.fileSize), countStyle: .file))
+                        Text(ByteCountFormatter.string(fromByteCount: download.fileSize, countStyle: .file))
                             .font(.system(size: 12))
                             .foregroundColor(.gray)
 
                         Text("•")
                             .foregroundColor(.gray)
 
-                        Text(download.quality.rawValue.uppercased())
+                        Text(download.quality.displayName)
                             .font(.system(size: 12))
                             .foregroundColor(.gray)
                     }
@@ -619,12 +628,15 @@ struct DownloadsView: View {
                         .foregroundColor(.gray)
                         .frame(width: 44, height: 44)
                 }
+                .accessibilityLabel("More options for \(download.title)")
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(download.title)
+        .accessibilityHint("Available offline. Double tap to play.")
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
@@ -706,12 +718,14 @@ struct DownloadsView: View {
                         }
                     }
                     .disabled(isDownloading || isAlreadyDownloaded)
+                    .accessibilityLabel(isAlreadyDownloaded ? "Downloaded" : "Download \(video.title)")
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(video.title), \(video.channelName)")
         }
     }
 
@@ -791,7 +805,7 @@ struct DownloadSettingsView: View {
     @StateObject private var offlineService = OfflineDownloadService.shared
     @State private var downloadQuality: DownloadQuality = .high
     @State private var wifiOnly = true
-    @State private var smartDownloads = false
+    @State private var autoDelete = false
     @State private var storageLimit = 10.0
 
     var body: some View {
@@ -816,28 +830,27 @@ struct DownloadSettingsView: View {
 
                     Section {
                         Toggle("Download over Wi-Fi only", isOn: $wifiOnly)
+                        Toggle("Auto-delete watched videos", isOn: $autoDelete)
+                    } header: {
+                        Text("Downloads")
                     } footer: {
-                        Text("Recommended to avoid data charges")
+                        Text("Wi-Fi only avoids data charges. Auto-delete frees space by removing videos after you finish them.")
                     }
 
                     Section {
-                        Toggle("Smart downloads", isOn: $smartDownloads)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Storage limit: \(Int(storageLimit)) GB")
+                                .font(.system(size: 15))
+                                .foregroundColor(.white)
 
-                        if smartDownloads {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Storage limit: \(Int(storageLimit)) GB")
-                                    .font(.system(size: 15))
-                                    .foregroundColor(.white)
-
-                                Slider(value: $storageLimit, in: 1...50, step: 1)
-                                    .tint(.blue)
-                            }
-                            .padding(.vertical, 8)
+                            Slider(value: $storageLimit, in: 1...50, step: 1)
+                                .tint(.blue)
                         }
+                        .padding(.vertical, 8)
                     } header: {
-                        Text("Smart Downloads")
+                        Text("Storage limit")
                     } footer: {
-                        Text("Automatically download recommended videos over Wi-Fi")
+                        Text("Downloads pause when your offline library reaches this size.")
                     }
 
                     Section {
@@ -867,6 +880,7 @@ struct DownloadSettingsView: View {
             .task {
                 downloadQuality = offlineService.downloadQuality
                 wifiOnly = offlineService.downloadOnlyOnWiFi
+                autoDelete = offlineService.autoDeleteWatchedVideos
                 storageLimit = Double(offlineService.maxStorageLimit) / 1_000_000_000.0
             }
             .toolbar {
@@ -874,6 +888,7 @@ struct DownloadSettingsView: View {
                     Button("Done") {
                         offlineService.downloadQuality = downloadQuality
                         offlineService.downloadOnlyOnWiFi = wifiOnly
+                        offlineService.autoDeleteWatchedVideos = autoDelete
                         offlineService.maxStorageLimit = Int64(storageLimit * 1_000_000_000.0)
                         dismiss()
                     }

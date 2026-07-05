@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(Network)
+import Network
+#endif
 
 struct DownloadQualitySheet: View {
     let video: Video
@@ -353,9 +356,22 @@ struct DownloadQualitySheet: View {
     }
     
     private func isOnWiFi() -> Bool {
-        // TODO: Implement actual WiFi check
-        // For now, return true
+        // Check for WiFi using Network framework
+        #if canImport(Network)
+        let monitor = NWPathMonitor()
+        var isWifi = false
+        let sem = DispatchSemaphore(value: 0)
+        monitor.pathUpdateHandler = { path in
+            isWifi = path.usesInterfaceType(.wifi)
+            sem.signal()
+        }
+        monitor.start(queue: DispatchQueue.global())
+        _ = sem.wait(timeout: .now() + 0.1)
+        monitor.cancel()
+        return isWifi
+        #else
         return true
+        #endif
     }
 }
 

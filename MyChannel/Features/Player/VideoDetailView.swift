@@ -103,6 +103,12 @@ struct VideoDetailView: View {
     @State var userExplicitlyClosed = false  // 🔥 YOUTUBE PARITY: Track explicit close vs swipe dismiss
     @State var watchProgress: Double = 0.0
     @State var hasWatchedThreshold = false
+    // 🔥 PERF: Track which playback quartiles (1–4) have already been reported so
+    // analytics fires once per milestone instead of every time-observer tick.
+    @State var trackedQuartiles: Set<Int> = []
+    // 🔥 PERF: Chapters sorted by start time, computed once on appear instead of
+    // re-sorting the array on every player time-observer tick.
+    @State var sortedChapters: [Video.Chapter] = []
     @State var showingCinemaMode = false
     @State var showingCreatorProfile = false
     @State var selectedCreatorProfile: User? = nil
@@ -146,6 +152,12 @@ struct VideoDetailView: View {
     @State var verticalSwipeStartY: CGFloat = 0
     @State var lastBrightnessFeedbackStep: Int = -1
     @State var lastVolumeFeedbackStep: Int = -1
+
+    // MARK: - YouTube Parity: Fluid Slide-to-Fullscreen Gesture
+    /// Live drag translation while the user is pulling the player toward fullscreen (negative = up)
+    @State var playerExpandOffset: CGFloat = 0
+    /// True while the user's finger is actively driving the expand gesture
+    @State var isExpandingPlayer: Bool = false
 
     var body: some View {
         tertiaryOverlays
@@ -454,22 +466,26 @@ struct VideoDetailView: View {
                 return
             }
             
-            // 🔥 YOUTUBE PARITY: Swipe-dismiss or back gesture → start PiP
-            // Video continues in floating window while user browses the app
+            // 🔥 YOUTUBE PARITY: Swipe-dismiss or back gesture → mini player
+            // Hand off to GlobalVideoPlayerManager so FloatingMiniPlayer can show.
+            // Also attempt native PiP — FloatingMiniPlayer is the reliable fallback.
             if !isYouTube {
                 Task { @MainActor in
                     let wasPlaying = playerManager.isPlaying
-                    // Adopt player into global manager so PiP controller has a reference
+                    // Adopt player — sets globalPlayer.currentVideo + showingFullscreen = false,
+                    // which makes FloatingMiniPlayer appear immediately in MainTabView.
                     await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
                     globalPlayer.showingFullscreen = false
                     if wasPlaying {
-                        // Ensure playback continues
                         if let player = globalPlayer.player, player.rate == 0 {
                             player.play()
                             globalPlayer.isPlaying = true
                         }
-                        // Start native PiP floating window
-                        globalPlayer.startPiP()
+                        // Bonus: try native PiP; FloatingMiniPlayer is already showing as fallback
+                        PiPPlayerManager.shared.startPiP(
+                            onStarted: { print("✅ [onDisappear] Native PiP started") },
+                            onFailed:  { print("⚠️ [onDisappear] PiP unavailable — FloatingMiniPlayer active") }
+                        )
                     }
                 }
             }
@@ -486,7 +502,9 @@ struct VideoDetailView: View {
             }
         }
         .onChange(of: controlsCoordinator.showControls) { newValue in
+            #if DEBUG
             print("🎮 Controls visibility changed to: \(newValue)")
+            #endif
             if newValue {
                 controlsCoordinator.resetHideTimer()
             } else {
@@ -494,7 +512,9 @@ struct VideoDetailView: View {
             }
         }
         .onChange(of: playerManager.isPlaying) { newValue in
+            #if DEBUG
             print("🎵 Player state changed to: \(newValue ? "Playing" : "Paused")")
+            #endif
             controlsCoordinator.updatePlayingState(newValue)
             if newValue {
                 Task {
@@ -547,8 +567,14 @@ struct VideoDetailView: View {
             }
         }
         .task {
+            // 🔥 PERF: Sort chapters once up front — video is immutable for this view.
+            if sortedChapters.isEmpty, let chapters = video.chapters, !chapters.isEmpty {
+                sortedChapters = chapters.sorted { $0.start < $1.start }
+            }
             // View count + recommendations in parallel
+            #if DEBUG
             print("📊 [VideoDetailView] Fetching latest view count for: \(video.id)")
+            #endif
             async let viewCountFetch = RealtimeViewTracker.shared.getViewCount(for: video.id)
             async let recsFetch = recommendationService.recommendations(for: video, userId: appState.currentUser?.id, limit: 20)
             let (latestCount, recs) = await (viewCountFetch, recsFetch)

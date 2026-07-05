@@ -26,7 +26,7 @@ final class VSMatchComplianceService: ObservableObject {
     func verifyAgeForWagering(userId: String, dateOfBirth: Date) async throws -> AgeVerificationResult {
         let age = Calendar.current.dateComponents([.year], from: dateOfBirth, to: Date()).year ?? 0
         
-        guard age >= 18 else {
+        guard WagerPolicy.isOfAge(age) else {
             throw ComplianceError.underage("Must be 18+ to wager real money")
         }
         
@@ -72,8 +72,12 @@ final class VSMatchComplianceService: ObservableObject {
             throw ComplianceError.invalidDocument
         }
         
-        // TODO: Integrate with Stripe Identity or Jumio for document verification
-        // For now, mark as pending manual review
+        // KYC document verification via Stripe Identity
+        // The iOS Stripe Identity SDK verifies documents in-app.
+        // For now, mark as pending — a Cloud Function with Stripe Identity webhook
+        // will advance status to 'approved' after server-side verification.
+        // To enable: integrate StripeIdentityKit SPM package and call
+        // IdentityVerificationSheet.create(ephemeralKeySecret:) from the app.
         
         #if canImport(FirebaseFirestore)
         try await db.collection("vs_match_compliance").document(userId).setData([
@@ -120,7 +124,7 @@ final class VSMatchComplianceService: ObservableObject {
         }
         
         // 2. KYC verification (for amounts > $500)
-        if amount > 500 {
+        if WagerPolicy.requiresKYC(amountDollars: amount) {
             let kycStatus = await getKYCStatus(userId: userId)
             if kycStatus != .approved {
                 errors.append(.kycRequired)
@@ -148,7 +152,7 @@ final class VSMatchComplianceService: ObservableObject {
         // 6. Daily wager limit check
         let dailyWagered = await getDailyWagerAmount(userId: userId)
         let dailyLimit = await getDailyWagerLimit(userId: userId)
-        if dailyWagered + amount > dailyLimit {
+        if !WagerPolicy.isWithinDailyLimit(alreadyWagered: dailyWagered, newWager: amount, limit: dailyLimit) {
             errors.append(.dailyLimitExceeded)
         }
         
@@ -194,23 +198,9 @@ final class VSMatchComplianceService: ObservableObject {
     
     /// Check if user's region allows real money wagering
     func isRegionAllowed(userId: String) async -> Bool {
-        // TODO: Get user's region from profile
-        // For now, allow US only (expand later)
+        // Get user's region from their Firestore profile
         let userRegion = await getUserRegion(userId: userId)
-        
-        // States where skill-based gaming is legal
-        let allowedRegions = [
-            "US-CA", "US-NY", "US-TX", "US-FL", "US-IL", "US-PA", "US-OH",
-            "US-GA", "US-NC", "US-MI", "US-NJ", "US-VA", "US-WA", "US-AZ",
-            "US-MA", "US-TN", "US-IN", "US-MO", "US-MD", "US-WI", "US-CO",
-            "US-MN", "US-SC", "US-AL", "US-LA", "US-KY", "US-OR", "US-OK",
-            "US-CT", "US-IA", "US-UT", "US-AR", "US-NV", "US-MS", "US-KS",
-            "US-NM", "US-NE", "US-WV", "US-ID", "US-HI", "US-NH", "US-ME",
-            "US-RI", "US-MT", "US-DE", "US-SD", "US-ND", "US-AK", "US-DC",
-            "US-VT", "US-WY"
-        ]
-        
-        return allowedRegions.contains(userRegion)
+        return WagerPolicy.isRegionAllowed(userRegion)
     }
     
     // MARK: - 🚫 ACCOUNT STATUS
@@ -234,13 +224,7 @@ final class VSMatchComplianceService: ObservableObject {
     func getDailyWagerLimit(userId: String) async -> Double {
         // Default limits based on account tier
         let accountTier = await getAccountTier(userId: userId)
-        
-        switch accountTier {
-        case .new: return 100.0      // $100/day for new users
-        case .verified: return 1000.0  // $1,000/day for verified
-        case .premium: return 10000.0  // $10,000/day for premium
-        case .vip: return 100000.0    // $100,000/day for VIP
-        }
+        return WagerPolicy.dailyLimitDollars(tier: accountTier)
     }
     
     func getDailyWagerAmount(userId: String) async -> Double {

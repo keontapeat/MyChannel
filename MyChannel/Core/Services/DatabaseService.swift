@@ -163,6 +163,7 @@ class DatabaseService: ObservableObject {
         }
         let db = Firestore.firestore()
         let expiresAt = story.expiresAt
+        let audience = story.audience ?? "public"
         let data: [String: Any] = [
             "id": story.id,
             "creatorId": authUID,
@@ -173,7 +174,9 @@ class DatabaseService: ObservableObject {
             "text": story.text as Any,
             "backgroundColor": story.backgroundColor as Any,
             "textColor": story.textColor as Any,
-            "audience": story.audience ?? "public",
+            "audience": audience,
+            "isActive": true,
+            "isPublic": audience == "public",
             "viewCount": story.viewCount,
             "isLive": false,
             "createdAt": Timestamp(date: story.createdAt),

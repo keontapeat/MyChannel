@@ -162,7 +162,13 @@ final class ChannelBoostAGI: ObservableObject {
     
     private func executeIntervention(_ intervention: ChurnIntervention, _ user: User) async {
         // Send push notification, in-app message, email, etc.
-        // TODO: Integrate with notification system
+        await PushNotificationService.shared.sendNotification(
+            to: user.id,
+            notification: [
+                "title": "Channel Boost",
+                "message": intervention.message
+            ]
+        )
         
         print("📧 [BoostAGI] Sending intervention: \(intervention.message)")
     }

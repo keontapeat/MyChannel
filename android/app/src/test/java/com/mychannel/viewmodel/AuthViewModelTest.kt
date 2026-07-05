@@ -244,6 +244,12 @@ class AuthViewModelTest {
         override val currentUserId: String?
             get() = authState.value?.uid
 
+        override val currentUserDisplayName: String?
+            get() = authState.value?.username
+
+        override val currentUserAvatarUrl: String?
+            get() = authState.value?.avatarUrl
+
         override suspend fun signInWithEmail(email: String, password: String): Result<User> {
             signInCalls++
             return resolve()

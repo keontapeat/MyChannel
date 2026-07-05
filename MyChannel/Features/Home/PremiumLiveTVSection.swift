@@ -6,6 +6,7 @@ struct PremiumLiveTVSection: View {
     
     @State private var selectedCategory: LiveTVChannel.ChannelCategory = .news
     @State private var isShowingAllChannels: Bool = false
+    @State private var pulse: Bool = false
     @StateObject private var healthAgent = StreamHealthMLAgent.shared
     @StateObject private var liveTVManager = LiveTVManager.shared
     
@@ -34,15 +35,16 @@ struct PremiumLiveTVSection: View {
                         Circle()
                             .fill(Color.red)
                             .frame(width: 12, height: 12)
-                            .scaleEffect(1.0)
-                            .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: true)
+                            .scaleEffect(pulse ? 1.15 : 0.9)
+                            .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: pulse)
                         
                         Circle()
                             .stroke(Color.red.opacity(0.3), lineWidth: 8)
                             .frame(width: 20, height: 20)
-                            .scaleEffect(1.2)
-                            .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: true)
+                            .scaleEffect(pulse ? 1.4 : 1.0)
+                            .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: pulse)
                     }
+                    .onAppear { pulse = true }
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text("📺 Live TV")
@@ -257,7 +259,8 @@ struct PremiumChannelCard: View {
                                 withAnimation(.easeOut(duration: 0.2)) {
                                     streamReady = true
                                 }
-                            }
+                            },
+                            cornerRadius: 16
                         )
                         .frame(width: 120, height: 80)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -469,8 +472,10 @@ struct TrendingLiveBanner: View {
     
     private func startTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+            let count = trendingChannels.count
+            guard count > 0 else { return }
             withAnimation(.easeInOut(duration: 0.5)) {
-                currentIndex = (currentIndex + 1) % trendingChannels.count
+                currentIndex = (currentIndex + 1) % count
             }
         }
     }

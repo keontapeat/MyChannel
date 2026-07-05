@@ -160,21 +160,25 @@ class CreatorEconomyService: ObservableObject {
         let nftRevenue = await getRevenueStream(creatorId: creatorId, source: "nft")
         let liveStreamRevenue = await getRevenueStream(creatorId: creatorId, source: "liveStream")
         
-        let totalRevenue = adRevenue + tipRevenue + membershipRevenue + merchandiseRevenue + 
-                          courseRevenue + brandDealRevenue + nftRevenue + liveStreamRevenue
+        // Exact money math in integer cents (convert the Double reads at the boundary).
+        let totalRevenueMoney = Money.sum([
+            adRevenue, tipRevenue, membershipRevenue, merchandiseRevenue,
+            courseRevenue, brandDealRevenue, nftRevenue, liveStreamRevenue
+        ].map { Money(dollars: $0) })
 
         // Prefer the authoritative aggregate balance if present; the ad service
         // already stores the creator's net share, so don't double-apply the split.
         let aggregate = await NuclearAdMonetizationService.shared.getCreatorEarnings(creatorId: creatorId)
-        let creatorShare = aggregate?.totalEarnings ?? (totalRevenue * Self.REVENUE_SHARE)
-        let grossRevenue = max(totalRevenue, creatorShare / Self.REVENUE_SHARE)
-        let platformFee = grossRevenue - creatorShare
+        let creatorShareMoney = aggregate.map { Money(dollars: $0.totalEarnings) }
+            ?? totalRevenueMoney.fraction(Self.REVENUE_SHARE)
+        let grossRevenueMoney = max(totalRevenueMoney, creatorShareMoney.divided(by: Self.REVENUE_SHARE))
+        let platformFeeMoney = (grossRevenueMoney - creatorShareMoney).clampedToZero
         
         let earnings = CreatorEarnings(
             creatorId: creatorId,
-            totalRevenue: grossRevenue,
-            creatorShare: creatorShare,
-            platformFee: max(0, platformFee),
+            totalRevenue: grossRevenueMoney.dollars,
+            creatorShare: creatorShareMoney.dollars,
+            platformFee: platformFeeMoney.dollars,
             revenueBreakdown: CreatorRevenueBreakdown(
                 adRevenue: adRevenue,
                 tipRevenue: tipRevenue,
@@ -435,6 +439,12 @@ struct CreatorEarnings {
         guard totalRevenue > 0 else { return 0 }
         return (creatorShare / totalRevenue) * 100
     }
+
+    // Exact-cents accessors for display. Prefer these over formatting the raw
+    // `Double` dollar fields with `%.2f`.
+    var totalRevenueMoney: Money { Money(dollars: totalRevenue) }
+    var creatorShareMoney: Money { Money(dollars: creatorShare) }
+    var platformFeeMoney: Money { Money(dollars: platformFee) }
 }
 
 struct CreatorRevenueBreakdown: Codable {

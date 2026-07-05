@@ -43,13 +43,20 @@ final class LiveTVCatalogService {
                 return nil
             }
 
-            let channels: [LiveTVChannel] = snapshot.documents.compactMap { Self.channel(from: $0.data(), id: $0.documentID) }
-            guard !channels.isEmpty else { return nil }
-
-            // Respect optional sortIndex, then viewer count
-            let sorted = channels.sorted { lhs, rhs in
-                lhs.viewerCount > rhs.viewerCount
+            // Keep each channel's sortIndex alongside it so we can honor the
+            // curated server-side ordering (falling back to viewer count).
+            let decoded: [(sortIndex: Int, channel: LiveTVChannel)] = snapshot.documents.compactMap { doc in
+                guard let channel = Self.channel(from: doc.data(), id: doc.documentID) else { return nil }
+                let sortIndex = doc.data()["sortIndex"] as? Int ?? Int.max
+                return (sortIndex, channel)
             }
+            guard !decoded.isEmpty else { return nil }
+
+            // Respect optional sortIndex first, then viewer count as a tie-breaker.
+            let sorted = decoded.sorted { lhs, rhs in
+                if lhs.sortIndex != rhs.sortIndex { return lhs.sortIndex < rhs.sortIndex }
+                return lhs.channel.viewerCount > rhs.channel.viewerCount
+            }.map { $0.channel }
             print("✅ [LiveTVCatalog] Loaded \(sorted.count) channels from Firestore")
             return sorted
         } catch {
@@ -71,6 +78,14 @@ final class LiveTVCatalogService {
             let categoryRaw = data["category"] as? String,
             let category = LiveTVChannel.ChannelCategory(rawValue: categoryRaw)
         else {
+            return nil
+        }
+
+        // Defense in depth: skip channels whose logo can't render, even though
+        // Firestore rules validate logoURL on write. Prevents broken thumbnails.
+        let lowerLogo = logoURL.lowercased()
+        if lowerLogo.contains("wikipedia.org") || lowerLogo.contains("wikimedia.org") || lowerLogo.hasSuffix(".svg") {
+            print("⚠️ [LiveTVCatalog] Skipping channel \"\(name)\" — non-approved logoURL: \(logoURL)")
             return nil
         }
 

@@ -20,6 +20,17 @@ import {GoogleAuth} from 'google-auth-library';
 
 admin.initializeApp();
 
+// Thumbnail AI analysis functions (relocated from web-v2/app/api).
+export {predictThumbnailCtr, aiVideoThumbnail} from './thumbnail-ai';
+
+// University: server-authoritative watch aggregation + certificate issuance + leaderboard mirror.
+export {
+  issueUniversityViewToken,
+  onUniversityWatchEvent,
+  onUniversityProgressWritten,
+  onUniversityStatsWritten,
+} from './university';
+
 const googleAuth = new GoogleAuth();
 
 const SECURITY_AI_SERVICE = 'cybersecurity-ai';
@@ -382,3 +393,59 @@ export const onChannelUnsubscribed = onDocumentDeleted({document: 'users/{userId
     console.error('[onChannelUnsubscribed]', err);
   }
 });
+
+// ─── FLICKS ENGAGEMENT AGGREGATION ──────────────────────────────────────────
+// 🔒 SECURITY: Flick view/like/share/comment counts are server-authoritative.
+// Clients no longer increment these counters directly (that was spoofable).
+// Instead they create userId-stamped docs in /flicks/{id}/events, and this
+// trigger aggregates them into the parent flick's counters via the Admin SDK
+// (which bypasses security rules). Watch time arrives as a "watch_time" event
+// carrying a numeric `watchTime` (seconds) and updates totalWatchTime only.
+export const onFlickEngagementEvent = onDocumentCreated(
+  {document: 'flicks/{flickId}/events/{eventId}', region: 'us-east1'},
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    const type = data.type as string;
+    const flickId = event.params.flickId;
+
+    const updates: Record<string, admin.firestore.FieldValue> = {};
+    switch (type) {
+      case 'view':
+        updates.viewCount = admin.firestore.FieldValue.increment(1);
+        break;
+      case 'like':
+        updates.likeCount = admin.firestore.FieldValue.increment(1);
+        break;
+      case 'unlike':
+        updates.likeCount = admin.firestore.FieldValue.increment(-1);
+        break;
+      case 'comment':
+        updates.commentCount = admin.firestore.FieldValue.increment(1);
+        break;
+      case 'share':
+        updates.shareCount = admin.firestore.FieldValue.increment(1);
+        break;
+      case 'watch_time': {
+        // Clamp to a sane range (0, 24h) so a bad client can't poison the metric.
+        const wt = Number(data.watchTime ?? 0);
+        if (wt > 0 && wt < 86400) {
+          updates.totalWatchTime = admin.firestore.FieldValue.increment(Math.round(wt));
+        }
+        break;
+      }
+      default:
+        return; // ignore unknown event types
+    }
+    if (Object.keys(updates).length === 0) return;
+    updates.lastEngagementAt = admin.firestore.FieldValue.serverTimestamp();
+
+    try {
+      await admin.firestore().collection('flicks').doc(flickId).update(updates);
+    } catch (err) {
+      // Parent flick may not exist (e.g. demo/seed content) — safe to skip.
+      console.error('[onFlickEngagementEvent]', flickId, type, err);
+    }
+  }
+);

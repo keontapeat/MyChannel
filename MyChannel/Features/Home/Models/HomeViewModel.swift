@@ -144,10 +144,15 @@ class HomeViewModel: ObservableObject {
                     newVideos = rerankedSlots.compactMap { videoDict[$0.id] }
                 }
                 
-                // Phase 111: Session Graph Recommendations
+                // Phase 111: Session Graph Recommendations — boost recommended
+                // videos to the top of this batch (stable within each group).
                 try? await SessionGraphRecommenderService.shared.recommend(userId: currentUserId, count: 5)
-                let recommendedIds = SessionGraphRecommenderService.shared.recommendations.map { $0.id }
-                // In a real app we'd fetch these recommended videos and inject them, but for now we just trigger the engine.
+                let recommendedIds = Set(SessionGraphRecommenderService.shared.recommendations.map { $0.id })
+                if !recommendedIds.isEmpty {
+                    let recommended = newVideos.filter { recommendedIds.contains($0.id) }
+                    let rest = newVideos.filter { !recommendedIds.contains($0.id) }
+                    newVideos = recommended + rest
+                }
             }
             
             self.feedVideos.append(contentsOf: newVideos.filter { newVideo in

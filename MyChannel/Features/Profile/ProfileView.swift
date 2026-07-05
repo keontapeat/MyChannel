@@ -77,13 +77,6 @@ struct ProfileView: View {
     @State private var showingVideoAnalytics: Bool = false
     @State private var videoToAnalyze: Video?
 
-    // AI Agent Insights (background-loaded from Cloud Run)
-    @State private var aiViralScore: Double? = nil
-    @State private var aiChurnRisk: Double? = nil
-    @State private var aiRetentionActions: [String] = []
-    @State private var aiCreatorInsights: [String] = []
-    @State private var aiInsightsTask: Task<Void, Never>? = nil
-    
     // Premium & Downloads Navigation
     @State private var showingDownloads = false
     @State private var showingPremiumBenefits = false
@@ -173,7 +166,6 @@ struct ProfileView: View {
                     // 🔥 FIX: Cancel in-flight tasks when leaving profile
                     loadTask?.cancel()
                     historyTask?.cancel()
-                    aiInsightsTask?.cancel()
                     print("🎥 [ProfileView] Profile page disappeared — tasks cancelled")
                 }
             )
@@ -285,6 +277,17 @@ struct ProfileView: View {
         GeometryReader { geo in
         ScrollView {
             VStack(spacing: 0) {
+                // 🔥 FIX: Track scroll offset so the header collapse/parallax and
+                // tab pinning actually respond to scrolling in the live path.
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(
+                            key: ProfileScrollOffsetPreferenceKey.self,
+                            value: proxy.frame(in: .named("profileScroll")).minY
+                        )
+                }
+                .frame(height: 0)
+
                 // Profile Header - flush to top
                 ProfileHeaderView(
                     user: user,
@@ -405,33 +408,39 @@ struct ProfileView: View {
                             HStack(spacing: 12) {
                                 ZStack {
                                     Circle()
-                                        .fill(Color.blue.opacity(0.15))
+                                        .fill(AppTheme.Colors.verificationBlue.opacity(0.15))
                                         .frame(width: 44, height: 44)
                                     
                                     Image(systemName: "arrow.down.circle.fill")
                                         .font(.system(size: 20, weight: .semibold))
-                                        .foregroundColor(.blue)
+                                        .foregroundColor(AppTheme.Colors.verificationBlue)
                                 }
                                 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Downloads")
-                                        .font(.system(size: 17, weight: .semibold))
+                                        .font(AppTheme.Typography.headline)
                                         .foregroundColor(AppTheme.Colors.textPrimary)
                                     
                                     Text("Watch videos offline")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
+                                        .font(AppTheme.Typography.footnote)
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
                                 }
                                 
                                 Spacer()
                                 
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
                             }
                             .padding(16)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(AppTheme.Colors.surface)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
                         }
                         
                         if AppConfig.Features.enableSubscriptions || storeKit.isPremium {
@@ -452,12 +461,12 @@ struct ProfileView: View {
                                     
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(storeKit.isPremium ? "Your Premium Benefits" : "MyChannel Plus+")
-                                            .font(.system(size: 17, weight: .semibold))
+                                            .font(AppTheme.Typography.headline)
                                             .foregroundColor(AppTheme.Colors.textPrimary)
                                         
                                         Text(storeKit.isPremium ? "View your usage stats" : "Try 7 days free")
-                                            .font(.system(size: 13))
-                                            .foregroundColor(.secondary)
+                                            .font(AppTheme.Typography.footnote)
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
                                     }
                                     
                                     Spacer()
@@ -593,6 +602,12 @@ struct ProfileView: View {
             }
         }
         .frame(maxWidth: .infinity)
+        .coordinateSpace(name: "profileScroll")
+        .onPreferenceChange(ProfileScrollOffsetPreferenceKey.self) { value in
+            withAnimation(.easeOut(duration: 0.12)) {
+                scrollOffset = value
+            }
+        }
         // 🔥 FIX: Provide breathing room so History & bottom sections stay above the floating tab bar
         .safeAreaInset(edge: .bottom) {
             Color.clear
@@ -742,7 +757,6 @@ struct ProfileView: View {
         // 🔥 FIX: Cancel any in-flight load to prevent race conditions
         loadTask?.cancel()
         historyTask?.cancel()
-        aiInsightsTask?.cancel()
         
         // 🔥 FIX: Always reset error state on reload so error view clears
         hasError = false
@@ -804,43 +818,10 @@ struct ProfileView: View {
             guard !Task.isCancelled else { return }
             let creatorId = user.id
             
-            // Load first page of videos
+            // Load first page of videos (shared with handleUserChange)
             do {
-                let result = try await VideoFirestoreService.shared.fetchVideosByCreatorPaginated(
-                    creatorId: creatorId,
-                    limit: videosPerPage,
-                    lastDocument: nil
-                )
-                guard !Task.isCancelled else { return }
-                
-                var videosWithIntro = result.videos
-                
-                if (isViewingOwnProfile && isOwnerAccount) || isOwnerProfile, let intro = ownerIntroVideo() {
-                    videosWithIntro.removeAll { $0.id == intro.id }
-                    videosWithIntro.insert(intro, at: 0)
-                    PinnedVideosStore.shared.pin(intro.id, for: user.id)
-                    GlobalVideoPlayerManager.shared.preloadVideo(url: intro.videoURL)
-                }
-                
-                userVideos = videosWithIntro
-                lastVideoDocument = result.lastDocument
-                // 🔥 FIX: Use raw Firestore count for pagination (don't count injected intro)
-                hasMoreVideos = result.videos.count >= videosPerPage
-                isLoadingVideos = false
-                
-                profileCache.cacheProfile(user: user, videos: videosWithIntro)
-                
-                // Local storage backup only if Firestore returned empty
-                if userVideos.isEmpty || (userVideos.count == 1 && userVideos.first?.id == "owner_intro_video") {
-                    if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: creatorId), !localVids.isEmpty {
-                        guard !Task.isCancelled else { return }
-                        userVideos = Array(localVids.prefix(videosPerPage))
-                        hasMoreVideos = localVids.count > videosPerPage
-                        profileCache.updateCachedVideos(userVideos)
-                    }
-                }
-                
-                print("✅ [ProfileView] Loaded \(result.videos.count) videos from Firestore")
+                try await loadFirstVideoPage(creatorId: creatorId)
+                print("✅ [ProfileView] Loaded videos from Firestore")
             } catch {
                 guard !Task.isCancelled else { return }
                 print("🚨 [ProfileView] Error loading videos: \(error)")
@@ -881,24 +862,49 @@ struct ProfileView: View {
                     await MainActor.run { watchHistory = [] }
                 }
             }
-
-            // Fire AI agents in background (non-blocking, own profile only)
-            if isViewingOwnProfile {
-                let snapshotUser = user
-                let snapshotVideos = userVideos
-                aiInsightsTask?.cancel()
-                aiInsightsTask = Task {
-                    guard !Task.isCancelled else { return }
-                    await loadProfileAIInsights(
-                        userId: creatorId,
-                        snapshotUser: snapshotUser,
-                        snapshotVideos: snapshotVideos
-                    )
-                }
-            }
         }
     }
     
+    /// Shared first-page video load used by both `loadProfileSafely` and
+    /// `handleUserChange`. Fetches page 1 from Firestore, injects the owner
+    /// intro video, updates the pagination cursor + cache, and falls back to
+    /// local storage when Firestore returns an empty set. Throws on Firestore
+    /// error so each caller can apply its own error handling.
+    @MainActor
+    private func loadFirstVideoPage(creatorId: String) async throws {
+        let result = try await VideoFirestoreService.shared.fetchVideosByCreatorPaginated(
+            creatorId: creatorId,
+            limit: videosPerPage,
+            lastDocument: nil
+        )
+        guard !Task.isCancelled else { return }
+
+        var videosWithIntro = result.videos
+        if (isViewingOwnProfile && isOwnerAccount) || isOwnerProfile, let intro = ownerIntroVideo() {
+            videosWithIntro.removeAll { $0.id == intro.id }
+            videosWithIntro.insert(intro, at: 0)
+            PinnedVideosStore.shared.pin(intro.id, for: user.id)
+            GlobalVideoPlayerManager.shared.preloadVideo(url: intro.videoURL)
+        }
+
+        userVideos = videosWithIntro
+        lastVideoDocument = result.lastDocument
+        // 🔥 Use raw Firestore count for pagination (don't count injected intro)
+        hasMoreVideos = result.videos.count >= videosPerPage
+        isLoadingVideos = false
+        profileCache.cacheProfile(user: user, videos: videosWithIntro)
+
+        // Local storage backup only if Firestore returned empty
+        if userVideos.isEmpty || (userVideos.count == 1 && userVideos.first?.id == "owner_intro_video") {
+            if let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: creatorId), !localVids.isEmpty {
+                guard !Task.isCancelled else { return }
+                userVideos = Array(localVids.prefix(videosPerPage))
+                hasMoreVideos = localVids.count > videosPerPage
+                profileCache.updateCachedVideos(userVideos)
+            }
+        }
+    }
+
     /// Helper to finalize video load state on error
     private func finishVideoLoadWithError(hadCachedVideos: Bool) {
         if userVideos.isEmpty {
@@ -912,68 +918,6 @@ struct ProfileView: View {
         }
         hasMoreVideos = false
         isLoadingVideos = false
-    }
-
-    // MARK: - AI Agent Insights
-
-    private func loadProfileAIInsights(userId: String, snapshotUser: User, snapshotVideos: [Video]) async {
-        let mlAgents = RealMLAgentsService.shared
-        let agentAPI = AgentAPIService.shared
-
-        // 1. Viral prediction on most recent video
-        if let topVideo = snapshotVideos.first {
-            let avgViews = Double((snapshotUser.totalViews ?? 0) / max(snapshotUser.videoCount, 1))
-            if let result = try? await mlAgents.predictViral(
-                title: topVideo.title,
-                durationSeconds: Int(topVideo.duration),
-                thumbnailScore: 0.7,
-                subscriberCount: snapshotUser.subscriberCount,
-                avgViews: avgViews,
-                category: topVideo.category.rawValue,
-                isShorts: topVideo.duration < 60
-            ) {
-                await MainActor.run {
-                    aiViralScore = result.viral_probability
-                }
-                let safeViralPct = result.viral_probability.isFinite ? Int(result.viral_probability * 100) : 0
-                print("🤖 [ProfileAI] Viral score for \(topVideo.title): \(safeViralPct)%")
-            }
-        }
-
-        // 2. Churn/retention risk for this creator's audience
-        let accountAgeDays = max(Int(Date().timeIntervalSince(snapshotUser.createdAt) / 86400), 1)
-        let totalViewCount = snapshotUser.totalViews ?? 0
-        let isPremium = !(snapshotUser.membershipTiers?.isEmpty ?? true)
-        if let result = try? await mlAgents.predictChurn(
-            userId: userId,
-            daysSinceSignup: accountAgeDays,
-            daysSinceLastVisit: 1,
-            totalWatchTimeHours: Double(totalViewCount) * 0.05,
-            avgSessionMinutes: 12.0,
-            sessionsLast7Days: 7,
-            sessionsLast30Days: 25,
-            videosLast7Days: max(snapshotUser.videoCount / 4, 1),
-            videosLast30Days: max(snapshotUser.videoCount, 1),
-            isPremium: isPremium
-        ) {
-            await MainActor.run {
-                aiChurnRisk = result.churn_probability
-                aiRetentionActions = result.retention_actions
-            }
-            let safeChurnPct = result.churn_probability.isFinite ? Int(result.churn_probability * 100) : 0
-            print("🤖 [ProfileAI] Churn risk: \(result.risk_level) (\(safeChurnPct)%)")
-        }
-
-        // 3. Creator analytics agent
-        if let result = try? await agentAPI.getCreatorAnalytics(
-            creatorId: userId,
-            timeRange: "30d"
-        ) {
-            await MainActor.run {
-                aiCreatorInsights = result.insights
-            }
-            print("🤖 [ProfileAI] Creator insights loaded: \(result.insights.count) tips")
-        }
     }
 
     private func recalculateUserStats(propagateGlobalState: Bool = false) {
@@ -1008,7 +952,6 @@ struct ProfileView: View {
             loadTask?.cancel()
             historyTask?.cancel()
             userChangeTask?.cancel()
-            aiInsightsTask?.cancel()
             user = User.defaultUser
             userVideos = []
             watchHistory = []
@@ -1026,7 +969,6 @@ struct ProfileView: View {
         loadTask?.cancel()
         historyTask?.cancel()
         userChangeTask?.cancel()
-        aiInsightsTask?.cancel()
         
         userChangeTask = Task { @MainActor in
             // Small yield so any second fire in the same runloop cancels this before we start
@@ -1061,36 +1003,9 @@ struct ProfileView: View {
             }
             guard !Task.isCancelled else { return }
             
-            // Load videos for this user
+            // Load videos for this user (shared with loadProfileSafely)
             do {
-                let result = try await VideoFirestoreService.shared.fetchVideosByCreatorPaginated(
-                    creatorId: user.id,
-                    limit: videosPerPage,
-                    lastDocument: nil
-                )
-                guard !Task.isCancelled else { return }
-                
-                var videosWithIntro = result.videos
-                if (isViewingOwnProfile && isOwnerAccount) || isOwnerProfile, let intro = ownerIntroVideo() {
-                    videosWithIntro.removeAll { $0.id == intro.id }
-                    videosWithIntro.insert(intro, at: 0)
-                    PinnedVideosStore.shared.pin(intro.id, for: user.id)
-                }
-                
-                userVideos = videosWithIntro
-                lastVideoDocument = result.lastDocument
-                hasMoreVideos = result.videos.count >= videosPerPage
-                isLoadingVideos = false
-                profileCache.cacheProfile(user: user, videos: videosWithIntro)
-                
-                if userVideos.isEmpty || (userVideos.count == 1 && userVideos.first?.id == "owner_intro_video"),
-                   let localVids = try? await DatabaseService.shared.fetchVideosByCreator(creatorId: user.id),
-                   !localVids.isEmpty {
-                    guard !Task.isCancelled else { return }
-                    userVideos = Array(localVids.prefix(videosPerPage))
-                    hasMoreVideos = localVids.count > videosPerPage
-                    profileCache.updateCachedVideos(userVideos)
-                }
+                try await loadFirstVideoPage(creatorId: user.id)
             } catch {
                 guard !Task.isCancelled else { return }
                 print("🚨 [ProfileView] handleUserChange video load error: \(error)")
@@ -1375,159 +1290,6 @@ struct ProfileView: View {
         }
     }
     
-    // MARK: - Profile Content with Tabs
-    @ViewBuilder
-    private var profileContentWithTabs: some View {
-        ScrollView {
-            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                Section {
-                    // Content under tabs
-                    ProfileContentSection(
-                        selectedTab: $selectedTab,
-                        user: user,
-                        videos: userVideos,
-                        onLoadMore: { await loadMoreVideos() },
-                        hasMoreVideos: hasMoreVideos,
-                        isLoadingMore: isLoadingMoreVideos
-                    )
-                    .padding(.top, 8)
-                    .background(AppTheme.Colors.background)
-
-                    VStack(spacing: 14) {
-                        Divider()
-                            .padding(.horizontal)
-
-                        ProfileQuickActionsChips(
-                            isIncognito: isIncognito,
-                            switchAccountAction: {
-                                HapticManager.shared.impact(style: .light)
-                                NotificationCenter.default.post(name: .navigateToAccountSwitcher, object: nil)
-                            },
-                            googleAccountAction: {
-                                HapticManager.shared.impact(style: .light)
-                                NotificationCenter.default.post(name: .openGoogleAccount, object: nil)
-                            },
-                            toggleIncognitoAction: {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                    isIncognito.toggle()
-                                }
-                                HapticManager.shared.impact(style: .rigid)
-                            }
-                        )
-                        .padding(.horizontal)
-                        
-                        NavigationLink(destination: ComprehensiveCreatorStudioView()) {
-                            HStack(spacing: 10) {
-                                // 🔥 YOUTUBE PARITY: Neutral icon (not red)
-                                Image(systemName: "chart.bar.xaxis")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                Text("Open Creator Studio")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textTertiary)  // 🔥 YOUTUBE PARITY: Subtle chevron
-                            }
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(AppTheme.Colors.surface)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
-                                    )
-                            )
-                            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
-                        }
-                        .padding(.horizontal)
-                        
-                        // 🔥 HISTORY SECTION - Full YouTube Parity
-                        NavigationLink(destination: WatchHistoryView()) {
-                            HStack(spacing: 10) {
-                                Image(systemName: "clock.arrow.circlepath")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                Text("History")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textTertiary)
-                            }
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(AppTheme.Colors.surface)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
-                                    )
-                            )
-                            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
-                        }
-                        .padding(.horizontal)
-                        
-                        // 🔥 WATCH LATER SECTION - YouTube Parity
-                        NavigationLink(destination: WatchLaterView()) {
-                            HStack(spacing: 10) {
-                                Image(systemName: "clock.badge.checkmark")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                Text("Watch Later")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                Spacer()
-                                // Show count badge if user has saved videos
-                                if appState.watchLaterVideos.count > 0 {
-                                    Text("\(appState.watchLaterVideos.count)")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(
-                                            Capsule()
-                                                .fill(AppTheme.Colors.divider.opacity(0.2))
-                                        )
-                                }
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textTertiary)
-                            }
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(AppTheme.Colors.surface)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(AppTheme.Colors.divider.opacity(0.1), lineWidth: 1)
-                                    )
-                            )
-                            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
-                        }
-                        .padding(.horizontal)
-                    }
-                    .padding(.bottom, 24)
-                } header: {
-                    // Absolutely flush, pinned tabs
-                    ProfileTabNavigation(
-                        selectedTab: $selectedTab,
-                        user: user,
-                        scrollOffset: scrollOffset
-                    )
-                }
-            }
-        }
-        .coordinateSpace(name: "profileScroll")
-        .ignoresSafeArea(.container, edges: .top)
-        .onPreferenceChange(ProfileScrollOffsetPreferenceKey.self) { value in
-            withAnimation(.easeOut(duration: 0.12)) {
-                scrollOffset = value
-            }
-        }
-    }
 }
 
 

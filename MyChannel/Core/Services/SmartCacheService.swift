@@ -415,6 +415,34 @@ final class SmartCacheService: ObservableObject {
         try await saveToDiskCache(key: key, data: data, ttl: ttl)
         try await saveToSharedCache(key: sharedKey, data: data, ttl: ttl)
     }
+    
+    // MARK: - Cache Optimization (used by ScaleAgents)
+    
+    /// Current cache hit rate as a 0-1 ratio
+    var currentHitRate: Double {
+        let total = cacheStats.totalHits + cacheStats.misses
+        return total > 0 ? Double(cacheStats.totalHits) / Double(total) : 0.85
+    }
+    
+    /// Optimize cache by evicting expired entries and pre-warming popular content
+    func optimizeCache() async {
+        // Evict expired memory entries
+        let expiredKeys = memoryCache.filter { $0.value.isExpired }.map { $0.key }
+        for key in expiredKeys {
+            memoryCache.removeValue(forKey: key)
+        }
+        
+        // Trim memory cache if over limit
+        if memoryCache.count > maxMemoryCacheSize {
+            let sorted = memoryCache.sorted { $0.value.accessCount < $1.value.accessCount }
+            let toRemove = sorted.prefix(memoryCache.count - maxMemoryCacheSize)
+            for (key, _) in toRemove {
+                memoryCache.removeValue(forKey: key)
+            }
+        }
+        
+        print("💾 [SmartCache] Optimized: evicted \(expiredKeys.count) expired, \(memoryCache.count) entries active")
+    }
 }
 
 // MARK: - CacheStats Codable

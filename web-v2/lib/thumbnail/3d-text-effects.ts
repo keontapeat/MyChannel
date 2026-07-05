@@ -1,8 +1,8 @@
 // 🔥 3D TEXT EFFECTS - CRAZY DEPTH & LIGHTING 💣
 
 import * as THREE from 'three';
-import { FontLoader } from 'three/examples/jsm/loaders/FontLoader';
-import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry';
+import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
+import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 
 // Types
 export interface Text3DOptions {

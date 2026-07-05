@@ -1,0 +1,12 @@
+FROM node:20-slim
+
+# ffmpeg is required for frame extraction (fingerprint.ts spawns it directly).
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY package.json package-lock.json* .npmrc* ./
+RUN npm ci --silent || npm i --silent
+COPY . .
+RUN npm run build
+CMD ["node", "dist/video-content-id/main.js"]

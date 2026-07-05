@@ -533,6 +533,8 @@ struct ModernPlayerControlsView: View {
                             .font(.title)
                             .foregroundColor(.white)
                     }
+                    .accessibilityLabel(Text(viewModel.isPlaying ? "Pause" : "Play"))
+                    .accessibilityAddTraits(.isButton)
                     
                     Button(action: {
                         viewModel.seekForward(10)
@@ -541,6 +543,8 @@ struct ModernPlayerControlsView: View {
                             .font(.title2)
                             .foregroundColor(.white)
                     }
+                    .accessibilityLabel(Text("Seek Forward 10 Seconds"))
+                    .accessibilityAddTraits(.isButton)
                     
                     Spacer()
                     
@@ -560,6 +564,8 @@ struct ModernPlayerControlsView: View {
                             .background(Color.black.opacity(0.3))
                             .cornerRadius(6)
                     }
+                    .accessibilityLabel(Text("Playback speed, \(String(format: "%.2f", viewModel.playbackRate)) times"))
+                    .accessibilityHint(Text("Opens playback speed options"))
 
                     if !viewModel.subtitleOptions.isEmpty {
                         Menu {
@@ -577,6 +583,8 @@ struct ModernPlayerControlsView: View {
                                 .background(Color.black.opacity(0.3))
                                 .cornerRadius(6)
                         }
+                        .accessibilityLabel(Text("Subtitles, \(viewModel.selectedSubtitle?.displayName ?? "Off")"))
+                        .accessibilityHint(Text("Opens subtitle language options"))
                     }
 
                     if !viewModel.audioOptions.isEmpty {
@@ -593,6 +601,8 @@ struct ModernPlayerControlsView: View {
                                 .background(Color.black.opacity(0.3))
                                 .cornerRadius(6)
                         }
+                        .accessibilityLabel(Text("Audio track, \(viewModel.selectedAudio?.displayName ?? "Default")"))
+                        .accessibilityHint(Text("Opens audio track options"))
                     }
                     
                     Button(action: {

@@ -1,11 +1,16 @@
 import express from 'express';
 import admin from 'firebase-admin';
 import crypto from 'crypto';
+import { Storage } from '@google-cloud/storage';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
   Fingerprint,
   compareFingerprints,
   fingerprintHash,
   activeFingerprintProvider,
+  chromaprintFile,
 } from './fingerprint';
 
 const app = express();
@@ -22,6 +27,19 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+const storage = new Storage();
+const BUCKET = process.env.MUSIC_BUCKET || 'mychannel-ca26d.appspot.com';
+const bucket = storage.bucket(BUCKET);
+
+/** Convert a public/https storage URL into an in-bucket object path (mirrors transcode.ts). */
+function objectPathFromURL(url: string): string {
+  const marker = `${BUCKET}/`;
+  const idx = url.indexOf(marker);
+  if (idx >= 0) return decodeURIComponent(url.slice(idx + marker.length).split('?')[0]);
+  const oIdx = url.indexOf('/o/');
+  if (oIdx >= 0) return decodeURIComponent(url.slice(oIdx + 3).split('?')[0]);
+  return url;
+}
 
 // Helper function to verify Firebase Auth token
 async function requireUser(req: any, res: any) {
@@ -115,6 +133,73 @@ app.post('/v1/music/content-id/register', async (req, res) => {
   } catch (error) {
     console.error('Content ID registration error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /v1/music/content-id/register-from-url - Register a track's fingerprint
+// by downloading its already-uploaded audio and running Chromaprint server-side.
+// This is the endpoint iOS calls (it has no client-side fingerprinting) —
+// /v1/music/content-id/register above is for callers that already computed
+// a structured fingerprint themselves.
+app.post('/v1/music/content-id/register-from-url', async (req, res) => {
+  let tempPath: string | null = null;
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const { trackId, audioURL } = req.body || {};
+    if (!trackId || typeof trackId !== 'string') {
+      return res.status(400).json({ error: 'trackId is required' });
+    }
+    if (!audioURL || typeof audioURL !== 'string') {
+      return res.status(400).json({ error: 'audioURL is required' });
+    }
+
+    const trackRef = db.collection('music_tracks').doc(trackId);
+    const trackSnap = await trackRef.get();
+    if (!trackSnap.exists) {
+      return res.status(404).json({ error: 'Track not found' });
+    }
+    const trackData = trackSnap.data()!;
+    if (String(trackData.artistId || '') !== user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const objectPath = objectPathFromURL(audioURL);
+    const ext = path.extname(objectPath) || '.m4a';
+    tempPath = path.join(os.tmpdir(), `contentid-${trackId}-${Date.now()}${ext}`);
+    await bucket.file(objectPath).download({ destination: tempPath });
+
+    const fp = await chromaprintFile(tempPath);
+    if (!fp.duration) fp.duration = trackData.duration || 0;
+
+    const now = admin.firestore.Timestamp.now();
+    await db.collection('music_content_id').doc(trackId).set({
+      trackId,
+      artistId: user.userId,
+      fingerprint: fp,
+      fingerprintHash: fingerprintHash(fp),
+      fingerprintProvider: activeFingerprintProvider(),
+      registeredAt: now,
+      status: 'active',
+      copyrightPolicy: 'strict',
+      revenueSharePercentage: null,
+    }, { merge: true });
+
+    await trackRef.update({ contentIdRegistered: true, contentIdRegisteredAt: now });
+
+    res.json({
+      referenceId: trackId,
+      trackId,
+      status: 'registered',
+      copyrightPolicy: 'strict',
+      frameCount: fp.frames.length,
+    });
+  } catch (error: any) {
+    console.error('Content ID register-from-url error:', error);
+    res.status(500).json({ error: error?.message || 'Internal server error' });
+  } finally {
+    if (tempPath) await fs.promises.rm(tempPath, { force: true }).catch(() => {});
   }
 });
 

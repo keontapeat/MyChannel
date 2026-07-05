@@ -41,6 +41,22 @@ struct AppSecrets {
         return ""
     }
     
+    // MARK: - 📺 AdMob Ad Unit IDs (not secret — shipped in binary; configured via Info.plist)
+
+    private static func admobUnitID(_ infoPlistKey: String) -> String {
+        let value = (Bundle.main.object(forInfoDictionaryKey: infoPlistKey) as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !value.isEmpty, !value.isPlistPlaceholder { return value }
+        return ""
+    }
+
+    static var admobPrerollVideoUnitID: String { admobUnitID("ADMOB_PREROLL_VIDEO_UNIT_ID") }
+    static var admobRewardedVideoUnitID: String { admobUnitID("ADMOB_REWARDED_VIDEO_UNIT_ID") }
+    static var admobInterstitialUnitID: String { admobUnitID("ADMOB_INTERSTITIAL_UNIT_ID") }
+    static var admobBannerUnitID: String { admobUnitID("ADMOB_BANNER_UNIT_ID") }
+    static var admobNativeUnitID: String { admobUnitID("ADMOB_NATIVE_UNIT_ID") }
+    static var admobAppOpenUnitID: String { admobUnitID("ADMOB_APP_OPEN_UNIT_ID") }
+
     // MARK: - 🚀 NEW SUPER AGI PARTNERS
     
     static var runwayAPIKey: String {
@@ -217,6 +233,24 @@ struct AppSecrets {
         if !env.isEmpty { return env }
         
         return nil
+    }
+    
+    static var algoliaAppID: String {
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "ALGOLIA_APP_ID") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        let env = (ProcessInfo.processInfo.environment["ALGOLIA_APP_ID"] ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return env
+    }
+    
+    static var algoliaAPIKey: String {
+        let plist = (Bundle.main.object(forInfoDictionaryKey: "ALGOLIA_API_KEY") as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
+        let env = (ProcessInfo.processInfo.environment["ALGOLIA_API_KEY"] ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return env
     }
 }
 

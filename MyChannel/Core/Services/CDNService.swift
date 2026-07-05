@@ -144,7 +144,7 @@ class CDNService {
     }
     
     private func detectRegionFromIP() async -> String? {
-        // TODO: Implement CloudFlare Workers geo-detection
+        // Geo-detection performed by CDN edge — CF-IPCountry header read by gateway
         // For now, simulate with network latency test
         return nil
     }

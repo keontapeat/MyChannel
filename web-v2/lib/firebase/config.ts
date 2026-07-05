@@ -5,6 +5,7 @@ import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getDatabase, Database } from 'firebase/database';
+import { getFunctions, Functions } from 'firebase/functions';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -24,6 +25,8 @@ let auth: Auth;
 let firestore: Firestore;
 let storage: FirebaseStorage;
 let realtimeDb: Database;
+// Cloud Functions callables live in the story-functions codebase (us-east1).
+let functions: Functions;
 
 if (typeof window !== 'undefined') {
   // Client-side initialization
@@ -32,6 +35,7 @@ if (typeof window !== 'undefined') {
   firestore = getFirestore(app);
   storage = getStorage(app);
   realtimeDb = getDatabase(app);
+  functions = getFunctions(app, 'us-east1');
 
   console.log('✅ Firebase initialized (client-side)');
 } else {
@@ -41,15 +45,17 @@ if (typeof window !== 'undefined') {
   firestore = getFirestore(app);
   storage = getStorage(app);
   realtimeDb = getDatabase(app);
+  functions = getFunctions(app, 'us-east1');
 
   console.log('✅ Firebase initialized (server-side)');
 }
 
 // Export Firebase services
-export { app, auth, firestore, storage, realtimeDb };
+export { app, auth, firestore, storage, realtimeDb, functions };
 
 // Alias for compatibility
 export const db = firestore;
+export const rtdb = realtimeDb;
 
 // Firebase connection status
 export function checkFirebaseConnection(): boolean {

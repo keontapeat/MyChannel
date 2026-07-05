@@ -1,8 +1,8 @@
 import SwiftUI
 
-// MARK: - Trending Now Section (Polished Header + Carousel)
-/// Dedicated, premium "Trending Now" section: sleek header with a flame accent
-/// and a pill "See all" affordance, wrapping the ranked Top 10 carousel.
+// MARK: - Trending Now Section (Clean Header + Carousel)
+/// Dedicated "Trending Now" section: clean, professional YouTube-style header
+/// (plain title + simple "See all"), wrapping the ranked Top 10 carousel.
 struct TrendingNowSection: View {
     let videos: [Video]
     var onSeeAll: () -> Void
@@ -22,29 +22,15 @@ struct TrendingNowSection: View {
                 .foregroundColor(AppTheme.Colors.textPrimary)
                 .tracking(-0.3)
 
-            Image(systemName: "flame.fill")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(TrendingStyle.flameGradient)
-                .shadow(color: AppTheme.Colors.primary.opacity(0.35), radius: 5, x: 0, y: 1)
-
             Spacer(minLength: 8)
 
             Button {
                 HapticManager.shared.impact(style: .light)
                 onSeeAll()
             } label: {
-                HStack(spacing: 2) {
-                    Text("See all")
-                        .font(.system(size: 13, weight: .semibold))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
-                }
-                .foregroundColor(AppTheme.Colors.primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule().fill(AppTheme.Colors.primary.opacity(0.10))
-                )
+                Text("See all")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.accent)
             }
             .buttonStyle(.plain)
         }
@@ -209,16 +195,10 @@ private struct TopTenCard: View {
 private struct RankBadge: View {
     let rank: Int
 
-    private var isTopThree: Bool { rank <= 3 }
-
     var body: some View {
         ZStack {
             Circle()
-                .fill(
-                    isTopThree
-                        ? AnyShapeStyle(TrendingStyle.flameGradient)
-                        : AnyShapeStyle(Color.black.opacity(0.62))
-                )
+                .fill(Color.black.opacity(0.72))
             Circle()
                 .stroke(Color.white.opacity(0.35), lineWidth: 1)
 
@@ -227,10 +207,7 @@ private struct RankBadge: View {
                 .foregroundColor(.white)
         }
         .frame(width: 28, height: 28)
-        .shadow(
-            color: isTopThree ? AppTheme.Colors.primary.opacity(0.45) : .black.opacity(0.3),
-            radius: 6, x: 0, y: 3
-        )
+        .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 3)
     }
 }
 
@@ -284,15 +261,6 @@ private struct PressableCardStyle: ButtonStyle {
             .opacity(configuration.isPressed ? 0.92 : 1.0)
             .animation(.spring(response: 0.32, dampingFraction: 0.7), value: configuration.isPressed)
     }
-}
-
-// MARK: - Shared Style
-private enum TrendingStyle {
-    static let flameGradient = LinearGradient(
-        colors: [AppTheme.Colors.primaryLight, AppTheme.Colors.primary, AppTheme.Colors.primaryDark],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
 }
 
 // MARK: - Compat

@@ -14,7 +14,7 @@ struct VideoInfoSheet: View {
                         InfoRow(label: "Duration", value: formatDuration(video.duration))
                         InfoRow(label: "Upload Date", value: formatDate(video.createdAt))
                         InfoRow(label: "Category", value: video.category.rawValue.capitalized)
-                        InfoRow(label: "Language", value: "English") // Default for now
+                        InfoRow(label: "Language", value: languageText)
                     }
                     
                     // Statistics Section
@@ -28,10 +28,10 @@ struct VideoInfoSheet: View {
                     
                     // Technical Details Section
                     InfoSection(title: "Technical Details") {
-                        InfoRow(label: "Resolution", value: "1920x1080") // Default for now
-                        InfoRow(label: "Frame Rate", value: "30 fps")
-                        InfoRow(label: "Codec", value: "H.264")
-                        InfoRow(label: "Audio", value: "AAC, 128 kbps")
+                        InfoRow(label: "Resolution", value: resolutionText)
+                        InfoRow(label: "Available Quality", value: availableQualityText)
+                        InfoRow(label: "Streaming", value: video.videoURL.contains(".m3u8") ? "HLS (adaptive)" : "Progressive")
+                        InfoRow(label: "Subtitles", value: subtitlesText)
                         InfoRow(label: "File Size", value: "~\(estimateFileSize()) MB")
                     }
                     
@@ -112,6 +112,35 @@ struct VideoInfoSheet: View {
         )
     }
     
+    // MARK: - Real technical metadata (from the Video model, not hardcoded)
+
+    /// Highest concrete quality the video offers (ignores `.auto`).
+    private var bestQuality: VideoQuality? {
+        video.quality.filter { $0 != .auto }.max { $0.sortOrder < $1.sortOrder }
+    }
+
+    private var resolutionText: String {
+        guard let q = bestQuality else { return "Adaptive" }
+        let r = q.resolution
+        return "\(Int(r.width))×\(Int(r.height))"
+    }
+
+    private var availableQualityText: String {
+        let qualities = video.quality.filter { $0 != .auto }.sorted { $0.sortOrder < $1.sortOrder }
+        return qualities.isEmpty ? "Adaptive" : qualities.map { $0.displayName }.joined(separator: ", ")
+    }
+
+    private var languageText: String {
+        if let lang = video.language, !lang.isEmpty { return lang.capitalized }
+        if let firstSub = video.subtitles?.first?.language, !firstSub.isEmpty { return firstSub }
+        return "Not specified"
+    }
+
+    private var subtitlesText: String {
+        guard let subs = video.subtitles, !subs.isEmpty else { return "None" }
+        return subs.map { $0.language }.joined(separator: ", ")
+    }
+
     private func calculateEngagementRate() -> String {
         let totalEngagements = video.likeCount + video.dislikeCount + video.commentCount
         let rate = video.viewCount > 0 ? (Double(totalEngagements) / Double(video.viewCount)) * 100 : 0

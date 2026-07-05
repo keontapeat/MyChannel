@@ -8,6 +8,7 @@
  */
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import {
   Search, Bell, Plus, Play, Camera, BadgeCheck, Star, Flame,
@@ -92,28 +93,39 @@ export default function LandingHome() {
 
 /* ---------------------------------------------------------------- Top bar */
 function TopBar() {
+  const router = useRouter();
+  const [query, setQuery] = useState('');
+
+  const submitSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (query.trim()) router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+  };
+
   return (
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/90 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-4 px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-red-600 text-sm font-black text-white">
-            MC
-          </span>
-          <span className="text-lg font-bold tracking-tight">MyChannel</span>
+          <img src="/logo.png" alt="MyChannel" className="w-7 h-7 rounded-lg object-contain" />
+          <span className="text-[18px] font-semibold tracking-tight">MyChannel</span>
         </Link>
 
-        <div className="mx-auto hidden w-full max-w-xl items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 sm:flex">
+        <form
+          onSubmit={submitSearch}
+          className="mx-auto hidden w-full max-w-xl items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 sm:flex"
+        >
           <Search size={18} className="text-gray-400" />
           <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder="Search"
             className="w-full bg-transparent text-sm outline-none placeholder:text-gray-400"
           />
-        </div>
+        </form>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
-          <button className="rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100" aria-label="Go live">
+          <Link href="/live" className="rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100" aria-label="Go live">
             <Camera size={20} />
-          </button>
+          </Link>
           <button className="relative rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-100" aria-label="Notifications">
             <Bell size={20} />
             <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-600" />
@@ -124,7 +136,7 @@ function TopBar() {
           >
             <Plus size={16} /> Create
           </Link>
-          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-red-500 to-pink-500" />
+          <Link href="/login" className="h-8 w-8 rounded-full bg-gradient-to-br from-red-500 to-pink-500" aria-label="Account" />
         </div>
       </div>
     </header>

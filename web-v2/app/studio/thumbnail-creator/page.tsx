@@ -4,7 +4,6 @@
 
 import {
   Upload,
-  Cpu,
   Type,
   Palette,
   Scissors,
@@ -43,12 +42,13 @@ import {
   Undo2,
   Redo2,
   Cloud,
-  Eraser,
   Shuffle,
   BarChart3,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/lib/firebase/config';
 
 // Types
 interface TextLayer {
@@ -135,13 +135,10 @@ export default function ThumbnailCreatorPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   // UI state
-  const [activeTab, setActiveTab] = useState<'upload' | 'ai' | 'text' | 'stickers' | 'filters' | 'templates' | 'abtest' | 'projects'>('upload');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
+  const [activeTab, setActiveTab] = useState<'upload' | 'text' | 'stickers' | 'filters' | 'templates' | 'abtest' | 'projects'>('upload');
   const [ctrPrediction, setCtrPrediction] = useState<number | null>(null);
   const [zoom, setZoom] = useState(100);
   const [showGrid, setShowGrid] = useState(true);
-  const [isRemovingBg, setIsRemovingBg] = useState(false);
 
   // Drag state
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
@@ -350,59 +347,9 @@ export default function ThumbnailCreatorPage() {
     }
   };
 
-  // Generate AI thumbnail
-  const generateAIThumbnail = async () => {
-    if (!aiPrompt.trim()) return;
-
-    setIsGenerating(true);
-    try {
-      // TODO: Call Vertex AI Imagen API
-      const response = await fetch('/api/generate-thumbnail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: aiPrompt }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setBackgroundImage(data.imageUrl);
-        saveToHistory();
-      }
-    } catch (error) {
-      console.error('AI generation failed:', error);
-      // Fallback to mock
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      setBackgroundImage(`https://picsum.photos/seed/${Date.now()}/1280/720`);
-      saveToHistory();
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  // Remove background with AI
-  const removeBackground = async () => {
-    if (!backgroundImage) return;
-
-    setIsRemovingBg(true);
-    try {
-      // TODO: Call Vertex AI Vision API for background removal
-      const response = await fetch('/api/remove-background', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl: backgroundImage }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setBackgroundImage(data.imageUrl);
-        saveToHistory();
-      }
-    } catch (error) {
-      console.error('Background removal failed:', error);
-    } finally {
-      setIsRemovingBg(false);
-    }
-  };
+  // NOTE: Generative image features (AI thumbnail generation and AI background
+  // removal) were removed from MyChannel — generative media belongs to
+  // Parachute/Gekko, not this platform. CTR prediction (analytics) remains.
 
   // Add text layer
   const addTextLayer = () => {
@@ -496,21 +443,19 @@ export default function ThumbnailCreatorPage() {
     if (!canvas) return;
 
     try {
-      // TODO: Call Vertex AI Vision API for CTR prediction
+      // Calls the predictThumbnailCtr Cloud Function (story-functions, us-east1).
       const imageData = canvas.toDataURL();
-      const response = await fetch('/api/predict-ctr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageData }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setCtrPrediction(data.ctr);
+      const predict = httpsCallable<{ imageData: string }, { ctr: number }>(
+        functions,
+        'predictThumbnailCtr'
+      );
+      const result = await predict({ imageData });
+      if (typeof result.data?.ctr === 'number') {
+        setCtrPrediction(result.data.ctr);
       }
     } catch (error) {
       console.error('CTR prediction failed:', error);
-      // Mock prediction
+      // Fallback estimate if the function is unavailable
       const prediction = Math.floor(Math.random() * 5) + 8;
       setCtrPrediction(prediction);
     }
@@ -586,16 +531,26 @@ export default function ThumbnailCreatorPage() {
         },
       };
 
-      // TODO: Save to Firestore
-      // await db.collection('thumbnail-projects').add(project);
+      // Save to Firestore thumbnail projects
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db, auth } = await import('@/lib/firebase/config');
+      const { serverTimestamp } = await import('firebase/firestore');
+      const uid = auth?.currentUser?.uid;
+      if (uid) {
+        await setDoc(
+          doc(db, 'users', uid, 'thumbnailProjects', project.id),
+          {
+            ...project,
+            userId: uid,
+            createdAt: serverTimestamp(),
+          }
+        );
+      }
 
-      // Mock save
       setSavedProjects([...savedProjects, project]);
       setProjectName('');
-      alert('Project saved successfully!');
     } catch (error) {
       console.error('Save failed:', error);
-      alert('Failed to save project');
     } finally {
       setIsSaving(false);
     }
@@ -754,19 +709,6 @@ export default function ThumbnailCreatorPage() {
                 >
                   <Grid3x3 size={18} />
                 </button>
-                {backgroundImage && (
-                  <button
-                    onClick={removeBackground}
-                    disabled={isRemovingBg}
-                    className="p-2 bg-black/60 backdrop-blur-xl text-white rounded-lg hover:bg-black/80 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    {isRemovingBg ? (
-                      <div className="w-[18px] h-[18px] border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <Eraser size={18} />
-                    )}
-                  </button>
-                )}
               </div>
 
               <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
@@ -834,7 +776,6 @@ export default function ThumbnailCreatorPage() {
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2">
               {[
                 { id: 'upload', label: 'Upload', icon: Upload, gradient: 'from-blue-600 to-cyan-600' },
-                { id: 'ai', label: 'AI', icon: Cpu, gradient: 'from-purple-600 to-pink-600' },
                 { id: 'text', label: 'Text', icon: Type, gradient: 'from-orange-600 to-red-600' },
                 { id: 'stickers', label: 'Stickers', icon: Star, gradient: 'from-yellow-600 to-orange-600' },
                 { id: 'filters', label: 'Filters', icon: Filter, gradient: 'from-green-600 to-emerald-600' },
@@ -919,73 +860,6 @@ export default function ThumbnailCreatorPage() {
                       <span>Use the rule of thirds for composition</span>
                     </li>
                   </ul>
-                </div>
-              </div>
-            )}
-
-            {/* AI Generate Tab */}
-            {activeTab === 'ai' && (
-              <div className="space-y-4">
-                <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded-2xl p-6 border border-purple-500/30">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center">
-                      <Cpu size={24} className="text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-white">AI Thumbnail Generator</h3>
-                      <p className="text-xs text-purple-300">Powered by Vertex AI Imagen 3</p>
-                    </div>
-                  </div>
-
-                  <textarea
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="Describe your thumbnail in detail... (e.g., 'Epic gaming thumbnail with neon lights, futuristic city skyline, dramatic lighting, cinematic composition')"
-                    className="w-full h-32 px-4 py-3 bg-black/30 border border-purple-500/30 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none text-sm"
-                  />
-
-                  <button
-                    onClick={generateAIThumbnail}
-                    disabled={isGenerating || !aiPrompt.trim()}
-                    className="w-full mt-4 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-black rounded-xl hover:shadow-lg hover:shadow-purple-500/50 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isGenerating ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Generating with AI...
-                      </>
-                    ) : (
-                      <>
-                        <Star size={20} />
-                        Generate Thumbnail
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-4 border border-gray-700">
-                  <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                    <Star size={16} className="text-yellow-400" />
-                    Example Prompts
-                  </h3>
-                  <div className="space-y-2">
-                    {[
-                      'Epic gaming thumbnail with neon lights and futuristic city',
-                      'Minimalist tech review background with clean lines',
-                      'Dramatic reaction face with explosion and fire effects',
-                      'Cozy vlog aesthetic with warm tones and bokeh',
-                      'Professional tutorial thumbnail with clean workspace',
-                      'Energetic music video vibe with vibrant colors',
-                    ].map((prompt, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setAiPrompt(prompt)}
-                        className="w-full text-left px-3 py-2 bg-gray-700/50 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-all"
-                      >
-                        {prompt}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
             )}

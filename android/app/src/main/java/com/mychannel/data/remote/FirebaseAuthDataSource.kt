@@ -30,6 +30,12 @@ class FirebaseAuthDataSource @Inject constructor(
     val currentUserId: String?
         get() = auth.currentUser?.uid
 
+    val currentUserDisplayName: String?
+        get() = auth.currentUser?.displayName
+
+    val currentUserAvatarUrl: String?
+        get() = auth.currentUser?.photoUrl?.toString()
+
     /** Emits the current [User] profile (or null) on every auth state change. */
     fun observeAuthState(): Flow<User?> = callbackFlow {
         val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->

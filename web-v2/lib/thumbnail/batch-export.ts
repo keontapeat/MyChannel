@@ -267,7 +267,7 @@ async function sendToNative(action: string, data: any): Promise<void> {
 
   return new Promise((resolve, reject) => {
     try {
-      // @ts-ignore - React Native WebView
+      // @ts-expect-error - ReactNativeWebView is injected on window by the native shell
       window.ReactNativeWebView?.postMessage(
         JSON.stringify({
           type: 'thumbnail-export',

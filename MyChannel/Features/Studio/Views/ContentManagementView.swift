@@ -739,14 +739,29 @@ struct ContentManagementView: View {
     }
     
     private func downloadSelected() {
-        print("🔥 Download \(selectedVideos.count) videos")
-        // TODO: Implement bulk download
+        // Queue each selected video for offline download via the canonical OfflineDownloadService.
+        let videosToDownload = videos.filter { selectedVideos.contains($0.id) }
+        Task { @MainActor in
+            for video in videosToDownload {
+                guard !OfflineDownloadService.shared.hasDownload(videoId: video.id) else { continue }
+                _ = try? await OfflineDownloadService.shared.downloadVideo(video)
+            }
+        }
         HapticManager.shared.impact(style: .medium)
     }
     
     private func shareSelected() {
         print("🔥 Share \(selectedVideos.count) videos")
-        // TODO: Implement bulk share
+        // Build share URLs for selected videos and present share sheet
+        let shareURLs = selectedVideos.compactMap {
+            URL(string: "https://mychannel.live/watch/\($0)")
+        }
+        guard !shareURLs.isEmpty else { return }
+        let activityVC = UIActivityViewController(activityItems: shareURLs, applicationActivities: nil)
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let root = scene.windows.first?.rootViewController {
+            root.present(activityVC, animated: true)
+        }
         HapticManager.shared.impact(style: .medium)
     }
     

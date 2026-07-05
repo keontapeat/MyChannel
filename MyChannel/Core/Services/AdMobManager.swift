@@ -45,60 +45,49 @@ final class AdMobManager: NSObject, ObservableObject {
         /// Pre-roll video ad before main content
         static var prerollVideo: String {
             #if DEBUG
-            return testRewarded // Use test ads in debug
+            return testRewarded
             #else
-            // TODO: Replace with your real ad unit ID
-            return "ca-app-pub-6523548415882152/XXXXXXXXXX"
+            return AppSecrets.admobPrerollVideoUnitID.isEmpty ? "ca-app-pub-6523548415882152/PREROLL00" : AppSecrets.admobPrerollVideoUnitID
             #endif
         }
         
-        /// Rewarded video ad (user chooses to watch for rewards)
         static var rewardedVideo: String {
             #if DEBUG
             return testRewarded
             #else
-            // TODO: Replace with your real ad unit ID
-            return "ca-app-pub-6523548415882152/XXXXXXXXXX"
+            return AppSecrets.admobRewardedVideoUnitID.isEmpty ? "ca-app-pub-6523548415882152/REWARDED0" : AppSecrets.admobRewardedVideoUnitID
             #endif
         }
         
-        /// Interstitial ad (full-screen between content)
         static var interstitial: String {
             #if DEBUG
             return testInterstitial
             #else
-            // TODO: Replace with your real ad unit ID
-            return "ca-app-pub-6523548415882152/XXXXXXXXXX"
+            return AppSecrets.admobInterstitialUnitID.isEmpty ? "ca-app-pub-6523548415882152/INTERSTIT" : AppSecrets.admobInterstitialUnitID
             #endif
         }
         
-        /// Banner ad (persistent at bottom/top of screen)
         static var banner: String {
             #if DEBUG
             return testBanner
             #else
-            // TODO: Replace with your real ad unit ID
-            return "ca-app-pub-6523548415882152/XXXXXXXXXX"
+            return AppSecrets.admobBannerUnitID.isEmpty ? "ca-app-pub-6523548415882152/BANNER000" : AppSecrets.admobBannerUnitID
             #endif
         }
         
-        /// Native ad (blends with content)
         static var native: String {
             #if DEBUG
             return testNative
             #else
-            // TODO: Replace with your real ad unit ID
-            return "ca-app-pub-6523548415882152/XXXXXXXXXX"
+            return AppSecrets.admobNativeUnitID.isEmpty ? "ca-app-pub-6523548415882152/NATIVE000" : AppSecrets.admobNativeUnitID
             #endif
         }
         
-        /// App open ad (shown when app opens)
         static var appOpen: String {
             #if DEBUG
             return testAppOpen
             #else
-            // TODO: Replace with your real ad unit ID
-            return "ca-app-pub-6523548415882152/XXXXXXXXXX"
+            return AppSecrets.admobAppOpenUnitID.isEmpty ? "ca-app-pub-6523548415882152/APPOPEN00" : AppSecrets.admobAppOpenUnitID
             #endif
         }
     }

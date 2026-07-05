@@ -127,14 +127,24 @@ export class AuthService {
     return auth.currentUser !== null;
   }
 
-  // Check if user is admin
+  // Check if user is admin.
+  //
+  // Admin status comes from a Firebase custom claim (`admin: true`) set
+  // server-side (Cloud Function / Admin SDK) — it cannot be forged by the
+  // client. NOTE: this is only for UI gating. All privileged reads/writes must
+  // still be enforced by Firestore/Storage Security Rules and server code;
+  // never trust this client-side check alone for access control.
   async isAdmin(): Promise<boolean> {
     const user = auth.currentUser;
     if (!user) return false;
 
-    // Check if user email is in admin list
-    const adminEmails = process.env.ADMIN_EMAILS?.split(',') || [];
-    return adminEmails.includes(user.email || '');
+    try {
+      const token = await user.getIdTokenResult();
+      return token.claims.admin === true;
+    } catch (error) {
+      console.error('🚨 isAdmin claim check error:', error);
+      return false;
+    }
   }
 
   // Listen to auth state changes

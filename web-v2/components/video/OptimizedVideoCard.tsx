@@ -60,10 +60,10 @@ export default function OptimizedVideoCard({ video, index, allVideos = [] }: Opt
 
   const handleVideoClick = () => {
     openMiniPlayer({
-      videoId: video.id,
+      id: video.id,
       title: video.title,
       channel: video.channel,
-      thumbnail: video.thumbnailURL,
+      thumbnailURL: video.thumbnailURL,
     });
   };
 

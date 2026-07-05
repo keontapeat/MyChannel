@@ -13,6 +13,7 @@ struct UIKitFlicksGestureLayer: UIViewRepresentable {
     let onSingleTap: () -> Void
     let onDoubleTap: () -> Void
     let onLongPressBegan: () -> Void
+    var onLongPressEnded: () -> Void = {}
     
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
@@ -59,8 +60,14 @@ struct UIKitFlicksGestureLayer: UIViewRepresentable {
         }
         
         @objc func longPress(_ recognizer: UILongPressGestureRecognizer) {
-            guard recognizer.state == .began else { return }
-            parent.onLongPressBegan()
+            switch recognizer.state {
+            case .began:
+                parent.onLongPressBegan()
+            case .ended, .cancelled, .failed:
+                parent.onLongPressEnded()
+            default:
+                break
+            }
         }
     }
 }

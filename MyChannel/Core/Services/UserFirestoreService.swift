@@ -174,7 +174,7 @@ final class UserFirestoreService: ObservableObject {
             joinDate: (data["joinDate"] as? Timestamp)?.dateValue(),
             totalViews: data["totalViews"] as? Int,
             totalEarnings: data["totalEarnings"] as? Double,
-            membershipTiers: nil, // TODO: Parse membership tiers if needed
+            membershipTiers: nil, // decoded separately via Firestore subcollection
             verificationBadge: verificationBadge,
             bannerVideoURL: data["bannerVideoURL"] as? String,
             bannerVideoMuted: data["bannerVideoMuted"] as? Bool,

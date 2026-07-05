@@ -77,11 +77,54 @@ const VideoGrid = () => {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {videos.map((video) => (
-        <VideoCard key={video.id} video={video} />
+        <VideoCard
+          key={video.id}
+          video={{
+            id: video.id,
+            title: video.title,
+            thumbnailURL: video.thumbnailURL,
+            duration: formatDuration(video.duration),
+            channel: video.creator?.displayName ?? 'Unknown',
+            channelIcon: video.creator?.profileImageURL ?? '',
+            views: formatViews(video.viewCount),
+            timeAgo: formatTimeAgo(video.createdAt),
+            isVerified: video.creator?.isVerified ?? false,
+          }}
+        />
       ))}
     </div>
   );
 };
 
 export default VideoGrid;
+
+function formatDuration(seconds: number): string {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return hrs > 0 ? `${hrs}:${pad(mins)}:${pad(secs)}` : `${mins}:${pad(secs)}`;
+}
+
+function formatViews(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
+  return `${count}`;
+}
+
+function formatTimeAgo(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  const intervals: [number, string][] = [
+    [31_536_000, 'year'],
+    [2_592_000, 'month'],
+    [86_400, 'day'],
+    [3_600, 'hour'],
+    [60, 'minute'],
+  ];
+  for (const [secs, label] of intervals) {
+    const value = Math.floor(seconds / secs);
+    if (value >= 1) return `${value} ${label}${value > 1 ? 's' : ''} ago`;
+  }
+  return 'just now';
+}
 

@@ -39,6 +39,9 @@ app.get('/health', async () => ({ status: 'ok' }))
 // Proxy examples to internal services (env-configurable)
 const BOOST = process.env.CHANNELBOOST_URL || 'http://channelboost:8787'
 const MIND  = process.env.CHANNELMIND_URL  || 'http://channelmind:8080'
+const SEARCH = process.env.SEARCH_URL      || 'http://search:8080'
+const MODERATION = process.env.MODERATION_URL || 'http://moderation:8080'
+const VIDEO_CONTENT_ID = process.env.VIDEO_CONTENT_ID_URL || 'http://video-content-id:8080'
 const PAY   = process.env.PAY_URL          || 'http://pay:8888'
 const PROTECT = process.env.PROTECT_URL    || 'http://protect:9091'
 const IQ      = process.env.IQ_URL         || 'http://iq:9092'
@@ -60,6 +63,41 @@ app.all('/boost/*', { preHandler: auth }, async (req, reply) => {
 
 app.all('/mind/*', { preHandler: auth }, async (req, reply) => {
   const url = MIND + req.url.replace('/mind', '')
+  const res = await fetch(url, { method: req.method, headers: buildForwardHeaders(req), body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.raw })
+  reply.status(res.status)
+  for (const [k,v] of res.headers) reply.header(k, v)
+  reply.send(await res.arrayBuffer())
+})
+
+// Search is unauthenticated on purpose: it only reads public videos/channels
+// (isPublic == true), matching the public-browsing UX of /app/search on web.
+// No user/session data is exposed through this proxy.
+app.all('/search/*', async (req, reply) => {
+  const url = SEARCH + req.url.replace('/search', '')
+  const res = await fetch(url, { method: req.method, headers: buildForwardHeaders(req), body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.raw })
+  reply.status(res.status)
+  for (const [k,v] of res.headers) reply.header(k, v)
+  reply.send(await res.arrayBuffer())
+})
+
+// Moderation requires auth: it's called by the uploader at publish time
+// (pre-flight check before a video goes live), so we need to know who's
+// asking to rate-limit abuse. The authoritative enforcement pass still runs
+// server-side in Cloud Functions (functions/main.py moderate_video_on_upload)
+// regardless of whether the client calls this endpoint.
+app.all('/moderation/*', { preHandler: auth }, async (req, reply) => {
+  const url = MODERATION + req.url.replace('/moderation', '')
+  const res = await fetch(url, { method: req.method, headers: buildForwardHeaders(req), body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.raw })
+  reply.status(res.status)
+  for (const [k,v] of res.headers) reply.header(k, v)
+  reply.send(await res.arrayBuffer())
+})
+
+// Video Content ID: registering a reference or scanning requires auth (write
+// paths); reading existing matches for a video is intentionally left behind
+// auth too since match data can reveal a rightsholder's copyright claims.
+app.all('/video-content-id/*', { preHandler: auth }, async (req, reply) => {
+  const url = VIDEO_CONTENT_ID + req.url.replace('/video-content-id', '')
   const res = await fetch(url, { method: req.method, headers: buildForwardHeaders(req), body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.raw })
   reply.status(res.status)
   for (const [k,v] of res.headers) reply.header(k, v)

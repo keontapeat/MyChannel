@@ -276,6 +276,7 @@ struct MusicHubView: View {
                 
                 Button {
                     HapticManager.shared.impact(style: .light)
+                    NotificationCenter.default.post(name: NSNotification.Name("PresentNotificationsInbox"), object: nil)
                 } label: {
                     Image(systemName: "bell")
                         .font(.system(size: 20, weight: .medium))
@@ -1149,7 +1150,9 @@ struct MusicHubView: View {
                         .cornerRadius(8)
                 }
                 Button {
-                    // TODO: open terms / pricing
+                    if let url = URL(string: "https://mychannel.live/terms") {
+                        UIApplication.shared.open(url)
+                    }
                 } label: {
                     Text("Learn More")
                         .foregroundColor(AppTheme.Colors.primary)

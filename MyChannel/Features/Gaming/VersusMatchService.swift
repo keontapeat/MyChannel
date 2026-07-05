@@ -22,8 +22,16 @@ class VersusMatchService: ObservableObject {
     private let db = Firestore.firestore()
     private let escrowService = MoneyEscrowService.shared
     
+    /// Active match listeners, keyed by matchId, so we can avoid duplicate
+    /// listeners and detach them (previously they leaked — attached, never removed).
+    private var matchListeners: [String: ListenerRegistration] = [:]
+    
     private init() {
         loadMatches()
+    }
+    
+    deinit {
+        matchListeners.values.forEach { $0.remove() }
     }
     
     // MARK: - 🎮 CREATE MATCH
@@ -44,6 +52,17 @@ class VersusMatchService: ObservableObject {
         guard wagerAmount >= 1.0 && wagerAmount <= 100000 else {
             throw MatchError.invalidWagerAmount
         }
+        
+        // 🔒 COMPLIANCE GATE — required before ANY money moves.
+        // Enforces 18+, KYC (for $500+), terms acceptance, region allowlist,
+        // account status, and daily wager limit. Throws ComplianceError (a
+        // LocalizedError) surfaced to the UI. This is a client-side gate for UX;
+        // the escrow Cloud Function MUST re-enforce these server-side (client
+        // checks are never authoritative for money).
+        _ = try await VSMatchComplianceService.shared.canUserWager(
+            userId: challengerId,
+            amount: wagerAmount
+        )
         
         // 🤖 AI: Optimize match with Match Orchestrator Agent
         var optimizedRules = rules
@@ -119,6 +138,15 @@ class VersusMatchService: ObservableObject {
             throw MatchError.matchNotFound
         }
         
+        // 🔒 COMPLIANCE GATE — the opponent is also wagering real money by
+        // accepting, so they must clear the same checks as the challenger
+        // (18+, KYC for $500+, terms, region, account status, daily limit)
+        // BEFORE their funds are held. Mirror server-side in the escrow function.
+        _ = try await VSMatchComplianceService.shared.canUserWager(
+            userId: opponentId,
+            amount: match.wagerAmount
+        )
+        
         // Hold opponent's money in escrow
         try await escrowService.holdFunds(
             userId: opponentId,
@@ -147,12 +175,13 @@ class VersusMatchService: ObservableObject {
             throw MatchError.matchNotFound
         }
         
-        // Return challenger's money
-        try await escrowService.releaseFunds(
+        // Return the challenger's held funds. A declined match was never accepted,
+        // so ONLY the challenger has funds in escrow — use refundFunds (cancels the
+        // hold), NOT releaseFunds (which captures both legs and pays a "winner" and
+        // would throw .noFundsHeld here since the opponent never funded escrow).
+        try await escrowService.refundFunds(
             matchId: matchId,
-            winnerId: match.challengerId,
-            loserId: match.opponentId,
-            totalPot: match.wagerAmount
+            userId: match.challengerId
         )
         
         // Update status
@@ -193,10 +222,13 @@ class VersusMatchService: ObservableObject {
             throw MatchError.matchNotFound
         }
         
-        // Calculate winnings (winner gets both wagers minus platform fee)
-        let totalPot = match.wagerAmount * 2
-        let platformFee = totalPot * 0.10 // 10% platform fee
-        let winnerPayout = totalPot - platformFee
+        // Calculate winnings in INTEGER CENTS (rounded), matching the server's
+        // settlement math. The stored winnerPayout/platformFee below are a display
+        // preview — the authoritative transfer is computed server-side from the
+        // captured escrow legs.
+        let grossCents = MoneyMath.cents(fromDollars: match.wagerAmount) * 2
+        let platformFee = MoneyMath.dollars(fromCents: MoneyMath.platformFeeCents(grossCents: grossCents))
+        let winnerPayout = MoneyMath.dollars(fromCents: MoneyMath.winnerPayoutCents(grossCents: grossCents))
         
         // Release funds to winner
         try await escrowService.releaseFunds(
@@ -217,11 +249,15 @@ class VersusMatchService: ObservableObject {
             "platformFee": platformFee
         ])
         
-        // Update stats and award points in parallel — independent operations
-        async let statsUpdate: Void = updatePlayerStats(winnerId: winnerId, loserId: loserId, match: match)
-        async let pointsUpdate: Void = awardChampionshipPoints(winnerId: winnerId, match: match)
-        await statsUpdate
-        await pointsUpdate
+        // 🔒 Player stats, earnings, and championship points are written
+        // SERVER-SIDE by the escrow settlement function (/create-transfer), which
+        // runs once per verified, paid-out match. We intentionally do NOT write
+        // them from the client — client-writable stats were forgeable (a user
+        // could inflate their own wins/earnings/points directly). Firestore rules
+        // now make player_stats / championship_rankings admin-write only.
+        
+        // Match is over — detach its real-time listener so it doesn't leak.
+        stopMonitoring(matchId: matchId)
         
         print("✅ Match completed! Winner: \(winnerId), Payout: $\(winnerPayout)")
     }
@@ -332,65 +368,70 @@ class VersusMatchService: ObservableObject {
     }
     
     private func sendMatchInvite(match: VersusMatch) async {
-        // Send push notification to opponent
         print("📨 Sending match invite to \(match.opponentId)")
-        
-        // TODO: Implement push notification
+        // Send FCM push notification via Firestore trigger
+        // The on_video_ready / match notification is handled server-side.
+        // Write a notification doc — the Cloud Function picks it up.
+        try? await db.collection("notifications").addDocument(data: [
+            "userId":   match.opponentId,
+            "type":     "match_invitation",
+            "title":    "VS Match Challenge",
+            "body":     "You've been challenged to a VS Match!",
+            "matchId":  match.id,
+            "isRead":   false,
+            "createdAt": Timestamp(date: Date()),
+        ])
     }
     
     private func scheduleMatchStart(match: VersusMatch) async {
         print("⏰ Scheduling match start for \(match.scheduledDate)")
-        
-        // TODO: Schedule notification/reminder
+        // Write a scheduled notification doc that the Cloud Function picks up
+        let scheduledDate = match.scheduledDate
+        try? await db.collection("scheduled_notifications").addDocument(data: [
+            "userId":      match.challengerId,
+            "targetUsers": [match.challengerId, match.opponentId],
+            "type":        "match_reminder",
+            "title":       "VS Match Starting Soon",
+            "body":        "Your match starts in 5 minutes!",
+            "matchId":     match.id,
+            "deliverAt":   Timestamp(date: scheduledDate.addingTimeInterval(-300)),
+            "createdAt":   Timestamp(date: Date()),
+        ])
     }
     
     private func monitorMatch(matchId: String) async {
+        // Avoid stacking duplicate listeners for the same match.
+        guard matchListeners[matchId] == nil else { return }
         print("👀 Monitoring match \(matchId)")
-        
-        // TODO: Real-time monitoring of match stats
-    }
-    
-    private func updatePlayerStats(winnerId: String, loserId: String, match: VersusMatch) async {
-        print("📊 Updating player stats...")
-        let db = self.db
-        let wagerAmount = match.wagerAmount  // Double — avoids Int64 truncation bug
-        let now = Timestamp(date: Date())
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask {
-                try? await db.collection("player_stats").document(winnerId).setData([
-                    "wins": FieldValue.increment(Int64(1)),
-                    "totalEarnings": FieldValue.increment(wagerAmount),
-                    "lastMatchDate": now
-                ], merge: true)
+        // Attach a real-time listener to the match document. Retained so it can
+        // be detached in stopMonitoring / deinit instead of leaking.
+        let registration = db.collection("versus_matches").document(matchId)
+            .addSnapshotListener { snap, _ in
+                guard let data = snap?.data() else { return }
+                print("🔴 [VersusMatchService] Match \(matchId) updated: status=\(data["status"] ?? "unknown")")
+                // Notify any observers that the match was updated
+                NotificationCenter.default.post(
+                    name: Notification.Name("VSMatchUpdated"),
+                    object: matchId,
+                    userInfo: data
+                )
             }
-            group.addTask {
-                try? await db.collection("player_stats").document(loserId).setData([
-                    "losses": FieldValue.increment(Int64(1)),
-                    "totalLosses": FieldValue.increment(wagerAmount),
-                    "lastMatchDate": now
-                ], merge: true)
-            }
-        }
+        matchListeners[matchId] = registration
     }
     
-    private func awardChampionshipPoints(winnerId: String, match: VersusMatch) async {
-        let points = calculateChampionshipPoints(for: match)
-        
-        print("🏆 Awarding \(points) championship points to \(winnerId)")
-        
-        try? await db.collection("championship_rankings").document(winnerId).setData([
-            "points": FieldValue.increment(Int64(points)),
-            "lastWin": Timestamp(date: Date())
-        ], merge: true)
+    /// Detach the real-time listener for a match (call when a match completes or
+    /// its view goes away) to avoid leaking Firestore listeners.
+    func stopMonitoring(matchId: String) {
+        matchListeners[matchId]?.remove()
+        matchListeners[matchId] = nil
     }
     
-    private func calculateChampionshipPoints(for match: VersusMatch) -> Int {
-        // Higher wager = more points
-        let basePoints = 100
-        let wagerBonus = Int(match.wagerAmount / 10) // 1 point per $10
-        
-        return basePoints + wagerBonus
-    }
+    // NOTE: Player stats, earnings, and championship points are now written
+    // SERVER-SIDE in the escrow settlement Cloud Function (/create-transfer),
+    // keyed idempotently per match. The former client-side updatePlayerStats /
+    // awardChampionshipPoints / calculateChampionshipPoints helpers were removed
+    // because client-writable outcomes were forgeable. Points formula lives in
+    // the Cloud Function: 100 base + 1 point per $10 of the winner's wager.
     
     private func loadMatches() {
         Task {

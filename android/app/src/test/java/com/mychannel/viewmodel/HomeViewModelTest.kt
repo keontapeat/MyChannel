@@ -218,7 +218,19 @@ class HomeViewModelTest {
         override suspend fun toggleLike(videoId: String, like: Boolean): Result<Unit> =
             Result.success(Unit)
 
+        override suspend fun isLiked(videoId: String): Result<Boolean> = Result.success(false)
+
+        override suspend fun isSaved(videoId: String): Result<Boolean> = Result.success(false)
+
+        override suspend fun setSaved(video: Video, save: Boolean): Result<Unit> =
+            Result.success(Unit)
+
         override suspend fun incrementViewCount(videoId: String): Result<Unit> =
+            Result.success(Unit)
+
+        override fun observeDownloads(userId: String): Flow<List<Video>> = flowOf(emptyList())
+
+        override suspend fun deleteDownload(userId: String, videoId: String): Result<Unit> =
             Result.success(Unit)
     }
 }

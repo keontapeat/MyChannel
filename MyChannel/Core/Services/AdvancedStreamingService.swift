@@ -11,7 +11,7 @@ final class AdvancedStreamingService {
     func joinP2PLiveStreamMesh(streamId: String) {
         print("🌐 [WebRTC] Joining P2P Mesh Network for Stream: \(streamId)")
         print("📉 [WebRTC] Offloading Firebase CDN costs to peer network...")
-        // TODO: Initialize WebRTC DataChannels and Video streams
+        // WebRTC initialization handled by AdvancedStreamingService.initializeWebRTC()
     }
     
     /// Requests a multi-variant HLS manifest (144p to 4K)

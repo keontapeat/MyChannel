@@ -12,7 +12,15 @@ import BackgroundTasks
 actor BackgroundFetchService {
     static let shared = BackgroundFetchService()
     
-    let refreshTaskId = "com.mychannel.refresh"
+    // 🔥 CRASH FIX (App Store Guideline 2.1(a), submission 438e47dd): this identifier
+    // MUST exactly match an entry in Info.plist > BGTaskSchedulerPermittedIdentifiers.
+    // It previously registered "com.mychannel.refresh", which is NOT in the plist
+    // (only "com.keontapeat.MyChannelApp.*" identifiers are declared there). Since
+    // BGTaskScheduler.register(forTaskWithIdentifier:) is called synchronously during
+    // didFinishLaunchingWithOptions, an unlisted identifier throws an uncaught
+    // NSInternalInconsistencyException and crashes the app immediately on every launch —
+    // exactly what App Review saw on the iPad Air 11-inch (M3) / iPadOS 26.5 review device.
+    let refreshTaskId = "com.keontapeat.MyChannelApp.refresh"
     
     private init() {}
     

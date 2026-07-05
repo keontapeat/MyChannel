@@ -1164,6 +1164,20 @@
       "density": "SPARSE_ALL"
     },
     {
+      "collectionGroup": "views",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "music_tracks",
       "queryScope": "COLLECTION",
       "fields": [

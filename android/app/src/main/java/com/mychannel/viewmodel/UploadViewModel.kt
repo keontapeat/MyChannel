@@ -59,7 +59,11 @@ data class UploadUiState(
     val description: String = "",
     val tags: String = "",
     val category: String = "",
-    val privacy: String = UploadWorker.PRIVACY_PUBLIC
+    val privacy: String = UploadWorker.PRIVACY_PUBLIC,
+    val ageRestricted: Boolean = false,
+    val madeForKids: Boolean = false,
+    val isPremiere: Boolean = false,
+    val scheduledAtMs: Long = 0L   // 0 = not scheduled
 ) {
     /** True while bytes are transferring — used to show the progress bar. */
     val isUploading: Boolean get() = status is UploadStatus.Uploading
@@ -113,8 +117,11 @@ class UploadViewModel @Inject constructor(
     fun updateTags(value: String) = _uiState.update { it.copy(tags = value) }
 
     fun updateCategory(value: String) = _uiState.update { it.copy(category = value) }
-
     fun updatePrivacy(value: String) = _uiState.update { it.copy(privacy = value) }
+    fun updateAgeRestricted(value: Boolean) = _uiState.update { it.copy(ageRestricted = value, madeForKids = if (value) false else it.madeForKids) }
+    fun updateMadeForKids(value: Boolean) = _uiState.update { it.copy(madeForKids = value, ageRestricted = if (value) false else it.ageRestricted) }
+    fun updateIsPremiere(value: Boolean) = _uiState.update { it.copy(isPremiere = value) }
+    fun updateScheduledAt(ms: Long) = _uiState.update { it.copy(scheduledAtMs = ms) }
 
     /**
      * Validates the form and enqueues the background [UploadWorker] (REQ-8.2,
@@ -141,7 +148,11 @@ class UploadViewModel @Inject constructor(
             UploadWorker.KEY_TAGS to state.tags.trim(),
             UploadWorker.KEY_CATEGORY to state.category.trim(),
             UploadWorker.KEY_PRIVACY to state.privacy,
-            UploadWorker.KEY_DURATION_SECONDS to state.durationSeconds
+            UploadWorker.KEY_DURATION_SECONDS to state.durationSeconds,
+            "ageRestricted" to state.ageRestricted,
+            "madeForKids" to state.madeForKids,
+            "isPremiere" to state.isPremiere,
+            "scheduledAtMs" to state.scheduledAtMs
         )
 
         // Require a network connection; upload is deferrable but should not run

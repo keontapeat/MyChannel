@@ -3,8 +3,9 @@
 // 🔥🎨 BEAUTIFUL YOUTUBE-PREMIUM HERO SECTION 🎨🔥
 // The most stunning hero section ever created
 
-import { Play, TrendingUp, Award, Zap } from 'lucide-react';
+import { Play, TrendingUp, Award, Zap, CheckCircle, Eye } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 interface HeroVideo {
   id: string;
@@ -12,6 +13,7 @@ interface HeroVideo {
   description: string;
   thumbnailURL: string;
   channel: string;
+  channelIcon: string;
   views: string;
   category: string;
 }
@@ -199,19 +201,5 @@ export default function BeautifulHero({ featuredVideos }: BeautifulHeroProps) {
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-[rgb(var(--color-primary))]/20 blur-3xl opacity-50" />
     </div>
   );
-}
-
-/* Add to globals.css: */
-@keyframes slow-zoom {
-  0%, 100% {
-    transform: scale(1.1);
-  }
-  50% {
-    transform: scale(1.15);
-  }
-}
-
-.animate-slow-zoom {
-  animation: slow-zoom 20s ease-in-out infinite;
 }
 

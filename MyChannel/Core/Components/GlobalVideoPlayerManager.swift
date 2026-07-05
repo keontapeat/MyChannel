@@ -40,6 +40,15 @@ class GlobalVideoPlayerManager: ObservableObject {
     private let appState = AppState.shared
     private var currentViewSessionId: String?
     private var heartbeatTimer: Timer?
+
+    // 🎓 MyChannel University watch attribution for the currently-tracked session.
+    // Snapshotted at session start so it survives the synchronous state resets in
+    // closePlayer()/nuclearReset() that run before the async endViewTracking() Task.
+    private var universityWatchVideo: Video?
+    private var universityMaxPosition: TimeInterval = 0
+    // Single-use, server-minted proof this session's view is real (see
+    // issueUniversityViewToken / consumeViewToken). Requested once per session.
+    private var universityViewToken: String?
     
     private var playerManager: VideoPlayerManager?
     private var backgroundObserver: NSObjectProtocol?
@@ -132,6 +141,9 @@ class GlobalVideoPlayerManager: ObservableObject {
     }
     
     private func startViewTracking(for video: Video) async {
+        // 🎓 Flush the previous session's watch time to University before switching.
+        flushUniversityWatch()
+
         // End previous session if exists
         if let sessionId = currentViewSessionId {
             await viewTracker.endViewSession(sessionId: sessionId)
@@ -143,6 +155,22 @@ class GlobalVideoPlayerManager: ObservableObject {
         
         // Store session ID
         currentViewSessionId = UUID().uuidString
+
+        // 🎓 Begin University watch attribution for this video. Request a
+        // server-minted view token now, at genuine playback start, so a later
+        // watch event for this video can prove it corresponds to a real view.
+        universityWatchVideo = video
+        universityMaxPosition = 0
+        universityViewToken = nil
+        Task { [weak self, videoId = video.id] in
+            let token = await UniversityWatchTrackingService.shared.requestViewToken(videoId: videoId)
+            await MainActor.run {
+                // Only apply if we're still tracking the same video (guards against
+                // a fast video switch racing this request).
+                guard self?.universityWatchVideo?.id == videoId else { return }
+                self?.universityViewToken = token
+            }
+        }
         
         print("👁️ [GlobalPlayer] Started view tracking for: \(video.title)")
     }
@@ -150,6 +178,9 @@ class GlobalVideoPlayerManager: ObservableObject {
     private func sendViewHeartbeat() async {
         guard let sessionId = currentViewSessionId,
               currentVideo != nil else { return }
+
+        // 🎓 Track the furthest playhead reached for University watch attribution.
+        universityMaxPosition = max(universityMaxPosition, currentTime)
         
         await viewTracker.updateViewHeartbeat(
             sessionId: sessionId,
@@ -159,12 +190,42 @@ class GlobalVideoPlayerManager: ObservableObject {
     }
     
     private func endViewTracking() async {
+        // 🎓 Flush University watch attribution for the ending session.
+        flushUniversityWatch()
+
         guard let sessionId = currentViewSessionId else { return }
         
         await viewTracker.endViewSession(sessionId: sessionId)
         currentViewSessionId = nil
         
         print("👋 [GlobalPlayer] Ended view tracking")
+    }
+
+    /// 🎓 Report the just-watched session to MyChannel University so learning hours,
+    /// career-path progress, certificates, and streaks advance from real playback.
+    /// Uses the session snapshot (not live `currentVideo`) so it stays correct even
+    /// after closePlayer()/nuclearReset() have already zeroed live state.
+    private func flushUniversityWatch() {
+        guard let video = universityWatchVideo else { return }
+        universityWatchVideo = nil
+        let token = universityViewToken
+        universityViewToken = nil
+
+        let watched = max(universityMaxPosition, currentTime)
+        universityMaxPosition = 0
+
+        // Ignore trivial sessions (scrubbing, accidental opens, quick skips).
+        guard watched >= 30 else { return }
+
+        let total = duration > 0 ? duration : video.duration
+        let completion = total > 0 ? min(1.0, watched / total) : 0
+
+        appState.trackUniversityWatch(
+            video: video,
+            watchTime: watched,
+            completionPercentage: completion,
+            viewToken: token
+        )
     }
     
     private func handleAppDidEnterBackground() {
@@ -970,6 +1031,26 @@ class GlobalVideoPlayerManager: ObservableObject {
     func seekBackward() {
         guard !isCleanedUp else { return }
         playerManager?.seekBackward(10)
+    }
+
+    /// Switch playback quality from a UI label (e.g. "Auto", "4K", "1080p").
+    /// Routes to the underlying `VideoPlayerManager.setPreferredQuality`.
+    func setQuality(_ quality: String) {
+        guard !isCleanedUp else { return }
+        let mapped: VideoQuality
+        switch quality.lowercased() {
+        case "auto": mapped = .auto
+        case "4k", "2160p": mapped = .quality2160p
+        case "1440p", "2k": mapped = .quality1440p
+        case "1080p": mapped = .quality1080p
+        case "720p": mapped = .quality720p
+        case "480p": mapped = .quality480p
+        case "360p": mapped = .quality360p
+        case "240p": mapped = .quality240p
+        case "144p": mapped = .quality144p
+        default: mapped = VideoQuality(rawValue: quality.lowercased()) ?? .auto
+        }
+        playerManager?.setPreferredQuality(mapped)
     }
     
     // MARK: - Miniplayer Gestures (Removed - Native PiP only)

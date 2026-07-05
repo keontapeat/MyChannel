@@ -14,11 +14,17 @@ data class Channel(
     val name: String = "",
     val handle: String = "",
     val description: String = "",
+    val bio: String = "",
+    val displayName: String = "",
+    val username: String = "",
     val avatarUrl: String = "",
     val bannerUrl: String = "",
+    val location: String = "",
+    val links: List<String> = emptyList(),
     val subscriberCount: Long = 0L,
     val videoCount: Long = 0L,
     val totalViewCount: Long = 0L,
     val isVerified: Boolean = false,
-    val createdAt: Timestamp = Timestamp(0, 0)
+    val createdAt: String = "",    // ISO string for display
+    val createdAtTimestamp: Timestamp = Timestamp(0, 0)
 )

@@ -9,6 +9,9 @@
 import SwiftUI
 import PhotosUI
 import Combine
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct PostUploadEditorView: View {
     let video: Video
@@ -879,14 +882,34 @@ class PostUploadEditorViewModel: ObservableObject {
                 return
                 
             case .holdForReview:
-                // FLAG for manual review (but allow save for now)
+                // FLAG for manual review — write to moderation queue
                 print("⚠️ [CPS Guardian] Content FLAGGED for review: \(triageResult.reasoning)")
-                // TODO: Send alert to admin dashboard for manual review
+                if let uid = AuthenticationManager.shared.currentUser?.id {
+                    Task {
+                        #if canImport(FirebaseFirestore)
+                        try? await Firestore.firestore().collection("reports").addDocument(data: [
+                            "type": "auto_flag",
+                            "itemType": "video_upload",
+                            "reporterUid": "cps_guardian",
+                            "targetUid": uid,
+                            "reason": triageResult.reasoning,
+                            "status": "pending_review",
+                            "createdAt": Timestamp(date: Date()),
+                        ])
+                        #endif
+                    }
+                }
                 
             case .allowWithWarning:
-                // ALLOW with warning
+                // ALLOW with warning — surface a banner to the creator
                 print("⚠️ [CPS Guardian] Content APPROVED with warnings: \(triageResult.reasoning)")
-                // TODO: Show warning to user about potential issues
+                await MainActor.run {
+                    // Post notification for the UI to show a non-blocking warning banner
+                    NotificationCenter.default.post(
+                        name: Notification.Name("ContentModerationWarning"),
+                        object: triageResult.reasoning
+                    )
+                }
                 
             case .allow:
                 // APPROVE: Content is clean

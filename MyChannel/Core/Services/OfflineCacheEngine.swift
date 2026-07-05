@@ -40,7 +40,7 @@ final class CachedComment {
 final class OfflineCacheEngine {
     static let shared = OfflineCacheEngine()
     
-    let container: ModelContainer
+    let container: ModelContainer?
     
     private init() {
         do {
@@ -49,26 +49,32 @@ final class OfflineCacheEngine {
             container = try ModelContainer(for: schema, configurations: [modelConfiguration])
             print("💾 [OfflineCache] SwiftData container initialized successfully.")
         } catch {
-            fatalError("⚠️ [OfflineCache] Failed to initialize SwiftData container: \(error)")
+            // 🔥 FIX 2.1(a): Never fatalError on container init — degrade gracefully.
+            print("⚠️ [OfflineCache] Failed to initialize SwiftData container (non-fatal): \(error)")
+            container = nil
         }
     }
     
     func saveProfile(_ profile: CachedProfile) {
+        guard let container = container else { return }
         container.mainContext.insert(profile)
         try? container.mainContext.save()
     }
     
     func getProfile(userId: String) -> CachedProfile? {
+        guard let container = container else { return nil }
         let descriptor = FetchDescriptor<CachedProfile>(predicate: #Predicate { $0.userId == userId })
         return try? container.mainContext.fetch(descriptor).first
     }
     
     func saveComment(_ comment: CachedComment) {
+        guard let container = container else { return }
         container.mainContext.insert(comment)
         try? container.mainContext.save()
     }
     
     func getComments(for videoId: String) -> [CachedComment] {
+        guard let container = container else { return [] }
         let descriptor = FetchDescriptor<CachedComment>(
             predicate: #Predicate { $0.videoId == videoId },
             sortBy: [SortDescriptor(\.timestamp, order: .reverse)]

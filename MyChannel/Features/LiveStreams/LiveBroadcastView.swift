@@ -8,6 +8,9 @@
 
 import SwiftUI
 import AVFoundation
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct LiveBroadcastView: View {
     let stream: FirestoreLiveStream
@@ -21,6 +24,10 @@ struct LiveBroadcastView: View {
     @State private var showEndConfirm = false
     @State private var chatText = ""
     @State private var timer: Timer?
+    @State private var chatMessages: [(id: String, username: String, content: String, avatar: String)] = []
+    #if canImport(FirebaseFirestore)
+    @State private var chatListener: ListenerRegistration?
+    #endif
 
     @Environment(\.dismiss) private var dismiss
 
@@ -68,10 +75,15 @@ struct LiveBroadcastView: View {
                 camera.startSession()
             }
             startTimer()
+            startChatListener()
         }
         .onDisappear {
             camera.stopSession()
             stopTimer()
+            #if canImport(FirebaseFirestore)
+            chatListener?.remove()
+            chatListener = nil
+            #endif
         }
         .alert("End Live Stream?", isPresented: $showEndConfirm) {
             Button("End Stream", role: .destructive) { endStream() }
@@ -207,17 +219,18 @@ struct LiveBroadcastView: View {
     // MARK: - Chat Overlay
     private var chatOverlay: some View {
         VStack(spacing: 8) {
-            // Recent messages (mock for MVP; real Firestore listener can be added)
+            // Recent messages — live Firestore chat
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 6) {
-                    ForEach(sampleChatMessages, id: \.self) { msg in
-                        Text(msg)
-                            .font(.system(size: 13))
-                            .foregroundColor(.white)
+                    ForEach(chatMessages, id: \.id) { msg in
+                        (Text(msg.username).font(.system(size: 13, weight: .semibold)).foregroundColor(.white.opacity(0.9))
+                         + Text("  ").font(.system(size: 13))
+                         + Text(msg.content).font(.system(size: 13)).foregroundColor(.white))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
                             .background(Color.black.opacity(0.4))
                             .cornerRadius(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
@@ -276,6 +289,29 @@ struct LiveBroadcastView: View {
         timer = nil
     }
 
+    private func startChatListener() {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        chatListener = db.collection("live_streams").document(stream.id).collection("chat")
+            .order(by: "createdAt", descending: false)
+            .limit(toLast: 100)
+            .addSnapshotListener { snapshot, _ in
+                guard let docs = snapshot?.documents else { return }
+                Task { @MainActor in
+                    chatMessages = docs.map { doc in
+                        let d = doc.data()
+                        return (
+                            id: doc.documentID,
+                            username: d["username"] as? String ?? "User",
+                            content: d["content"] as? String ?? "",
+                            avatar: d["avatarUrl"] as? String ?? ""
+                        )
+                    }
+                }
+            }
+        #endif
+    }
+
     private func endStream() {
         camera.stopSession()
         stopTimer()
@@ -285,14 +321,6 @@ struct LiveBroadcastView: View {
         HapticManager.shared.impact(style: .heavy)
         onEnd()
         dismiss()
-    }
-
-    private var sampleChatMessages: [String] {
-        [
-            "🔥 Welcome to the stream!",
-            "👋 Hey everyone!",
-            "🎉 Let's gooo!",
-        ]
     }
 }
 

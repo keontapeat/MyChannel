@@ -242,26 +242,17 @@ class UniversityViewModel: ObservableObject {
         }
     }
 
-    /// Record genuine learning time and advance the real streak.
-    /// Call this when a University video is actually watched.
+    /// Refresh streak/points from the server. Streak advancement itself is now
+    /// server-authoritative (the onUniversityWatchEvent Cloud Function updates it
+    /// from the emitted watch event); the client only reads it for display.
     func recordLearningSession(minutes: Double) async {
-        guard let userId = AppState.shared.currentUser?.id else { return }
-        let updated = await streakService.recordLearningActivity(userId: userId, minutes: minutes)
-        await MainActor.run {
-            streaksAndGoals.currentStreak = updated.displayStreak()
-            streaksAndGoals.longestStreak = updated.longestStreak
-            streaksAndGoals.todayProgress = updated.todayMinutes / 60.0
-            streaksAndGoals.todayGoalMet = updated.goalMetToday()
-            streakFreezesAvailable = updated.streakFreezesAvailable
-            totalPoints = updated.totalPoints
-        }
+        await checkStreakStatus()
     }
     
-    // MARK: - Streak Management (delegates to real Firestore-backed service)
+    // MARK: - Streak Management (server-authoritative; client reads for display)
     
     func updateStreak(watchDuration: TimeInterval) async {
-        let minutes = watchDuration / 60.0
-        await recordLearningSession(minutes: minutes)
+        await checkStreakStatus()
     }
     
     func checkStreakStatus() async {
@@ -272,6 +263,10 @@ class UniversityViewModel: ObservableObject {
         await MainActor.run {
             streaksAndGoals.currentStreak = stats.displayStreak()
             streaksAndGoals.longestStreak = stats.longestStreak
+            streaksAndGoals.todayProgress = stats.todayMinutes / 60.0
+            streaksAndGoals.todayGoalMet = stats.goalMetToday()
+            streakFreezesAvailable = stats.streakFreezesAvailable
+            totalPoints = stats.totalPoints
         }
     }
     
@@ -613,25 +608,24 @@ class UniversityViewModel: ObservableObject {
     }
     
     func playVideo(_ continueVideo: ContinueLearningVideo) {
-        print("▶️ [UniversityVM] Playing video: \(continueVideo.video.title)")
-        print("   Resuming from: \(Int(continueVideo.progressPercentage * 100))%")
-        
-        // TODO: Integrate with GlobalVideoPlayerManager
-        // GlobalVideoPlayerManager.shared.playVideo(video, startAt: continueVideo.progressPercentage)
+        GlobalVideoPlayerManager.shared.playVideo(continueVideo.video.asVideo, showFullscreen: true)
     }
     
     func playUniversityVideo(_ video: UniversityVideo) {
-        print("▶️ [UniversityVM] Playing University video: \(video.title)")
-        
-        // TODO: Integrate with GlobalVideoPlayerManager
-        // Also track with UniversityWatchTrackingService
+        // Map UniversityVideo → Video for the player. Watch time is recorded as a
+        // university_watch_events doc (AppState.trackUniversityWatch →
+        // UniversityWatchTrackingService.recordWatchEvent); the server aggregates
+        // progress and issues certificates.
+        let playerVideo = video.asVideo
+        GlobalVideoPlayerManager.shared.playVideo(playerVideo, showFullscreen: true)
     }
     
     func navigateToCareerPath(_ careerPath: CareerPath, progress: CareerPathProgress) {
         print("🎯 [UniversityVM] Navigate to career path: \(careerPath.name)")
-        print("   Progress: \(progress.progressPercentage)%")
-        
-        // TODO: Navigate to CareerPathDetailView
+        NotificationCenter.default.post(
+            name: Notification.Name("NavigateToCareerPath"),
+            object: careerPath
+        )
     }
     
     // MARK: - 🔥 CACHING METHODS

@@ -47,11 +47,32 @@ final class DependencyContainer: @unchecked Sendable {
             
             // Otherwise generate via factory
             guard let factory = factories[key] as? () -> Service else {
-                fatalError("No registered dependency found for \(key)")
+                // A required dependency was requested but never registered. This is a
+                // programmer error (misconfigured DI), not user-driven — surface it loudly.
+                print("🛑 [DI] No registered dependency for \(key). Register it in registerDefaultServices() or via register(_:factory:).")
+                preconditionFailure("No registered dependency found for \(key)")
             }
             
             let instance = factory()
             // Cache it as a singleton by default
+            cachedInstances[key] = instance
+            return instance
+        }
+    }
+
+    /// Graceful variant of `resolve` for callers that can tolerate a missing
+    /// registration. Returns `nil` instead of trapping.
+    func resolveOptional<Service>(_ type: Service.Type) -> Service? {
+        let key = String(describing: type)
+        return queue.sync {
+            if let cached = cachedInstances[key] as? Service {
+                return cached
+            }
+            guard let factory = factories[key] as? () -> Service else {
+                print("⚠️ [DI] No registered dependency for \(key) (resolveOptional → nil).")
+                return nil
+            }
+            let instance = factory()
             cachedInstances[key] = instance
             return instance
         }

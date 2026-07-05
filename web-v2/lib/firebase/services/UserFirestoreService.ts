@@ -87,12 +87,45 @@ export class UserFirestoreService {
     }
   }
 
-  // Search users by username or display name
+  // Search users by username or display name.
+  // Prefers the real search backend (services/search /v1/search/channels —
+  // relevance-ranked by name match + subscriber popularity) when
+  // NEXT_PUBLIC_SEARCH_API_URL is configured, falling back to client-side
+  // filtering over a popularity-ordered window if the service is unset,
+  // unreachable, or errors.
   async searchUsers(searchQuery: string, limitCount: number = 20): Promise<User[]> {
-    try {
-      // Note: Firestore doesn't support full-text search
-      // This is client-side filtering - use Algolia for production
+    const term = searchQuery.trim();
+    if (!term) return [];
 
+    const apiUrl = process.env.NEXT_PUBLIC_SEARCH_API_URL;
+    if (apiUrl) {
+      try {
+        const res = await fetch(
+          `${apiUrl}/v1/search/channels?q=${encodeURIComponent(term)}&limit=${limitCount}`,
+          { signal: AbortSignal.timeout(5000) }
+        );
+        if (res.ok) {
+          const json = await res.json();
+          const items = Array.isArray(json?.items) ? json.items : [];
+          return items.map((item: any) => ({
+            id: item.id,
+            username: item.username || '',
+            displayName: item.displayName || item.username || '',
+            email: '',
+            profileImageURL: item.profileImageURL || '',
+            subscriberCount: item.subscriberCount || 0,
+            videoCount: 0,
+            createdAt: new Date(),
+            isVerified: !!item.isVerified,
+            isAdmin: false,
+          })) as User[];
+        }
+      } catch (error) {
+        console.warn('⚠️ Search API unreachable, falling back to client-side channel search:', error);
+      }
+    }
+
+    try {
       const constraints = [
         orderBy('subscriberCount', 'desc'),
         firestoreLimit(limitCount * 2), // Fetch more to filter
@@ -107,8 +140,8 @@ export class UserFirestoreService {
       return users
         .filter(
           (user) =>
-            user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            user.displayName.toLowerCase().includes(searchQuery.toLowerCase())
+            user.username.toLowerCase().includes(term.toLowerCase()) ||
+            user.displayName.toLowerCase().includes(term.toLowerCase())
         )
         .slice(0, limitCount);
     } catch (error) {

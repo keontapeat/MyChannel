@@ -152,22 +152,22 @@ fun UploadScreen(
             )
 
             else -> UploadFormContent(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize().padding(padding),
                 state = state,
                 status = status,
                 onPickVideo = ::launchVideoPicker,
                 onPickThumbnail = {
-                    thumbnailPicker.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
+                    thumbnailPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 },
                 onTitleChange = viewModel::updateTitle,
                 onDescriptionChange = viewModel::updateDescription,
                 onTagsChange = viewModel::updateTags,
                 onCategoryChange = viewModel::updateCategory,
                 onPrivacyChange = viewModel::updatePrivacy,
+                onAgeRestrictedChange = viewModel::updateAgeRestricted,
+                onMadeForKidsChange = viewModel::updateMadeForKids,
+                onIsPremiereChange = viewModel::updateIsPremiere,
+                onScheduledAtChange = viewModel::updateScheduledAt,
                 onStartUpload = viewModel::startUpload,
                 onCancelUpload = viewModel::cancelUpload
             )
@@ -188,6 +188,10 @@ private fun UploadFormContent(
     onTagsChange: (String) -> Unit,
     onCategoryChange: (String) -> Unit,
     onPrivacyChange: (String) -> Unit,
+    onAgeRestrictedChange: (Boolean) -> Unit,
+    onMadeForKidsChange: (Boolean) -> Unit,
+    onIsPremiereChange: (Boolean) -> Unit,
+    onScheduledAtChange: (Long) -> Unit,
     onStartUpload: () -> Unit,
     onCancelUpload: () -> Unit
 ) {
@@ -241,6 +245,20 @@ private fun UploadFormContent(
         PrivacySelector(
             selected = state.privacy,
             onSelected = onPrivacyChange
+        )
+
+        AudienceSection(
+            ageRestricted = state.ageRestricted,
+            madeForKids = state.madeForKids,
+            onAgeRestrictedChange = onAgeRestrictedChange,
+            onMadeForKidsChange = onMadeForKidsChange
+        )
+
+        PremiereSection(
+            isPremiere = state.isPremiere,
+            scheduledAtMs = state.scheduledAtMs,
+            onIsPremiereChange = onIsPremiereChange,
+            onScheduledAtChange = onScheduledAtChange
         )
 
         // Progress / error / action area
@@ -495,3 +513,85 @@ private val PRIVACY_OPTIONS = listOf(
     UploadWorker.PRIVACY_UNLISTED to "Unlisted",
     UploadWorker.PRIVACY_PRIVATE to "Private"
 )
+
+@Composable
+private fun AudienceSection(
+    ageRestricted: Boolean,
+    madeForKids: Boolean,
+    onAgeRestrictedChange: (Boolean) -> Unit,
+    onMadeForKidsChange: (Boolean) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Audience", style = MaterialTheme.typography.titleSmall)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Made for kids", style = MaterialTheme.typography.bodyMedium)
+                Text("Disables personalization (COPPA)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            androidx.compose.material3.Switch(
+                checked = madeForKids,
+                onCheckedChange = onMadeForKidsChange
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Age-restrict (18+)", style = MaterialTheme.typography.bodyMedium)
+                Text("Only viewers 18+ can watch", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            androidx.compose.material3.Switch(
+                checked = ageRestricted,
+                onCheckedChange = onAgeRestrictedChange
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PremiereSection(
+    isPremiere: Boolean,
+    scheduledAtMs: Long,
+    onIsPremiereChange: (Boolean) -> Unit,
+    onScheduledAtChange: (Long) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Schedule as Premiere", style = MaterialTheme.typography.bodyMedium)
+                Text("Debut at a scheduled time with live chat", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            androidx.compose.material3.Switch(
+                checked = isPremiere,
+                onCheckedChange = onIsPremiereChange
+            )
+        }
+        if (isPremiere) {
+            // Simple date/time display — a full DateTimePicker would use
+            // the Material3 DatePicker composable which requires more scaffolding.
+            // Here we show the selected time or a prompt.
+            val timeText = if (scheduledAtMs > 0) {
+                java.text.SimpleDateFormat("MMM d, yyyy 'at' h:mm a", java.util.Locale.getDefault())
+                    .format(java.util.Date(scheduledAtMs))
+            } else "Tap to set premiere time"
+            OutlinedTextField(
+                value = timeText,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Premiere date & time") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}

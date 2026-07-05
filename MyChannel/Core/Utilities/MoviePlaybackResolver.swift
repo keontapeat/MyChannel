@@ -17,13 +17,32 @@ enum MoviePlaybackResolver {
 
     static func directPlayableURL(for movie: FreeMovie) -> URL? {
         if let url = URL(string: movie.streamURL),
-           ["mp4", "m3u8"].contains(url.pathExtension.lowercased()) {
+           ["mp4", "m3u8"].contains(url.pathExtension.lowercased()),
+           !isTrailerURL(url) {
             return url
         }
         if let mapped = directStreamURL(for: movie) {
             return mapped
         }
         return nil
+    }
+
+    /// A "…Trailer…" archive asset is only a preview, not the full film (this is
+    /// all that legally exists for the copyrighted studio titles in our catalog).
+    /// Treat it as a trailer, never as a full stream, so the UI never falsely
+    /// advertises "Play Now" for a 2-minute trailer.
+    static func isTrailerURL(_ url: URL) -> Bool {
+        url.absoluteString.range(of: "trailer", options: .caseInsensitive) != nil
+    }
+
+    /// A web "where-to-watch" link (e.g. a Tubi/Roku provider page from the remote
+    /// catalog) — not a directly playable media file. These should open externally.
+    static func externalWatchURL(for movie: FreeMovie) -> URL? {
+        guard directPlayableURL(for: movie) == nil,
+              let url = URL(string: movie.streamURL),
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              !["mp4", "m3u8"].contains(url.pathExtension.lowercased()) else { return nil }
+        return url
     }
 
     static func videoIfDirect(from movie: FreeMovie, creator: User = User.defaultUser) -> Video? {
@@ -36,8 +55,8 @@ enum MoviePlaybackResolver {
             thumbnailURL: movie.posterURL,
             videoURL: url.absoluteString,
             duration: TimeInterval(max(60, movie.runtime * 60)),
-            viewCount: Int.random(in: 50_000...2_000_000),
-            likeCount: Int.random(in: 5_000...200_000),
+            viewCount: stableViewCount(for: movie),
+            likeCount: stableLikeCount(for: movie),
             creator: creator,
             category: .movies,
             tags: tags,
@@ -62,8 +81,8 @@ enum MoviePlaybackResolver {
             thumbnailURL: movie.posterURL,
             videoURL: playableURL.absoluteString,
             duration: TimeInterval(max(60, movie.runtime * 60)),
-            viewCount: Int.random(in: 50_000...2_000_000),
-            likeCount: Int.random(in: 5_000...200_000),
+            viewCount: stableViewCount(for: movie),
+            likeCount: stableLikeCount(for: movie),
             creator: creator,
             category: .movies,
             tags: tags,
@@ -76,6 +95,28 @@ enum MoviePlaybackResolver {
             language: movie.language,
             isVerified: true
         )
+    }
+
+    // MARK: - Deterministic display stats
+    // Swift's String.hashValue is randomly seeded per process, so it can't be used
+    // for values that must stay stable across launches. Use a fixed FNV-1a hash so
+    // a movie's view/like counts don't shuffle every time it's opened.
+
+    private static func stableHash(_ string: String) -> UInt64 {
+        var hash: UInt64 = 1_469_598_103_934_665_603
+        for byte in string.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 1_099_511_628_211
+        }
+        return hash
+    }
+
+    private static func stableViewCount(for movie: FreeMovie) -> Int {
+        50_000 + Int(stableHash("v-\(movie.id)") % 1_950_000)
+    }
+
+    private static func stableLikeCount(for movie: FreeMovie) -> Int {
+        5_000 + Int(stableHash("l-\(movie.id)") % 195_000)
     }
 
     private static func ratingFromString(_ rating: String) -> Video.ContentRating? {

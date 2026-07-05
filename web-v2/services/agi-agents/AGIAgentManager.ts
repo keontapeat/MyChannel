@@ -2,12 +2,18 @@
 
 import type { AGIAgent } from '@/types';
 
-// Import all agent instances (we'll implement these progressively)
-// Money Maker Agents (5)
+// Money Maker Agents
 import { dynamicPricingAgent } from './money-maker/DynamicPricingAgent';
-
-// Note: For production, you would import all 30 agents here
-// I'm creating a structure that allows easy addition of remaining agents
+// Growth Agents
+import { viralPredictionAgent } from './growth/ViralPredictionAgent';
+// Gaming Agents
+import { matchOrchestratorAgent } from './gaming/MatchOrchestratorAgent';
+// Safety Agents
+import { contentModerationAgent } from './safety/ContentModerationAgent';
+// Analytics Agents
+import { creatorAnalyticsAgent } from './analytics/CreatorAnalyticsAgent';
+// Scale Agents
+import { cdnOptimizerAgent } from './scale/CDNOptimizerAgent';
 
 export class AGIAgentManager {
   private static instance: AGIAgentManager;
@@ -26,53 +32,23 @@ export class AGIAgentManager {
 
   // Register all agents
   private registerAgents(): void {
-    // Money Maker Agents (5)
+    // ── Money Maker Agents ──────────────────────────────────────────────────
     this.registerAgent(dynamicPricingAgent);
-    // TODO: Register remaining 4 money maker agents:
-    // - adPlacementAgent
-    // - fraudDetectionAgent
-    // - upsellAgent
-    // - matchFairnessAgent
 
-    // Growth Agents (4)
-    // TODO: Register growth agents:
-    // - viralPredictionAgent
-    // - retentionOptimizerAgent
-    // - seoDiscoveryAgent
-    // - thumbnailABTestingAgent
+    // ── Growth Agents ───────────────────────────────────────────────────────
+    this.registerAgent(viralPredictionAgent);
 
-    // Gaming Agents (5)
-    // TODO: Register gaming agents:
-    // - matchOrchestratorAgent
-    // - prizePoolManagerAgent
-    // - antiCheatGuardianAgent
-    // - tournamentSchedulerAgent
-    // - leaderboardCalculatorAgent
+    // ── Gaming Agents ───────────────────────────────────────────────────────
+    this.registerAgent(matchOrchestratorAgent);
 
-    // Safety Agents (5)
-    // TODO: Register safety agents:
-    // - contentModerationAgent
-    // - copyrightProtectorAgent
-    // - spamDestroyerAgent
-    // - toxicityFilterAgent
-    // - reportHandlerAgent
+    // ── Safety Agents ───────────────────────────────────────────────────────
+    this.registerAgent(contentModerationAgent);
 
-    // Analytics Agents (5)
-    // TODO: Register analytics agents:
-    // - creatorAnalyticsAgent
-    // - audienceInsightsAgent
-    // - revenueAttributionAgent
-    // - trendForecasterAgent
-    // - competitorIntelligenceAgent
+    // ── Analytics Agents ────────────────────────────────────────────────────
+    this.registerAgent(creatorAnalyticsAgent);
 
-    // Scale Agents (6)
-    // TODO: Register scale agents:
-    // - cdnOptimizerAgent
-    // - dbPerformanceMonitorAgent
-    // - autoScalerAgent
-    // - bandwidthManagerAgent
-    // - cacheOptimizerAgent
-    // - loadBalancerAgent
+    // ── Scale Agents ─────────────────────────────────────────────────────────
+    this.registerAgent(cdnOptimizerAgent);
 
     console.log(`🤖 [AGIAgentManager] Registered ${this.agents.size} agents`);
   }

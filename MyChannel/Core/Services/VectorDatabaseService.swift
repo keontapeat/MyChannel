@@ -319,48 +319,81 @@ class VectorDatabaseService {
         let score: Float
     }
     
+    private func pineconeRequest(path: String, method: String = "POST", body: [String: Any]? = nil) async throws -> Data {
+        let host = "https://\(indexName)-\(pineconeEnvironment).svc.pinecone.io"
+        guard !pineconeAPIKey.hasPrefix("YOUR"),
+              let url = URL(string: "\(host)\(path)") else {
+            throw VectorError.pineconeError("Pinecone not configured — add PINECONE_API_KEY to AppSecrets")
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.setValue(pineconeAPIKey, forHTTPHeaderField: "Api-Key")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let body = body { req.httpBody = try? JSONSerialization.data(withJSONObject: body) }
+        let (data, _) = try await URLSession.shared.data(for: req)
+        return data
+    }
+
     private func uploadToPinecone(_ embedding: VideoEmbedding) async throws {
-        // TODO: Implement actual Pinecone API call
-        // POST to https://\(indexName)-\(pineconeEnvironment).pinecone.io/vectors/upsert
-        print("⬆️ [Pinecone] Uploading vector for: \(embedding.videoID)")
+        let vectorData: [String: Any] = [
+            "id": embedding.videoID,
+            "values": embedding.vector,
+            "metadata": [
+                "title": embedding.metadata.title,
+                "category": embedding.metadata.category,
+                "creatorID": embedding.metadata.creatorID,
+                "viewCount": embedding.metadata.viewCount,
+            ]
+        ]
+        _ = try await pineconeRequest(path: "/vectors/upsert", body: ["vectors": [vectorData]])
+        print("⬆️ [Pinecone] Uploaded: \(embedding.videoID)")
     }
     
-    private func queryPinecone(
-        vector: [Float],
-        limit: Int,
-        filters: SearchFilters?
-    ) async throws -> [PineconeMatch] {
-        // TODO: Implement actual Pinecone API call
-        // POST to https://\(indexName)-\(pineconeEnvironment).pinecone.io/query
-        print("🔍 [Pinecone] Querying with limit: \(limit)")
-        return []
+    private func queryPinecone(vector: [Float], limit: Int, filters: SearchFilters?) async throws -> [PineconeMatch] {
+        var body: [String: Any] = ["vector": vector, "topK": limit, "includeMetadata": true]
+        if let cat = filters?.category { body["filter"] = ["category": ["$eq": cat]] }
+        let data = try await pineconeRequest(path: "/query", body: body)
+        struct PineconeResponse: Decodable {
+            struct Match: Decodable { let id: String; let score: Float }
+            let matches: [Match]
+        }
+        guard let resp = try? JSONDecoder().decode(PineconeResponse.self, from: data) else { return [] }
+        return resp.matches.compactMap { m -> PineconeMatch? in
+            // Construct a minimal Video placeholder — callers resolve full data from Firestore
+            let placeholder = Video(
+                id: m.id, title: "", description: "", thumbnailURL: "", videoURL: "",
+                duration: 0, viewCount: 0, likeCount: 0, commentCount: 0,
+                createdAt: Date(), creator: User(
+                    id: "", username: "", displayName: "", email: "",
+                    profileImageURL: "", subscriberCount: 0, videoCount: 0,
+                    isVerified: false, createdAt: Date()
+                ),
+                category: .entertainment, tags: [], isPublic: true, ageRestricted: false
+            )
+            return PineconeMatch(video: placeholder, score: m.score)
+        }
     }
     
     private func getVideoVector(_ videoID: String) async throws -> [Float]? {
-        // TODO: Implement actual Pinecone API call
-        // GET vector for video
-        return nil
+        let data = try await pineconeRequest(path: "/vectors/fetch?ids=\(videoID)", method: "GET")
+        struct FetchResponse: Decodable {
+            struct VectorRecord: Decodable { let values: [Float] }
+            let vectors: [String: VectorRecord]
+        }
+        return (try? JSONDecoder().decode(FetchResponse.self, from: data))?.vectors[videoID]?.values
     }
     
     private func deleteFromPinecone(_ videoID: String) async throws {
-        // TODO: Implement actual Pinecone API call
-        // DELETE from https://\(indexName)-\(pineconeEnvironment).pinecone.io/vectors/delete
-        print("🗑️ [Pinecone] Deleting: \(videoID)")
-    }
-    
-    // MARK: - 📊 STATISTICS
-    
-    struct VectorStats {
-        let totalVectors: Int
-        let indexSize: Int // bytes
-        let dimension: Int
-        let queries: Int
+        _ = try await pineconeRequest(path: "/vectors/delete", body: ["ids": [videoID]])
+        print("🗑️ [Pinecone] Deleted: \(videoID)")
     }
     
     func getStats() async throws -> VectorStats {
-        // TODO: Implement stats from Pinecone
+        let data = try await pineconeRequest(path: "/describe_index_stats", method: "POST", body: [:])
+        struct Stats: Decodable { let totalVectorCount: Int?; let indexFullness: Double? }
+        let stats = try? JSONDecoder().decode(Stats.self, from: data)
         return VectorStats(
-            totalVectors: 0,
+            totalVectors: stats?.totalVectorCount ?? 0,
             indexSize: 0,
             dimension: dimension,
             queries: 0
@@ -384,6 +417,15 @@ class VectorDatabaseService {
             }
         }
     }
+}
+
+// MARK: - 📊 VECTOR STATS
+
+struct VectorStats {
+    let totalVectors: Int
+    let indexSize: Int
+    let dimension: Int
+    let queries: Int
 }
 
 // MARK: - 📱 USAGE EXAMPLES

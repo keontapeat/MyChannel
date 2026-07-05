@@ -88,7 +88,10 @@ class ImmersiveContentService: ObservableObject {
         spatialAudio: Bool = true
     ) async throws -> Immersive360Experience {
         
-        let player = try await setup360Video(url: URL(string: video.videoURL)!)
+        guard let videoURL = URL(string: video.videoURL) else {
+            throw ImmersiveContentError.invalidURL
+        }
+        let player = try await setup360Video(url: videoURL)
         
         // Setup spatial audio
         if spatialAudio {
@@ -857,6 +860,7 @@ enum ImmersiveContentError: LocalizedError {
     case arNotSupported
     case invalidPlayer
     case modelLoadFailed
+    case invalidURL
     
     var errorDescription: String? {
         switch self {
@@ -868,6 +872,8 @@ enum ImmersiveContentError: LocalizedError {
             return "Invalid video player"
         case .modelLoadFailed:
             return "Failed to load 3D model"
+        case .invalidURL:
+            return "The video URL is missing or malformed"
         }
     }
 }

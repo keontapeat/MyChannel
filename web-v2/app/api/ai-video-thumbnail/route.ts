@@ -1,7 +1,11 @@
-// 🔥 AI VIDEO THUMBNAIL EXTRACTION - FIND BEST MOMENTS 💣
+// AI VIDEO THUMBNAIL EXTRACTION - FIND BEST MOMENTS
+//
+// NOTE: Route handlers do not ship with the static export (output: 'export').
+// This must be hosted on a Node runtime (Cloud Functions / Cloud Run) to work.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { VertexAI } from '@google-cloud/vertexai';
+import { verifyRequestAuth } from '@/lib/server/api-auth';
 
 const vertexAI = new VertexAI({
   project: process.env.NEXT_PUBLIC_VERTEX_AI_PROJECT_ID || 'mychannel-ca26d',
@@ -9,6 +13,9 @@ const vertexAI = new VertexAI({
 });
 
 export async function POST(request: NextRequest) {
+  const authResult = await verifyRequestAuth(request);
+  if (authResult.error) return authResult.error;
+
   try {
     const { videoUrl, analysisType = 'engagement' } = await request.json();
 
@@ -43,7 +50,9 @@ export async function POST(request: NextRequest) {
     });
 
     const response = result.response;
-    const analysis = JSON.parse(response.text());
+    const responseText =
+      response.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const analysis = JSON.parse(responseText);
 
     console.log('✅ [AI] Video thumbnail analysis complete');
 

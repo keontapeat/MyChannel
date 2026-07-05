@@ -113,7 +113,7 @@ struct CertificateRequirement: Codable, Hashable {
     let minimumAIScore: Int // 0-100
     let requiredSkills: [String] // Must watch videos covering these skills
     
-    init(minimumVideos: Int = 300, minimumHours: Double = 250, minimumAIScore: Int = 70, requiredSkills: [String] = []) {
+    init(minimumVideos: Int = 30, minimumHours: Double = 25, minimumAIScore: Int = 70, requiredSkills: [String] = []) {
         self.minimumVideos = minimumVideos
         self.minimumHours = minimumHours
         self.minimumAIScore = minimumAIScore
@@ -139,11 +139,13 @@ struct CareerPathProgress: Identifiable, Codable {
     var skillsCovered: Set<String> // Skills user has learned
     
     var hoursRemaining: Double {
-        max(0, 250 - totalHours) // Default 250 hours for certificate
+        let required = CareerPath.getCareerPath(byId: careerPathId)?.certificateRequirement.minimumHours ?? 25
+        return max(0, required - totalHours)
     }
     
     var videosRemaining: Int {
-        max(0, 300 - videosWatched) // Default 300 videos for certificate
+        let required = CareerPath.getCareerPath(byId: careerPathId)?.certificateRequirement.minimumVideos ?? 30
+        return max(0, required - videosWatched)
     }
     
     var progressPercentage: Int {
@@ -177,6 +179,30 @@ struct UniversityVideo: Identifiable, Codable, Equatable, Hashable {
     var lastWatchedAt: Date?
     var aiVerificationScore: Int? // 0-100
     var completed: Bool
+
+    /// Maps this University video to the app's standard `Video` model so it can be
+    /// handed to `GlobalVideoPlayerManager`. Keyed by the original `videoId` so the
+    /// player resolves the underlying source.
+    var asVideo: Video {
+        Video(
+            id: videoId,
+            title: title,
+            description: "",
+            thumbnailURL: thumbnailURL,
+            videoURL: "",
+            duration: duration,
+            viewCount: 0,
+            likeCount: 0,
+            creator: User(
+                id: creatorId,
+                username: creatorName,
+                displayName: creatorName,
+                email: "",
+                profileImageURL: creatorAvatarURL
+            ),
+            category: .entertainment
+        )
+    }
     
     enum DifficultyLevel: String, Codable {
         case beginner = "Beginner"
@@ -289,7 +315,7 @@ extension CareerPath {
             icon: "chart.bar.doc.horizontal.fill",
             color: Color(red: 0.2, green: 0.4, blue: 0.8),
             keywords: ["accounting", "finance", "bookkeeping", "tax", "cpa", "financial analysis", "audit", "quickbooks", "excel"],
-            certificateRequirement: CertificateRequirement(minimumVideos: 300, minimumHours: 250, minimumAIScore: 70, requiredSkills: ["accounting basics", "financial statements", "tax preparation"]),
+            certificateRequirement: CertificateRequirement(minimumVideos: 30, minimumHours: 25, minimumAIScore: 70, requiredSkills: ["accounting basics", "financial statements", "tax preparation"]),
             skillTags: ["Accounting", "Tax Preparation", "Financial Analysis", "QuickBooks", "Excel", "Bookkeeping", "Audit"]
         ),
         
@@ -302,7 +328,7 @@ extension CareerPath {
             icon: "film.fill",
             color: Color(red: 0.6, green: 0.2, blue: 0.8),
             keywords: ["film", "video editing", "cinematography", "premiere pro", "final cut", "davinci resolve", "color grading", "filmmaking", "production"],
-            certificateRequirement: CertificateRequirement(minimumVideos: 350, minimumHours: 300, minimumAIScore: 75, requiredSkills: ["video editing", "cinematography", "color grading"]),
+            certificateRequirement: CertificateRequirement(minimumVideos: 35, minimumHours: 30, minimumAIScore: 75, requiredSkills: ["video editing", "cinematography", "color grading"]),
             skillTags: ["Video Editing", "Cinematography", "Color Grading", "Premiere Pro", "Final Cut Pro", "DaVinci Resolve", "Lighting", "Sound Design"]
         ),
         
@@ -315,7 +341,7 @@ extension CareerPath {
             icon: "laptopcomputer.and.iphone",
             color: Color(red: 0.0, green: 0.7, blue: 0.4),
             keywords: ["programming", "coding", "software", "javascript", "python", "java", "react", "development", "algorithms", "data structures"],
-            certificateRequirement: CertificateRequirement(minimumVideos: 400, minimumHours: 350, minimumAIScore: 80, requiredSkills: ["programming fundamentals", "algorithms", "system design"]),
+            certificateRequirement: CertificateRequirement(minimumVideos: 40, minimumHours: 35, minimumAIScore: 80, requiredSkills: ["programming fundamentals", "algorithms", "system design"]),
             skillTags: ["Programming", "JavaScript", "Python", "React", "Algorithms", "System Design", "Git", "Testing"]
         ),
         
@@ -327,7 +353,7 @@ extension CareerPath {
             icon: "apple.logo",
             color: Color(red: 0.0, green: 0.5, blue: 0.9),
             keywords: ["ios", "swift", "swiftui", "xcode", "app development", "iphone", "mobile"],
-            certificateRequirement: CertificateRequirement(minimumVideos: 320, minimumHours: 280, minimumAIScore: 75, requiredSkills: ["swift basics", "swiftui", "app architecture"]),
+            certificateRequirement: CertificateRequirement(minimumVideos: 32, minimumHours: 28, minimumAIScore: 75, requiredSkills: ["swift basics", "swiftui", "app architecture"]),
             skillTags: ["Swift", "SwiftUI", "UIKit", "Xcode", "App Store", "iOS Design", "Core Data"]
         ),
         
@@ -340,7 +366,7 @@ extension CareerPath {
             icon: "megaphone.fill",
             color: Color(red: 0.9, green: 0.5, blue: 0.2),
             keywords: ["marketing", "seo", "social media", "content marketing", "google ads", "facebook ads", "analytics", "growth"],
-            certificateRequirement: CertificateRequirement(minimumVideos: 280, minimumHours: 220, minimumAIScore: 70, requiredSkills: ["seo", "social media", "content strategy"]),
+            certificateRequirement: CertificateRequirement(minimumVideos: 28, minimumHours: 22, minimumAIScore: 70, requiredSkills: ["seo", "social media", "content strategy"]),
             skillTags: ["SEO", "Social Media", "Content Marketing", "Google Ads", "Analytics", "Email Marketing", "Growth Hacking"]
         ),
         
@@ -353,7 +379,7 @@ extension CareerPath {
             icon: "paintbrush.pointed.fill",
             color: Color(red: 0.8, green: 0.2, blue: 0.5),
             keywords: ["ui design", "ux design", "figma", "sketch", "adobe xd", "prototyping", "user experience", "interface"],
-            certificateRequirement: CertificateRequirement(minimumVideos: 300, minimumHours: 250, minimumAIScore: 75, requiredSkills: ["ui design", "ux principles", "prototyping"]),
+            certificateRequirement: CertificateRequirement(minimumVideos: 30, minimumHours: 25, minimumAIScore: 75, requiredSkills: ["ui design", "ux principles", "prototyping"]),
             skillTags: ["UI Design", "UX Design", "Figma", "Prototyping", "Design Systems", "User Research", "Wireframing"]
         ),
         
@@ -366,7 +392,7 @@ extension CareerPath {
             icon: "figure.strengthtraining.traditional",
             color: Color(red: 0.9, green: 0.3, blue: 0.3),
             keywords: ["fitness", "personal trainer", "exercise", "nutrition", "workout", "strength training", "cardio"],
-            certificateRequirement: CertificateRequirement(minimumVideos: 250, minimumHours: 200, minimumAIScore: 70, requiredSkills: ["exercise science", "nutrition", "program design"]),
+            certificateRequirement: CertificateRequirement(minimumVideos: 25, minimumHours: 20, minimumAIScore: 70, requiredSkills: ["exercise science", "nutrition", "program design"]),
             skillTags: ["Exercise Science", "Nutrition", "Program Design", "Client Management", "Strength Training", "Cardio"]
         ),
         
@@ -379,7 +405,7 @@ extension CareerPath {
             icon: "bolt.fill",
             color: Color(red: 0.9, green: 0.7, blue: 0.1),
             keywords: ["electrical", "electrician", "wiring", "circuits", "voltage", "nec code", "residential", "commercial"],
-            certificateRequirement: CertificateRequirement(minimumVideos: 280, minimumHours: 240, minimumAIScore: 80, requiredSkills: ["electrical theory", "wiring", "safety codes"]),
+            certificateRequirement: CertificateRequirement(minimumVideos: 28, minimumHours: 24, minimumAIScore: 80, requiredSkills: ["electrical theory", "wiring", "safety codes"]),
             skillTags: ["Electrical Theory", "Wiring", "NEC Code", "Circuit Design", "Troubleshooting", "Safety"]
         ),
         
@@ -392,7 +418,7 @@ extension CareerPath {
             icon: "person.2.fill",
             color: Color(red: 0.3, green: 0.5, blue: 0.9),
             keywords: ["teaching", "online courses", "education", "instructor", "curriculum", "pedagogy", "e-learning"],
-            certificateRequirement: CertificateRequirement(minimumVideos: 250, minimumHours: 200, minimumAIScore: 70, requiredSkills: ["course design", "teaching methods", "content creation"]),
+            certificateRequirement: CertificateRequirement(minimumVideos: 25, minimumHours: 20, minimumAIScore: 70, requiredSkills: ["course design", "teaching methods", "content creation"]),
             skillTags: ["Course Design", "Teaching Methods", "Video Production", "Student Engagement", "Assessment"]
         ),
         
@@ -405,7 +431,7 @@ extension CareerPath {
             icon: "chart.xyaxis.line",
             color: Color(red: 0.2, green: 0.8, blue: 0.6),
             keywords: ["data science", "machine learning", "python", "statistics", "analytics", "data analysis", "ml", "ai"],
-            certificateRequirement: CertificateRequirement(minimumVideos: 350, minimumHours: 300, minimumAIScore: 80, requiredSkills: ["statistics", "python", "machine learning"]),
+            certificateRequirement: CertificateRequirement(minimumVideos: 35, minimumHours: 30, minimumAIScore: 80, requiredSkills: ["statistics", "python", "machine learning"]),
             skillTags: ["Python", "Statistics", "Machine Learning", "Data Visualization", "SQL", "Pandas", "Scikit-learn"]
         ),
         
@@ -418,7 +444,7 @@ extension CareerPath {
             icon: "gearshape.2.fill",
             color: Color(red: 0.4, green: 0.6, blue: 0.8),
             keywords: ["mechanical engineering", "cad", "solidworks", "thermodynamics", "mechanics", "design", "manufacturing"],
-            certificateRequirement: CertificateRequirement(minimumVideos: 320, minimumHours: 280, minimumAIScore: 75, requiredSkills: ["cad", "thermodynamics", "mechanics"]),
+            certificateRequirement: CertificateRequirement(minimumVideos: 32, minimumHours: 28, minimumAIScore: 75, requiredSkills: ["cad", "thermodynamics", "mechanics"]),
             skillTags: ["CAD", "SolidWorks", "Thermodynamics", "Mechanics", "Manufacturing", "3D Modeling"]
         ),
         
@@ -431,13 +457,26 @@ extension CareerPath {
             icon: "doc.text.fill",
             color: Color(red: 0.5, green: 0.4, blue: 0.7),
             keywords: ["paralegal", "legal", "law", "legal research", "litigation", "contracts", "legal writing"],
-            certificateRequirement: CertificateRequirement(minimumVideos: 280, minimumHours: 240, minimumAIScore: 75, requiredSkills: ["legal research", "legal writing", "document prep"]),
+            certificateRequirement: CertificateRequirement(minimumVideos: 28, minimumHours: 24, minimumAIScore: 75, requiredSkills: ["legal research", "legal writing", "document prep"]),
             skillTags: ["Legal Research", "Legal Writing", "Document Preparation", "Litigation", "Contracts", "Ethics"]
         )
     ]
     
     static func getCareerPath(byId id: String) -> CareerPath? {
         allCareerPaths.first { $0.id == id }
+    }
+
+    /// Lightweight keyword attribution used client-side to decide whether a watch
+    /// counts as genuine learning (e.g. for the streak gate). Mirrors the server's
+    /// `matchCareerPaths` in firebase/functions/src/university.ts. Returns the top
+    /// matching career-path IDs (by keyword hits), or empty when nothing matches.
+    static func match(title: String, description: String = "", tags: [String] = []) -> [String] {
+        let haystack = (title + " " + description + " " + tags.joined(separator: " ")).lowercased()
+        let scored: [(id: String, hits: Int)] = allCareerPaths.compactMap { path in
+            let hits = path.keywords.filter { haystack.contains($0.lowercased()) }.count
+            return hits > 0 ? (path.id, hits) : nil
+        }
+        return scored.sorted { $0.hits > $1.hits }.prefix(2).map(\.id)
     }
     
     static func getCareerPaths(byCategory category: CareerCategory) -> [CareerPath] {

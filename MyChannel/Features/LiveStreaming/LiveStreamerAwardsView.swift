@@ -130,8 +130,15 @@ struct LiveStreamerAwardsView: View {
                     leaderboardEmptyState
                 } else {
                     if let topStreamer = awards.topStreamers.first {
-                        featuredTopStreamerCard(ranking: topStreamer)
-                            .padding(.horizontal, 16)
+                        ZStack {
+                            NavigationLink(destination: CreatorProfileView(creator: topStreamer.streamer)) {
+                                EmptyView()
+                            }
+                            .opacity(0)
+
+                            featuredTopStreamerCard(ranking: topStreamer)
+                        }
+                        .padding(.horizontal, 16)
                     }
                     
                     // Rankings List
@@ -166,11 +173,14 @@ struct LiveStreamerAwardsView: View {
     }
 
     private func featuredTopStreamerCard(ranking: LiveStreamerAwardsSystem.StreamerRanking) -> some View {
-        HStack(spacing: 14) {
-            featuredAvatar
-            featuredInfoColumn(ranking: ranking)
-            Spacer(minLength: 0)
-            featuredMedalBadge
+        VStack(spacing: 14) {
+            HStack(spacing: 14) {
+                featuredAvatar(ranking: ranking)
+                featuredInfoColumn(ranking: ranking)
+                Spacer(minLength: 0)
+                featuredMedalBadge
+            }
+            featuredFollowButton(ranking: ranking)
         }
         .padding(12)
         .background(featuredCardBackground)
@@ -179,21 +189,68 @@ struct LiveStreamerAwardsView: View {
         .shadow(color: AppTheme.Colors.primary.opacity(0.18), radius: 12, x: 0, y: 8)
     }
 
-    private var featuredAvatar: some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [Color(.systemGray4), Color(.systemGray2)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+    private func featuredAvatar(ranking: LiveStreamerAwardsSystem.StreamerRanking) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            CachedAsyncImage(
+                url: ranking.streamer.profileImageURL.flatMap(URL.init),
+                content: { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                },
+                placeholder: {
+                    LinearGradient(
+                        colors: [Color(.systemGray4), Color(.systemGray2)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .overlay(
+                        Image(systemName: "person.crop.square.fill")
+                            .font(.system(size: 54, weight: .medium))
+                            .foregroundColor(.white.opacity(0.92))
+                    )
+                }
             )
             .frame(width: 128, height: 142)
-            .overlay(
-                Image(systemName: "person.crop.square.fill")
-                    .font(.system(size: 54, weight: .medium))
-                    .foregroundColor(.white.opacity(0.92))
-            )
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            if ranking.isLiveNow {
+                HStack(spacing: 3) {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 5, height: 5)
+                    Text("LIVE")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(AppTheme.Colors.live, in: Capsule())
+                .padding(8)
+                .accessibilityLabel("Live now")
+            }
+        }
+    }
+
+    private func featuredFollowButton(ranking: LiveStreamerAwardsSystem.StreamerRanking) -> some View {
+        let isFollowing = awards.isFollowing(ranking.streamer.id)
+        return Button {
+            withAnimation(AppTheme.AnimationPresets.spring) {
+                awards.toggleFollow(ranking.streamer.id)
+            }
+        } label: {
+            Text(isFollowing ? "Following" : "Follow")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(isFollowing ? AppTheme.Colors.textPrimary : .white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    isFollowing ? AppTheme.Colors.backgroundSecondary : AppTheme.Colors.primary,
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isFollowing ? "Following \(ranking.streamer.displayName)" : "Follow \(ranking.streamer.displayName)")
     }
 
     private func featuredInfoColumn(ranking: LiveStreamerAwardsSystem.StreamerRanking) -> some View {
@@ -322,7 +379,7 @@ struct LiveStreamerAwardsView: View {
     private var cinematicHeroSection: some View {
         CeremonyCountdownHero(
             ceremonyDate: awards.currentSeason.ceremonyDate,
-            isLive: false, // TODO: Connect to live stream status
+            isLive: awards.currentSeason.isCurrentlyLive,
             isVotingOpen: awards.currentSeason.isVotingOpen,
             onWatchLive: {
                 showLiveStream = true
@@ -481,7 +538,13 @@ struct LiveStreamerAwardsView: View {
                             winner: winner,
                             year: 2024,
                             onPlayVideo: {
-                                // TODO: Play acceptance speech
+                                // Play acceptance speech video if winner has one
+                                if let videoId = winner.acceptanceSpeechVideoId {
+                                    NotificationCenter.default.post(
+                                        name: NSNotification.Name("NavigateToVideoId"),
+                                        object: videoId
+                                    )
+                                }
                             }
                         )
                         .frame(width: 280)
@@ -895,33 +958,47 @@ struct PodiumCard: View {
 
 struct RankingCard: View {
     let ranking: LiveStreamerAwardsSystem.StreamerRanking
-    
-    var body: some View {
-        HStack(spacing: 14) {
-            Text("\(ranking.rank)")
-                .font(.system(size: 30, weight: .black, design: .rounded))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-                .frame(width: 26)
 
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [ranking.tier.color.opacity(0.95), ranking.tier.color.opacity(0.55)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 46, height: 46)
-                .overlay(
-                    Text(String(ranking.streamer.displayName.prefix(1)))
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
-                )
+    @ObservedObject private var awards = LiveStreamerAwardsSystem.shared
+
+    private var isFollowing: Bool { awards.isFollowing(ranking.streamer.id) }
+
+    var body: some View {
+        ZStack {
+            NavigationLink(destination: CreatorProfileView(creator: ranking.streamer)) {
+                EmptyView()
+            }
+            .opacity(0)
+
+            rowContent
+        }
+        .padding(12)
+        .background(AppTheme.Colors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 7, x: 0, y: 3)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Rank \(ranking.rank), \(ranking.streamer.displayName), \(categoryLabel), \(compactWeeklyViews) weekly views")
+    }
+
+    private var rowContent: some View {
+        HStack(spacing: 14) {
+            rankColumn
+
+            avatarView
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(ranking.streamer.displayName)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
+                HStack(spacing: 6) {
+                    Text(ranking.streamer.displayName)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
+
+                    if ranking.streamer.isVerified {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.verificationBlue)
+                    }
+                }
                 HStack(spacing: 5) {
                     Image(systemName: categoryIcon)
                         .font(.system(size: 11, weight: .semibold))
@@ -931,7 +1008,7 @@ struct RankingCard: View {
                 .foregroundColor(AppTheme.Colors.textSecondary)
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 4) {
                 HStack(spacing: 5) {
@@ -941,23 +1018,94 @@ struct RankingCard: View {
                     Text(compactWeeklyViews)
                         .font(.system(size: 24, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.Colors.textPrimary)
+                        .contentTransition(.numericText())
                 }
                 Text("Weekly Views")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(AppTheme.Colors.textSecondary)
             }
 
-            Text(ranking.rank <= 3 ? "Follow" : "View Stats")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color(.systemGray6), in: Capsule())
+            followButton
         }
-        .padding(12)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: .black.opacity(0.04), radius: 7, x: 0, y: 3)
+    }
+
+    private var rankColumn: some View {
+        VStack(spacing: 2) {
+            Text("\(ranking.rank)")
+                .font(.system(size: 26, weight: .black, design: .rounded))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+
+            if let change = ranking.rankChange, change != 0 {
+                HStack(spacing: 1) {
+                    Image(systemName: change > 0 ? "arrow.up" : "arrow.down")
+                        .font(.system(size: 8, weight: .bold))
+                    Text("\(abs(change))")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .foregroundColor(change > 0 ? AppTheme.Colors.success : AppTheme.Colors.error)
+            }
+        }
+        .frame(width: 30)
+    }
+
+    private var avatarView: some View {
+        ZStack(alignment: .bottomTrailing) {
+            CachedAsyncImage(
+                url: ranking.streamer.profileImageURL.flatMap(URL.init),
+                content: { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                },
+                placeholder: {
+                    LinearGradient(
+                        colors: [ranking.tier.color.opacity(0.95), ranking.tier.color.opacity(0.55)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .overlay(
+                        Text(String(ranking.streamer.displayName.prefix(1)))
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                    )
+                }
+            )
+            .frame(width: 46, height: 46)
+            .clipShape(Circle())
+
+            if ranking.isLiveNow {
+                Text("LIVE")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(AppTheme.Colors.live, in: Capsule())
+                    .overlay(Capsule().stroke(AppTheme.Colors.cardBackground, lineWidth: 1.5))
+                    .offset(x: 6, y: 6)
+                    .accessibilityLabel("Live now")
+            }
+        }
+    }
+
+    private var followButton: some View {
+        Button {
+            withAnimation(AppTheme.AnimationPresets.spring) {
+                awards.toggleFollow(ranking.streamer.id)
+            }
+        } label: {
+            Text(isFollowing ? "Following" : "Follow")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(isFollowing ? AppTheme.Colors.textPrimary : .white)
+                .padding(.horizontal, 14)
+                .frame(height: 36)
+                .background(
+                    isFollowing ? AppTheme.Colors.backgroundSecondary : AppTheme.Colors.primary,
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isFollowing ? "Following \(ranking.streamer.displayName)" : "Follow \(ranking.streamer.displayName)")
+        .accessibilityHint("Double tap to \(isFollowing ? "unfollow" : "follow")")
     }
 
     private var categoryLabel: String {

@@ -44,6 +44,9 @@ struct LiveTVPlayerView: View {
     
     // 🔥 Stream error state
     @State private var streamError: StreamError?
+
+    // 🔥 Tracks whether playback ever actually started (used by the loading timeout)
+    @State private var hasStartedPlayback: Bool = false
     
     // 🔥 Pluto blocks in-app streams and serves "unavailable" video; we use Apple fallback and show this banner
     @State private var isPlayingPlutoFallback: Bool = false
@@ -113,10 +116,14 @@ struct LiveTVPlayerView: View {
             watchStartTime = Date()
             currentWatchingChannel = channel
             
-            // 🔥 Loading timeout - show error if stream doesn't start in 15 seconds
+            // 🔥 Loading timeout - show error if the stream never actually starts
+            // playing within 15s. Previously this only checked `player == nil`,
+            // but `player` is set synchronously in setupPlayer, so a created-but-
+            // stalled stream never surfaced an error. Now we track whether
+            // playback ever began (hasStartedPlayback).
             Task { @MainActor [self] in
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
-                if player == nil && streamError == nil {
+                if !hasStartedPlayback && streamError == nil {
                     streamError = .streamUnavailable
                     HapticManager.shared.notification(type: .warning)
                 }
@@ -950,6 +957,7 @@ struct LiveTVPlayerView: View {
         guard let player = player else { return }
         let interval = CMTime(seconds: 1.0, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { _ in
+            if player.timeControlStatus == .playing { hasStartedPlayback = true }
             updateLiveEdgeLag()
             updateDVRFraction()
         }

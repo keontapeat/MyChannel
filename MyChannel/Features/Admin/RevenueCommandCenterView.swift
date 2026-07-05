@@ -18,13 +18,14 @@ struct RevenueCommandCenterView: View {
                 VStack(spacing: 10) {
                     Text("REVENUE ATTRIBUTION")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(CCTheme.textSecondary)
                     Text(String(format: "$%.2f", attribution.totalRevenue))
-                        .font(.system(size: 36, weight: .black)).foregroundColor(.green)
+                        .font(.system(size: 36, weight: .black, design: .monospaced)).foregroundColor(CCTheme.good)
                 }
                 .padding(16)
-                .background(Color.green.opacity(0.08))
+                .background(CCTheme.panel)
                 .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(CCTheme.panelBorder, lineWidth: 1))
                 
                 // Revenue Streams
                 ForEach(attribution.revenueStreams) { stream in
@@ -35,23 +36,24 @@ struct RevenueCommandCenterView: View {
                 VStack(spacing: 10) {
                     Text("CREATOR ECONOMY")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(CCTheme.textSecondary)
                     HStack(spacing: 20) {
                         VStack {
                             Text(String(format: "$%.2f", creatorEconomy.totalCreatorPayouts))
-                                .font(.system(size: 24, weight: .black)).foregroundColor(.yellow)
-                            Text("Payouts").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+                                .font(.system(size: 24, weight: .black, design: .monospaced)).foregroundColor(CCTheme.textPrimary)
+                            Text("Payouts").font(.system(size: 10, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         }
                         VStack {
                             Text("\(creatorEconomy.pendingPayouts)")
-                                .font(.system(size: 24, weight: .black)).foregroundColor(creatorEconomy.pendingPayouts > 0 ? .orange : .green)
-                            Text("Pending").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+                                .font(.system(size: 24, weight: .black, design: .monospaced)).foregroundColor(creatorEconomy.pendingPayouts > 0 ? CCTheme.warning : CCTheme.good)
+                            Text("Pending").font(.system(size: 10, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         }
                     }
                 }
                 .padding(16)
-                .background(Color.yellow.opacity(0.08))
+                .background(CCTheme.panel)
                 .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(CCTheme.panelBorder, lineWidth: 1))
             }
             .padding(16)
         }
@@ -68,20 +70,22 @@ private struct RevenueStreamCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(stream.source)
                     .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(CCTheme.textPrimary)
                 Text("\(stream.period)")
-                    .font(.system(size: 11)).foregroundColor(.secondary)
+                    .font(.system(size: 11)).foregroundColor(CCTheme.textSecondary)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
                 Text("$\(stream.amount, specifier: "%.2f")")
-                    .font(.system(size: 14, weight: .bold)).foregroundColor(.green)
+                    .font(.system(size: 14, weight: .bold, design: .monospaced)).foregroundColor(CCTheme.textPrimary)
                 Text("\(stream.growth > 0 ? "+" : "")\(String(format: "%.1f%%", stream.growth))")
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(stream.growth >= 0 ? .green : .red)
+                    .foregroundColor(stream.growth >= 0 ? CCTheme.good : CCTheme.critical)
             }
         }
         .padding(12)
-        .background(Color(.systemBackground))
+        .background(CCTheme.panel)
         .cornerRadius(10)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(CCTheme.panelBorder, lineWidth: 1))
     }
 }

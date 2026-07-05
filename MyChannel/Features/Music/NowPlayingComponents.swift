@@ -2,6 +2,9 @@
 // NowPlayingView, LyricsDisplayView, QueueView, SleepTimerSheet, VisualizerView compile separately.
 import SwiftUI
 import AVFoundation
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct NowPlayingView: View {
     @Environment(\.dismiss) private var dismiss
@@ -428,50 +431,81 @@ struct NowPlayingView: View {
 // MARK: - Lyrics Display View
 
 struct LyricsDisplayView: View {
-    @State private var currentLineIndex: Int = 2
-    @State private var lyricsTimer: Timer?
-    
-    // Sample lyrics for demo
-    private let sampleLyrics: [String] = [
-        "Yeah, yeah",
-        "Flint city, 810",
-        "We came from nothing",
-        "Now we running everything",
-        "Shout out to the whole gang",
-        "We been grinding all day",
-        "Stack it up, get it right",
-        "This that 810 life",
-        "Real ones know what's up",
-        "We don't fold, we stand up"
-    ]
-    
+    @ObservedObject private var player = AudioPreviewPlayer.shared
+    @State private var lines: [String] = []
+    @State private var isLoading = true
+    @State private var loadedTrackId: String?
+
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 24) {
-                ForEach(Array(sampleLyrics.enumerated()), id: \.offset) { index, line in
-                    Text(line)
-                        .font(.system(size: index == currentLineIndex ? 28 : 22, weight: .bold))
-                        .foregroundColor(index == currentLineIndex ? .white : .white.opacity(0.3))
-                        .multilineTextAlignment(.center)
-                        .scaleEffect(index == currentLineIndex ? 1.05 : 1.0)
-                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentLineIndex)
+            if isLoading {
+                ProgressView()
+                    .tint(.white)
+                    .padding(.top, 80)
+            } else if lines.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "music.note.list")
+                        .font(.system(size: 40))
+                        .foregroundColor(.white.opacity(0.4))
+                    Text("Lyrics not available")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.6))
                 }
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 40)
-        }
-        .onAppear {
-            lyricsTimer?.invalidate()
-            lyricsTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
-                withAnimation {
-                    currentLineIndex = (currentLineIndex + 1) % sampleLyrics.count
+                .frame(maxWidth: .infinity)
+                .padding(.top, 90)
+            } else {
+                VStack(spacing: 20) {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white.opacity(0.85))
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 40)
             }
         }
-        .onDisappear {
-            lyricsTimer?.invalidate()
-            lyricsTimer = nil
+        .onAppear { loadLyrics(for: player.currentTrackId) }
+        .onChange(of: player.currentTrackId) { newValue in loadLyrics(for: newValue) }
+    }
+
+    private func loadLyrics(for trackId: String?) {
+        guard let trackId else {
+            lines = []
+            isLoading = false
+            loadedTrackId = nil
+            return
         }
+        guard trackId != loadedTrackId else { return }
+        loadedTrackId = trackId
+        isLoading = true
+        Task {
+            let fetched = await Self.fetchLyrics(trackId: trackId)
+            await MainActor.run {
+                // Ignore stale results if the track changed while loading
+                guard trackId == self.loadedTrackId else { return }
+                self.lines = fetched
+                self.isLoading = false
+            }
+        }
+    }
+
+    private static func fetchLyrics(trackId: String) async -> [String] {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        guard
+            let snap = try? await db.collection("music_tracks").document(trackId).getDocument(),
+            let raw = snap.data()?["lyrics"] as? String
+        else { return [] }
+        return raw
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        #else
+        return []
+        #endif
     }
 }
 

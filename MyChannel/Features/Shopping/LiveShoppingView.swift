@@ -244,7 +244,7 @@ struct LiveShoppingView: View {
                 Spacer()
                 
                 Button {
-                    // TODO: navigate to full catalog
+                    NotificationCenter.default.post(name: Notification.Name("NavigateToShoppingCatalog"), object: nil)
                 } label: {
                     HStack(spacing: 4) {
                         Text("View all")
@@ -279,7 +279,10 @@ struct LiveShoppingView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 14) {
                 ForEach(ShoppingCategory.allCases) { category in
                     ShoppingCategoryButton(category: category) {
-                        // TODO: route to category storefront
+                        NotificationCenter.default.post(
+                            name: Notification.Name("NavigateToShoppingCategory"),
+                            object: category
+                        )
                     }
                 }
             }
@@ -295,7 +298,7 @@ struct LiveShoppingView: View {
                     .foregroundColor(AppTheme.Colors.textPrimary)
                 Spacer()
                 Button {
-                    // TODO: navigate
+                    NotificationCenter.default.post(name: Notification.Name("NavigateToShoppingCreators"), object: nil)
                 } label: {
                     HStack(spacing: 4) {
                         Text("Browse all")
@@ -373,7 +376,7 @@ struct LiveShoppingView: View {
             }
             
             Button {
-                // TODO: launch go-live flow
+                NotificationCenter.default.post(name: NSNotification.Name("ShowUpload"), object: nil)
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "video.fill")

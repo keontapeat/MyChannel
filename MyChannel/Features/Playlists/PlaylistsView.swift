@@ -10,6 +10,7 @@ import SwiftUI
 struct PlaylistsView: View {
     @StateObject private var fsService = PlaylistFirestoreService.shared
     @State private var showingCreatePlaylist = false
+    @State private var editingPlaylist: Playlist? = nil
     @State private var searchText = ""
     @State private var selectedCategory: PlaylistCategory?
     @State private var playlists: [Playlist] = []
@@ -58,6 +59,13 @@ struct PlaylistsView: View {
             }
             .sheet(isPresented: $showingCreatePlaylist) {
                 CreatePlaylistViewFirestore()
+            }
+            .sheet(item: $editingPlaylist) { playlist in
+                EditPlaylistSheet(playlist: playlist) { updated in
+                    if let idx = playlists.firstIndex(where: { $0.id == updated.id }) {
+                        playlists[idx] = updated
+                    }
+                }
             }
             .task {
                 await loadPlaylists()
@@ -186,8 +194,7 @@ struct PlaylistsView: View {
     }
     
     private func editPlaylist(_ playlist: Playlist) {
-        // TODO: Show edit playlist sheet
-        print("Edit playlist: \(playlist.title)")
+        editingPlaylist = playlist
     }
 }
 
@@ -432,4 +439,88 @@ struct CreatePlaylistViewFirestore: View {
 
 #Preview {
     PlaylistsView()
+}
+
+// MARK: - Edit Playlist Sheet
+
+struct EditPlaylistSheet: View {
+    let playlist: Playlist
+    let onSave: (Playlist) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var description: String
+    @State private var isPublic: Bool
+    @State private var saving = false
+
+    init(playlist: Playlist, onSave: @escaping (Playlist) -> Void) {
+        self.playlist = playlist
+        self.onSave = onSave
+        _title = State(initialValue: playlist.title)
+        _description = State(initialValue: playlist.description)
+        _isPublic = State(initialValue: playlist.isPublic)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Details") {
+                    TextField("Title", text: $title)
+                    TextField("Description", text: $description, axis: .vertical)
+                        .lineLimit(3...6)
+                }
+                Section("Privacy") {
+                    Toggle("Public playlist", isOn: $isPublic)
+                }
+            }
+            .navigationTitle("Edit Playlist")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") { saveChanges() }
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || saving)
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+
+    private func saveChanges() {
+        saving = true
+        Task {
+            do {
+                let updated = Playlist(
+                    id: playlist.id,
+                    title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                    description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+                    thumbnailURL: playlist.thumbnailURL,
+                    creatorId: playlist.creatorId,
+                    videoIds: playlist.videoIds,
+                    songIds: playlist.songIds,
+                    isPublic: isPublic,
+                    createdAt: playlist.createdAt,
+                    updatedAt: Date(),
+                    tags: playlist.tags,
+                    category: playlist.category
+                )
+                try await PlaylistFirestoreService.shared.updatePlaylist(
+                    id: updated.id,
+                    title: updated.title,
+                    description: updated.description,
+                    category: updated.category,
+                    visibility: updated.isPublic ? "public" : "private",
+                    tags: updated.tags
+                )
+                await MainActor.run {
+                    onSave(updated)
+                    dismiss()
+                }
+            } catch {
+                print("❌ EditPlaylistSheet save error: \(error)")
+            }
+            saving = false
+        }
+    }
 }

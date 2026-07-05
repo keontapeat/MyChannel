@@ -74,7 +74,7 @@ struct GamingOnboardingView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hexString: "#FFD700") ?? .yellow, Color(hexString: "#FFA500") ?? .orange],
+                                colors: [Color(hexString: "#FFD700"), Color(hexString: "#FFA500")],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -187,6 +187,7 @@ struct GamingOnboardingView: View {
                     .foregroundColor(Color(hexString: "#FFD700"))
                 
                 Text("Fund Your Wallet")
+
                     .font(.system(size: 32, weight: .black))
                     .foregroundColor(AppTheme.Colors.textPrimary)
                 
@@ -434,7 +435,7 @@ struct GamingOnboardingView: View {
                     title: "Balance",
                     value: "$\(viewModel.selectedAmount)",
                     icon: "dollarsign.circle.fill",
-                    color: Color(hexString: "#FFD700") ?? .yellow
+                    color: Color(hexString: "#FFD700")
                 )
                 
                 statCard(
@@ -464,7 +465,7 @@ struct GamingOnboardingView: View {
                 .frame(height: 54)
                 .background(
                     LinearGradient(
-                        colors: [Color(hexString: "#DC143C") ?? .red, Color(hexString: "#8B0000") ?? Color(red: 0.55, green: 0, blue: 0)],
+                        colors: [Color(hexString: "#DC143C"), Color(hexString: "#8B0000")],
                         startPoint: .leading,
                         endPoint: .trailing
                     )

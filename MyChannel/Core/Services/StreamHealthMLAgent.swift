@@ -62,16 +62,13 @@ final class StreamHealthMLAgent: ObservableObject {
         "ntv2.akamaized.net"
     ]
     
-    // 🔥 KNOWN BAD PATTERNS - Instant reject!
-    private let knownBadPatterns: [String] = [
-        "404", "error", "offline", "expired"
-    ]
-    
-    // MARK: - 🔥 OPTIMIZED SESSION - Reuse connections!
+    // Optimized session — reuses connections. Timeouts are generous enough to
+    // avoid false negatives on cellular/slow networks (previously 1.5s/2.0s,
+    // which marked healthy streams as unhealthy and hid them from the UI).
     private lazy var fastSession: URLSession = {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 1.5 // 🔥 BLAZING 1.5s timeout
-        config.timeoutIntervalForResource = 2.0
+        config.timeoutIntervalForRequest = 3.0
+        config.timeoutIntervalForResource = 5.0
         config.waitsForConnectivity = false
         config.httpMaximumConnectionsPerHost = 3
         config.urlCache = nil
@@ -284,7 +281,7 @@ final class StreamHealthMLAgent: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "HEAD"
-        request.timeoutInterval = 0.5 // 🔥 500ms!
+        request.timeoutInterval = 2.5
         request.setValue("MyChannel/1.0", forHTTPHeaderField: "User-Agent")
         
         // Pluto TV headers
@@ -309,7 +306,7 @@ final class StreamHealthMLAgent: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 0.8 // 🔥 800ms!
+        request.timeoutInterval = 3.0
         request.setValue("bytes=0-512", forHTTPHeaderField: "Range") // 🔥 Only 512 bytes!
         request.setValue("MyChannel/1.0", forHTTPHeaderField: "User-Agent")
         
@@ -341,11 +338,12 @@ final class StreamHealthMLAgent: ObservableObject {
     }
     
     private func isKnownBadStream(_ url: String) -> Bool {
-        let lower = url.lowercased()
-        for pattern in knownBadPatterns {
-            if lower.contains(pattern) { return true }
-        }
-        return false
+        // Only reject obviously invalid URLs. We used to substring-match generic
+        // words like "error"/"offline"/"404" against the whole URL, which
+        // instantly rejected any legitimate stream whose path happened to contain
+        // those substrings. Real reachability is decided by the probes instead.
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty || URL(string: trimmed) == nil
     }
     
     private func isCacheExpired(_ result: StreamHealthResult) -> Bool {

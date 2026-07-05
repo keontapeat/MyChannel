@@ -7,6 +7,9 @@
 
 import SwiftUI
 import Charts
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct CreatorMonetizationView: View {
     @StateObject private var viewModel = CreatorMonetizationViewModel()
@@ -955,18 +958,56 @@ class CreatorMonetizationViewModel: ObservableObject {
         holderName: String,
         paypalEmail: String
     ) {
-        // TODO: Save to Firestore
+        // Save payment method pref to Firestore (no raw account numbers — just the type and masked last4)
+        guard let uid = AuthenticationManager.shared.currentUser?.id else { return }
+        let methodName: String
+        let last4: String
+        switch method {
+        case .bank:
+            methodName = "Bank Account"
+            last4 = String(accountNumber.suffix(4))
+        case .paypal:
+            methodName = "PayPal"
+            last4 = String(paypalEmail.prefix(4))
+        case .stripe:
+            methodName = "Stripe"
+            last4 = "****"
+        }
+        Task {
+            #if canImport(FirebaseFirestore)
+            try? await Firestore.firestore().collection("payout_settings").document(uid).setData([
+                "methodType": methodName,
+                "maskedLast4": last4,
+                "holderName": holderName,
+                "updatedAt": Timestamp(date: Date()),
+            ], merge: true)
+            #endif
+        }
         hasPaymentMethod = true
-        paymentMethodName = method == .bank ? "Bank Account" : (method == .paypal ? "PayPal" : "Stripe")
-        paymentMethodLast4 = method == .bank ? String(accountNumber.suffix(4)) : String(paypalEmail.prefix(4))
+        paymentMethodName = methodName
+        paymentMethodLast4 = last4
         HapticManager.shared.impact(style: .medium)
     }
     
     func withdrawFunds(amount: Double) {
-        // TODO: Process withdrawal
+        // File a payout request — the server-side Cloud Function processes it.
+        // MONEY NOTE: we never move money client-side; we just write a request record.
+        guard let uid = AuthenticationManager.shared.currentUser?.id else { return }
+        let amountCents = Int(amount * 100)
+        Task {
+            #if canImport(FirebaseFirestore)
+            try? await Firestore.firestore().collection("payout_requests").addDocument(data: [
+                "creatorId": uid,
+                "amountCents": amountCents,
+                "currency": "USD",
+                "status": "pending",
+                "createdAt": Timestamp(date: Date()),
+            ])
+            #endif
+        }
         availableBalance -= amount
         HapticManager.shared.impact(style: .heavy)
-        print("💰 Withdrawing $\(amount)")
+        print("💰 Withdrawal request for $\(amount) filed")
     }
 }
 

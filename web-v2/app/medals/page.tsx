@@ -3,9 +3,10 @@
 // 🏆 CHAMPIONSHIP HUB - OLYMPICS/NBA FINALS LEVEL 🔥
 // The most EPIC, professional championship experience ever built!
 
-import { Trophy, TrendingUp, Crown, Star, Award, Medal, Flame, Zap, Target, Users, DollarSign, Calendar, ChevronRight, ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { Trophy, TrendingUp, Crown, Star, Medal, Flame, Zap, Target, ChevronRight, ArrowUp, ArrowDown } from 'lucide-react';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import Image from 'next/image';
+import { useState, useMemo } from 'react';
 import {
   MedalDivision,
   getMedalIcon,
@@ -14,14 +15,13 @@ import {
   RankedCompetitor,
 } from '@/types/vs-matches';
 
+// Stable timestamp for seed data — captured at module load, not per render
+const MODULE_LOAD_TIME = new Date('2026-06-01T00:00:00Z').getTime();
+
 export default function ChampionshipHub() {
   const [selectedDivision, setSelectedDivision] = useState<MedalDivision>(MedalDivision.GOLD);
   const [activeTab, setActiveTab] = useState<'rankings' | 'matches' | 'stats'>('rankings');
-  const [animateIn, setAnimateIn] = useState(false);
-
-  useEffect(() => {
-    setAnimateIn(true);
-  }, []);
+  const [animateIn] = useState(true);
 
   // Medal divisions with enhanced styling
   const divisions = [
@@ -69,37 +69,56 @@ export default function ChampionshipHub() {
     },
   ];
 
-  // Sample ranked competitors (Top 15) with enhanced data
-  const rankedCompetitors: RankedCompetitor[] = Array.from({ length: 15 }).map((_, i) => ({
-    userId: `user-${i + 1}`,
-    displayName: `Champion ${i + 1}`,
-    photoURL: `https://i.pravatar.cc/150?img=${i + 1}`,
-    division: selectedDivision,
-    rank: i + 1,
-    wins: Math.floor(Math.random() * 50 + 20),
-    losses: Math.floor(Math.random() * 15 + 2),
-    winRate: Math.random() * 25 + 75, // 75-100%
-    totalWagered: Math.random() * 100000 + 10000,
-    totalWinnings: Math.random() * 60000 + 5000,
-    currentStreak: Math.floor(Math.random() * 15),
-    lastMatchDate: new Date(),
-    isChampion: i === 0,
-    defenseCount: i === 0 ? Math.floor(Math.random() * 10 + 5) : 0,
-    rankChange: i === 0 ? 0 : Math.floor(Math.random() * 5) - 2, // -2 to +2
-  }));
+  // Stable seeded sample data — computed once per selectedDivision, not every render
+  const rankedCompetitors: RankedCompetitor[] = useMemo(
+    () =>
+      Array.from({ length: 15 }).map((_, i) => {
+        // Deterministic pseudo-random using index as seed
+        const seed = (n: number) => ((i + 1) * 17 + n * 31) % 100;
+        return {
+          userId: `user-${i + 1}`,
+          displayName: `Champion ${i + 1}`,
+          photoURL: `https://i.pravatar.cc/150?img=${i + 1}`,
+          division: selectedDivision,
+          rank: i + 1,
+          wins: (seed(1) % 50) + 20,
+          losses: (seed(2) % 15) + 2,
+          winRate: 75 + (seed(3) % 25),
+          totalWagered: 10000 + (seed(4) * 1000),
+          totalWinnings: 5000 + (seed(5) * 600),
+          currentStreak: seed(6) % 15,
+          lastMatchDate: new Date(MODULE_LOAD_TIME),
+          isChampion: i === 0,
+          defenseCount: i === 0 ? (seed(7) % 10) + 5 : 0,
+          rankChange: i === 0 ? 0 : (seed(8) % 5) - 2,
+        };
+      }),
+    [selectedDivision]
+  );
 
   const selectedDivisionData = divisions.find((d) => d.division === selectedDivision);
 
-  // Recent matches (sample data)
-  const recentMatches = Array.from({ length: 5 }).map((_, i) => ({
-    id: `match-${i}`,
-    player1: `Player ${i * 2 + 1}`,
-    player2: `Player ${i * 2 + 2}`,
-    wager: Math.floor(Math.random() * 5000 + 500),
-    winner: Math.random() > 0.5 ? 1 : 2,
-    date: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000),
-    category: ['Gaming', 'Views', 'Likes', 'Comments'][Math.floor(Math.random() * 4)],
-  }));
+  // Stable seeded recent matches — hoursAgo computed once, not per render
+  const recentMatches = useMemo(
+    () => {
+      return Array.from({ length: 5 }).map((_, i) => {
+        const seed = (n: number) => ((i + 1) * 13 + n * 7) % 100;
+        const categories = ['Gaming', 'Views', 'Likes', 'Comments'] as const;
+        const hoursAgo = (seed(3) % 24) + 1;
+        return {
+          id: `match-${i}`,
+          player1: `Player ${i * 2 + 1}`,
+          player2: `Player ${i * 2 + 2}`,
+          wager: 500 + (seed(1) * 45),
+          winner: seed(2) > 50 ? 1 : 2,
+          hoursAgo,
+          date: new Date(MODULE_LOAD_TIME - hoursAgo * 3600000),
+          category: categories[seed(4) % 4],
+        };
+      });
+    },
+    []
+  );
 
   // Division stats
   const divisionStats = {
@@ -177,7 +196,7 @@ export default function ChampionshipHub() {
               ].map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => setActiveTab(tab.id as 'rankings' | 'matches' | 'stats')}
                   className={`
                     flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg font-semibold text-sm transition-all
                     ${activeTab === tab.id 
@@ -338,10 +357,13 @@ export default function ChampionshipHub() {
                         {/* Champion Avatar with Glow */}
                         <div className="relative">
                           <div className="absolute inset-0 bg-yellow-400 rounded-full blur-xl animate-pulse" />
-                          <img
-                            src={rankedCompetitors[0].photoURL || ''}
+                          <Image
+                            src={rankedCompetitors[0].photoURL || '/icons/default-avatar.png'}
                             alt={rankedCompetitors[0].displayName}
+                            width={96}
+                            height={96}
                             className="relative w-24 h-24 rounded-full border-4 border-white shadow-2xl"
+                            unoptimized
                           />
                           <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-2 shadow-xl">
                             <Crown size={20} className="text-yellow-600" />
@@ -457,10 +479,13 @@ export default function ChampionshipHub() {
 
                         {/* Avatar */}
                         <div className="relative flex-shrink-0">
-                          <img
-                            src={competitor.photoURL || ''}
+                          <Image
+                            src={competitor.photoURL || '/icons/default-avatar.png'}
                             alt={competitor.displayName}
+                            width={56}
+                            height={56}
                             className="w-14 h-14 rounded-full border-2 border-gray-600"
+                            unoptimized
                           />
                           {competitor.isChampion && (
                             <div className="absolute -top-1 -right-1 bg-yellow-500 rounded-full p-1 shadow-lg">
@@ -538,7 +563,7 @@ export default function ChampionshipHub() {
                         </span>
                       </div>
                       <div className="text-xs text-gray-400">
-                        {Math.floor(Math.random() * 24)}h ago
+                        {match.hoursAgo}h ago
                       </div>
                     </div>
 
@@ -624,7 +649,7 @@ export default function ChampionshipHub() {
                 {/* Activity Stats */}
                 <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
                   <h4 className="text-sm font-bold text-gray-400 uppercase mb-4">
-                    Today's Activity
+                    Today&apos;s Activity
                   </h4>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">

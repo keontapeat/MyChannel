@@ -307,13 +307,21 @@ struct ChatUserProfileView: View {
                     // Actions
                     VStack(spacing: 12) {
                         Button("Send Direct Message") {
-                            // TODO: Implement DM functionality
+                            NotificationCenter.default.post(
+                                name: Notification.Name("OpenDirectMessage"),
+                                object: user.id
+                            )
+                            dismiss()
                         }
                         .buttonStyle(.borderedProminent)
                         .frame(maxWidth: .infinity)
                         
                         Button("View Profile") {
-                            // TODO: Navigate to full user profile
+                            NotificationCenter.default.post(
+                                name: Notification.Name("NavigateToUserProfile"),
+                                object: user.id
+                            )
+                            dismiss()
                         }
                         .buttonStyle(.bordered)
                         .frame(maxWidth: .infinity)

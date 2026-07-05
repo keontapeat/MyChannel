@@ -122,8 +122,9 @@ service cloud.firestore {
       // Public read (cached by Firebase)
       allow read: if true;
       
-      // Create (auth check + image URL validation)
+      // Create (auth check + ownership + image URL validation)
       allow create: if isSignedIn() && 
+                       request.resource.data.creatorId == request.auth.uid &&
                        isValidSize(request.resource.data, 50) &&
                        (!('thumbnailURL' in request.resource.data) || 
                         isValidImageURL(request.resource.data.thumbnailURL));
@@ -137,8 +138,15 @@ service cloud.firestore {
                         isValidImageURL(request.resource.data.thumbnailURL))
                     ) || (
                        isSignedIn() &&
+                       // 'status' intentionally removed from this allowlist: it is
+                       // the client-owned VISIBILITY field (public/unlisted/private/
+                       // scheduled) and must only change via the owner/admin branch
+                       // above. The transcode/moderation pipeline's lifecycle field
+                       // is 'processingStatus' (distinct field, allowed here) — see
+                       // functions/main.py notes on the on_upload_created_trigger /
+                       // transcode_webhook / moderate_video_on_upload writers.
                        request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['viewCount','likeCount','dislikeCount','shareCount','commentCount','lastViewedAt','updatedAt','totalWatchTime','trendingScore','trendingUpdatedAt','searchKeywords','searchIndexedAt','status','hlsURL','dashURL','videoURL','qualityVariants','transcodeJobId','transcodeCompletedAt','transcodeError','thumbnailCandidates'])
+                         .hasOnly(['viewCount','likeCount','dislikeCount','shareCount','commentCount','lastViewedAt','updatedAt','totalWatchTime','trendingScore','trendingUpdatedAt','searchKeywords','searchIndexedAt','processingStatus','hlsURL','dashURL','videoURL','qualityVariants','transcodeJobId','transcodeCompletedAt','transcodeError','thumbnailCandidates'])
                     );
       
       allow delete: if isSignedIn() && 
@@ -216,20 +224,19 @@ service cloud.firestore {
     match /flicks/{flickId} {
       allow read: if true;
       allow create: if isSignedIn() && 
+                       request.resource.data.creatorId == request.auth.uid &&
                        isValidSize(request.resource.data, 30) &&
                        (!('thumbnailURL' in request.resource.data) || 
                         isValidImageURL(request.resource.data.thumbnailURL));
-      // Owner/admin for full edits, OR any signed-in user for engagement-only
-      // counter increments (view/like/comment/share/report counters).
-      allow update: if (
-                       (isCreator(resource.data.creatorId) || isAdmin()) &&
+      // 🔒 SECURITY: engagement counters are NO LONGER client-writable.
+      // Clients record engagement by creating userId-stamped docs in the
+      // /events subcollection below; the onFlickEngagementEvent Cloud Function
+      // aggregates those into these counters via the Admin SDK. This makes
+      // view/like/share/comment counts server-authoritative and non-spoofable.
+      // Only the owner or an admin may edit the flick document itself.
+      allow update: if (isCreator(resource.data.creatorId) || isAdmin()) &&
                        (!('thumbnailURL' in request.resource.data) || 
-                        isValidImageURL(request.resource.data.thumbnailURL))
-                    ) || (
-                       isSignedIn() &&
-                       request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['viewCount','likeCount','commentCount','shareCount','reportCount','totalWatchTime','lastViewed','viralScore','viralPrediction','predictedViews','updatedAt'])
-                    );
+                        isValidImageURL(request.resource.data.thumbnailURL));
       allow delete: if isCreator(resource.data.creatorId) || isAdmin();
     }
 
@@ -237,7 +244,7 @@ service cloud.firestore {
       allow read: if false;
       allow create: if isSignedIn() &&
                        request.resource.data.userId == request.auth.uid &&
-                       request.resource.data.type in ['view', 'like', 'unlike', 'comment', 'share'];
+                       request.resource.data.type in ['view', 'like', 'unlike', 'comment', 'share', 'watch_time'];
       allow update, delete: if false;
     }
 
@@ -258,6 +265,7 @@ service cloud.firestore {
     match /shorts/{shortId} {
       allow read: if true;
       allow create: if isSignedIn() && 
+                       request.resource.data.creatorId == request.auth.uid &&
                        isValidSize(request.resource.data, 30) &&
                        (!('thumbnailURL' in request.resource.data) || 
                         isValidImageURL(request.resource.data.thumbnailURL));
@@ -513,7 +521,16 @@ service cloud.firestore {
                        (!('bannerURL' in request.resource.data) || 
                         isValidImageURL(request.resource.data.bannerURL)) &&
                        (!('bannerImageURL' in request.resource.data) || 
-                        isValidImageURL(request.resource.data.bannerImageURL))
+                        isValidImageURL(request.resource.data.bannerImageURL)) &&
+                       // ⚖️ 3-Strike moderation fields are admin-only. A regular
+                       // owner-of-doc update may never touch these — otherwise a
+                       // user could un-ban/un-suspend/un-shadowban themselves or
+                       // erase their own strike count.
+                       (isAdmin() ||
+                        !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['banned','bannedAt','suspended','suspendedUntil',
+                                   'suspendDays','shadowbanned','shadowbannedAt',
+                                   'strikeCount','strikesCleared','lastStrikeAt']))
                     ) || (
                        // 🏆 RANKING: any signed-in user may increment ONLY the
                        // engagement counters on another creator's profile (so views,
@@ -567,6 +584,11 @@ service cloud.firestore {
     // ✅ STUDIO PARITY: like/dislike state written by VideoEngagement.tsx
     // Doc id == videoId, value field == 'like' | 'dislike'
     match /users/{userId}/videoLikes/{videoId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Per-user Flick like state (count increments go through flick events → trigger)
+    match /users/{userId}/flickLikes/{flickId} {
       allow read, write: if isOwner(userId);
     }
 
@@ -699,8 +721,11 @@ service cloud.firestore {
     // ========================================
     
     // VS Matches - 🔥 OPTIMIZED: Inline participant check
+    // 🔒 Read requires sign-in: these are real-money records exposing wager
+    // amounts + participant IDs and should not be world-readable. If anonymous
+    // match discovery is needed, expose a sanitized public projection instead.
     match /versus_matches/{matchId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidSize(request.resource.data, 40);
       allow update: if isSignedIn() && 
                        (request.auth.uid == resource.data.challengerId || 
@@ -799,6 +824,50 @@ service cloud.firestore {
                        request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin();
     }
+
+    // ========================================
+    // ⚖️ 3-STRIKE REVIEW SYSTEM (OWNER-ONLY MODERATION)
+    // ========================================
+    // These collections back PlatformMonitorService's automated scanning and the
+    // owner-only StrikeReviewView. All of it is admin-triggered/admin-reviewed —
+    // no regular signed-in user should be able to read, forge, or tamper with
+    // moderation cases, fraud/content flags, or the moderator audit log.
+
+    // Moderation cases — contains PII, AI risk scores, and the owner's decisions.
+    match /strikeCases/{caseId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Immutable audit trail of every moderator decision. Admin-only, ever.
+    match /moderatorActionsLog/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Evidence (flagged images/videos) attached to a strike case.
+    match /flaggedContent/{flagId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Fraud alerts written by the automated platform monitor (distinct from the
+    // deposit-time `fraud_alerts` collection above). Admin-only.
+    match /fraudAlerts/{alertId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Content policy flags written by the automated platform monitor.
+    match /contentFlags/{flagId} {
+      allow read, write: if isAdmin();
+    }
+
+    // In-app notifications generated by strike decisions (warnings, strikes,
+    // suspensions, bans, clears). Only the recipient may read/mark-read their
+    // own notifications; only an admin may create one for another user.
+    match /userNotifications/{notificationId} {
+      allow read: if isSignedIn() &&
+                     (resource == null || request.auth.uid == resource.data.userId);
+      allow create: if isAdmin() && request.resource.data.userId is string;
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+    }
     
     // 🔥 OPTIMIZED: Gaming collections
     match /match_submissions/{document=**} {
@@ -816,14 +885,41 @@ service cloud.firestore {
       allow write: if isOwner(userId);
     }
     
+    // 🔒 Player stats are real-money-adjacent (wins/earnings feed championship
+    // divisions & leaderboards) and were previously client-forgeable. They are
+    // now written ONLY server-side by the escrow settlement Cloud Function
+    // (Admin SDK bypasses these rules). Public read stays open for profiles.
     match /player_stats/{document=**} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
     
-    match /tournaments/{document=**} {
+    // 🏆 Tournaments: public read; signed-in users may create and may update
+    // non-result fields (e.g. currentPlayers when joining). The OUTCOME and
+    // PRIZE fields (winnerId/status/prizePool/completedAt/endDate) are
+    // server/admin-only so a user can't forge a tournament "victory" that would
+    // surface in the Championship Hub. Crowning a champion must go through an
+    // admin/Cloud-Function path (see backend TODO), not a raw client write.
+    match /tournaments/{tournamentId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isAdmin() ||
+        (isSignedIn() &&
+         !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['winnerId', 'status', 'prizePool', 'completedAt', 'endDate', 'payoutTransferId']));
+      allow delete: if isAdmin();
+
+      // A user may add/update only their OWN participant entry (join/leave).
+      match /participants/{participantId} {
+        allow read: if true;
+        allow write: if isSignedIn() && request.auth.uid == participantId;
+      }
+      // Bracket rounds carry match results. Signed-in writes remain for the
+      // current client bracket engine; TODO: move result writes server-side.
+      match /rounds/{roundId} {
+        allow read: if true;
+        allow write: if isSignedIn();
+      }
     }
     
     match /rounds/{document=**} {
@@ -958,6 +1054,30 @@ service cloud.firestore {
                                request.auth.uid == resource.data.creatorId ||
                                request.auth.uid == resource.data.userId ||
                                isAdmin());
+
+      // Live chat messages — anyone can read; signed-in users post their own.
+      // Messages are immutable once posted; author or admin may delete.
+      match /messages/{messageId} {
+        allow read: if true;
+        allow create: if isSignedIn()
+                      && request.resource.data.userId == request.auth.uid
+                      && request.resource.data.message is string
+                      && request.resource.data.message.size() > 0
+                      && request.resource.data.message.size() <= 200;
+        allow update: if false;
+        allow delete: if isSignedIn() && (request.auth.uid == resource.data.userId || isAdmin());
+      }
+    }
+
+    // ========================================
+    // 💳 CHANNEL MEMBERSHIP TIERS (creator-defined config; no money)
+    // ========================================
+    // Anyone can read tiers (to show the Join sheet). Only the channel owner
+    // may create/update/delete their own tiers. Prices are validated by the
+    // create_membership_checkout function server-side, not here.
+    match /channels/{channelId}/membershipTiers/{tierId} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == channelId;
     }
     
     // ========================================
@@ -1375,8 +1495,24 @@ service cloud.firestore {
     // ========================================
     
     // Per-user University profile (streak, points, daily goal) + activity feed.
+    // 🔒 Streak/points/learning-day counters are server-authoritative: only the
+    // onUniversityWatchEvent Cloud Function writes them (Admin SDK bypasses rules).
+    // Clients may only write their public identity, credential counts, daily goal,
+    // and the seeded flag — so the leaderboard's points can't be spoofed by writing
+    // this doc directly.
     match /university_users/{userId} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if (isOwner(userId)
+          && request.resource.data.keys().hasOnly(
+              ['userId', 'name', 'avatarURL', 'certificates', 'watchHours',
+               'dailyGoalMinutes', 'seeded', 'seededAt', 'updatedAt']))
+        || isAdmin();
+      allow update: if (isOwner(userId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+              ['userId', 'name', 'avatarURL', 'certificates', 'watchHours',
+               'dailyGoalMinutes', 'seeded', 'seededAt', 'updatedAt']))
+        || isAdmin();
+      allow delete: if isAdmin();
 
       // Activity feed entries are owned by the user.
       match /activity/{activityId} {
@@ -1389,25 +1525,71 @@ service cloud.firestore {
       }
     }
     
-    match /university_progress/{userId}/{document=**} {
-      allow read, write: if isOwner(userId) || isAdmin();
+    // 🔒 Career-path progress is server-authoritative. Real progress (hours,
+    // videos, AI score) is written only by the `onUniversityWatchEvent` Cloud
+    // Function via the Admin SDK, from validated watch events. Clients may read
+    // their own progress and create ZERO-progress starter paths (for the "in
+    // progress" dashboard state) — nothing more — so progress can't be inflated
+    // to forge a certificate.
+    match /university_progress/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+
+      match /career_paths/{pathId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId)
+                         && request.resource.data.get('totalHours', 0) == 0
+                         && request.resource.data.get('videosWatched', 0) == 0
+                         && request.resource.data.get('certificateEarned', false) == false;
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // 🔒 Raw watch events — the only University write a client makes for progress.
+    // userId-stamped and immutable; the server aggregates them into progress.
+    match /university_watch_events/{eventId} {
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow create: if isSignedIn()
+                       && request.resource.data.userId == request.auth.uid
+                       && request.resource.data.videoId is string;
+      allow update, delete: if isAdmin();
+    }
+
+    // 🔒 Per-user daily rate-limit counters for credited learning. Written only by
+    // onUniversityWatchEvent (Admin SDK). Never client-accessible — a client must
+    // not be able to read or reset its own anti-abuse budget.
+    match /university_rate_limits/{userId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 🔒 Single-use view-attestation tokens. Minted only by the
+    // `issueUniversityViewToken` callable and consumed only by
+    // `onUniversityWatchEvent`, both via the Admin SDK. Entirely inaccessible to
+    // clients — a client only ever learns a token's ID from the callable's
+    // response, never by reading Firestore, and can't mark one used/unused itself.
+    match /university_view_tokens/{tokenId} {
+      allow read, write: if isAdmin();
     }
     
     // Certificates are stored as TOP-LEVEL documents keyed by certificate id,
-    // each carrying a `userId` field. Public read (so credentials are verifiable),
-    // writes restricted to the owner of the certificate or an admin.
+    // each carrying a `userId` field. Public read (so credentials are verifiable).
+    // 🔒 Issuance is server-authoritative: the `onUniversityProgressWritten` Cloud
+    // Function validates progress against the career-path requirements and writes
+    // the credential via the Admin SDK (which bypasses these rules). Clients can
+    // NOT write here, so certificates cannot be forged. Admins retain access.
     match /university_certificates/{certificateId} {
       allow read: if true;
-      allow create: if isSignedIn() &&
-                       request.resource.data.userId == request.auth.uid;
-      allow update, delete: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow write: if isAdmin();
     }
 
-    // Public, points-ranked leaderboard mirror. Anyone can read; a user may only
-    // write their own entry (document id == uid).
+    // Public, points-ranked leaderboard. Anyone can read.
+    // 🔒 Mirrored only by the `onUniversityStatsWritten` Cloud Function from the
+    // authoritative `university_users/{userId}` doc (Admin SDK bypasses these
+    // rules). Clients can NOT write here, so the public rank can't be spoofed on
+    // its own. Admins retain access.
     match /university_leaderboard/{userId} {
       allow read: if true;
-      allow write: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
     }
 
     // Cached AI video → career-path categorizations (shared, read-only to clients).
@@ -2067,8 +2249,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
+    // 🔒 SECURITY: aggregated analytics are written server-side (Cloud
+    // Functions / Admin SDK, which bypass rules) and read by creators through
+    // the backend analytics API — never directly by arbitrary clients. Locking
+    // this to admin stops any signed-in user from reading global analytics or
+    // overwriting shared docs (e.g. the retired flicks "watch_time" doc).
     match /analytics/{document=**} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isAdmin();
     }
     
     // ========================================
@@ -2504,6 +2691,46 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
+    }
+
+    // ✅ PARITY: communityPosts (camelCase — written by web community page)
+    // Public read; creator deletes own; any signed-in user can increment likes/votes.
+    match /communityPosts/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+                       request.resource.data.creatorId == request.auth.uid;
+      allow update: if isSignedIn() &&
+                       (resource.data.creatorId == request.auth.uid || isAdmin() ||
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['likeCount','commentCount','poll','updatedAt']));
+      allow delete: if isSignedIn() &&
+                       (resource.data.creatorId == request.auth.uid || isAdmin());
+    }
+
+    // ✅ PARITY: premiere reminders per user
+    match /users/{userId}/premiereReminders/{premiereId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ✅ PARITY: end screen elements sub-collection
+    match /endScreens/{videoId}/elements/{elementId} {
+      allow read: if true;
+      allow write: if isSignedIn() &&
+                      (get(/databases/$(database)/documents/videos/$(videoId)).data.creatorId == request.auth.uid
+                       || isAdmin());
+    }
+
+    // ✅ PARITY: age confirmations (user acknowledges 18+ gate)
+    match /age_confirmations/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId);
+      allow delete: if isAdmin();
+    }
+
+    // ✅ PARITY: per-creator geographic restrictions
+    match /creator_geo_restrictions/{creatorId} {
+      allow read: if isOwner(creatorId) || isAdmin();
+      allow write: if isOwner(creatorId) || isAdmin();
     }
 
     // ========================================

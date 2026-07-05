@@ -22,207 +22,157 @@ final class UniversityWatchTrackingService: ObservableObject {
     
     @Published var currentCareerPaths: [String: CareerPathProgress] = [:]
     @Published var totalUniversityHours: Double = 0
+
+    /// Set when the server mints a new certificate for the current user while the
+    /// listener is active. Drives the in-app celebration; cleared by the UI.
+    @Published var newlyEarnedCertificate: UniversityCertificate?
+
+    #if canImport(FirebaseFirestore)
+    private var certificateListener: ListenerRegistration?
+    #endif
+    private var certificateListenerPrimed = false
     
-    // MARK: - Watch Tracking
-    
-    /// Track a video watch session for University
-    func trackVideoWatch(
+    // MARK: - View Token Attestation
+
+    /// Requests a single-use view-attestation token from `issueUniversityViewToken`
+    /// for the given video. Call this once when playback genuinely starts. The
+    /// returned token must be included with the corresponding watch event so the
+    /// server can verify the watch against a real, server-minted view rather than
+    /// a client-fabricated one. Best-effort: returns nil on any failure (network,
+    /// rate limit, signed-out) and callers fall back to the weaker corroboration
+    /// path server-side.
+    func requestViewToken(videoId: String) async -> String? {
+        guard let url = URL(string: "https://us-east1-mychannel-ca26d.cloudfunctions.net/issueUniversityViewToken") else {
+            return nil
+        }
+        guard let idToken = try? await AuthTokenProvider.idToken() else { return nil }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 10
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: ["data": ["videoId": videoId]])
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let result = json["result"] as? [String: Any],
+                  let tokenId = result["tokenId"] as? String else { return nil }
+            return tokenId
+        } catch {
+            print("⚠️ [University Tracking] View token request failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    // MARK: - Watch Tracking (event-sourced, server-authoritative)
+
+    /// Emit a raw watch event for MyChannel University.
+    ///
+    /// 🔒 The client no longer computes or writes career-path progress. It only
+    /// records what was watched into `university_watch_events`; the
+    /// `onUniversityWatchEvent` Cloud Function validates the watch, attributes it
+    /// to career paths from the VIDEO's own metadata (not client-supplied), and
+    /// writes `university_progress` via the Admin SDK — which in turn triggers
+    /// server-side certificate issuance. This makes the credential impossible to
+    /// forge from the client (see firestore.rules).
+    ///
+    /// Streak + points are also advanced server-side from this same event by the
+    /// Cloud Function (writing `university_users`), so the leaderboard can't be
+    /// spoofed by writing streak/points directly (see firestore.rules).
+    func recordWatchEvent(
         userId: String,
         videoId: String,
         title: String,
         duration: TimeInterval,
         watchTime: TimeInterval,
         completionPercentage: Double,
-        aiVerificationScore: Int?
+        aiVerificationScore: Int? = nil,
+        viewToken: String? = nil
     ) async throws {
-        print("📊 [University Tracking] Video watched: \(title)")
-        print("   Duration: \(Int(watchTime/60))m | Completion: \(Int(completionPercentage*100))%")
-        
-        // Only track if quality watch (>= 70% completion or >= 70 AI score)
+        print("📊 [University Tracking] Watch event: \(title)")
+        print("   Watched: \(Int(watchTime/60))m | Completion: \(Int(completionPercentage*100))%")
+
+        // Quality gate mirrors the server; avoids emitting noise for trivial watches.
         guard completionPercentage >= 0.7 || (aiVerificationScore ?? 0) >= 70 else {
-            print("⚠️ [University Tracking] Low quality watch - not counting toward certificate")
+            print("⚠️ [University Tracking] Low-quality watch — not recorded")
             return
         }
-        
-        // Categorize video into career paths
-        let categorization = try await AICareerCategorizationService.shared.categorizeVideo(
-            videoId: videoId,
-            title: title,
-            description: "", // Will fetch from video model in production
-            tags: [],
-            category: nil
-        )
-        
-        // Only track if confidence is high enough
-        guard categorization.confidence >= 0.7 else {
-            print("⚠️ [University Tracking] Low confidence categorization - not tracking")
-            return
-        }
-        
-        // Update progress for each career path
-        for match in categorization.careerPaths where match.confidence >= 0.7 {
-            try await updateCareerPathProgress(
-                userId: userId,
-                careerPathId: match.careerPathId,
-                videoId: videoId,
-                watchHours: watchTime / 3600.0,
-                aiScore: aiVerificationScore,
-                skillTags: categorization.skillTags
-            )
-        }
-        
-        // Update total University hours
-        totalUniversityHours += watchTime / 3600.0
-        
-        print("✅ [University Tracking] Updated progress for \(categorization.careerPaths.count) career paths")
-    }
-    
-    /// Update progress for a specific career path
-    private func updateCareerPathProgress(
-        userId: String,
-        careerPathId: String,
-        videoId: String,
-        watchHours: Double,
-        aiScore: Int?,
-        skillTags: [String]
-    ) async throws {
+
         #if canImport(FirebaseFirestore)
-        let docRef = db.collection("university_progress").document(userId).collection("career_paths").document(careerPathId)
-        
-        // Get current progress
-        let doc = try await docRef.getDocument()
-        
-        var progress: CareerPathProgress
-        
-        if doc.exists, let data = doc.data() {
-            // Update existing progress
-            progress = try parseCareerPathProgress(from: data, careerPathId: careerPathId, userId: userId)
-            
-            // Add new video if not already tracked
-            if !progress.videoIds.contains(videoId) {
-                progress.videoIds.append(videoId)
-                progress.videosWatched += 1
-            }
-            
-            // Add hours
-            progress.totalHours += watchHours
-            
-            // Update AI score average
-            if let aiScore = aiScore {
-                let totalScore = Double(progress.averageAIScore * (progress.videosWatched - 1) + aiScore)
-                progress.averageAIScore = Int(totalScore / Double(progress.videosWatched))
-            }
-            
-            // Add new skills
-            for skill in skillTags {
-                progress.skillsCovered.insert(skill)
-            }
-            
-            // Update last watched
-            progress.lastWatchedAt = Date()
-            
-        } else {
-            // Create new progress
-            progress = CareerPathProgress(
-                id: "\(userId)_\(careerPathId)",
-                userId: userId,
-                careerPathId: careerPathId,
-                totalHours: watchHours,
-                videosWatched: 1,
-                videoIds: [videoId],
-                lastWatchedAt: Date(),
-                certificateProgress: 0.0,
-                certificateEarned: false,
-                certificateEarnedDate: nil,
-                averageAIScore: aiScore ?? 0,
-                skillsCovered: Set(skillTags)
-            )
+        // tzOffsetMinutes lets the server compute the user's local streak day from
+        // server time (the client can't fast-forward days; only the tz is honored).
+        let tzOffsetMinutes = TimeZone.current.secondsFromGMT() / 60
+        var data: [String: Any] = [
+            "userId": userId,
+            "videoId": videoId,
+            "title": title,
+            "watchSeconds": watchTime,
+            "completion": min(1.0, max(0.0, completionPercentage)),
+            "tzOffsetMinutes": tzOffsetMinutes,
+            "createdAt": FieldValue.serverTimestamp()
+        ]
+        if let aiVerificationScore { data["aiScore"] = aiVerificationScore }
+        if let viewToken { data["viewToken"] = viewToken }
+
+        do {
+            try await db.collection("university_watch_events").addDocument(data: data)
+            print("✅ [University Tracking] Watch event recorded (server will aggregate progress + streak)")
+        } catch {
+            print("⚠️ [University Tracking] Failed to record watch event: \(error.localizedDescription)")
         }
-        
-        // Calculate certificate progress
-        let careerPath = CareerPath.getCareerPath(byId: careerPathId)
-        let videoProgress = Double(progress.videosWatched) / Double(careerPath?.certificateRequirement.minimumVideos ?? 300)
-        let hoursProgress = progress.totalHours / (careerPath?.certificateRequirement.minimumHours ?? 250)
-        progress.certificateProgress = min(1.0, (videoProgress + hoursProgress) / 2.0)
-        
-        // Check if certificate earned
-        if !progress.certificateEarned &&
-           progress.videosWatched >= (careerPath?.certificateRequirement.minimumVideos ?? 300) &&
-           progress.totalHours >= (careerPath?.certificateRequirement.minimumHours ?? 250) &&
-           progress.averageAIScore >= (careerPath?.certificateRequirement.minimumAIScore ?? 70) {
-            
-            // Award certificate!
-            try await awardCertificate(userId: userId, careerPathId: careerPathId, progress: progress)
-            
-            progress.certificateEarned = true
-            progress.certificateEarnedDate = Date()
-            progress.certificateProgress = 1.0
-        }
-        
-        // Save to Firestore
-        try await docRef.setData(careerPathProgressToDict(progress))
-        
-        // Update local cache
-        currentCareerPaths[careerPathId] = progress
-        
-        print("💾 [University Tracking] Saved progress for career path: \(careerPathId)")
-        print("   Videos: \(progress.videosWatched) | Hours: \(Int(progress.totalHours)) | Progress: \(Int(progress.certificateProgress*100))%")
-        
         #endif
     }
-    
-    // MARK: - Certificate Award
-    
-    private func awardCertificate(userId: String, careerPathId: String, progress: CareerPathProgress) async throws {
+
+    // MARK: - Certificate Celebration Listener
+
+    /// Listen for server-issued certificates for this user and surface an in-app
+    /// celebration the instant one is minted. Because issuance is now async +
+    /// server-side, this restores the immediate "Certificate Earned!" UX without
+    /// the client ever writing the credential itself.
+    func startCertificateListener(userId: String) {
         #if canImport(FirebaseFirestore)
-        guard let careerPath = CareerPath.getCareerPath(byId: careerPathId) else { return }
-        
-        // Get user info
-        let userName = AppState.shared.currentUser?.displayName ?? "MyChannel Student"
-        
-        // Generate certificate
-        let certificate = UniversityCertificate(
-            id: UUID().uuidString,
-            userId: userId,
-            userName: userName,
-            careerPathId: careerPathId,
-            careerPathName: careerPath.name,
-            totalHours: progress.totalHours,
-            videosCompleted: progress.videosWatched,
-            averageAIScore: progress.averageAIScore,
-            earnedDate: Date(),
-            verificationHash: nil, // Blockchain verification (future)
-            certificateNumber: generateCertificateNumber(),
-            skillsAcquired: Array(progress.skillsCovered)
-        )
-        
-        // Save certificate
-        try await db.collection("university_certificates")
-            .document(certificate.id)
-            .setData(certificateToDict(certificate))
-        
-        print("🎓 [University] CERTIFICATE EARNED!")
-        print("   Career: \(careerPath.name)")
-        print("   Hours: \(Int(progress.totalHours)) | Videos: \(progress.videosWatched)")
-        print("   AI Score: \(progress.averageAIScore)/100")
-        print("   Certificate Code: \(certificate.certificateCode)")
-        
-        // Show celebration UI
-        HapticManager.shared.notification(type: .success)
-        
-        // TODO: Show certificate earned modal
-        // TODO: Send notification
-        // TODO: Post achievement to feed
-        
+        guard certificateListener == nil else { return }
+        certificateListenerPrimed = false
+        certificateListener = db.collection("university_certificates")
+            .whereField("userId", isEqualTo: userId)
+            .addSnapshotListener { [weak self] snapshot, _ in
+                guard let snapshot else { return }
+                let addedDocs = snapshot.documentChanges
+                    .filter { $0.type == .added }
+                    .map { $0.document.data() }
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    // Skip the first snapshot (baseline of already-earned certs);
+                    // only celebrate certificates minted after we start listening.
+                    guard self.certificateListenerPrimed else {
+                        self.certificateListenerPrimed = true
+                        return
+                    }
+                    for data in addedDocs {
+                        if let cert = try? self.parseCertificate(from: data) {
+                            self.newlyEarnedCertificate = cert
+                            HapticManager.shared.notification(type: .success)
+                            NotificationCenter.default.post(
+                                name: Notification.Name("UniversityCertificateEarned"),
+                                object: cert
+                            )
+                        }
+                    }
+                }
+            }
         #endif
     }
-    
-    private func generateCertificateNumber() -> String {
-        let timestamp = Int(Date().timeIntervalSince1970)
-        let random = Int.random(in: 1000...9999)
-        return "\(timestamp)\(random)"
+
+    func stopCertificateListener() {
+        #if canImport(FirebaseFirestore)
+        certificateListener?.remove()
+        certificateListener = nil
+        #endif
+        certificateListenerPrimed = false
     }
-    
+
     // MARK: - Fetch Progress
     
     func fetchUserProgress(userId: String) async throws -> [CareerPathProgress] {
@@ -311,28 +261,6 @@ final class UniversityWatchTrackingService: ObservableObject {
         )
     }
     
-    private func careerPathProgressToDict(_ progress: CareerPathProgress) -> [String: Any] {
-        var dict: [String: Any] = [
-            "id": progress.id,
-            "userId": progress.userId,
-            "careerPathId": progress.careerPathId,
-            "totalHours": progress.totalHours,
-            "videosWatched": progress.videosWatched,
-            "videoIds": progress.videoIds,
-            "lastWatchedAt": Timestamp(date: progress.lastWatchedAt),
-            "certificateProgress": progress.certificateProgress,
-            "certificateEarned": progress.certificateEarned,
-            "averageAIScore": progress.averageAIScore,
-            "skillsCovered": Array(progress.skillsCovered)
-        ]
-        
-        if let earnedDate = progress.certificateEarnedDate {
-            dict["certificateEarnedDate"] = Timestamp(date: earnedDate)
-        }
-        
-        return dict
-    }
-    
     private func parseCertificate(from data: [String: Any]) throws -> UniversityCertificate {
         UniversityCertificate(
             id: data["id"] as? String ?? UUID().uuidString,
@@ -350,26 +278,5 @@ final class UniversityWatchTrackingService: ObservableObject {
         )
     }
     
-    private func certificateToDict(_ certificate: UniversityCertificate) -> [String: Any] {
-        var dict: [String: Any] = [
-            "id": certificate.id,
-            "userId": certificate.userId,
-            "userName": certificate.userName,
-            "careerPathId": certificate.careerPathId,
-            "careerPathName": certificate.careerPathName,
-            "totalHours": certificate.totalHours,
-            "videosCompleted": certificate.videosCompleted,
-            "averageAIScore": certificate.averageAIScore,
-            "earnedDate": Timestamp(date: certificate.earnedDate),
-            "certificateNumber": certificate.certificateNumber,
-            "skillsAcquired": certificate.skillsAcquired
-        ]
-        
-        if let hash = certificate.verificationHash {
-            dict["verificationHash"] = hash
-        }
-        
-        return dict
-    }
 }
 

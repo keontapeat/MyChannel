@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +40,12 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
 import com.mychannel.domain.model.Video
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.util.concurrent.TimeUnit
 
 /**
@@ -55,6 +61,7 @@ fun VideoCard(
     video: Video,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    trailingContent: (@Composable () -> Unit)? = null,
     overflowActions: List<VideoCardAction> = emptyList()
 ) {
     Column(
@@ -80,38 +87,26 @@ fun VideoCard(
             )
 
             if (video.isLive) {
-                LiveBadge(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(8.dp)
-                )
+                LiveBadge(modifier = Modifier.align(Alignment.TopStart).padding(8.dp))
             } else if (video.duration > 0L) {
                 DurationBadge(
                     durationSeconds = video.duration,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp)
                 )
             }
         }
 
-        // Metadata row: avatar + text + overflow
+        // Metadata row: avatar + text + trailing/overflow
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(video.channelAvatarUrl)
-                    .crossfade(true)
-                    .build(),
+                    .data(video.channelAvatarUrl).crossfade(true).build(),
                 contentDescription = "${video.channelName} avatar",
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
+                modifier = Modifier.size(40.dp).clip(CircleShape)
             )
 
             Column(modifier = Modifier.weight(1f)) {
@@ -132,8 +127,45 @@ fun VideoCard(
                 )
             }
 
-            if (overflowActions.isNotEmpty()) {
+            // Custom trailing slot (e.g. delete button for downloads)
+            if (trailingContent != null) {
+                trailingContent()
+            } else if (overflowActions.isNotEmpty()) {
                 VideoCardOverflowMenu(actions = overflowActions)
+            } else {
+                // Default overflow: Watch Later + Not Interested — both write to Firestore
+                val scope = rememberCoroutineScope()
+                val db = remember { FirebaseFirestore.getInstance() }
+                val uid = remember { FirebaseAuth.getInstance().currentUser?.uid }
+                VideoCardOverflowMenu(
+                    actions = listOf(
+                        VideoCardAction("Save to Watch Later") {
+                            if (uid != null) scope.launch {
+                                runCatching {
+                                    db.collection("users").document(uid)
+                                        .collection("watchLater").document(video.id)
+                                        .set(mapOf(
+                                            "videoId" to video.id,
+                                            "addedAt" to FieldValue.serverTimestamp()
+                                        )).await()
+                                }
+                            }
+                        },
+                        VideoCardAction("Not interested") {
+                            if (uid != null) scope.launch {
+                                runCatching {
+                                    db.collection("users").document(uid)
+                                        .collection("notInterested").document(video.id)
+                                        .set(mapOf(
+                                            "videoId" to video.id,
+                                            "dismissedAt" to FieldValue.serverTimestamp(),
+                                            "reason" to "not_interested"
+                                        )).await()
+                                }
+                            }
+                        },
+                    )
+                )
             }
         }
     }

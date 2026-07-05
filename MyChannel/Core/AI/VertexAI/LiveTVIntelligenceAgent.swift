@@ -48,7 +48,17 @@ final class LiveTVIntelligenceAgent: ObservableObject {
     private func finite(_ value: Double, fallback: Double = 0) -> Double {
         value.isFinite ? value : fallback
     }
-    
+
+    /// Single source of truth for the channel catalog the AI reasons over.
+    /// Uses the live LiveTVManager catalog (Firestore-curated / cached) and only
+    /// falls back to bundled sample data when the manager hasn't loaded yet.
+    /// Previously the agent hardcoded `LiveTVChannel.sampleChannels`, so its
+    /// recommendations ignored the catalog the rest of the app displays.
+    private var catalog: [LiveTVChannel] {
+        let managed = LiveTVManager.shared.channels
+        return managed.isEmpty ? LiveTVChannel.sampleChannels : managed
+    }
+
     private init() {
         setupModels()
     }
@@ -97,7 +107,7 @@ final class LiveTVIntelligenceAgent: ObservableObject {
         let preferences = await analyzeUserPreferences(userId: userId)
         
         // 2. Get all available channels - 🔥 FILTER OUT UNHEALTHY STREAMS
-        let allChannels = await StreamHealthMLAgent.shared.filterHealthyChannels(LiveTVChannel.sampleChannels)
+        let allChannels = await StreamHealthMLAgent.shared.filterHealthyChannels(catalog)
         
         // 3. Score each channel using multiple AI signals
         var scoredChannels: [(channel: LiveTVChannel, score: LiveTVScore)] = []
@@ -180,7 +190,7 @@ final class LiveTVIntelligenceAgent: ObservableObject {
     /// AI-powered trending channel detection
     func getTrendingChannels(limit: Int = 10) async -> [TrendingChannel] {
         // 🔥 Only show healthy channels
-        let allChannels = await StreamHealthMLAgent.shared.filterHealthyChannels(LiveTVChannel.sampleChannels)
+        let allChannels = await StreamHealthMLAgent.shared.filterHealthyChannels(catalog)
         
         var trending: [TrendingChannel] = []
         
@@ -538,7 +548,7 @@ final class LiveTVIntelligenceAgent: ObservableObject {
         var items: [BecauseYouWatchedItem] = []
         
         for event in recentEvents {
-            if let watchedChannel = LiveTVChannel.sampleChannels.first(where: { $0.id == event.channelId }) {
+            if let watchedChannel = catalog.first(where: { $0.id == event.channelId }) {
                 let similar = findSimilarChannels(to: watchedChannel).first
                 if let similarChannel = similar, similarChannel.id != watchedChannel.id {
                     items.append(BecauseYouWatchedItem(
@@ -585,7 +595,7 @@ final class LiveTVIntelligenceAgent: ObservableObject {
         }
         
         // 🔥 Only show healthy channels
-        let healthyChannels = await StreamHealthMLAgent.shared.filterHealthyChannels(LiveTVChannel.sampleChannels)
+        let healthyChannels = await StreamHealthMLAgent.shared.filterHealthyChannels(catalog)
         let channels = healthyChannels
             .filter { goodCategories.contains($0.category) }
             .sorted { $0.viewerCount > $1.viewerCount }
@@ -712,7 +722,7 @@ final class LiveTVIntelligenceAgent: ObservableObject {
     }
     
     private func findSimilarChannels(to channel: LiveTVChannel) -> [LiveTVChannel] {
-        return LiveTVChannel.sampleChannels
+        return catalog
             .filter { $0.id != channel.id && $0.category == channel.category }
             .sorted { $0.viewerCount > $1.viewerCount }
             .prefix(5)
@@ -724,12 +734,12 @@ final class LiveTVIntelligenceAgent: ObservableObject {
         let differentCategories = LiveTVChannel.ChannelCategory.allCases.filter { $0 != channel.category }
         
         for category in preferences.preferredCategories where differentCategories.contains(category) {
-            if let found = LiveTVChannel.sampleChannels.first(where: { $0.category == category }) {
+            if let found = catalog.first(where: { $0.category == category }) {
                 return found
             }
         }
         
-        return LiveTVChannel.sampleChannels.first { $0.category != channel.category }
+        return catalog.first { $0.category != channel.category }
     }
     
     private func inferTargetAudience(channel: LiveTVChannel) -> String {
@@ -828,7 +838,7 @@ final class LiveTVIntelligenceAgent: ObservableObject {
     
     private func calculateInitialTrending() async {
         // Calculate initial trending scores
-        for channel in LiveTVChannel.sampleChannels {
+        for channel in catalog {
             trendingScores[channel.id] = Double(channel.viewerCount) / 100_000
         }
         print("📈 [LiveTV-AI] Calculated initial trending scores for \(trendingScores.count) channels")

@@ -119,6 +119,27 @@ final class CommunityPostService: ObservableObject {
         } catch { }
         #endif
     }
+
+    /// Deletes a post. Only the owning creator may delete it (server-verified).
+    func deletePost(postId: String, creatorId: String) async {
+        #if canImport(FirebaseFirestore)
+        do {
+            let doc = try await db.collection("community_posts").document(postId).getDocument()
+            guard (doc.data()?["creatorId"] as? String) == creatorId else { return }
+            try await db.collection("community_posts").document(postId).delete()
+        } catch { }
+        #endif
+    }
+
+    /// Pins or unpins a post for the creator's community feed.
+    func togglePin(postId: String, isPinned: Bool) async {
+        #if canImport(FirebaseFirestore)
+        try? await db.collection("community_posts").document(postId).updateData([
+            "isPinned": isPinned,
+            "updatedAt": FieldValue.serverTimestamp()
+        ])
+        #endif
+    }
     
     func stopListening() {
         #if canImport(FirebaseFirestore)

@@ -275,7 +275,7 @@ function filterByPeriod(
 // Calculate overview metrics
 function calculateOverviewMetrics(
   analytics: ThumbnailAnalytics[],
-  period: string
+  period: 'day' | 'week' | 'month' | 'year' | 'all-time'
 ): PerformanceMetrics {
   const totalImpressions = analytics.reduce((sum, a) => sum + a.impressions, 0);
   const totalClicks = analytics.reduce((sum, a) => sum + a.clicks, 0);

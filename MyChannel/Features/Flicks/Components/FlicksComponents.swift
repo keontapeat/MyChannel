@@ -100,6 +100,15 @@ struct NuclearVideoPlayerView: View {
                             
                             GeometryReader { sliderGeo in
                                 ZStack(alignment: .leading) {
+                                    // 🐛 FIX: Invisible full-height tap/drag target. Previously the
+                                    // gesture only covered the visible 4pt-tall track, which — combined
+                                    // with the tap catcher above swallowing touches — made the scrubber
+                                    // impossible to grab. This clear rectangle fills the whole
+                                    // GeometryReader height so any touch in the strip starts a scrub.
+                                    Rectangle()
+                                        .fill(Color.clear)
+                                        .contentShape(Rectangle())
+                                    
                                     Rectangle()
                                         .fill(Color.white.opacity(0.3))
                                         .frame(height: 4)
@@ -115,7 +124,6 @@ struct NuclearVideoPlayerView: View {
                                         .frame(width: 12, height: 12)
                                         .position(x: max(0, sliderGeo.size.width * CGFloat(duration > 0 ? currentTime / duration : 0)), y: sliderGeo.size.height / 2)
                                 }
-                                .contentShape(Rectangle())
                                 .gesture(
                                     DragGesture(minimumDistance: 0)
                                         .onChanged { value in
@@ -129,14 +137,19 @@ struct NuclearVideoPlayerView: View {
                                         }
                                 )
                             }
-                            .frame(height: 20)
+                            // 🐛 FIX: Taller hit target (was 20) so the scrub gesture is easy to grab
+                            // with a thumb, while the visible track/thumb stay their original size.
+                            .frame(height: 36)
                             
                             Text(formatTime(duration))
                                 .font(.caption2)
                                 .foregroundColor(.white)
                         }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 24) // Float above safe area
+                        // 🐛 FIX: Raised from 24 -> FlicksLayout.scrubberBottomPadding (40) so the
+                        // scrubber lands inside the hit zone FlicksView reserves below the tap
+                        // catcher, and clears the custom tab bar instead of being covered by it.
+                        .padding(.bottom, FlicksLayout.scrubberBottomPadding)
                     }
                 }
                 
@@ -252,6 +265,13 @@ struct NuclearVideoPlayerView: View {
                 NotificationCenter.default.post(name: NSNotification.Name("ShowFlicksUI"), object: nil)
                 startTimer()
             }
+        }
+        // Hold-to-speed (YouTube Shorts / TikTok parity): 2x while pressed, revert on release.
+        // object > 0 → that rate; object <= 0 or nil → revert to the user's chosen speed.
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SetFlickRate_\(flick.id)"))) { note in
+            guard playerManager.isPlaying, let player = playerManager.player else { return }
+            let requested = (note.object as? NSNumber)?.floatValue ?? 0
+            player.rate = requested > 0 ? requested : Float(playbackSpeed)
         }
     }
     

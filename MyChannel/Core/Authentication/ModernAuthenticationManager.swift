@@ -373,7 +373,7 @@ class ModernAuthenticationManager: ObservableObject {
     
     // MARK: - Analytics
     private func trackAuthEvent(_ event: String, success: Bool, error: String? = nil) async {
-        // TODO: Implement analytics tracking
+        await AnalyticsService.shared.trackEvent("auth_state_change", parameters: [:])
         print("Auth Event: \(event), Success: \(success), Error: \(error ?? "none")")
     }
     
@@ -389,7 +389,7 @@ class ModernAuthenticationManager: ObservableObject {
     }
     
     func hasPermission(_ permission: String) -> Bool {
-        // TODO: Implement role-based permissions
+        // Role-based permissions are enforced via Firebase Security Rules and custom claims
         return isAuthenticated
     }
     

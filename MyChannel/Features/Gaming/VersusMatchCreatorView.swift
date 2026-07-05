@@ -25,6 +25,7 @@ struct VersusMatchCreatorView: View {
     @State private var showingError = false
     @State private var errorMessage = ""
     @State private var showingOpponentPicker = false
+    @State private var showingComplianceGate = false
     
     var body: some View {
         NavigationStack {
@@ -87,6 +88,15 @@ struct VersusMatchCreatorView: View {
             }
             .sheet(isPresented: $showingOpponentPicker) {
                 OpponentPickerView(selectedOpponent: $selectedOpponent)
+            }
+            .sheet(isPresented: $showingComplianceGate) {
+                if let userId = AuthenticationManager.shared.currentUser?.id,
+                   let wager = Double(wagerAmount) {
+                    VSMatchComplianceSheet(userId: userId, wagerAmount: wager) {
+                        // User cleared the gate — proceed straight to creating the match.
+                        performCreateMatch()
+                    }
+                }
             }
         }
     }
@@ -366,23 +376,25 @@ struct VersusMatchCreatorView: View {
         }
     }
     
+    // Money previews computed in integer cents (rounded) via MoneyMath so they
+    // match the server's actual settlement math — no floating-point drift.
+    private var grossCents: Int {
+        guard let wager = Double(wagerAmount) else { return 0 }
+        return MoneyMath.cents(fromDollars: wager) * 2
+    }
+    
     private var potSize: String {
-        guard let wager = Double(wagerAmount) else { return "$0" }
-        return "$\(Int(wager * 2))"
+        "$\(MoneyMath.dollars(fromCents: grossCents).formatted(.number.precision(.fractionLength(0...2))))"
     }
     
     private var winnerGets: String {
-        guard let wager = Double(wagerAmount) else { return "$0" }
-        let total = wager * 2
-        let fee = total * 0.10
-        return "$\(Int(total - fee))"
+        let payout = MoneyMath.dollars(fromCents: MoneyMath.winnerPayoutCents(grossCents: grossCents))
+        return "$\(payout.formatted(.number.precision(.fractionLength(0...2))))"
     }
     
     private var platformFee: String {
-        guard let wager = Double(wagerAmount) else { return "$0" }
-        let total = wager * 2
-        let fee = total * 0.10
-        return "$\(Int(fee)) (10%)"
+        let fee = MoneyMath.dollars(fromCents: MoneyMath.platformFeeCents(grossCents: grossCents))
+        return "$\(fee.formatted(.number.precision(.fractionLength(0...2)))) (10%)"
     }
     
     // MARK: - Create Button
@@ -425,12 +437,55 @@ struct VersusMatchCreatorView: View {
     
     // MARK: - Actions
     
+    /// Entry point for the "Send Challenge" button. Runs a compliance pre-flight
+    /// so a not-yet-eligible user is routed to the onboarding gate instead of
+    /// hitting a raw error. If already cleared, creates the match directly.
     private func createMatch() {
-        guard let opponent = selectedOpponent,
+        guard selectedOpponent != nil,
               let wager = Double(wagerAmount) else { return }
-        
+
+        guard let challengerId = AuthenticationManager.shared.currentUser?.id else {
+            errorMessage = MatchError.userNotLoggedIn.localizedDescription
+            showingError = true
+            return
+        }
+
         isCreating = true
-        
+
+        Task {
+            do {
+                // 🔒 Pre-flight the same checks the service enforces. On any
+                // compliance failure, open the gate so the user can resolve the
+                // self-serviceable items (age / terms) instead of seeing an error.
+                _ = try await VSMatchComplianceService.shared.canUserWager(
+                    userId: challengerId,
+                    amount: wager
+                )
+            } catch is ComplianceError {
+                isCreating = false
+                showingComplianceGate = true
+                return
+            } catch {
+                errorMessage = error.localizedDescription
+                showingError = true
+                isCreating = false
+                return
+            }
+
+            // Already eligible — proceed.
+            performCreateMatch()
+        }
+    }
+
+    /// Actually creates the match. Called either directly (already eligible) or
+    /// from the compliance gate's completion handler once the user has cleared.
+    private func performCreateMatch() {
+        guard let opponent = selectedOpponent,
+              let wager = Double(wagerAmount),
+              let challengerId = AuthenticationManager.shared.currentUser?.id else { return }
+
+        isCreating = true
+
         Task {
             do {
                 let rules = VersusMatch.MatchRules(
@@ -439,14 +494,7 @@ struct VersusMatchCreatorView: View {
                     winCondition: .mostViews,
                     customRules: customRules.isEmpty ? nil : [customRules]
                 )
-                
-                guard let challengerId = AuthenticationManager.shared.currentUser?.id else {
-                    errorMessage = MatchError.userNotLoggedIn.localizedDescription
-                    showingError = true
-                    isCreating = false
-                    return
-                }
-                
+
                 _ = try await matchService.createMatch(
                     challengerId: challengerId,
                     opponentId: opponent.id,
@@ -456,13 +504,13 @@ struct VersusMatchCreatorView: View {
                     rules: rules,
                     scheduledDate: scheduledDate
                 )
-                
+
                 showingSuccess = true
             } catch {
                 errorMessage = error.localizedDescription
                 showingError = true
             }
-            
+
             isCreating = false
         }
     }

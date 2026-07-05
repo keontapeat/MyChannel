@@ -10,6 +10,15 @@ extension VideoDetailView {
         if playerManager.selectedQuality == .auto {
             playerManager.autoSelectQuality()
         }
+        // 🔗 Deep link (?t=) takes priority over resume position.
+        if let deepLinkSeconds = DeepLinkService.shared.consumeSeek(for: video.id) {
+            let fraction = deepLinkSeconds / newDuration
+            if fraction > 0 && fraction < 0.99 {
+                print("🔗 [DeepLink] Starting at t=\(Int(deepLinkSeconds))s")
+                playerManager.seek(to: fraction)
+                return
+            }
+        }
         let savedPosition = WatchProgressService.shared.resumePosition(videoId: video.id)
         guard savedPosition > 0 else { return }
         let fraction = savedPosition / newDuration
@@ -30,13 +39,18 @@ extension VideoDetailView {
                 Task { try? await WatchProgressService.shared.saveProgress(userId: uid, videoId: vid, position: newTime, duration: dur) }
             }
             watchProgress = newTime / playerManager.duration
+            // 🔥 PERF: Report each quartile milestone exactly once. Previously the
+            // 50%/75% branches spawned a fresh Task on every time-observer tick for
+            // the rest of the video (hundreds of redundant main-actor hops) and the
+            // 75% branch was unreachable behind the 50% `else if`.
             if !hasWatchedThreshold && watchProgress >= 0.25 {
                 hasWatchedThreshold = true
-                Task { await AnalyticsService.shared.trackVideoQuartile(videoId: video.id, quartile: 1) }
-            } else if watchProgress >= 0.5 {
-                Task { await AnalyticsService.shared.trackVideoQuartile(videoId: video.id, quartile: 2) }
-            } else if watchProgress >= 0.75 {
-                Task { await AnalyticsService.shared.trackVideoQuartile(videoId: video.id, quartile: 3) }
+            }
+            for (threshold, quartile) in [(0.25, 1), (0.5, 2), (0.75, 3), (0.98, 4)] {
+                if watchProgress >= threshold && !trackedQuartiles.contains(quartile) {
+                    trackedQuartiles.insert(quartile)
+                    Task { await AnalyticsService.shared.trackVideoQuartile(videoId: video.id, quartile: quartile) }
+                }
             }
         }
         if speedCurvesService.autoSkipSilence {
@@ -50,10 +64,12 @@ extension VideoDetailView {
                 }
             }
         }
-        if let chapters = video.chapters, !chapters.isEmpty {
-            let sorted = chapters.sorted { $0.start < $1.start }
-            if let current = sorted.last(where: { $0.start <= newTime }) {
-                currentChapterTitle = current.title
+        // 🔥 PERF: Use the pre-sorted chapters cached on appear (no per-tick sort).
+        if !sortedChapters.isEmpty,
+           let current = sortedChapters.last(where: { $0.start <= newTime }) {
+            let title = current.title
+            if currentChapterTitle != title {
+                currentChapterTitle = title
             }
         }
         if let cards = video.videoCards {
@@ -130,28 +146,40 @@ extension VideoDetailView {
 
     @MainActor
     func minimizeToMiniPlayer() async {
-        print("🔄 [VideoDetailView] Minimizing to native PiP")
+        print("🔄 [VideoDetailView] Minimizing to mini player")
         let wasPlaying = playerManager.isPlaying
-        
-        // Hand the player off to GlobalVideoPlayerManager so PiP controller has a reference
+
+        // 1. Hand the player to GlobalVideoPlayerManager.
+        //    This sets currentVideo + showingFullscreen = false, which makes
+        //    FloatingMiniPlayer appear in MainTabView automatically.
         await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
         globalPlayer.showingFullscreen = false
-        
-        // Keep playback going and start native PiP
+
+        // 2. Keep audio/video playing in the mini player.
         if wasPlaying, let player = globalPlayer.player, player.rate == 0 {
             player.play()
             globalPlayer.isPlaying = true
         }
-        
-        // Start native iOS PiP floating window, then dismiss
+
+        // 3. Attempt native system PiP as a bonus (it's fine if it fails —
+        //    FloatingMiniPlayer is already showing at this point).
+        //    Use PiPPlayerManager which has the real AVPlayerLayer wired by PiPEnabledVideoPlayer.
         PiPPlayerManager.shared.startPiP(
             onStarted: { [weak globalPlayer] in
+                // PiP started — FloatingMiniPlayer will hide itself while PiP is active
+                // (it checks globalPlayer.currentVideo != nil and system handles the bubble)
+                print("✅ [minimizeToMiniPlayer] Native PiP started")
                 globalPlayer?.showingFullscreen = false
             },
-            onFailed: nil
+            onFailed: {
+                // PiP failed — no problem, FloatingMiniPlayer is already on screen
+                print("⚠️ [minimizeToMiniPlayer] PiP unavailable — FloatingMiniPlayer is active fallback")
+            }
         )
-        
-        // Dismiss the VideoDetailView
+
+        // 4. Dismiss VideoDetailView.  The FloatingMiniPlayer overlay in MainTabView
+        //    will already be visible because globalPlayer.currentVideo is set and
+        //    globalPlayer.showingFullscreen is false.
         dismiss()
     }
 

@@ -317,20 +317,20 @@ final class RetentionOptimizer: ObservableObject {
     }
     
     private func generateRecommendations(for userId: String, history: [String]) async throws -> [String] {
-        // TODO: Use PersonalizationEngineV2 for smart recommendations
-        // return await PersonalizationEngineV2.shared.getPersonalizedRecommendations(userId: userId, limit: 5)
-        return [] // Placeholder
+        // Generate simple recommendations based on watch history
+        // PersonalizationEngineV2 not yet implemented; use basic logic
+        return Array(history.suffix(5))
     }
     
     private func sendReEngagementNotification(userId: String, videos: [String]) async throws {
         print("📱 [Retention] Sending re-engagement notification to user \(userId)")
-        // TODO: Send push notification via PushNotificationService
-        // await PushNotificationService.shared.sendNotification(
-        //     userId: userId,
-        //     title: "We miss you! 💙",
-        //     body: "New videos from creators you love are waiting",
-        //     data: ["videoIds": videos]
-        // )
+        await PushNotificationService.shared.sendNotification(
+            to: userId,
+            notification: [
+                "title": "We miss you! 💙",
+                "message": "New videos from creators you love are waiting"
+            ]
+        )
     }
     
     private func handleError(_ error: Error) {
@@ -610,9 +610,12 @@ final class ThumbnailABTestingAgent: ObservableObject {
     }
     
     private func generateAlternativeThumbnails(videoId: String) async throws -> [String] {
-        // TODO: Use AIThumbnailTestEngine to generate variations
-        // return await AIThumbnailTestEngine.shared.generateVariations(videoId: videoId, count: 2)
-        return [] // Placeholder
+        // Generate thumbnail variations (AIThumbnailTestEngine not yet implemented)
+        // Return placeholder URLs for A/B testing
+        return [
+            "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg",
+            "https://i.ytimg.com/vi/\(videoId)/maxresdefault.jpg"
+        ]
     }
     
     private func determineWinner(test: ThumbnailTest) -> String {

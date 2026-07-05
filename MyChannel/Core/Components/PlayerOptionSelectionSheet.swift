@@ -99,6 +99,9 @@ struct PlayerOptionSelectionSheet: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(item.id == selectedID ? Color.accentColor.opacity(0.1) : Color.clear)
                         )
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(item.subtitle.map { "\(item.title), \($0)" } ?? item.title)
+                        .accessibilityAddTraits(item.id == selectedID ? [.isButton, .isSelected] : .isButton)
                     }
                 }
                 .listStyle(.plain)

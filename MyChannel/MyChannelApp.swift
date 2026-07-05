@@ -41,10 +41,12 @@ struct MyChannelApp: App {
     init() {
         let initStartTime = Date()
         print("🚀 MyChannelApp init started...")
-        
-        // Register Background Tasks
-        BackgroundFetchService.shared.register()
-        
+
+        // NOTE: BGTaskScheduler launch handlers are registered in
+        // FirebaseAppDelegate.application(_:didFinishLaunchingWithOptions:), NOT here.
+        // SwiftUI may run this App.init() after the app has finished launching, and
+        // registering a BGTask launch handler after launch throws and crashes the app.
+
         // 🔥 PERFORMANCE: Only critical synchronous operations in init
         setupAppearance()
         configureAudioSession()

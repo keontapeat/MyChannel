@@ -622,20 +622,52 @@ final class AdTargetingAGI: ObservableObject {
     // MARK: - Claude AI Integration
     
     private func callClaudeForInterests(prompt: String) async -> [String]? {
-        // Call Claude Sonnet 4.5 API
         guard !anthropicAPIKey.isEmpty else { return nil }
-        
-        // TODO: Implement actual API call
-        // For now, return nil to use fallback
-        return nil
+        guard let url = URL(string: "https://api.anthropic.com/v1/messages") else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(anthropicAPIKey, forHTTPHeaderField: "x-api-key")
+        req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "model": "claude-sonnet-4-5",
+            "max_tokens": 512,
+            "messages": [["role": "user", "content": prompt]]
+        ])
+        guard let (data, _) = try? await URLSession.shared.data(for: req),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let content = (json["content"] as? [[String: Any]])?.first?["text"] as? String else {
+            return nil
+        }
+        // Parse comma-separated interests from response
+        return content.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     }
     
     private func callClaudeForBuyingIntent(prompt: String) async -> AdUserProfile.BuyingIntent? {
-        // Call Claude Sonnet 4.5 API
         guard !anthropicAPIKey.isEmpty else { return nil }
-        
-        // TODO: Implement actual API call
-        return nil
+        guard let url = URL(string: "https://api.anthropic.com/v1/messages") else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(anthropicAPIKey, forHTTPHeaderField: "x-api-key")
+        req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "model": "claude-sonnet-4-5",
+            "max_tokens": 256,
+            "messages": [["role": "user", "content": prompt]]
+        ])
+        guard let (data, _) = try? await URLSession.shared.data(for: req),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let text = (json["content"] as? [[String: Any]])?.first?["text"] as? String else {
+            return nil
+        }
+        let lower = text.lowercased()
+        let score: Double
+        if lower.contains("high") { score = 0.9 }
+        else if lower.contains("medium") { score = 0.6 }
+        else if lower.contains("low") { score = 0.3 }
+        else { score = 0.1 }
+        return AdUserProfile.BuyingIntent(score: score, category: nil, confidence: 0.7, indicators: ["ai_prediction"])
     }
 }
 

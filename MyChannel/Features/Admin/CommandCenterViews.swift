@@ -11,8 +11,8 @@ struct CCHeaderStat: View {
     let label: String; let value: String; let color: Color
     var body: some View {
         VStack(spacing: 2) {
-            Text(value).font(.system(size: 18, weight: .black)).foregroundColor(color)
-            Text(label).font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
+            Text(value).font(.system(size: 18, weight: .black, design: .monospaced)).foregroundColor(color)
+            Text(label).font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundColor(CCTheme.textSecondary.opacity(0.7))
         }
         .frame(maxWidth: .infinity)
     }
@@ -23,16 +23,17 @@ struct CCMetricCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: icon).font(.system(size: 14)).foregroundColor(color)
-                Text(title).font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
+                Image(systemName: icon).font(.system(size: 13)).foregroundColor(color)
+                Text(title).font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
             }
-            Text(value).font(.system(size: 24, weight: .black)).foregroundColor(color)
-            Text(subtitle).font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+            Text(value).font(.system(size: 24, weight: .black, design: .monospaced)).foregroundColor(CCTheme.textPrimary)
+            Text(subtitle).font(.system(size: 10, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(color.opacity(0.08)).cornerRadius(10)
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(color.opacity(0.2), lineWidth: 1))
+        .background(CCTheme.panel)
+        .cornerRadius(10)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(CCTheme.panelBorder, lineWidth: 1))
     }
 }
 
@@ -40,14 +41,15 @@ struct DepartmentRow: View {
     let dept: Department
     var body: some View {
         HStack(spacing: 10) {
-            Circle().fill(dept.statusColor).frame(width: 8, height: 8)
-            Text(dept.name).font(.system(size: 13, weight: .semibold))
+            Circle().fill(dept.statusColor).frame(width: 6, height: 6)
+            Text(dept.name).font(.system(size: 13, weight: .medium)).foregroundColor(CCTheme.textPrimary)
             Spacer()
-            Text(dept.status).font(.system(size: 11, design: .monospaced)).foregroundColor(dept.statusColor)
-            Text(dept.metric).font(.system(size: 11, weight: .bold, design: .monospaced)).foregroundColor(.primary)
+            Text(dept.status).font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(dept.statusColor)
+            Text(dept.metric).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(Color(.systemGray6)).cornerRadius(8)
+        .padding(.horizontal, 12).padding(.vertical, 9)
+        .background(CCTheme.panel).cornerRadius(8)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(CCTheme.panelBorder, lineWidth: 1))
     }
 }
 
@@ -57,13 +59,13 @@ struct PlatformEventRow: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: event.icon).font(.system(size: 12)).foregroundColor(event.color).padding(.top, 1)
             VStack(alignment: .leading, spacing: 2) {
-                Text(event.title).font(.system(size: 12, weight: .semibold))
-                Text(event.detail).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(2)
+                Text(event.title).font(.system(size: 12, weight: .semibold)).foregroundColor(CCTheme.textPrimary)
+                Text(event.detail).font(.system(size: 11)).foregroundColor(CCTheme.textSecondary).lineLimit(2)
             }
             Spacer()
-            Text(event.timestamp, style: .relative).font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+            Text(event.timestamp, style: .relative).font(.system(size: 10, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
         }
-        .padding(8).background(event.color.opacity(0.05)).cornerRadius(8)
+        .padding(8).background(CCTheme.panel).cornerRadius(8)
     }
 }
 
@@ -73,34 +75,34 @@ struct FraudAlertRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: "exclamationmark.shield.fill").foregroundColor(.red)
+                Image(systemName: "exclamationmark.shield.fill").foregroundColor(CCTheme.critical)
                 Text(alert.type.uppercased())
-                    .font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(.red)
+                    .font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(CCTheme.critical)
                 Spacer()
                 Text(alert.timestamp, style: .relative)
-                    .font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+                    .font(.system(size: 10, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                 if !alert.reviewed {
                     Text("NEW").font(.system(size: 9, weight: .bold)).foregroundColor(.white)
                         .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.red).cornerRadius(4)
+                        .background(CCTheme.critical).cornerRadius(4)
                 }
             }
-            Text(alert.description).font(.system(size: 12)).foregroundColor(.primary)
+            Text(alert.description).font(.system(size: 12)).foregroundColor(CCTheme.textPrimary)
             HStack {
-                Label(alert.amount, systemImage: "dollarsign.circle").font(.system(size: 11)).foregroundColor(.orange)
+                Label(alert.amount, systemImage: "dollarsign.circle").font(.system(size: 11)).foregroundColor(CCTheme.warning)
                 Spacer()
-                Text("User: \(alert.userId)").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+                Text("User: \(alert.userId)").font(.system(size: 10, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                 if !alert.reviewed {
                     Button("MARK REVIEWED", action: onReview)
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(.green)
+                        .foregroundColor(CCTheme.good)
                 }
             }
         }
         .padding(12)
-        .background(alert.reviewed ? Color(.systemGray6) : Color.red.opacity(0.08))
+        .background(CCTheme.panel)
         .cornerRadius(10)
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(alert.reviewed ? Color.clear : Color.red.opacity(0.3), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(alert.reviewed ? CCTheme.panelBorder : CCTheme.critical.opacity(0.35), lineWidth: 1))
     }
 }
 
@@ -111,39 +113,39 @@ struct ContentFlagRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
+                Image(systemName: "exclamationmark.triangle.fill").foregroundColor(CCTheme.warning)
                 Text(flag.violationType.uppercased())
-                    .font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(.orange)
+                    .font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(CCTheme.warning)
                 Spacer()
                 Text(flag.timestamp, style: .relative)
-                    .font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+                    .font(.system(size: 10, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                 if !flag.reviewed {
                     Text("PENDING").font(.system(size: 9, weight: .bold)).foregroundColor(.white)
                         .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.orange).cornerRadius(4)
+                        .background(CCTheme.warning).cornerRadius(4)
                 }
             }
-            Text("Video: \(flag.videoTitle)").font(.system(size: 13, weight: .semibold))
-            Text("Creator: \(flag.creatorName)").font(.system(size: 11)).foregroundColor(.secondary)
-            Text("AI Confidence: \(flag.confidence)%").font(.system(size: 11, design: .monospaced)).foregroundColor(.orange)
+            Text("Video: \(flag.videoTitle)").font(.system(size: 13, weight: .semibold)).foregroundColor(CCTheme.textPrimary)
+            Text("Creator: \(flag.creatorName)").font(.system(size: 11)).foregroundColor(CCTheme.textSecondary)
+            Text("AI Confidence: \(flag.confidence)%").font(.system(size: 11, design: .monospaced)).foregroundColor(CCTheme.warning)
             if !flag.reviewed {
                 HStack(spacing: 10) {
-                    Button("✓ APPROVE", action: onApprove)
-                        .font(.system(size: 11, weight: .bold)).foregroundColor(.green)
+                    Button("APPROVE", action: onApprove)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced)).foregroundColor(CCTheme.good)
                         .padding(.horizontal, 14).padding(.vertical, 7)
-                        .background(Color.green.opacity(0.1)).cornerRadius(8)
-                    Button("✕ REMOVE", action: onRemove)
-                        .font(.system(size: 11, weight: .bold)).foregroundColor(.red)
+                        .background(CCTheme.good.opacity(0.12)).cornerRadius(8)
+                    Button("REMOVE", action: onRemove)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced)).foregroundColor(CCTheme.critical)
                         .padding(.horizontal, 14).padding(.vertical, 7)
-                        .background(Color.red.opacity(0.1)).cornerRadius(8)
+                        .background(CCTheme.critical.opacity(0.12)).cornerRadius(8)
                     Spacer()
                 }
             }
         }
         .padding(12)
-        .background(flag.reviewed ? Color(.systemGray6) : Color.orange.opacity(0.07))
+        .background(CCTheme.panel)
         .cornerRadius(10)
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(flag.reviewed ? Color.clear : Color.orange.opacity(0.3), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(flag.reviewed ? CCTheme.panelBorder : CCTheme.warning.opacity(0.35), lineWidth: 1))
     }
 }
 
@@ -156,41 +158,41 @@ struct DailyReportCard: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(report.date, style: .date)
-                            .font(.system(size: 15, weight: .bold)).foregroundColor(.primary)
+                            .font(.system(size: 15, weight: .bold)).foregroundColor(CCTheme.textPrimary)
                         HStack(spacing: 12) {
-                            scoreLabel("HEALTH", "\(Int(report.healthScore))%", report.healthScore >= 80 ? .green : .orange)
-                            scoreLabel("USERS", "+\(report.newUsers)", .cyan)
-                            scoreLabel("REVENUE", "$\(report.revenue)", .green)
+                            scoreLabel("HEALTH", "\(Int(report.healthScore))%", report.healthScore >= 80 ? CCTheme.good : CCTheme.warning)
+                            scoreLabel("USERS", "+\(report.newUsers)", CCTheme.textPrimary)
+                            scoreLabel("REVENUE", "$\(report.revenue)", CCTheme.good)
                         }
                     }
                     Spacer()
                     Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(CCTheme.textSecondary)
                 }
             }
             if expanded {
                 Divider()
                 Text(report.summary)
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.primary).lineSpacing(4)
+                    .foregroundColor(CCTheme.textPrimary).lineSpacing(4)
                 if !report.highlights.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("HIGHLIGHTS").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
+                        Text("HIGHLIGHTS").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         ForEach(report.highlights, id: \.self) { h in
                             HStack(spacing: 6) {
-                                Image(systemName: "star.fill").font(.system(size: 8)).foregroundColor(.yellow)
-                                Text(h).font(.system(size: 12))
+                                Image(systemName: "checkmark.circle.fill").font(.system(size: 8)).foregroundColor(CCTheme.good)
+                                Text(h).font(.system(size: 12)).foregroundColor(CCTheme.textPrimary)
                             }
                         }
                     }
                 }
                 if !report.concerns.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("CONCERNS").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.secondary)
+                        Text("CONCERNS").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
                         ForEach(report.concerns, id: \.self) { c in
                             HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.circle.fill").font(.system(size: 8)).foregroundColor(.orange)
-                                Text(c).font(.system(size: 12))
+                                Image(systemName: "exclamationmark.circle.fill").font(.system(size: 8)).foregroundColor(CCTheme.warning)
+                                Text(c).font(.system(size: 12)).foregroundColor(CCTheme.textPrimary)
                             }
                         }
                     }
@@ -198,13 +200,14 @@ struct DailyReportCard: View {
             }
         }
         .padding(14)
-        .background(Color(.systemGray6)).cornerRadius(12)
+        .background(CCTheme.panel).cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(CCTheme.panelBorder, lineWidth: 1))
     }
 
     private func scoreLabel(_ title: String, _ val: String, _ color: Color) -> some View {
         VStack(spacing: 1) {
-            Text(val).font(.system(size: 12, weight: .bold)).foregroundColor(color)
-            Text(title).font(.system(size: 8, design: .monospaced)).foregroundColor(.secondary)
+            Text(val).font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(color)
+            Text(title).font(.system(size: 8, design: .monospaced)).foregroundColor(CCTheme.textSecondary)
         }
     }
 }
@@ -666,22 +669,22 @@ class CommandCenterViewModel: ObservableObject {
     private func setupDepartments() {
         let monitor = PlatformMonitorService.shared
         departments = [
-            Department(name: "⚖️ 3-Strike Review", status: strikeQueueCount > 0 ? "NEEDS REVIEW" : "ALL CLEAR", metric: "\(strikeQueueCount) in queue", statusColor: strikeQueueCount > 0 ? .red : .green),
-            Department(name: "🤖 AI Agent Army", status: AGIAgentManager.shared.isSchedulerRunning ? "RUNNING" : "STANDBY", metric: "\(AGIAgentManager.shared.agents.filter { $0.status == .live }.count)/30 LIVE", statusColor: AGIAgentManager.shared.isSchedulerRunning ? .green : .orange),
-            Department(name: "🛡️ Fraud Detection", status: fraudAlerts.filter { !$0.reviewed }.isEmpty ? "ALL CLEAR" : "ALERT", metric: "\(monitor.fraudCaught) caught today", statusColor: fraudAlerts.filter { !$0.reviewed }.isEmpty ? .green : .red),
-            Department(name: "📹 Content Moderation", status: contentFlags.filter { !$0.reviewed }.isEmpty ? "CLEAN" : "REVIEW", metric: "\(monitor.contentFlagged) flagged today", statusColor: contentFlags.filter { !$0.reviewed }.isEmpty ? .green : .orange),
-            Department(name: "🔍 Platform Monitor", status: monitor.isRunning ? "SCANNING" : "OFFLINE", metric: "\(monitor.totalScansToday) scans today", statusColor: monitor.isRunning ? .cyan : .red),
-            Department(name: "📈 Growth & Analytics", status: "TRACKING", metric: "+\(formatNumber(newUsersToday))/day", statusColor: .cyan),
-            Department(name: "💰 Revenue", status: "EARNING", metric: "$\(formatNumber(revenueToday))/day", statusColor: .green),
-            Department(name: "🎬 Creator Studio", status: "ACTIVE", metric: "\(formatNumber(creatorCount)) creators", statusColor: .yellow),
+            Department(name: "3-Strike Review", status: strikeQueueCount > 0 ? "NEEDS REVIEW" : "ALL CLEAR", metric: "\(strikeQueueCount) in queue", statusColor: strikeQueueCount > 0 ? CCTheme.critical : CCTheme.good),
+            Department(name: "AI Agent Army", status: AGIAgentManager.shared.isSchedulerRunning ? "RUNNING" : "STANDBY", metric: "\(AGIAgentManager.shared.agents.filter { $0.status == .live }.count)/30 LIVE", statusColor: AGIAgentManager.shared.isSchedulerRunning ? CCTheme.good : CCTheme.warning),
+            Department(name: "Fraud Detection", status: fraudAlerts.filter { !$0.reviewed }.isEmpty ? "ALL CLEAR" : "ALERT", metric: "\(monitor.fraudCaught) caught today", statusColor: fraudAlerts.filter { !$0.reviewed }.isEmpty ? CCTheme.good : CCTheme.critical),
+            Department(name: "Content Moderation", status: contentFlags.filter { !$0.reviewed }.isEmpty ? "CLEAN" : "REVIEW", metric: "\(monitor.contentFlagged) flagged today", statusColor: contentFlags.filter { !$0.reviewed }.isEmpty ? CCTheme.good : CCTheme.warning),
+            Department(name: "Platform Monitor", status: monitor.isRunning ? "SCANNING" : "OFFLINE", metric: "\(monitor.totalScansToday) scans today", statusColor: monitor.isRunning ? CCTheme.neutral : CCTheme.critical),
+            Department(name: "Growth & Analytics", status: "TRACKING", metric: "+\(formatNumber(newUsersToday))/day", statusColor: CCTheme.neutral),
+            Department(name: "Revenue", status: "EARNING", metric: "$\(formatNumber(revenueToday))/day", statusColor: CCTheme.good),
+            Department(name: "Creator Studio", status: "ACTIVE", metric: "\(formatNumber(creatorCount)) creators", statusColor: CCTheme.neutral),
         ]
     }
 
     private func setupSampleEvents() {
         recentEvents = [
-            PlatformEvent(title: "New user milestone", detail: "Platform reached \(formatNumber(totalUsers)) registered users", icon: "person.fill.checkmark", color: .green, timestamp: Date().addingTimeInterval(-300)),
-            PlatformEvent(title: "AI Agents running", detail: "\(AGIAgentManager.shared.agents.filter { $0.isEnabled }.count) agents actively improving the platform", icon: "brain.head.profile", color: .cyan, timestamp: Date().addingTimeInterval(-900)),
-            PlatformEvent(title: "Content uploaded", detail: "\(videosUploadedToday) new videos uploaded today", icon: "video.fill", color: .blue, timestamp: Date().addingTimeInterval(-1800)),
+            PlatformEvent(title: "New user milestone", detail: "Platform reached \(formatNumber(totalUsers)) registered users", icon: "person.fill.checkmark", color: CCTheme.good, timestamp: Date().addingTimeInterval(-300)),
+            PlatformEvent(title: "AI Agents running", detail: "\(AGIAgentManager.shared.agents.filter { $0.isEnabled }.count) agents actively improving the platform", icon: "brain.head.profile", color: CCTheme.neutral, timestamp: Date().addingTimeInterval(-900)),
+            PlatformEvent(title: "Content uploaded", detail: "\(videosUploadedToday) new videos uploaded today", icon: "video.fill", color: CCTheme.neutral, timestamp: Date().addingTimeInterval(-1800)),
         ]
     }
 

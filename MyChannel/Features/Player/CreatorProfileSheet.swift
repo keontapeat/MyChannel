@@ -19,6 +19,7 @@ struct CreatorProfileSheet: View {
     @State private var isLoadingVideos = false
     @State private var subscribeScale: CGFloat = 1.0
     @State private var headerOffset: CGFloat = 0
+    @State private var shareItems: [Any]?
     
     private let bannerHeight: CGFloat = 140
     private let avatarSize: CGFloat = 88
@@ -97,11 +98,13 @@ struct CreatorProfileSheet: View {
                         Button(action: { showingFullProfile = true }) {
                             Label("View Full Channel", systemImage: "person.crop.rectangle")
                         }
-                        Button(action: {}) {
+                        Button {
+                            let handle = creator.username.isEmpty ? creator.id : creator.username
+                            if let url = URL(string: "https://mychannel.live/channel/\(handle)") {
+                                shareItems = ["\(creator.displayName) on MyChannel", url]
+                            }
+                        } label: {
                             Label("Share Channel", systemImage: "square.and.arrow.up")
-                        }
-                        Button(action: {}) {
-                            Label("Report", systemImage: "flag")
                         }
                     } label: {
                         Image(systemName: "ellipsis")
@@ -117,6 +120,11 @@ struct CreatorProfileSheet: View {
         .onAppear {
             isSubscribed = appState.isSubscribedTo(creator.id)
             loadCreatorVideos()
+        }
+        .sheet(isPresented: Binding(get: { shareItems != nil }, set: { if !$0 { shareItems = nil } })) {
+            if let items = shareItems {
+                NativeShareSheet(items: items)
+            }
         }
         .fullScreenCover(isPresented: $showingFullProfile) {
             if creator.id == authManager.currentUser?.id {

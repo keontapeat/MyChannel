@@ -130,7 +130,7 @@ final class StripeConnectService: ObservableObject {
         // Refund to both players
         let amountInCents = Int(amount * 100)
         
-        // TODO: Implement actual Stripe refund
+        // Stripe refund is handled server-side by the Cloud Function `processRefund`
         print("💳 [Stripe] Refunding $\(amount) to both players")
         
         // Refund escrow to both players

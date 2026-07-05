@@ -202,7 +202,7 @@ class TournamentService: ObservableObject {
             id: tournamentId,
             name: name,
             prizePool: prizePool,
-            totalPlayers: 0, // TODO: Calculate from rounds
+            totalPlayers: rounds.reduce(0) { $0 + ($1.matches.count * 2) },
             rounds: rounds,
             startDate: startDate
         )
@@ -370,11 +370,15 @@ class TournamentService: ObservableObject {
             let isTeam1 = matchIndex % 2 == 0
             if isTeam1 {
                 matches[matchIndex]["team1Id"] = winnerId
-                // TODO: Load team name from user data
-                matches[matchIndex]["team1Name"] = "Winner from Round \(currentRound)"
+                // Fetch display name from Firestore asynchronously
+                let userName = (try? await db.collection("users").document(winnerId).getDocument()
+                    .data()?["displayName"] as? String) ?? "Winner from Round \(currentRound)"
+                matches[matchIndex]["team1Name"] = userName
             } else {
                 matches[matchIndex]["team2Id"] = winnerId
-                matches[matchIndex]["team2Name"] = "Winner from Round \(currentRound)"
+                let userName = (try? await db.collection("users").document(winnerId).getDocument()
+                    .data()?["displayName"] as? String) ?? "Winner from Round \(currentRound)"
+                matches[matchIndex]["team2Name"] = userName
             }
             
             nextRoundData["matches"] = matches

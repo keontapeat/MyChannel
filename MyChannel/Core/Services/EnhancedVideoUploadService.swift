@@ -600,56 +600,17 @@ class EnhancedVideoUploadService: ObservableObject {
             return (videoDownloadURL.absoluteString, thumbnailDownloadURL.absoluteString)
             
         } catch {
-            print("🚨 Firebase Storage upload failed: \(error)")
-            print("🔄 Using fallback local storage URLs")
-            
-            // Fallback: Save files locally and return local URLs
-            let fm = FileManager.default
-            let baseDir = try fm.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-                .appendingPathComponent("MyChannelUploads", isDirectory: true)
-            
-            if !fm.fileExists(atPath: baseDir.path) {
-                try? fm.createDirectory(at: baseDir, withIntermediateDirectories: true)
-            }
-            
-            // Save video locally
-            let localVideoURL = baseDir.appendingPathComponent("\(videoId).mp4")
-            if fm.fileExists(atPath: localVideoURL.path) {
-                try? fm.removeItem(at: localVideoURL)
-            }
-            try? fm.copyItem(at: videoURL, to: localVideoURL)
-            
-            // Save thumbnail locally
-            let localThumbnailURL = baseDir.appendingPathComponent("\(videoId)_thumb.jpg")
-            if fm.fileExists(atPath: localThumbnailURL.path) {
-                try? fm.removeItem(at: localThumbnailURL)
-            }
-            try? fm.copyItem(at: thumbnailURL, to: localThumbnailURL)
-            
-            print("📁 Saved video locally at: \(localVideoURL.path)")
-            print("📁 Saved thumbnail locally at: \(localThumbnailURL.path)")
-            
-            return (localVideoURL.absoluteString, localThumbnailURL.absoluteString)
+            // 🚫 No silent local fallback. Returning a file:// URL here produced
+            // "successful" uploads that no other user could ever play and hid the
+            // real failure from the creator. Surface the error so the retry wrapper
+            // can re-attempt and, if it ultimately fails, the UI shows a real error.
+            print("🚨 Firebase Storage upload failed for video \(videoId): \(error)")
+            throw error
         }
         #else
-        print("⚠️ Firebase Storage not available, using local storage")
-        
-        // Fallback: Save files locally
-        let fm = FileManager.default
-        let baseDir = try fm.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            .appendingPathComponent("MyChannelUploads", isDirectory: true)
-        
-        if !fm.fileExists(atPath: baseDir.path) {
-            try? fm.createDirectory(at: baseDir, withIntermediateDirectories: true)
-        }
-        
-        let localVideoURL = baseDir.appendingPathComponent("\(videoId).mp4")
-        let localThumbnailURL = baseDir.appendingPathComponent("\(videoId)_thumb.jpg")
-        
-        try? fm.copyItem(at: videoURL, to: localVideoURL)
-        try? fm.copyItem(at: thumbnailURL, to: localThumbnailURL)
-        
-        return (localVideoURL.absoluteString, localThumbnailURL.absoluteString)
+        // Firebase Storage isn't compiled into this build — a "successful" upload is
+        // impossible, so fail loudly instead of fabricating an unplayable local URL.
+        throw VideoUploadServiceError.firebaseUnavailable
         #endif
     }
     
@@ -791,6 +752,20 @@ class EnhancedVideoUploadService: ObservableObject {
                 url: self.videoProcessingURL + "/post-process",
                 request: request,
                 responseType: PostProcessingResponse.self
+            )
+        }
+
+        // Real Content ID scan against the reference database (see
+        // services/video-content-id — perceptual frame-hash matching).
+        // Fire-and-forget: never blocks or fails the upload; the video is
+        // already live by this point, matching YouTube's own async Content ID
+        // scanning behavior (uploads publish immediately, matches land later).
+        // Storage path matches uploadToStorage's convention: videos/{userId}/{videoId}/{filename}.
+        let storagePath = "videos/\(upload.userId)/\(videoId)/video.mp4"
+        Task.detached(priority: .background) {
+            _ = await ContentIDService.shared.scanForMatches(
+                videoId: videoId,
+                sourceUri: "gs://mychannel-ca26d.appspot.com/\(storagePath)"
             )
         }
     }

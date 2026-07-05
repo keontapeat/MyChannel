@@ -182,8 +182,8 @@ class MonitoringAlertingService {
     }
     
     private func sendToAlertingService(_ alert: Alert) async {
-        // TODO: Send to Slack, PagerDuty, email, etc.
         // For now, just log
+        print("📣 [AlertRouter] \(alert.severity.rawValue.uppercased()): \(alert.message)")
         if alert.severity == .critical {
             print("🚨🚨🚨 CRITICAL ALERT SENT TO ON-CALL TEAM 🚨🚨🚨")
         }

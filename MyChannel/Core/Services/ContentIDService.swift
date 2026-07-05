@@ -2,6 +2,9 @@ import Foundation
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
 
 struct ContentMatch: Identifiable, Codable {
     let id: String
@@ -69,73 +72,194 @@ final class ContentIDService: ObservableObject {
     #if canImport(FirebaseFirestore)
     private var db: Firestore { Firestore.firestore() }
     #endif
-    
+
+    /// Real general-video Content ID backend (perceptual frame-hash matching —
+    /// see services/video-content-id/fingerprint.ts). Distinct from
+    /// AppConfig.API.musicContentIDBaseURL, which handles audio-only tracks
+    /// via Chromaprint. Replaces the previous simulated fingerprint generation
+    /// (Task.sleep + character-set-overlap "similarity") with real ffmpeg-based
+    /// perceptual hashing running server-side, robust to re-encoding.
+    private let videoContentIDBaseURL = AppConfig.API.videoContentIDBaseURL
+
     @Published var activeMatches: [ContentMatch] = []
     @Published var referenceFiles: [ContentIDReference] = []
-    
-    func scanForMatches(videoId: String, videoURL: String, audioURL: String?, thumbnailURL: String?) async -> [ContentMatch] {
-        // Generate fingerprints for uploaded content
-        let fingerprints = await generateFingerprints(
-            videoURL: videoURL,
-            audioURL: audioURL,
-            thumbnailURL: thumbnailURL
-        )
-        
-        // Search against reference database
-        let matches = await searchReferences(fingerprints: fingerprints, videoId: videoId)
-        
-        // Store matches
-        for match in matches {
-            await storeMatch(match)
-            
-            // Apply policy automatically
-            await applyMatchPolicy(match: match)
+
+    private func authorizedRequest(path: String, method: String, body: [String: Any]) async throws -> URLRequest {
+        guard let url = URL(string: videoContentIDBaseURL + path) else {
+            throw URLError(.badURL)
         }
-        
-        return matches
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        #if canImport(FirebaseAuth)
+        if let token = try? await Auth.auth().currentUser?.getIDToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        #endif
+        return request
     }
-    
-    func uploadReferenceFile(title: String, rightsholder: String, ownerId: String? = nil, sourceTrackId: String? = nil, videoURL: String, audioURL: String?, policy: ContentMatch.MatchPolicy) async -> String? {
-        // Generate fingerprints for reference content
-        let fingerprints = await generateFingerprints(videoURL: videoURL, audioURL: audioURL, thumbnailURL: nil)
-        
-        let reference = ContentIDReference(
-            id: UUID().uuidString,
-            title: title,
-            rightsholder: rightsholder,
-            fingerprints: ContentIDReference.Fingerprints(
-                audioFingerprint: fingerprints.audio,
-                videoFingerprint: fingerprints.video,
-                thumbnailFingerprint: fingerprints.thumbnail
-            ),
-            policy: policy,
-            isActive: true,
-            uploadedAt: Date()
-        )
-        
-        #if canImport(FirebaseFirestore)
+
+    /// Scans an uploaded video against the Content ID reference database.
+    /// `sourceUri` must be a `gs://` or `storage.googleapis.com` URL the
+    /// backend can download and run ffmpeg frame extraction against (see
+    /// services/video-content-id/main.ts `/v1/video/content-id/scan`).
+    func scanForMatches(videoId: String, sourceUri: String) async -> [ContentMatch] {
         do {
-            try await db.collection("content_id_references").document(reference.id).setData([
-                "title": reference.title,
-                "rightsholder": reference.rightsholder,
-                "ownerId": ownerId as Any,
-                "sourceTrackId": sourceTrackId as Any,
-                "fingerprints": [
-                    "audioFingerprint": reference.fingerprints.audioFingerprint as Any,
-                    "videoFingerprint": reference.fingerprints.videoFingerprint as Any,
-                    "thumbnailFingerprint": reference.fingerprints.thumbnailFingerprint as Any
-                ],
-                "policy": reference.policy.rawValue,
-                "isActive": reference.isActive,
-                "uploadedAt": FieldValue.serverTimestamp()
-            ])
-            return reference.id
+            let request = try await authorizedRequest(
+                path: "/v1/video/content-id/scan",
+                method: "POST",
+                body: ["videoId": videoId, "sourceUri": sourceUri]
+            )
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                print("🚨 [ContentID] scan failed with non-200 response")
+                return []
+            }
+            let decoded = try JSONDecoder().decode(ScanResponse.self, from: data)
+            let matches = decoded.matches.map { $0.toContentMatch(matchedVideoId: videoId) }
+            activeMatches.append(contentsOf: matches)
+            return matches
         } catch {
+            print("🚨 [ContentID] scan error: \(error)")
+            return []
+        }
+    }
+
+    /// Registers a video as a protected Content ID reference. `sourceUri`
+    /// must point at the already-uploaded source file in Cloud Storage
+    /// (`gs://` or `storage.googleapis.com`), matching the storage path
+    /// convention `videos/{userId}/{videoId}/{filename}`.
+    func uploadReferenceFile(title: String, rightsholder: String, ownerId: String? = nil, videoId: String, sourceUri: String, policy: ContentMatch.MatchPolicy) async -> String? {
+        do {
+            var body: [String: Any] = [
+                "videoId": videoId,
+                "sourceUri": sourceUri,
+                "policy": policy.rawValue,
+                "title": title,
+                "rightsholder": rightsholder,
+            ]
+            if let ownerId { body["ownerId"] = ownerId }
+
+            let request = try await authorizedRequest(
+                path: "/v1/video/content-id/register",
+                method: "POST",
+                body: body
+            )
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                print("🚨 [ContentID] register failed with non-200 response")
+                return nil
+            }
+            let decoded = try JSONDecoder().decode(RegisterResponse.self, from: data)
+            return decoded.referenceId
+        } catch {
+            print("🚨 [ContentID] register error: \(error)")
             return nil
         }
-        #else
-        return nil
-        #endif
+    }
+
+    /// Registers a music track's audio for Content ID by having the backend
+    /// download the already-uploaded audio file and run real Chromaprint
+    /// fingerprinting (services/music/content-id.ts `/register-from-url`).
+    /// This hits the music Content ID service (audio fingerprinting), distinct
+    /// from `uploadReferenceFile` above which hits the video service (frame
+    /// hashing). `audioURL` is the Firebase Storage download URL returned
+    /// after uploading the track (e.g. `music/{uid}/tracks/{trackId}.m4a`).
+    func registerMusicTrack(trackId: String, audioURL: String, policy: ContentMatch.MatchPolicy) async -> String? {
+        guard let url = URL(string: AppConfig.API.musicContentIDBaseURL + "/v1/music/content-id/register-from-url") else {
+            return nil
+        }
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: ["trackId": trackId, "audioURL": audioURL])
+            #if canImport(FirebaseAuth)
+            if let token = try? await Auth.auth().currentUser?.getIDToken() {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+            #endif
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                print("🚨 [ContentID] music register failed with non-200 response")
+                return nil
+            }
+            let decoded = try JSONDecoder().decode(RegisterResponse.self, from: data)
+            // Policy is applied via the separate copyright-policy endpoint since
+            // register-from-url always starts a track at the 'strict' default.
+            if policy != .track {
+                await setMusicCopyrightPolicy(trackId: trackId, policy: policy)
+            }
+            return decoded.referenceId
+        } catch {
+            print("🚨 [ContentID] music register error: \(error)")
+            return nil
+        }
+    }
+
+    private func setMusicCopyrightPolicy(trackId: String, policy: ContentMatch.MatchPolicy) async {
+        // Music Content ID uses its own policy vocabulary (strict/monetize/allow)
+        // rather than the video service's (block/monetize/track/mute). Map the
+        // closest equivalent.
+        let musicPolicy: String
+        switch policy {
+        case .block: musicPolicy = "strict"
+        case .monetize: musicPolicy = "monetize"
+        case .track, .mute: musicPolicy = "allow"
+        }
+        guard let url = URL(string: AppConfig.API.musicContentIDBaseURL + "/v1/music/tracks/\(trackId)/copyright-policy") else { return }
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "PUT"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: ["policy": musicPolicy])
+            #if canImport(FirebaseAuth)
+            if let token = try? await Auth.auth().currentUser?.getIDToken() {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+            #endif
+            _ = try await URLSession.shared.data(for: request)
+        } catch {
+            print("🚨 [ContentID] set music copyright policy error: \(error)")
+        }
+    }
+
+    // MARK: - Backend response models
+
+    private struct RegisterResponse: Decodable {
+        let referenceId: String
+    }
+
+    private struct ScanResponse: Decodable {
+        let matches: [ScanMatch]
+    }
+
+    private struct ScanMatch: Decodable {
+        let matchId: String
+        let sourceVideoId: String
+        let rightsholder: String
+        let ownerId: String?
+        let policy: String
+        let similarity: Double
+
+        func toContentMatch(matchedVideoId: String) -> ContentMatch {
+            ContentMatch(
+                id: matchId,
+                sourceVideoId: sourceVideoId,
+                matchedVideoId: matchedVideoId,
+                matchType: .video,
+                confidence: similarity,
+                timeRange: ContentMatch.MatchTimeRange(start: 0, duration: 0, sourceStart: 0),
+                rightsholder: rightsholder,
+                ownerId: ownerId,
+                policy: ContentMatch.MatchPolicy(rawValue: policy) ?? .track,
+                claimId: nil,
+                status: .active,
+                createdAt: Date()
+            )
+        }
     }
     
     func disputeMatch(matchId: String, userId: String, reason: String, evidence: [String]) async -> Bool {
@@ -190,156 +314,10 @@ final class ContentIDService: ObservableObject {
         #endif
     }
     
-    private func generateFingerprints(videoURL: String, audioURL: String?, thumbnailURL: String?) async -> (video: String?, audio: String?, thumbnail: String?) {
-        // Simulate fingerprint generation
-        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second processing time
-        
-        let videoHash = videoURL.isEmpty ? nil : "vfp_\(abs(videoURL.hashValue))_\(Int.random(in: 1000...9999))"
-        let audioHash = audioURL?.isEmpty == false ? "afp_\(abs((audioURL ?? "").hashValue))_\(Int.random(in: 1000...9999))" : nil
-        let thumbnailHash = thumbnailURL?.isEmpty == false ? "tfp_\(abs((thumbnailURL ?? "").hashValue))_\(Int.random(in: 1000...9999))" : nil
-        
-        return (videoHash, audioHash, thumbnailHash)
-    }
-    
-    private func searchReferences(fingerprints: (video: String?, audio: String?, thumbnail: String?), videoId: String) async -> [ContentMatch] {
-        var matches: [ContentMatch] = []
-        
-        #if canImport(FirebaseFirestore)
-        do {
-            // Search for similar fingerprints
-            let refsQuery = try await db.collection("content_id_references")
-                .whereField("isActive", isEqualTo: true)
-                .getDocuments()
-            
-            for doc in refsQuery.documents {
-                let data = doc.data()
-                let refFingerprints = data["fingerprints"] as? [String: String] ?? [:]
-                
-                // Simple similarity check (in production would use proper fingerprint matching)
-                var confidence = 0.0
-                var matchType: ContentMatch.MatchType = .video
-                
-                if let videoFP = fingerprints.video,
-                   let refVideoFP = refFingerprints["videoFingerprint"],
-                   similarityScore(videoFP, refVideoFP) > 0.8 {
-                    confidence += 0.6
-                    matchType = .video
-                }
-                
-                if let audioFP = fingerprints.audio,
-                   let refAudioFP = refFingerprints["audioFingerprint"],
-                   similarityScore(audioFP, refAudioFP) > 0.8 {
-                    confidence += 0.4
-                    matchType = confidence > 0.6 ? .audioVideo : .audio
-                }
-                
-                if confidence > 0.7 { // Threshold for match
-                    let match = ContentMatch(
-                        id: UUID().uuidString,
-                        sourceVideoId: doc.documentID,
-                        matchedVideoId: videoId,
-                        matchType: matchType,
-                        confidence: confidence,
-                        timeRange: ContentMatch.MatchTimeRange(start: 0, duration: 300, sourceStart: 0), // Mock time range
-                        rightsholder: data["rightsholder"] as? String ?? "",
-                        ownerId: data["ownerId"] as? String,
-                        policy: ContentMatch.MatchPolicy(rawValue: data["policy"] as? String ?? "track") ?? .track,
-                        claimId: nil,
-                        status: .active,
-                        createdAt: Date()
-                    )
-                    matches.append(match)
-                }
-            }
-        } catch { }
-        #endif
-        
-        return matches
-    }
-    
-    private func storeMatch(_ match: ContentMatch) async {
-        #if canImport(FirebaseFirestore)
-        do {
-            try await db.collection("content_matches").document(match.id).setData([
-                "sourceVideoId": match.sourceVideoId,
-                "matchedVideoId": match.matchedVideoId,
-                "matchType": match.matchType.rawValue,
-                "confidence": match.confidence,
-                "timeRange": [
-                    "start": match.timeRange.start,
-                    "duration": match.timeRange.duration,
-                    "sourceStart": match.timeRange.sourceStart as Any
-                ],
-                "rightsholder": match.rightsholder,
-                "ownerId": match.ownerId as Any,
-                "policy": match.policy.rawValue,
-                "status": match.status.rawValue,
-                "createdAt": FieldValue.serverTimestamp()
-            ])
-        } catch { }
-        #endif
-    }
-    
-    private func applyMatchPolicy(match: ContentMatch) async {
-        switch match.policy {
-        case .block:
-            await blockContent(videoId: match.matchedVideoId, reason: "Copyright match: \(match.rightsholder)")
-        case .monetize:
-            await shareRevenue(videoId: match.matchedVideoId, rightsholder: match.rightsholder, ownerId: match.ownerId, percentage: 0.5)
-        case .mute:
-            await muteAudio(videoId: match.matchedVideoId, timeRange: match.timeRange)
-        case .track:
-            await trackUsage(videoId: match.matchedVideoId, rightsholder: match.rightsholder, ownerId: match.ownerId)
-        }
-    }
-    
-    private func blockContent(videoId: String, reason: String) async {
-        #if canImport(FirebaseFirestore)
-        do {
-            try await db.collection("videos").document(videoId).setData([
-                "visibility": "blocked",
-                "blockReason": reason,
-                "blockedAt": FieldValue.serverTimestamp()
-            ], merge: true)
-        } catch { }
-        #endif
-    }
-    
-    private func shareRevenue(videoId: String, rightsholder: String, ownerId: String?, percentage: Double) async {
-        #if canImport(FirebaseFirestore)
-        do {
-            try await db.collection("revenue_sharing").document("\(videoId)_\(rightsholder)").setData([
-                "videoId": videoId,
-                "rightsholder": rightsholder,
-                "ownerId": ownerId as Any,
-                "percentage": percentage,
-                "startedAt": FieldValue.serverTimestamp(),
-                "isActive": true
-            ])
-        } catch { }
-        #endif
-    }
-    
-    private func muteAudio(videoId: String, timeRange: ContentMatch.MatchTimeRange) async {
-        // Would integrate with transcoding service to mute specific time ranges
-        print("🔇 Muting audio for video \(videoId) from \(timeRange.start) to \(timeRange.start + timeRange.duration)")
-    }
-    
-    private func trackUsage(videoId: String, rightsholder: String, ownerId: String?) async {
-        #if canImport(FirebaseFirestore)
-        do {
-            try await db.collection("content_usage_tracking").document().setData([
-                "videoId": videoId,
-                "rightsholder": rightsholder,
-                "ownerId": ownerId as Any,
-                "trackedAt": FieldValue.serverTimestamp(),
-                "views": 0,
-                "revenue": 0.0
-            ])
-        } catch { }
-        #endif
-    }
-    
+    // NOTE: match-policy enforcement (block/monetize/track/mute) now happens
+    // server-side in services/video-content-id/main.ts applyMatchPolicy(),
+    // atomically with match creation during the scan — not duplicated here.
+
     private func restoreContentPendingDispute(videoId: String) async {
         #if canImport(FirebaseFirestore)
         do {
@@ -350,13 +328,6 @@ final class ContentIDService: ObservableObject {
             ], merge: true)
         } catch { }
         #endif
-    }
-    
-    private func similarityScore(_ hash1: String, _ hash2: String) -> Double {
-        // Simple hash comparison - in production would use proper fingerprint matching algorithms
-        let commonChars = Set(hash1).intersection(Set(hash2)).count
-        let totalChars = max(hash1.count, hash2.count)
-        return totalChars > 0 ? Double(commonChars) / Double(totalChars) : 0.0
     }
 }
 

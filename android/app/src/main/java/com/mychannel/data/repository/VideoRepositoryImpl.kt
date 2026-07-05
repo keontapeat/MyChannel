@@ -93,11 +93,31 @@ class VideoRepositoryImpl @Inject constructor(
     }
 
     override suspend fun toggleLike(videoId: String, like: Boolean): Result<Unit> = runCatching {
-        videoDataSource.adjustLikeCount(videoId, like)
+        videoDataSource.setLike(videoId, like)
+    }
+
+    override suspend fun isLiked(videoId: String): Result<Boolean> = runCatching {
+        videoDataSource.isLiked(videoId)
+    }
+
+    override suspend fun isSaved(videoId: String): Result<Boolean> = runCatching {
+        videoDataSource.isSaved(videoId)
+    }
+
+    override suspend fun setSaved(video: Video, save: Boolean): Result<Unit> = runCatching {
+        videoDataSource.setSaved(video, save)
     }
 
     override suspend fun incrementViewCount(videoId: String): Result<Unit> = runCatching {
         videoDataSource.incrementViewCount(videoId)
+    }
+
+    override fun observeDownloads(userId: String): Flow<List<Video>> =
+        videoDataSource.observeDownloads(userId)
+            .flowOn(Dispatchers.IO)
+
+    override suspend fun deleteDownload(userId: String, videoId: String): Result<Unit> = runCatching {
+        videoDataSource.deleteDownload(userId, videoId)
     }
 
     private companion object {

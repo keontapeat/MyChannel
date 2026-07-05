@@ -1,254 +1,183 @@
 'use client';
 
-// 🔥 YOUTUBE-LEVEL PROFESSIONAL TOP NAVIGATION BAR 🔥
-
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  Search, Upload, Bell, User, Menu, Settings, LogOut, Video, DollarSign, ChevronDown,
-} from 'lucide-react';
+import { Search, Bell, User, Menu, Upload, Video, DollarSign, Settings, LogOut, Mic } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 
 interface TopNavProps {
   onToggleSidebar?: () => void;
 }
 
-const TopNav = ({ onToggleSidebar }: TopNavProps) => {
+export default function TopNav({ onToggleSidebar }: TopNavProps) {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [searchFocused, setSearchFocused] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
-  const notificationsRef = useRef<HTMLDivElement>(null);
+  const [q, setQ] = useState('');
+  const [focused, setFocused] = useState(false);
+  const [userMenu, setUserMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  // Mock user data - replace with actual auth
-  const isAuthenticated = false;
-  const user = {
-    name: 'John Doe',
-    avatar: 'https://i.pravatar.cc/150?img=1',
-  };
+  // Replace with real auth context when wired
+  const isAuth = false;
+  const user = { name: 'Keonta', avatar: '' };
 
-  // Close dropdowns when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-        setShowUserMenu(false);
-      }
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
-      }
+    const close = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setUserMenu(false);
     };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
   }, []);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
-    }
+    if (q.trim()) router.push(`/search?q=${encodeURIComponent(q.trim())}`);
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-14 bg-white dark:bg-[rgb(var(--color-background))] border-b border-[rgb(var(--color-border))] z-50">
-      <div className="flex items-center justify-between h-full px-4">
-        {/* Left: Logo and Menu */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onToggleSidebar}
-            className="p-2 rounded-full hover:bg-[rgb(var(--color-surface))] transition-colors"
-            aria-label="Toggle sidebar"
+    <header className="fixed top-0 left-0 right-0 h-14 bg-[rgb(var(--color-background))] z-50 flex items-center justify-between px-4 gap-4">
+
+      {/* ── Left: hamburger + logo ── */}
+      <div className="flex items-center gap-4 flex-shrink-0">
+        <button
+          onClick={onToggleSidebar}
+          className="p-2 -ml-2 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition-colors"
+          aria-label="Menu"
+        >
+          <Menu size={20} className="text-[rgb(var(--color-text-primary))]" />
+        </button>
+
+        <Link href="/" className="flex items-center gap-2 flex-shrink-0">
+          <img
+            src="/logo.png"
+            alt="MyChannel"
+            width={32}
+            height={32}
+            className="w-8 h-8 object-contain"
+          />
+          <span className="text-[18px] font-semibold tracking-tight text-[rgb(var(--color-text-primary))] hidden sm:block leading-none">
+            MyChannel
+          </span>
+        </Link>
+      </div>
+
+      {/* ── Center: search ── */}
+      <div className="flex flex-1 items-center justify-center max-w-[600px]">
+        <form onSubmit={submit} className="flex w-full">
+          {/* Input */}
+          <div
+            className={`flex flex-1 items-center h-10 border rounded-l-full pl-4 pr-3 bg-[rgb(var(--color-background))] transition-colors ${
+              focused
+                ? 'border-blue-500 shadow-[inset_0_0_0_1px_rgb(37,99,235)]'
+                : 'border-[rgb(var(--color-border))]'
+            }`}
           >
-            <Menu size={20} className="text-[rgb(var(--color-text-primary))]" />
+            {focused && <Search size={15} className="text-[rgb(var(--color-text-tertiary))] mr-2 flex-shrink-0" />}
+            <input
+              type="text"
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              placeholder="Search"
+              className="w-full bg-transparent text-[14px] text-[rgb(var(--color-text-primary))] placeholder:text-[rgb(var(--color-text-tertiary))] outline-none"
+            />
+          </div>
+          {/* Search button */}
+          <button
+            type="submit"
+            className="h-10 w-16 flex items-center justify-center border border-l-0 border-[rgb(var(--color-border))] rounded-r-full bg-[rgb(var(--color-surface))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors flex-shrink-0"
+            aria-label="Search"
+          >
+            <Search size={18} className="text-[rgb(var(--color-text-primary))]" />
           </button>
+        </form>
 
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[rgb(var(--color-primary))] rounded-lg flex items-center justify-center">
-              <Video size={20} className="text-white" />
-            </div>
-            <span className="text-lg font-bold text-[rgb(var(--color-text-primary))] hidden sm:block">
-              MyChannel
-            </span>
-          </Link>
-        </div>
+        {/* Mic */}
+        <button
+          className="ml-2 w-10 h-10 flex items-center justify-center rounded-full bg-[rgb(var(--color-surface))] hover:bg-[rgb(var(--color-surface-hover))] flex-shrink-0 transition-colors"
+          aria-label="Search with voice"
+        >
+          <Mic size={18} className="text-[rgb(var(--color-text-primary))]" />
+        </button>
+      </div>
 
-        {/* Center: Search */}
-        <div className="flex-1 max-w-2xl mx-4">
-          <form onSubmit={handleSearch} className="flex gap-0">
-            <div 
-              className={`
-                flex-1 flex items-center
-                bg-white dark:bg-[rgb(var(--color-surface))]
-                border border-[rgb(var(--color-border))]
-                rounded-l-full
-                overflow-hidden
-                transition-all duration-150
-                ${searchFocused ? 'border-[rgb(var(--color-primary))]' : ''}
-              `}
-            >
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
-                placeholder="Search"
-                className="flex-1 bg-transparent px-4 py-2 text-sm text-[rgb(var(--color-text-primary))] placeholder:text-[rgb(var(--color-text-tertiary))] outline-none"
-              />
-            </div>
-            <button
-              type="submit"
-              className="px-6 py-2 bg-[rgb(var(--color-surface))] hover:bg-[rgb(var(--color-surface-hover))] border border-[rgb(var(--color-border))] border-l-0 rounded-r-full transition-colors"
-              aria-label="Search"
-            >
-              <Search size={18} className="text-[rgb(var(--color-text-primary))]" />
-            </button>
-          </form>
-        </div>
-
-        {/* Right: Actions and User */}
-        <div className="flex items-center gap-2">
-          {isAuthenticated ? (
-            <>
-              {/* Upload Button */}
-              <Link
-                href="/upload"
-                className="flex items-center gap-2 px-4 py-2 rounded-full hover:bg-[rgb(var(--color-surface))] transition-colors"
-              >
-                <Upload size={18} className="text-[rgb(var(--color-text-primary))]" />
-                <span className="text-sm font-medium text-[rgb(var(--color-text-primary))] hidden md:block">
-                  Upload
-                </span>
-              </Link>
-
-              {/* Notifications */}
-              <div className="relative" ref={notificationsRef}>
-                <button
-                  onClick={() => setShowNotifications(!showNotifications)}
-                  className="relative p-2 rounded-full hover:bg-[rgb(var(--color-surface))] transition-colors"
-                  aria-label="Notifications"
-                >
-                  <Bell size={20} className="text-[rgb(var(--color-text-primary))]" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-[rgb(var(--color-primary))] rounded-full"></span>
-                </button>
-
-                {/* Notifications Dropdown */}
-                {showNotifications && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-lg shadow-xl-yt overflow-hidden">
-                    <div className="px-4 py-3 border-b border-[rgb(var(--color-border))]">
-                      <h3 className="text-sm font-semibold text-[rgb(var(--color-text-primary))]">
-                        Notifications
-                      </h3>
-                    </div>
-                    <div className="max-h-96 overflow-y-auto">
-                      <div className="p-4 text-center text-sm text-[rgb(var(--color-text-secondary))]">
-                        No new notifications
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* User Menu */}
-              <div className="relative" ref={userMenuRef}>
-                <button
-                  onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center gap-2 p-1 rounded-full hover:bg-[rgb(var(--color-surface))] transition-colors"
-                  aria-label="User menu"
-                >
-                  <img
-                    src={user.avatar}
-                    alt={user.name}
-                    className="w-8 h-8 rounded-full"
-                  />
-                  <ChevronDown size={16} className="text-[rgb(var(--color-text-secondary))] hidden md:block" />
-                </button>
-
-                {/* User Dropdown */}
-                {showUserMenu && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-lg shadow-xl-yt overflow-hidden">
-                    {/* User Info */}
-                    <div className="px-4 py-3 border-b border-[rgb(var(--color-border))]">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={user.avatar}
-                          alt={user.name}
-                          className="w-10 h-10 rounded-full"
-                        />
-                        <div>
-                          <p className="text-sm font-semibold text-[rgb(var(--color-text-primary))]">
-                            {user.name}
-                          </p>
-                          <p className="text-xs text-[rgb(var(--color-text-secondary))]">
-                            View profile
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Menu Items */}
-                    <div className="py-2">
-                      <Link
-                        href="/studio"
-                        className="flex items-center gap-3 px-4 py-2 hover:bg-[rgb(var(--color-surface-hover))] transition-colors"
-                      >
-                        <Video size={18} className="text-[rgb(var(--color-text-secondary))]" />
-                        <span className="text-sm text-[rgb(var(--color-text-primary))]">
-                          Creator Studio
-                        </span>
-                      </Link>
-
-                      <Link
-                        href="/wallet"
-                        className="flex items-center gap-3 px-4 py-2 hover:bg-[rgb(var(--color-surface-hover))] transition-colors"
-                      >
-                        <DollarSign size={18} className="text-[rgb(var(--color-text-secondary))]" />
-                        <span className="text-sm text-[rgb(var(--color-text-primary))]">
-                          Wallet
-                        </span>
-                      </Link>
-
-                      <Link
-                        href="/settings"
-                        className="flex items-center gap-3 px-4 py-2 hover:bg-[rgb(var(--color-surface-hover))] transition-colors"
-                      >
-                        <Settings size={18} className="text-[rgb(var(--color-text-secondary))]" />
-                        <span className="text-sm text-[rgb(var(--color-text-primary))]">
-                          Settings
-                        </span>
-                      </Link>
-
-                      <div className="border-t border-[rgb(var(--color-border))] my-2"></div>
-
-                      <button
-                        onClick={() => {/* Handle logout */}}
-                        className="flex items-center gap-3 px-4 py-2 w-full hover:bg-[rgb(var(--color-surface-hover))] transition-colors"
-                      >
-                        <LogOut size={18} className="text-[rgb(var(--color-text-secondary))]" />
-                        <span className="text-sm text-[rgb(var(--color-text-primary))]">
-                          Sign out
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
+      {/* ── Right: actions ── */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {isAuth ? (
+          <>
+            {/* Create */}
             <Link
-              href="/login"
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-[rgb(var(--color-border))] hover:bg-[rgb(var(--color-surface))] transition-colors"
+              href="/upload"
+              className="flex items-center gap-2 h-9 px-4 rounded-full border border-[rgb(var(--color-border))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors text-[13.5px] font-medium text-[rgb(var(--color-text-primary))]"
             >
-              <User size={18} className="text-[rgb(var(--color-primary))]" />
-              <span className="text-sm font-medium text-[rgb(var(--color-primary))]">Sign in</span>
+              <Upload size={16} />
+              <span className="hidden md:block">Create</span>
             </Link>
-          )}
-        </div>
+
+            {/* Notifications */}
+            <button className="relative w-10 h-10 flex items-center justify-center rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition-colors" aria-label="Notifications">
+              <Bell size={20} className="text-[rgb(var(--color-text-primary))]" />
+              <span className="absolute top-1.5 right-1.5 w-[9px] h-[9px] rounded-full bg-[rgb(var(--color-primary))] border-2 border-[rgb(var(--color-background))]" />
+            </button>
+
+            {/* Avatar + dropdown */}
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setUserMenu(!userMenu)}
+                className="w-10 h-10 flex items-center justify-center rounded-full overflow-hidden hover:ring-2 hover:ring-[rgb(var(--color-border))] transition-all"
+                aria-label="Account"
+              >
+                {user.avatar ? (
+                  <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full object-cover" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-[13px] font-semibold">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </button>
+
+              {userMenu && (
+                <div className="absolute right-0 mt-2 w-64 bg-[rgb(var(--color-background))] border border-[rgb(var(--color-border))] rounded-xl shadow-lg overflow-hidden z-50">
+                  <div className="flex items-center gap-3 px-4 py-3 border-b border-[rgb(var(--color-border))]">
+                    <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-semibold text-[rgb(var(--color-text-primary))] truncate">{user.name}</p>
+                      <Link href="/profile/me" className="text-[13px] text-blue-500 hover:underline">View your channel</Link>
+                    </div>
+                  </div>
+                  <div className="py-1">
+                    {[
+                      { icon: Video,       label: 'Creator Studio', href: '/studio' },
+                      { icon: DollarSign,  label: 'Wallet',         href: '/wallet' },
+                      { icon: Settings,    label: 'Settings',       href: '/settings' },
+                    ].map(({ icon: Icon, label, href }) => (
+                      <Link key={href} href={href} className="flex items-center gap-3 px-4 py-2.5 text-[13.5px] text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors">
+                        <Icon size={18} className="text-[rgb(var(--color-text-secondary))]" />
+                        {label}
+                      </Link>
+                    ))}
+                    <div className="my-1 border-t border-[rgb(var(--color-border))]" />
+                    <button className="flex w-full items-center gap-3 px-4 py-2.5 text-[13.5px] text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors">
+                      <LogOut size={18} className="text-[rgb(var(--color-text-secondary))]" />
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <Link
+            href="/login"
+            className="flex items-center gap-2 h-9 px-4 rounded-full border border-blue-500 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors text-[13.5px] font-medium"
+          >
+            <User size={16} />
+            Sign in
+          </Link>
+        )}
       </div>
     </header>
   );
-};
-
-export default TopNav;
+}

@@ -333,13 +333,5 @@ enum MatchProofUploadError: LocalizedError {
     }
 }
 
-// MARK: - AVAsset Extension
-
 import AVFoundation
-
-extension AVAsset {
-    var duration: CMTime {
-        return self.duration
-    }
-}
 

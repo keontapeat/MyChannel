@@ -754,8 +754,22 @@ struct BulkPlaylistSheet: View {
     }
     
     private func addToPlaylists() {
-        // TODO: Implement playlist add in Firestore
         print("🔥 Add \(selectedVideoIds.count) videos to \(selectedPlaylists.count) playlists")
+        // Write to Firestore: each playlist gets the new videoIds appended
+        Task {
+            await withThrowingTaskGroup(of: Void.self) { group in
+                for playlistId in selectedPlaylists {
+                    for videoId in selectedVideoIds {
+                        group.addTask {
+                            try await PlaylistFirestoreService.shared.addVideoToPlaylist(
+                                videoId: videoId,
+                                playlistId: playlistId
+                            )
+                        }
+                    }
+                }
+            }
+        }
         HapticManager.shared.notification(type: .success)
         onSave()
         dismiss()

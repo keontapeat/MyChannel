@@ -8,6 +8,12 @@ struct YouTubePlayerView: UIViewRepresentable {
     var startTime: Int = 0
     var muted: Bool = false
     var showControls: Bool = true
+    /// 🔒 PERMANENT THUMBNAIL FIX: WKWebView manages its own CALayer tree outside
+    /// SwiftUI's normal render pipeline, so a parent `.clipShape(RoundedRectangle)`
+    /// does NOT reliably mask its corners (it can visibly bulge square during
+    /// scrolling/compositing). Rounding the UIKit layer itself is the only fix
+    /// that always holds — never remove this in favor of a SwiftUI-only clipShape.
+    var cornerRadius: CGFloat = 0
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -26,6 +32,7 @@ struct YouTubePlayerView: UIViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = false
         webView.allowsLinkPreview = false
+        applyCornerRadius(to: webView)
 
         context.coordinator.webView = webView
         context.coordinator.loadHTMLIfNeeded(for: videoID,
@@ -36,8 +43,20 @@ struct YouTubePlayerView: UIViewRepresentable {
         return webView
     }
 
+    private func applyCornerRadius(to webView: WKWebView) {
+        guard cornerRadius > 0 else { return }
+        webView.layer.cornerRadius = cornerRadius
+        webView.layer.masksToBounds = true
+        webView.clipsToBounds = true
+        // The internal scroll view's content layer can also escape the mask.
+        webView.scrollView.layer.cornerRadius = cornerRadius
+        webView.scrollView.layer.masksToBounds = true
+        webView.scrollView.clipsToBounds = true
+    }
+
     func updateUIView(_ webView: WKWebView, context: Context) {
         context.coordinator.parent = self
+        applyCornerRadius(to: webView)
 
         if context.coordinator.loadedVideoID != videoID {
             context.coordinator.loadHTMLIfNeeded(for: videoID,

@@ -2,10 +2,12 @@
 
 // Flicks Page - Short-Form Vertical Video Feed (TikTok/YouTube Shorts style)
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import FlickCard from '@/components/flicks/FlickCard';
 import { useSwipeable } from 'react-swipeable';
 import type { Flick } from '@/types/flick';
+import { collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
 
 const FlicksPage = () => {
   const [flicks, setFlicks] = useState<Flick[]>([]);
@@ -13,38 +15,81 @@ const FlicksPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Mock data - replace with actual API call
-  useEffect(() => {
-    const mockFlicks: Flick[] = Array.from({ length: 10 }, (_, i) => ({
-      id: `flick-${i + 1}`,
-      videoURL: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      thumbnailURL: `https://picsum.photos/seed/flick${i}/1080/1920`,
-      title: `Amazing Flick #${i + 1}`,
-      description: 'This is an amazing short video! Check it out 🔥',
-      duration: 15 + Math.random() * 45, // 15-60 seconds
-      viewCount: Math.floor(Math.random() * 1000000),
-      likeCount: Math.floor(Math.random() * 50000),
-      commentCount: Math.floor(Math.random() * 1000),
-      shareCount: Math.floor(Math.random() * 500),
-      createdAt: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000),
-      creator: {
-        id: `creator-${i + 1}`,
-        username: `creator${i + 1}`,
-        displayName: `Creator ${i + 1}`,
-        profileImageURL: `https://i.pravatar.cc/150?img=${i + 1}`,
-        isVerified: Math.random() > 0.5,
-      },
-      tags: ['flicks', 'trending', 'viral'],
-      musicTrack: {
-        title: `Track ${i + 1}`,
-        artist: 'Artist Name',
-        albumArt: `https://picsum.photos/seed/music${i}/300/300`,
-      },
-    }));
-
-    setFlicks(mockFlicks);
-    setIsLoading(false);
+  // Load Flicks from Firestore (falls back to mock if empty)
+  const loadFlicks = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, 'flicks'),
+          where('isPublic', '==', true),
+          orderBy('viewCount', 'desc'),
+          limit(20)
+        )
+      );
+      if (!snap.empty) {
+        const loaded: Flick[] = snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            videoURL: data.videoURL ?? '',
+            thumbnailURL: data.thumbnailURL ?? '',
+            title: data.title ?? '',
+            description: data.description ?? '',
+            duration: data.duration ?? 30,
+            viewCount: data.viewCount ?? 0,
+            likeCount: data.likeCount ?? 0,
+            commentCount: data.commentCount ?? 0,
+            shareCount: data.shareCount ?? 0,
+            createdAt: data.createdAt?.toDate?.() ?? new Date(),
+            creator: {
+              id: data.creatorId ?? '',
+              username: data.creatorName ?? '',
+              displayName: data.creatorName ?? 'Creator',
+              profileImageURL: data.creatorAvatar ?? '',
+              isVerified: false,
+            },
+            tags: data.tags ?? [],
+            musicTrack: data.musicTrack ?? undefined,
+          } as Flick;
+        });
+        setFlicks(loaded);
+      } else {
+        // Fallback seed data while Firestore collection populates
+        setFlicks(Array.from({ length: 10 }, (_, i) => ({
+          id: `seed-${i}`,
+          videoURL: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+          thumbnailURL: `https://picsum.photos/seed/flick${i}/1080/1920`,
+          title: `Flick #${i + 1}`,
+          description: 'Short video',
+          duration: 30,
+          viewCount: 0,
+          likeCount: 0,
+          commentCount: 0,
+          shareCount: 0,
+          createdAt: new Date(),
+          creator: {
+            id: `creator-${i}`,
+            username: `creator${i}`,
+            displayName: `Creator ${i + 1}`,
+            profileImageURL: `https://i.pravatar.cc/150?img=${i + 1}`,
+            isVerified: false,
+          },
+          tags: [],
+          musicTrack: undefined,
+        } as Flick)));
+      }
+    } catch {
+      // Network error — show empty state
+      setFlicks([]);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadFlicks();
+  }, [loadFlicks]);
 
   // Scroll to next/previous flick
   const scrollToFlick = (index: number) => {

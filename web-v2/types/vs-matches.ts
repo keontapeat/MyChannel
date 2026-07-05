@@ -84,6 +84,7 @@ export interface RankedCompetitor {
   lastMatchDate: Date;
   isChampion: boolean;
   defenseCount?: number; // Title defenses (only for champions)
+  rankChange?: number; // Positions gained (+) or lost (-) since last ranking
 }
 
 // VS Match Wallet

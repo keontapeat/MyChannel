@@ -322,10 +322,12 @@ struct AwardCeremonyLivestreamView: View {
             // Chat input
             ChatInputView(onSend: { messageText in
                 Task {
+                    let uid = AuthenticationManager.shared.currentUser?.id ?? "guest"
+                    let username = AuthenticationManager.shared.currentUser?.username ?? "Guest"
                     let message = LiveChatMessage(
                         streamId: "award-ceremony-2025",
-                        userId: "current-user", // TODO: Get from auth
-                        username: "Guest",
+                        userId: uid,
+                        username: username,
                         content: messageText
                     )
                     try? await chatService.sendMessage(message)

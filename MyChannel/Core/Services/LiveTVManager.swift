@@ -6,10 +6,10 @@
 //
 //  🔥 BULLETPROOF LIVE TV MANAGER 🔥
 //  Ensures all channels work 24/7 by:
-//  1. Fetching fresh channel data from Pluto TV API
-//  2. Monitoring stream health
-//  3. Auto-refreshing on app launch
-//  4. Falling back to backup streams when needed
+//  1. Loading the Firebase-curated catalog (fixable server-side, no app release)
+//  2. Falling back to bundled curated channels when the catalog is unavailable
+//  3. Monitoring stream health
+//  4. Auto-refreshing on app launch and caching for instant/offline load
 
 import Foundation
 import Combine
@@ -22,25 +22,14 @@ final class LiveTVManager: ObservableObject {
     @Published private(set) var channels: [LiveTVChannel] = []
     @Published private(set) var isLoading = false
     @Published private(set) var lastRefresh: Date?
-    @Published private(set) var healthStatus: [String: ChannelHealth] = [:]
-    
+
     // MARK: - Configuration
     private let refreshIntervalHours: Double = 4 // Refresh every 4 hours
-    private let healthCheckIntervalMinutes: Double = 30 // Check health every 30 min
-    private let maxConcurrentHealthChecks = 5
-    
+
     // MARK: - Private State
     private var refreshTask: Task<Void, Never>?
-    private var healthCheckTask: Task<Void, Never>?
     private let cache = ChannelCache()
-    
-    enum ChannelHealth {
-        case healthy
-        case degraded // Slow but working
-        case unhealthy // Not working
-        case unknown
-    }
-    
+
     private init() {
         // Load cached channels immediately for instant UI
         loadCachedChannels()
@@ -59,10 +48,10 @@ final class LiveTVManager: ObservableObject {
         if shouldRefresh() {
             await refreshChannels()
         }
-        
-        // Start health monitoring
-        startHealthMonitoring()
-        
+
+        // Stream health is owned by StreamHealthMLAgent (single source of truth).
+        // It runs its own background monitoring; we no longer duplicate that work here.
+
         print("✅ [LiveTVManager] Ready with \(channels.count) channels")
     }
     
@@ -83,238 +72,29 @@ final class LiveTVManager: ObservableObject {
             return
         }
         
-        do {
-            // 2️⃣ Fetch from Pluto TV API and merge with curated local channels.
-            let plutoChannels = try await fetchPlutoTVChannels()
-            
-            // Merge with our curated channels (keeps our metadata, updates stream URLs)
-            let mergedChannels = mergeChannels(apiChannels: plutoChannels, curatedChannels: LiveTVChannel.sampleChannels)
-            
-            // Update state
-            channels = mergedChannels
-            lastRefresh = Date()
-            
-            // Cache for offline/instant loading
-            cache.save(channels: mergedChannels, lastRefresh: Date())
-            
-            print("✅ [LiveTVManager] Refreshed \(mergedChannels.count) channels")
-            
-        } catch {
-            print("⚠️ [LiveTVManager] Refresh failed: \(error.localizedDescription)")
-            // 3️⃣ Fall back to curated local channels if everything else fails.
-            if channels.isEmpty {
-                channels = LiveTVChannel.sampleChannels
-            }
-        }
+        // 2️⃣ No Firebase catalog available — use the curated local channels.
+        //    The Pluto TV API fetch/merge path was removed: Pluto blocks in-app
+        //    playback, and merging its stream URLs actively overwrote our working
+        //    curated HLS URLs with Pluto URLs that only ever fell back to a demo
+        //    clip. Curated sample data (or the Firestore catalog above) is the
+        //    source of truth.
+        let curated = LiveTVChannel.sampleChannels
+        channels = curated
+        lastRefresh = Date()
+        cache.save(channels: curated, lastRefresh: Date())
+        print("✅ [LiveTVManager] Using \(curated.count) curated channels")
     }
     
-    /// Get a working stream URL for a channel (with health check)
-    func getWorkingStreamURL(for channel: LiveTVChannel) async -> String {
-        // Check if primary stream is healthy
-        if await checkStreamHealth(channel.streamURL) {
-            return channel.streamURL
-        }
-        
-        // Try alternative Pluto URL
-        if channel.streamURL.contains("pluto.tv"),
-           let channelId = extractChannelId(from: channel.streamURL) {
-            let altURL = LiveTVChannel.plutoURLAlt(channelId)
-            if await checkStreamHealth(altURL) {
-                return altURL
-            }
-        }
-        
-        // Fall back to preview URL
-        if let fallback = channel.previewFallbackURL {
-            return fallback
-        }
-        
-        // Last resort - return original
-        return channel.streamURL
-    }
-    
-    /// Check if a specific channel is working
+    /// Check if a specific channel is working.
+    /// Delegates to StreamHealthMLAgent, the single source of truth for stream
+    /// health. Unknown (not-yet-probed) channels are treated as available so we
+    /// never hide channels that simply haven't been checked yet.
     func isChannelHealthy(_ channelId: String) -> Bool {
-        return healthStatus[channelId] == .healthy || healthStatus[channelId] == .degraded
+        let agent = StreamHealthMLAgent.shared
+        if agent.unhealthyChannelIds.contains(channelId) { return false }
+        return true
     }
-    
-    // MARK: - Pluto TV API
-    
-    private func fetchPlutoTVChannels() async throws -> [PlutoAPIChannel] {
-        // Pluto TV's public channel guide API
-        let apiURL = "https://api.pluto.tv/v2/channels?include=categories,timeline&sort=number:asc"
-        
-        guard let url = URL(string: apiURL) else {
-            throw LiveTVError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 20.0
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("en-US", forHTTPHeaderField: "Accept-Language")
-        
-        let (data, response) = try await URLSession.configured.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw LiveTVError.apiError
-        }
-        
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        
-        return try decoder.decode([PlutoAPIChannel].self, from: data)
-    }
-    
-    // MARK: - Channel Merging
-    
-    private func mergeChannels(apiChannels: [PlutoAPIChannel], curatedChannels: [LiveTVChannel]) -> [LiveTVChannel] {
-        var result: [LiveTVChannel] = []
-        var usedAPIChannels: Set<String> = []
-        
-        // First, update our curated channels with fresh API data
-        for curated in curatedChannels {
-            // Find matching API channel by name or slug
-            if let apiMatch = findMatchingAPIChannel(for: curated, in: apiChannels) {
-                // Update stream URL with fresh one from API
-                let updated = LiveTVChannel(
-                    id: curated.id,
-                    name: curated.name,
-                    logoURL: apiMatch.colorLogoPNG?.path ?? apiMatch.logo?.path ?? curated.logoURL,
-                    streamURL: buildStreamURL(from: apiMatch),
-                    category: curated.category,
-                    description: curated.description,
-                    isLive: true,
-                    viewerCount: curated.viewerCount,
-                    quality: "1080p",
-                    language: curated.language,
-                    country: curated.country,
-                    epgURL: nil,
-                    previewFallbackURL: curated.previewFallbackURL
-                )
-                result.append(updated)
-                usedAPIChannels.insert(apiMatch.id)
-            } else {
-                // Keep curated channel as-is
-                result.append(curated)
-            }
-        }
-        
-        // Optionally add popular API channels not in our curated list
-        // (Uncomment if you want to auto-add new channels)
-        /*
-        for apiChannel in apiChannels where !usedAPIChannels.contains(apiChannel.id) {
-            if let category = mapCategory(apiChannel.category) {
-                let newChannel = LiveTVChannel(
-                    id: apiChannel.id,
-                    name: apiChannel.name,
-                    logoURL: apiChannel.colorLogoPNG?.path ?? apiChannel.logo?.path ?? "",
-                    streamURL: buildStreamURL(from: apiChannel),
-                    category: category,
-                    description: apiChannel.summary ?? apiChannel.name,
-                    isLive: true,
-                    viewerCount: Int.random(in: 10000...500000),
-                    quality: "1080p",
-                    language: "English",
-                    country: "US",
-                    epgURL: nil,
-                    previewFallbackURL: LiveTVChannel.reliableFallbackStreams.first
-                )
-                result.append(newChannel)
-            }
-        }
-        */
-        
-        return result
-    }
-    
-    private func findMatchingAPIChannel(for curated: LiveTVChannel, in apiChannels: [PlutoAPIChannel]) -> PlutoAPIChannel? {
-        let curatedNameLower = curated.name.lowercased()
-        
-        // Try exact match first
-        if let exact = apiChannels.first(where: { $0.name.lowercased() == curatedNameLower }) {
-            return exact
-        }
-        
-        // Try contains match
-        if let contains = apiChannels.first(where: { 
-            curatedNameLower.contains($0.name.lowercased()) || 
-            $0.name.lowercased().contains(curatedNameLower) 
-        }) {
-            return contains
-        }
-        
-        // Try slug match
-        let curatedSlug = curated.id.lowercased()
-        if let slugMatch = apiChannels.first(where: { 
-            $0.slug?.lowercased() == curatedSlug ||
-            $0.name.lowercased().replacingOccurrences(of: " ", with: "-") == curatedSlug
-        }) {
-            return slugMatch
-        }
-        
-        return nil
-    }
-    
-    private func buildStreamURL(from apiChannel: PlutoAPIChannel) -> String {
-        // Use the API channel's ID to build a fresh stream URL
-        return LiveTVChannel.plutoURL(apiChannel.id)
-    }
-    
-    // MARK: - Health Monitoring
-    
-    private func startHealthMonitoring() {
-        healthCheckTask?.cancel()
-        healthCheckTask = Task {
-            while !Task.isCancelled {
-                await performHealthChecks()
-                try? await Task.sleep(nanoseconds: UInt64(healthCheckIntervalMinutes * 60 * 1_000_000_000))
-            }
-        }
-    }
-    
-    private func performHealthChecks() async {
-        print("🏥 [LiveTVManager] Starting health checks...")
-        
-        // Check a subset of channels each time (rotating)
-        let channelsToCheck = Array(channels.prefix(maxConcurrentHealthChecks * 2))
-        
-        await withTaskGroup(of: (String, ChannelHealth).self) { group in
-            for channel in channelsToCheck {
-                group.addTask {
-                    let isHealthy = await self.checkStreamHealth(channel.streamURL)
-                    return (channel.id, isHealthy ? .healthy : .unhealthy)
-                }
-            }
-            
-            for await (channelId, health) in group {
-                healthStatus[channelId] = health
-            }
-        }
-        
-        let healthyCount = healthStatus.values.filter { $0 == .healthy }.count
-        print("✅ [LiveTVManager] Health check complete: \(healthyCount)/\(channelsToCheck.count) healthy")
-    }
-    
-    private func checkStreamHealth(_ urlString: String) async -> Bool {
-        guard let url = URL(string: urlString) else { return false }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "HEAD"
-        request.timeoutInterval = 3.0
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
-        
-        do {
-            let (_, response) = try await URLSession.configured.data(for: request)
-            if let httpResponse = response as? HTTPURLResponse {
-                return (200...399).contains(httpResponse.statusCode)
-            }
-        } catch { }
-        
-        return false
-    }
-    
+
     // MARK: - Cache Management
     
     private func loadCachedChannels() {
@@ -335,37 +115,6 @@ final class LiveTVManager: ObservableObject {
         return hoursSinceRefresh > refreshIntervalHours
     }
     
-    // MARK: - Helpers
-    
-    private func extractChannelId(from url: String) -> String? {
-        guard let range = url.range(of: "/channel/"),
-              let endRange = url.range(of: "/master.m3u8") else {
-            return nil
-        }
-        return String(url[range.upperBound..<endRange.lowerBound])
-    }
-}
-
-// MARK: - API Models
-
-struct PlutoAPIChannel: Codable {
-    let id: String
-    let name: String
-    let slug: String?
-    let summary: String?
-    let category: String?
-    let logo: PlutoImage?
-    let colorLogoPNG: PlutoImage?
-    let featuredImage: PlutoImage?
-    
-    enum CodingKeys: String, CodingKey {
-        case id = "_id"
-        case name, slug, summary, category, logo, colorLogoPNG, featuredImage
-    }
-}
-
-struct PlutoImage: Codable {
-    let path: String?
 }
 
 // MARK: - Cache
@@ -398,15 +147,6 @@ private class ChannelCache {
     }
 }
 
-// MARK: - Errors
-
-enum LiveTVError: Error {
-    case invalidURL
-    case apiError
-    case noChannelsFound
-    case streamUnavailable
-}
-
 // MARK: - App Lifecycle Integration
 
 extension LiveTVManager {
@@ -421,8 +161,8 @@ extension LiveTVManager {
     
     /// Call this when app enters background
     func onAppEnteredBackground() {
-        // Cancel ongoing health checks to save battery
-        healthCheckTask?.cancel()
+        // Stream health monitoring is owned by StreamHealthMLAgent; nothing to
+        // cancel here anymore.
     }
 }
 

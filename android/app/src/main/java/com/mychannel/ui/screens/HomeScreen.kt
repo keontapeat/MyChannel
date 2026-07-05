@@ -82,16 +82,16 @@ fun HomeScreen(
         TopAppBar(
             title = { Text("MyChannel", fontWeight = FontWeight.Bold) },
             actions = {
-                IconButton(onClick = { /* Search wired in Task 8 */ }) {
+                IconButton(onClick = { navController.navigate("search") }) {
                     Icon(
                         painter = painterResource(R.drawable.ic_search),
                         contentDescription = "Search"
                     )
                 }
-                IconButton(onClick = { /* Profile/Notifications wired in later tasks */ }) {
+                IconButton(onClick = { navController.navigate("notifications") }) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_profile),
-                        contentDescription = "Profile"
+                        painter = painterResource(R.drawable.ic_notification),
+                        contentDescription = "Notifications"
                     )
                 }
             }

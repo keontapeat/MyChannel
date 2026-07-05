@@ -61,6 +61,19 @@ enum RankCategory: String, Codable, CaseIterable {
     case channel = "channel"
 }
 
+// MARK: - Canonical Pin Order (single source of truth)
+//
+// These are the only pinned-name lists for the three Top shelves. The ranking
+// engine applies them once in `applyRankings`, so `TopRankedUser.rank` is
+// authoritative everywhere — the shelf cards and the "See All" lists both read
+// the already-ordered lists and display `user.rank`. Do NOT re-define pin lists
+// in the views; that previously caused the shelf and its "See All" to disagree.
+enum RankPins {
+    static let artists = ["Ysr Gramz", "Juscallmeep", "Mac Quall"]
+    static let filmmakers = ["Tee Cee", "Merch Hd", "Pros KT"]
+    static let channels = ["Ktrip", "Baby Juu", "Mbk Cari"]
+}
+
 // MARK: - TopRankMLService
 
 @MainActor
@@ -125,7 +138,7 @@ final class TopRankMLService: ObservableObject {
     }
 
     static var fallbackTopArtists: [TopRankedUser] {
-        ["HTG Nook", "Scatz Ripky", "Kleanup Man"].enumerated().compactMap { index, name in
+        RankPins.artists.enumerated().compactMap { index, name in
             OwnerProfile.instagramFriends.first { $0.name == name }.map {
                 fallbackRankedUser($0, category: .artist, rank: index + 1)
             }
@@ -550,15 +563,6 @@ final class TopRankMLService: ObservableObject {
         filmmakers.sort { $0.overallScore > $1.overallScore }
         channels.sort { $0.overallScore > $1.overallScore }
 
-        filmmakers = prioritizedRankings(
-            filmmakers,
-            pinnedNames: ["Tee Cee", "Merch Hd", "Pros KT"]
-        )
-        channels = prioritizedRankings(
-            channels,
-            pinnedNames: ["Ktrip", "Baby Ju", "Baby Juu", "Mbk Cari"]
-        )
-
         // Prevent duplicate people from appearing across sections.
         // Priority order:
         // 1. Top Artists
@@ -567,18 +571,12 @@ final class TopRankMLService: ObservableObject {
         let artistIds = Set(artists.map(\.id))
         filmmakers.removeAll { artistIds.contains($0.id) }
 
-        filmmakers = prioritizedRankings(
-            filmmakers,
-            pinnedNames: ["Tee Cee", "Merch Hd", "Pros KT"]
-        )
-
         let filmmakerIds = Set(filmmakers.map(\.id))
         channels.removeAll { artistIds.contains($0.id) || filmmakerIds.contains($0.id) }
 
         // Guarantee the pinned Top MyChannels always appear, even if deduplication removed them
-        let pinnedChannelNames = ["Ktrip", "Baby Juu", "Mbk Cari"]
         let channelIds = Set(channels.map(\.id))
-        for (pinIdx, pinName) in pinnedChannelNames.enumerated() {
+        for (pinIdx, pinName) in RankPins.channels.enumerated() {
             let pinId = "ig_\(pinName.lowercased().replacingOccurrences(of: " ", with: "_"))"
             if !channelIds.contains(pinId) {
                 if let friend = OwnerProfile.instagramFriends.first(where: { $0.name == pinName }) {
@@ -587,10 +585,12 @@ final class TopRankMLService: ObservableObject {
             }
         }
 
-        channels = prioritizedRankings(
-            channels,
-            pinnedNames: ["Ktrip", "Baby Ju", "Baby Juu", "Mbk Cari"]
-        )
+        // Apply the canonical pin order ONCE per category (single source of truth).
+        // After this, array position == displayed rank, so `assignRanks` makes
+        // `user.rank` authoritative for both the shelf cards and the See All lists.
+        artists = prioritizedRankings(artists, pinnedNames: RankPins.artists)
+        filmmakers = prioritizedRankings(filmmakers, pinnedNames: RankPins.filmmakers)
+        channels = prioritizedRankings(channels, pinnedNames: RankPins.channels)
 
         // Assign ranks + compute rank changes
         topArtists = assignRanks(artists.prefix(200).map { $0 }, previousRanks: &previousArtistRanks)

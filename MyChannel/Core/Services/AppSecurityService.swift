@@ -46,27 +46,27 @@ final class AppSecurityService: ObservableObject {
 
     func configureTrustKit() {
         #if canImport(TrustKit) && !DEBUG
-        let trustKitConfig: [String: Any] = [
-            kTSKSwizzleNetworkDelegates: false,
-            kTSKPinnedDomains: [
-                "api.mychannel.app": [
-                    kTSKIncludeSubdomains: true,
-                    kTSKEnforcePinning: true,
-                    kTSKPublicKeyHashes: [
-                        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
-                    ]
-                ],
-                "firestore.googleapis.com": [
-                    kTSKIncludeSubdomains: true,
-                    kTSKEnforcePinning: false,
-                    kTSKPublicKeyHashes: [
-                        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-                    ]
-                ]
-            ]
-        ]
-        TrustKit.initSharedInstance(withConfiguration: trustKitConfig)
-        isTrustKitConfigured = true
+        // ⚠️ Certificate pinning is DISABLED until real SPKI pin hashes are configured.
+        //
+        // The previous configuration used PLACEHOLDER hashes ("AAAA…=", "BBBB…=") with
+        // only ONE pin per domain. That caused two production-only failures:
+        //   1. TrustKit throws "less than 2 pins (no backup pins)" at launch → the app
+        //      crashed immediately on launch in Release builds (App Store rejection 2.1).
+        //   2. Even without the crash, `kTSKEnforcePinning: true` with a fake hash blocks
+        //      every TLS connection to api.mychannel.app → the app cannot reach its API.
+        //
+        // Pinning with wrong hashes is strictly worse than no pinning. The app remains
+        // secure via HTTPS/ATS, Firebase Auth, and JWT request signing.
+        //
+        // TO RE-ENABLE SAFELY:
+        //   1. Capture the REAL SubjectPublicKeyInfo (SPKI) SHA-256 hashes for the leaf/CA
+        //      of each domain, PLUS a backup pin (e.g. a second CA or a future cert).
+        //      `openssl s_client -connect api.mychannel.app:443 | openssl x509 -pubkey ...`
+        //   2. Provide >= 2 valid base64 hashes per pinned domain.
+        //   3. Test on a real device in Release before submitting.
+        // Until then we MUST NOT call TrustKit.initSharedInstance with placeholder pins.
+        print("ℹ️ [Security] Certificate pinning disabled (no valid SPKI pins configured)")
+        isTrustKitConfigured = false
         #endif
     }
 

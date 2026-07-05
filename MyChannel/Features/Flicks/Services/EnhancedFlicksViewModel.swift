@@ -197,10 +197,9 @@ class EnhancedFlicksViewModel: ObservableObject {
     }
     
     func preloadVideos(around index: Int, count: Int) {
-        let startIndex = max(0, index - count/2)
-        let endIndex = min(flicks.count - 1, index + count/2)
+        guard let range = FeedMath.preloadRange(around: index, before: count/2, after: count/2, total: flicks.count) else { return }
         
-        let flicksToPreload = Array(flicks[startIndex...endIndex])
+        let flicksToPreload = Array(flicks[range])
         
         Task {
             await cdnService.preloadFlicks(flicksToPreload, priority: .high)

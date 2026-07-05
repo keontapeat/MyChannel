@@ -60,15 +60,12 @@ final class MatchVerificationService: ObservableObject {
         print("   Player: \(playerId)")
         print("   Scores: \(selfReportedScore) - \(opponentScore)")
         
-        // Step 1: Analyze video with AI
+        // Step 1: Analyze video with REAL AI (OCR score extraction + confidence).
+        // This is a money path — we never fabricate confidence. If analysis can't
+        // read a scoreboard the result is low-confidence and the match is routed
+        // to referee review rather than auto-approved.
         print("🤖 [MatchVerification] Starting AI analysis...")
-        
-        // Download video for analysis (in production, would download from Firebase Storage)
-        // For now, we'll simulate analysis
-        let analysisResult = try await simulateVideoAnalysis(
-            videoURL: videoURL,
-            expectedScore: selfReportedScore
-        )
+        let analysisResult = await analyzeSubmissionVideo(videoURLString: videoURL)
         
         // Step 2: Create submission document
         let submission = MatchSubmission(
@@ -83,6 +80,7 @@ final class MatchVerificationService: ObservableObject {
             aiAnalysis: AIAnalysis(
                 confidence: analysisResult.confidence,
                 extractedScore: analysisResult.extractedScores.player1Score,
+                extractedOpponentScore: analysisResult.extractedScores.player2Score,
                 scoreboardDetected: analysisResult.scoreboardDetected,
                 analyzedAt: Date()
             ),
@@ -186,9 +184,12 @@ final class MatchVerificationService: ObservableObject {
         let scoresMatch = submission1.selfReportedScore == submission2.opponentScore &&
                          submission2.selfReportedScore == submission1.opponentScore
         
-        // Condition 3: AI-extracted scores match self-reported scores
-        let aiMatchesPlayer1 = submission1.aiAnalysis.extractedScore == submission1.selfReportedScore
-        let aiMatchesPlayer2 = submission2.aiAnalysis.extractedScore == submission2.selfReportedScore
+        // Condition 3: The AI-extracted score PAIR matches the reported PAIR for
+        // each submission, compared order-independently (the scoreboard doesn't
+        // tell us which score belongs to the submitter). Both extracted scores
+        // must be present — a single/absent read can't auto-approve a payout.
+        let aiMatchesPlayer1 = extractedPairMatchesReported(submission1)
+        let aiMatchesPlayer2 = extractedPairMatchesReported(submission2)
         
         // Condition 4: Scoreboards detected in both videos
         let scoreboardsDetected = submission1.aiAnalysis.scoreboardDetected &&
@@ -205,6 +206,17 @@ final class MatchVerificationService: ObservableObject {
         print("   → Can auto-approve: \(canApprove)")
         
         return canApprove
+    }
+
+    /// True if the AI-extracted score pair equals the player's reported score
+    /// pair, ignoring order. Requires BOTH extracted scores to be present — an
+    /// unreadable/half-read scoreboard can never satisfy this (fails to review).
+    private func extractedPairMatchesReported(_ submission: MatchSubmission) -> Bool {
+        guard let a = submission.aiAnalysis.extractedScore,
+              let b = submission.aiAnalysis.extractedOpponentScore else {
+            return false
+        }
+        return [a, b].sorted() == [submission.selfReportedScore, submission.opponentScore].sorted()
     }
     
     // MARK: - Approve Match
@@ -238,10 +250,12 @@ final class MatchVerificationService: ObservableObject {
         // Get match details
         let match = try await getMatch(matchId: matchId)
         
-        // Calculate payout (winner gets both wagers minus 10% platform fee)
-        let totalWager = match.wagerAmount * 2
-        let platformFee = totalWager * 0.1
-        let winnerPayout = totalWager - platformFee
+        // Calculate payout in INTEGER CENTS (rounded) via MoneyMath — matches the
+        // server settlement. This client value is a preview/notification amount;
+        // the authoritative transfer is computed server-side from escrow legs.
+        let grossCents = MoneyMath.cents(fromDollars: match.wagerAmount) * 2
+        let platformFee = MoneyMath.dollars(fromCents: MoneyMath.platformFeeCents(grossCents: grossCents))
+        let winnerPayout = MoneyMath.dollars(fromCents: MoneyMath.winnerPayoutCents(grossCents: grossCents))
         
         print("💰 [MatchVerification] Payout: $\(winnerPayout) (fee: $\(platformFee))")
         
@@ -376,10 +390,10 @@ final class MatchVerificationService: ObservableObject {
             loserId = match.challengerId
         }
         
-        // Calculate payout
-        let totalWager = match.wagerAmount * 2
-        let platformFee = totalWager * 0.1
-        let winnerPayout = totalWager - platformFee
+        // Calculate payout in integer cents (rounded) via MoneyMath — matches the
+        // server settlement; this client value is a preview only.
+        let grossCents = MoneyMath.cents(fromDollars: match.wagerAmount) * 2
+        let winnerPayout = MoneyMath.dollars(fromCents: MoneyMath.winnerPayoutCents(grossCents: grossCents))
         
         // Release escrow (real Stripe Connect payout, settled server-side).
         try await escrowService.releaseFunds(
@@ -430,6 +444,7 @@ final class MatchVerificationService: ObservableObject {
             "aiAnalysis": [
                 "confidence": submission.aiAnalysis.confidence,
                 "extractedScore": submission.aiAnalysis.extractedScore as Any,
+                "extractedOpponentScore": submission.aiAnalysis.extractedOpponentScore as Any,
                 "scoreboardDetected": submission.aiAnalysis.scoreboardDetected,
                 "analyzedAt": Timestamp(date: submission.aiAnalysis.analyzedAt)
             ],
@@ -466,6 +481,7 @@ final class MatchVerificationService: ObservableObject {
             
             let screenshotURL = data["screenshotURL"] as? String
             let extractedScore = aiData["extractedScore"] as? Int
+            let extractedOpponentScore = aiData["extractedOpponentScore"] as? Int
             let status = SubmissionStatus(rawValue: statusStr) ?? .pending
             
             return MatchSubmission(
@@ -480,6 +496,7 @@ final class MatchVerificationService: ObservableObject {
                 aiAnalysis: AIAnalysis(
                     confidence: confidence,
                     extractedScore: extractedScore,
+                    extractedOpponentScore: extractedOpponentScore,
                     scoreboardDetected: scoreboardDetected,
                     analyzedAt: analyzedAt
                 ),
@@ -526,26 +543,25 @@ final class MatchVerificationService: ObservableObject {
     
     /// Get match details
     private func getMatch(matchId: String) async throws -> VersusMatch {
-        // TODO: Get from VersusMatchService
-        // For now, return mock data
+        // Fetch from Firestore via VersusMatchService
+        let snap = try await db.collection("versus_matches").document(matchId).getDocument()
+        guard let data = snap.data() else {
+            throw NSError(domain: "MatchVerification", code: 404, userInfo: [NSLocalizedDescriptionKey: "Match not found: \(matchId)"])
+        }
         return VersusMatch(
             id: matchId,
-            challengerId: "player1",
-            opponentId: "player2",
+            challengerId: data["challengerId"] as? String ?? "",
+            opponentId:   data["opponentId"] as? String ?? "",
             matchType: .headToHead,
-            wagerAmount: 100.0,
+            wagerAmount: (data["wagerAmount"] as? Double) ?? 0,
             category: .gaming,
-            rules: VersusMatch.MatchRules(
-                duration: 3600,
-                category: .gaming,
-                winCondition: .mostViews
-            ),
-            status: .live,
-            winnerId: nil,
-            createdAt: Date(),
-            scheduledDate: Date(),
-            startedAt: Date(),
-            completedAt: nil,
+            rules: VersusMatch.MatchRules(duration: 3600, category: .gaming, winCondition: .mostViews),
+            status: VersusMatch.Status(rawValue: data["status"] as? String ?? "live") ?? .live,
+            winnerId: data["winnerId"] as? String,
+            createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
+            scheduledDate: (data["scheduledAt"] as? Timestamp)?.dateValue() ?? Date(),
+            startedAt: (data["startedAt"] as? Timestamp)?.dateValue() ?? Date(),
+            completedAt: (data["completedAt"] as? Timestamp)?.dateValue(),
             finalStats: nil
         )
     }
@@ -569,35 +585,73 @@ final class MatchVerificationService: ObservableObject {
     
     /// Send verification notifications
     private func sendVerificationNotification(winnerId: String, loserId: String, payout: Double) async {
-        // TODO: Send push notifications
         print("📱 [MatchVerification] Sending notifications...")
-        print("   Winner (\(winnerId)): You won $\(payout)!")
-        print("   Loser (\(loserId)): Better luck next time!")
+        // Write notification docs — FCM Cloud Function handles the push delivery
+        let notifications: [(String, String, String)] = [
+            (winnerId, "🏆 You Won!", "You won $\(String(format: "%.2f", payout))! Funds are being transferred."),
+            (loserId, "Match Result", "Better luck next time! Keep competing to earn."),
+        ]
+        for (userId, title, body) in notifications {
+            try? await db.collection("notifications").addDocument(data: [
+                "userId":   userId,
+                "type":     "match_result",
+                "title":    title,
+                "body":     body,
+                "isRead":   false,
+                "createdAt": FieldValue.serverTimestamp(),
+            ])
+        }
     }
     
     /// Notify admins for review
     private func notifyAdminsForReview(matchId: String, reason: String) async {
-        // TODO: Send admin notification
         print("📢 [MatchVerification] Notifying admins: Match \(matchId) needs review - \(reason)")
+        // Write to admin_alerts collection — admin dashboard listens to this collection
+        try? await db.collection("admin_alerts").addDocument(data: [
+            "type":     "match_review_needed",
+            "matchId":  matchId,
+            "reason":   reason,
+            "priority": "high",
+            "resolved": false,
+            "createdAt": FieldValue.serverTimestamp(),
+        ])
     }
     
-    /// Simulate video analysis (for testing)
-    private func simulateVideoAnalysis(videoURL: String, expectedScore: Int) async throws -> VideoAnalysisResult {
-        // Simulate AI processing delay
-        try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-        
-        return VideoAnalysisResult(
+    /// Runs REAL gameplay analysis on the uploaded proof video. On any failure
+    /// (invalid URL, unreadable video, no scoreboard) it returns a zero-confidence
+    /// result so `canAutoApprove` fails and the match is routed to referee review.
+    /// We never fabricate confidence — auto-approval must be earned by the video.
+    private func analyzeSubmissionVideo(videoURLString: String) async -> VideoAnalysisResult {
+        guard let url = URL(string: videoURLString) else {
+            print("⚠️ [MatchVerification] Invalid proof video URL — routing to referee review")
+            return Self.unverifiedAnalysis()
+        }
+        do {
+            return try await analysisService.analyzeGameplayVideo(
+                videoURL: url,
+                expectedGame: "Unknown"
+            )
+        } catch {
+            print("⚠️ [MatchVerification] Video analysis failed (\(error.localizedDescription)) — routing to referee review")
+            return Self.unverifiedAnalysis()
+        }
+    }
+
+    /// A definitively-unverified analysis result: no scores, zero confidence.
+    /// Guarantees the auto-approve gate fails closed → human referee review.
+    private static func unverifiedAnalysis() -> VideoAnalysisResult {
+        VideoAnalysisResult(
             extractedScores: ExtractedScores(
-                player1Score: expectedScore,
+                player1Score: nil,
                 player2Score: nil,
-                scoreboardDetected: true,
-                scoreboardTimestamp: 90.0,
-                ocrText: "Score: \(expectedScore)"
+                scoreboardDetected: false,
+                scoreboardTimestamp: nil,
+                ocrText: ""
             ),
-            confidence: 0.95,
+            confidence: 0.0,
             keyFrames: [],
-            detectedGame: "FIFA 24",
-            scoreboardDetected: true,
+            detectedGame: nil,
+            scoreboardDetected: false,
             timestamp: Date()
         )
     }
@@ -620,7 +674,12 @@ struct MatchSubmission {
 
 struct AIAnalysis {
     let confidence: Double
+    /// The scoreboard's first score read by OCR (position, not necessarily the
+    /// submitting player's own score — scoreboard order is ambiguous).
     let extractedScore: Int?
+    /// The scoreboard's second score read by OCR. Stored so auto-approval can
+    /// compare the extracted pair against the reported pair order-independently.
+    let extractedOpponentScore: Int?
     let scoreboardDetected: Bool
     let analyzedAt: Date
 }

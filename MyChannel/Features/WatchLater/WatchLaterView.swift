@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct WatchLaterView: View {
     @StateObject private var watchLaterService = WatchLaterFirestoreService.shared
@@ -245,8 +248,41 @@ struct WatchLaterView: View {
     
     // MARK: - Actions
     private func playVideo(_ item: WatchLaterItem) {
-        // TODO: Navigate to video player
-        print("Playing video: \(item.videoId)")
+        // Navigate to video player via GlobalVideoPlayerManager
+        Task { @MainActor in
+            guard let videoId = item.videoId.isEmpty ? nil : item.videoId else { return }
+            #if canImport(FirebaseFirestore)
+            if let snap = try? await Firestore.firestore().collection("videos").document(videoId).getDocument(),
+               snap.exists,
+               let data = snap.data() {
+                let creator = User(
+                    id: data["creatorId"] as? String ?? "",
+                    username: "", displayName: data["channelName"] as? String ?? "Creator",
+                    email: "", profileImageURL: "",
+                    subscriberCount: 0, videoCount: 0,
+                    isVerified: false, createdAt: Date()
+                )
+                let video = Video(
+                    id: videoId,
+                    title: data["title"] as? String ?? "",
+                    description: data["description"] as? String ?? "",
+                    thumbnailURL: data["thumbnailURL"] as? String ?? "",
+                    videoURL: data["videoURL"] as? String ?? "",
+                    duration: (data["duration"] as? Double) ?? 0,
+                    viewCount: (data["viewCount"] as? Int) ?? 0,
+                    likeCount: (data["likeCount"] as? Int) ?? 0,
+                    commentCount: (data["commentCount"] as? Int) ?? 0,
+                    createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
+                    creator: creator,
+                    category: .entertainment,
+                    tags: data["tags"] as? [String] ?? [],
+                    isPublic: true,
+                    ageRestricted: data["ageRestricted"] as? Bool ?? false
+                )
+                GlobalVideoPlayerManager.shared.playVideo(video)
+            }
+            #endif
+        }
     }
     
     private func removeFromWatchLater(_ item: WatchLaterItem) {
@@ -522,7 +558,11 @@ struct WatchLaterStatsView: View {
                                 .disabled(stats.watchedItems == 0)
                                 
                                 Button(action: {
-                                    // TODO: Navigate to playlist creation with watch later videos
+                                    // Navigate to playlist creation, passing watch later video IDs
+                                    NotificationCenter.default.post(
+                                        name: Notification.Name("CreatePlaylistFromWatchLater"),
+                                        object: nil
+                                    )
                                     dismiss()
                                 }) {
                                     HStack {

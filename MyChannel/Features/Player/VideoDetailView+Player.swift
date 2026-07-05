@@ -802,6 +802,8 @@ extension VideoDetailView {
             .frame(width: 60, height: 60)  // 🔥 FIX: Larger tap target
             .contentShape(Rectangle())  // 🔥 FIX: Explicit content shape
             .buttonStyle(.plain)  // 🔥 FIX: Plain button style to prevent interference
+            .accessibilityLabel("Seek backward 10 seconds")
+            .accessibilityAddTraits(.isButton)
             
             Button(action: { 
                 print("▶️ [VideoDetailView] Play/Pause button tapped - Current state: \(playerManager.isPlaying)")
@@ -818,6 +820,8 @@ extension VideoDetailView {
             .frame(width: 80, height: 80)  // 🔥 FIX: Larger tap target
             .contentShape(Rectangle())  // 🔥 FIX: Explicit content shape
             .buttonStyle(.plain)  // 🔥 FIX: Plain button style to prevent interference
+            .accessibilityLabel(playerManager.isPlaying ? "Pause" : "Play")
+            .accessibilityAddTraits(.isButton)
             
             Button(action: { 
                 print("⏩ [VideoDetailView] Forward button tapped")
@@ -831,6 +835,8 @@ extension VideoDetailView {
             .frame(width: 60, height: 60)  // 🔥 FIX: Larger tap target
             .contentShape(Rectangle())  // 🔥 FIX: Explicit content shape
             .buttonStyle(.plain)  // 🔥 FIX: Plain button style to prevent interference
+            .accessibilityLabel("Seek forward 10 seconds")
+            .accessibilityAddTraits(.isButton)
         }
         .padding(.bottom, 18)
         .opacity(controlsCoordinator.showControls ? 1.0 : 0.0)
@@ -875,7 +881,8 @@ extension VideoDetailView {
                 scrubFraction = max(0, min(1, fraction))
                 let t = playerManager.duration * scrubFraction
                 scrubPreviewImage = playerManager.thumbnail(at: t)
-            }
+            },
+            accessibilityValueText: "\(formatTime(isScrubbing ? playerManager.duration * scrubFraction : playerManager.currentTime)) of \(formatTime(playerManager.duration))"
         )
         .frame(height: 32)
         .padding(.horizontal, 20)
@@ -1029,6 +1036,8 @@ extension VideoDetailView {
                     .foregroundColor(playbackRate != 1.0 ? AppTheme.Colors.primary : .white)
             }
             .buttonStyle(ScaleButtonStyle())
+            .accessibilityLabel("Playback speed, \(playbackRate == 1.0 ? "1" : String(format: "%.2g", playbackRate)) times")
+            .accessibilityHint("Opens playback speed options")
 
             // 🔥 YOUTUBE PARITY: Queue button
             Button(action: {
@@ -1041,6 +1050,8 @@ extension VideoDetailView {
                     .foregroundColor(showingQueueSidebar ? AppTheme.Colors.primary : .white)
             }
             .buttonStyle(ScaleButtonStyle())
+            .accessibilityLabel("Up next queue")
+            .accessibilityAddTraits(showingQueueSidebar ? [.isButton, .isSelected] : .isButton)
         }
     }
     

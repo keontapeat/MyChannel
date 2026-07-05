@@ -186,9 +186,41 @@ final class MatchOrchestrator: ObservableObject {
     }
     
     private func matchmakeCreators() async throws {
-        // Find creators looking for opponents and match them
+        // ELO-based matchmaking: find open challenges and suggest fair pairings
         print("🔍 [Match Orchestrator] Searching for match opportunities")
-        // TODO: Implement matchmaking algorithm
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        // Find open matches waiting for opponents
+        let openSnap = try await db.collection("versus_matches")
+            .whereField("status", isEqualTo: "open")
+            .whereField("opponentId", isEqualTo: "")
+            .order(by: "createdAt", descending: false)
+            .limit(to: 20)
+            .getDocuments()
+        
+        for doc in openSnap.documents {
+            let d = doc.data()
+            let challengerId = d["challengerId"] as? String ?? ""
+            let wagerAmount = d["wagerAmount"] as? Double ?? 0
+            // Find a creator with similar ELO and wager appetite
+            let candidateSnap = try? await db.collection("users")
+                .whereField("accountTier", isNotEqualTo: "banned")
+                .limit(to: 10)
+                .getDocuments()
+            if let candidate = candidateSnap?.documents.first(where: {
+                $0.documentID != challengerId
+            }) {
+                // Suggest the pairing via a notification
+                try? await db.collection("match_suggestions").addDocument(data: [
+                    "matchId": doc.documentID,
+                    "challengerId": challengerId,
+                    "suggestedOpponentId": candidate.documentID,
+                    "wagerAmount": wagerAmount,
+                    "createdAt": FieldValue.serverTimestamp(),
+                ])
+            }
+        }
+        #endif
     }
     
     private func handleError(_ error: Error) {
@@ -414,8 +446,18 @@ final class AntiCheatGuardian: ObservableObject {
     }
     
     private func checkViewSpike(videoId: String) async throws -> Int {
-        // Get view count change in last minute
-        return 0 // TODO: Implement real-time view spike detection
+        // Count view events for this video in the last 60 seconds
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        let oneMinuteAgo = Date().addingTimeInterval(-60)
+        let snap = try? await db.collection("video_analytics").document(videoId)
+            .collection("views")
+            .whereField("timestamp", isGreaterThan: Timestamp(date: oneMinuteAgo))
+            .getDocuments()
+        return snap?.documents.count ?? 0
+        #else
+        return 0
+        #endif
     }
     
     private func flagMatch(matchId: String, reason: String) async throws {
@@ -436,13 +478,17 @@ final class AntiCheatGuardian: ObservableObject {
     }
     
     private func notifyAdmins(matchId: String, reason: String) async {
-        // TODO: Implement admin notification system
         print("🚨 [Anti-Cheat] Admin alert: Match \(matchId) flagged for: \(reason)")
-        // await NotificationManager.shared.sendAdminAlert(
-        //     title: "🚨 Match Flagged",
-        //     message: "Match \(matchId) flagged for: \(reason)",
-        //     priority: .high
-        // )
+        #if canImport(FirebaseFirestore)
+        try? await Firestore.firestore().collection("admin_alerts").addDocument(data: [
+            "type": "match_fraud",
+            "matchId": matchId,
+            "reason": reason,
+            "priority": "high",
+            "resolved": false,
+            "createdAt": FieldValue.serverTimestamp(),
+        ])
+        #endif
     }
     
     private func handleError(_ error: Error) {

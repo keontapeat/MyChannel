@@ -76,24 +76,28 @@ class CreatorStudioIntegrationService: ObservableObject {
     
     /// Get real-time creator metrics for live updates
     func getRealtimeMetrics(creatorId: String) async -> StudioRealtimeMetrics {
-        do {
-            // Get live metrics from enhanced services
-            let metrics = StudioRealtimeMetrics(
-                currentViewers: await getCurrentViewers(creatorId: creatorId),
-                recentViews: await getRecentViews(creatorId: creatorId),
-                liveEngagement: await getLiveEngagement(creatorId: creatorId),
-                revenueToday: await getTodayRevenue(creatorId: creatorId),
-                subscriberGrowth: await getSubscriberGrowth(creatorId: creatorId),
-                trendingVideos: await getTrendingVideos(creatorId: creatorId),
-                lastUpdated: Date()
-            )
-            
-            realtimeMetrics = metrics
-            return metrics
-            
-        } catch {
-            return StudioRealtimeMetrics()
-        }
+        guard !creatorId.isEmpty else { return StudioRealtimeMetrics() }
+
+        // Derive live metrics from REAL service data (no fabricated/random values).
+        // Day-range analytics + earnings back the numbers we can source truthfully.
+        let analytics = try? await enhancedStudioService.loadCreatorAnalytics(creatorId: creatorId, timeRange: .day)
+        let earnings = try? await monetizationService.loadEarningsData(creatorId: creatorId, timeRange: .day)
+
+        let metrics = StudioRealtimeMetrics(
+            // No live concurrent-viewer presence source is wired here yet — report 0
+            // rather than a fabricated count.
+            currentViewers: 0,
+            recentViews: analytics?.totalViews ?? 0,
+            liveEngagement: analytics?.engagementRate ?? 0,
+            revenueToday: earnings?.totalEarnings ?? 0,
+            // No per-day subscriber-delta source yet — report 0 rather than fabricating.
+            subscriberGrowth: 0,
+            trendingVideos: analytics?.topPerformingVideos ?? [],
+            lastUpdated: Date()
+        )
+
+        realtimeMetrics = metrics
+        return metrics
     }
     
     // MARK: - Content Management Integration
@@ -250,10 +254,11 @@ class CreatorStudioIntegrationService: ObservableObject {
     // MARK: - Real-time Monitoring
     
     private func startRealtimeMonitoring() {
-        metricsTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
+        metricsTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
+                guard let self else { return }
                 if let creatorId = AppState.shared.currentUser?.id {
-                    let _ = await self.getRealtimeMetrics(creatorId: creatorId)
+                    _ = await self.getRealtimeMetrics(creatorId: creatorId)
                 }
             }
         }
@@ -267,38 +272,10 @@ class CreatorStudioIntegrationService: ObservableObject {
     // MARK: - Helper Methods
     
     private func getRecentVideoIds(creatorId: String) async -> [String] {
-        // Get recent video IDs from Firestore
-        return ["video1", "video2", "video3"] // Placeholder
-    }
-    
-    private func getCurrentViewers(creatorId: String) async -> Int {
-        // Get current live viewers across all content
-        return Int.random(in: 50...500)
-    }
-    
-    private func getRecentViews(creatorId: String) async -> Int {
-        // Get views in last 24 hours
-        return Int.random(in: 1000...10000)
-    }
-    
-    private func getLiveEngagement(creatorId: String) async -> Double {
-        // Get current engagement rate
-        return Double.random(in: 0.05...0.15)
-    }
-    
-    private func getTodayRevenue(creatorId: String) async -> Double {
-        // Get revenue generated today
-        return Double.random(in: 10...100)
-    }
-    
-    private func getSubscriberGrowth(creatorId: String) async -> Int {
-        // Get new subscribers today
-        return Int.random(in: 5...50)
-    }
-    
-    private func getTrendingVideos(creatorId: String) async -> [String] {
-        // Get currently trending videos
-        return ["Trending Video 1", "Trending Video 2"]
+        guard !creatorId.isEmpty else { return [] }
+        // Real recent uploads from Firestore (no placeholder IDs).
+        let videos = await VideoFirestoreService.shared.fetchVideosByCreator(creatorId: creatorId, limit: 10)
+        return videos.map { $0.id }
     }
     
     deinit {

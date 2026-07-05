@@ -28,6 +28,12 @@ class AuthRepositoryImpl @Inject constructor(
     override val currentUserId: String?
         get() = authDataSource.currentUserId
 
+    override val currentUserDisplayName: String?
+        get() = authDataSource.currentUserDisplayName
+
+    override val currentUserAvatarUrl: String?
+        get() = authDataSource.currentUserAvatarUrl
+
     override suspend fun signInWithEmail(email: String, password: String): Result<User> =
         runCatching { authDataSource.signInWithEmail(email, password) }
             .onSuccess { cacheIdToken() }

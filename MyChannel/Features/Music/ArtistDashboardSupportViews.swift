@@ -576,12 +576,8 @@ struct ContentIDEnrollmentSheet: View {
         guard let track = eligibleTracks.first(where: { $0.id == selectedTrackId }), let audioURL = track.audioURL else { return }
         isSubmitting = true
         errorMessage = nil
-        let referenceId = await ContentIDService.shared.uploadReferenceFile(
-            title: track.title,
-            rightsholder: artistName,
-            ownerId: artistId,
-            sourceTrackId: track.id,
-            videoURL: "",
+        let referenceId = await ContentIDService.shared.registerMusicTrack(
+            trackId: track.id,
             audioURL: audioURL,
             policy: selectedPolicy
         )

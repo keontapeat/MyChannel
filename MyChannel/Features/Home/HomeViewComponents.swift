@@ -224,7 +224,8 @@ struct MinimalChannelCard: View {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 streamReady = true
                             }
-                        }
+                        },
+                        cornerRadius: 12
                     )
                     .frame(width: 160, height: 90)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -459,13 +460,6 @@ struct TopArtistsSection: View {
     var onSelect: (String, String, [Video], Int) -> Void = { _,_,_,_  in }
     var onSeeAll: () -> Void = {}
 
-    private var orderedRankings: [TopRankedUser] {
-        prioritizedRankings(
-            rankings,
-            pinnedNames: ["HTG Nook", "Scatz Ripky", "Kleanup Man"]
-        )
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -489,12 +483,12 @@ struct TopArtistsSection: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, a in
+                    ForEach(rankings, id: \.id) { a in
                         Button {
-                            let vids = sourceVideos.filter { $0.creator.displayName == a.name }
+                            let vids = sourceVideos.filter { matchesCreator($0, name: a.name) }
                             onSelect(a.name, a.avatar, vids, a.totalViews)
                         } label: {
-                            RankCardView(user: a, index: idx)
+                            RankCardView(user: a)
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
@@ -511,13 +505,6 @@ struct TopIndieFilmmakersSection: View {
     let rankings: [TopRankedUser]
     var onSeeAll: () -> Void = {}
     var onSelect: (String, [FreeMovie]) -> Void = { _,_ in }
-
-    private var orderedRankings: [TopRankedUser] {
-        prioritizedRankings(
-            rankings,
-            pinnedNames: ["Tee Cee", "Merch Hd", "Pros KT"]
-        )
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -542,11 +529,11 @@ struct TopIndieFilmmakersSection: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, f in
+                    ForEach(rankings, id: \.id) { f in
                         Button {
-                            onSelect(f.name, Array(FreeMovie.sampleMovies.shuffled().prefix(Int.random(in: 6...10))))
+                            onSelect(f.name, stableFilmSelection(seed: f.id, count: f.videoCount))
                         } label: {
-                            RankCardView(user: f, index: idx, subtitle: "\(f.videoCount) films • Score \(Int(f.overallScore))")
+                            RankCardView(user: f, subtitle: "\(f.videoCount) films • Score \(Int(f.overallScore))")
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
@@ -564,13 +551,6 @@ struct TopMyChannelsSection: View {
     let sourceVideos: [Video]
     var onSelect: (String, String, Int, Int, [Video]) -> Void = { _,_,_,_,_ in }
     var onSeeAll: () -> Void = {}
-
-    private var orderedRankings: [TopRankedUser] {
-        prioritizedRankings(
-            rankings,
-            pinnedNames: ["Ktrip", "Baby Ju", "Baby Juu", "Mbk Cari"]
-        )
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -595,13 +575,13 @@ struct TopMyChannelsSection: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
-                    ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, channel in
+                    ForEach(rankings, id: \.id) { channel in
                         Button {
                             HapticManager.shared.impact(style: .medium)
-                            let vids = sourceVideos.filter { $0.creator.displayName.lowercased().contains(channel.name.lowercased()) }
+                            let vids = sourceVideos.filter { matchesCreator($0, name: channel.name) }
                             onSelect(channel.name, channel.avatar, channel.subscribers, channel.totalViews, vids)
                         } label: {
-                            RankCardView(user: channel, index: idx, subtitle: "\(TopRankMLService.formatCount(channel.subscribers)) subs")
+                            RankCardView(user: channel, subtitle: "\(TopRankMLService.formatCount(channel.subscribers)) subs")
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
@@ -613,28 +593,40 @@ struct TopMyChannelsSection: View {
     }
 }
 
-private func prioritizedRankings(_ rankings: [TopRankedUser], pinnedNames: [String]) -> [TopRankedUser] {
-    func normalize(_ value: String) -> String {
-        value.lowercased()
-            .replacingOccurrences(of: "_c", with: "")
-            .replacingOccurrences(of: "_", with: " ")
-            .replacingOccurrences(of: "-", with: " ")
-            .replacingOccurrences(of: "  ", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+// MARK: - Top-shelf helpers (shared by all three sections)
+
+/// Normalizes a creator/rank name for matching: strips the "_c" channel suffix,
+/// lowercases, and collapses separators. Used consistently everywhere a shelf
+/// name is compared against a `Video.creator.displayName`.
+private func normalizeRankName(_ value: String) -> String {
+    value.lowercased()
+        .replacingOccurrences(of: "_c", with: "")
+        .replacingOccurrences(of: "_", with: " ")
+        .replacingOccurrences(of: "-", with: " ")
+        .replacingOccurrences(of: "  ", with: " ")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+/// Consistent creator↔shelf matching (replaces the old exact-`==` vs loose-`contains`
+/// mismatch between the Artists and MyChannels shelves).
+private func matchesCreator(_ video: Video, name: String) -> Bool {
+    normalizeRankName(video.creator.displayName) == normalizeRankName(name)
+}
+
+/// Deterministic per-filmmaker film selection so tapping the same filmmaker always
+/// opens the same catalog (previously used `.shuffled().prefix(random)` → changed
+/// on every tap). Stable across launches via a small FNV-1a hash of the seed+id.
+func stableFilmSelection(seed: String, count: Int) -> [FreeMovie] {
+    func fnv1a(_ s: String) -> UInt64 {
+        var hash: UInt64 = 1_469_598_103_934_665_603
+        for byte in s.utf8 { hash = (hash ^ UInt64(byte)) &* 1_099_511_628_211 }
+        return hash
     }
-
-    var remaining = rankings
-    var ordered: [TopRankedUser] = []
-
-    for pinnedName in pinnedNames {
-        let normalizedPinned = normalize(pinnedName)
-        if let index = remaining.firstIndex(where: { normalize($0.name) == normalizedPinned }) {
-            ordered.append(remaining.remove(at: index))
-        }
-    }
-
-    ordered.append(contentsOf: remaining)
-    return ordered
+    let clamped = min(max(count, 6), 10)
+    return FreeMovie.sampleMovies
+        .sorted { fnv1a(seed + $0.id) < fnv1a(seed + $1.id) }
+        .prefix(clamped)
+        .map { $0 }
 }
 
 // MARK: - See All List Views (ML-Powered — Top Artists / Filmmakers / Channels)
@@ -645,16 +637,13 @@ struct TopArtistsListView: View {
     @ObservedObject private var rankService = TopRankMLService.shared
 
     private var orderedRankings: [TopRankedUser] {
-        prioritizedRankings(
-            rankService.topArtists,
-            pinnedNames: ["Yung Sak Runner"]
-        )
+        rankService.topArtists.isEmpty ? TopRankMLService.fallbackTopArtists : rankService.topArtists
     }
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, artist in
+                ForEach(orderedRankings, id: \.id) { artist in
                     NavigationLink {
                         ArtistPageView(
                             artist: Artist(
@@ -670,7 +659,7 @@ struct TopArtistsListView: View {
                             similarArtists: []
                         )
                     } label: {
-                        RankListRow(user: artist, index: idx)
+                        RankListRow(user: artist)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
@@ -696,25 +685,21 @@ struct TopFilmmakersListView: View {
     @ObservedObject private var rankService = TopRankMLService.shared
 
     private var orderedRankings: [TopRankedUser] {
-        prioritizedRankings(
-            rankService.topFilmmakers,
-            pinnedNames: ["Shot By Keonta", "Tee Cee", "Merch Hd"]
-        )
+        rankService.topFilmmakers.isEmpty ? TopRankMLService.fallbackTopFilmmakers : rankService.topFilmmakers
     }
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, filmmaker in
+                ForEach(orderedRankings, id: \.id) { filmmaker in
                     NavigationLink {
                         FilmmakerDetailView(
                             name: filmmaker.name,
-                            films: Array(FreeMovie.sampleMovies.shuffled().prefix(filmmaker.videoCount > 0 ? filmmaker.videoCount : 8))
+                            films: stableFilmSelection(seed: filmmaker.id, count: filmmaker.videoCount)
                         )
                     } label: {
                         RankListRow(
                             user: filmmaker,
-                            index: idx,
                             subtitle: "\(filmmaker.videoCount) films • Score \(Int(filmmaker.overallScore))"
                         )
                     }
@@ -742,16 +727,13 @@ struct TopChannelsListView: View {
     @ObservedObject private var rankService = TopRankMLService.shared
 
     private var orderedRankings: [TopRankedUser] {
-        prioritizedRankings(
-            rankService.topChannels,
-            pinnedNames: ["Ktrip", "Baby Juu", "Mbk Cari"]
-        )
+        rankService.topChannels.isEmpty ? TopRankMLService.fallbackTopChannels : rankService.topChannels
     }
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(Array(orderedRankings.enumerated()), id: \.element.id) { idx, channel in
+                ForEach(orderedRankings, id: \.id) { channel in
                     NavigationLink {
                         ChannelDetailView(
                             name: channel.name,
@@ -763,7 +745,6 @@ struct TopChannelsListView: View {
                     } label: {
                         RankListRow(
                             user: channel,
-                            index: idx,
                             subtitle: "\(TopRankMLService.formatCount(channel.subscribers)) subs"
                         )
                     }
@@ -790,8 +771,11 @@ struct TopChannelsListView: View {
 
 struct RankListRow: View {
     let user: TopRankedUser
-    let index: Int
     var subtitle: String? = nil
+
+    // Engine-assigned rank is the single source of truth, so this "#" always
+    // agrees with the rank-change arrow below (both derive from `user.rank`).
+    private var displayRank: Int { max(user.rank, 1) }
 
     private var displayName: String {
         user.name
@@ -807,7 +791,7 @@ struct RankListRow: View {
         HStack(spacing: 12) {
             // Rank badge
             HStack(spacing: 2) {
-                Text("#\(index + 1)")
+                Text("#\(displayRank)")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white)
                 if user.rankChange > 0 {

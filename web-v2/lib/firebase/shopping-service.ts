@@ -31,9 +31,8 @@ import type {
   FlashSale,
   WishlistItem,
   ProductCategory,
-  StreamStatus,
-  OrderStatus,
 } from '@/types/shopping';
+import { StreamStatus, OrderStatus } from '@/types/shopping';
 
 export class ShoppingService {
   // ==================== PRODUCTS ====================

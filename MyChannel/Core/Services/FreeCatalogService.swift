@@ -94,6 +94,17 @@ final class FreeCatalogService: ObservableObject {
 }
 
 extension FreeCatalogItem {
+    /// TMDB returns bare image paths (e.g. `/abc.jpg`). Promote them to a full
+    /// `image.tmdb.org` URL (an approved CDN) so AsyncImage can actually load
+    /// them. Pass through values that are already absolute URLs or empty.
+    private static func tmdbImageURL(_ path: String?, size: String) -> String? {
+        guard let path = path?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !path.isEmpty else { return nil }
+        if path.hasPrefix("http://") || path.hasPrefix("https://") { return path }
+        let normalized = path.hasPrefix("/") ? path : "/\(path)"
+        return "https://image.tmdb.org/t/p/\(size)\(normalized)"
+    }
+
     var toFreeMovie: FreeMovie {
         let year = Int(releaseDate?.prefix(4) ?? "") ?? 0
         let sourceName = providers.first?.name.lowercased() ?? ""
@@ -107,8 +118,8 @@ extension FreeCatalogItem {
         return FreeMovie(
             id: id,
             title: title,
-            posterURL: posterPath ?? "",
-            backdropURL: backdropPath,
+            posterURL: Self.tmdbImageURL(posterPath, size: "w500") ?? "",
+            backdropURL: Self.tmdbImageURL(backdropPath, size: "w1280"),
             overview: overview,
             releaseDate: releaseDate ?? "",
             runtime: 90,

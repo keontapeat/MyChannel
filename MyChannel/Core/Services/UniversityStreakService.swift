@@ -89,9 +89,6 @@ final class UniversityStreakService: ObservableObject {
 
     @Published private(set) var stats: UniversityUserStats?
 
-    /// Points awarded when a streak milestone is reached.
-    private let milestoneDays: [Int: Int] = [7: 70, 14: 150, 30: 400, 50: 750, 100: 2000, 365: 10000]
-
     static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
@@ -124,102 +121,45 @@ final class UniversityStreakService: ObservableObject {
     }
 
     // MARK: - Record Activity
-
-    /// Record a learning session. This is what actually moves the streak forward.
-    /// Call this whenever the user genuinely watches University content.
-    /// - Returns: the updated stats (also published on `self.stats`).
-    @discardableResult
-    func recordLearningActivity(userId: String, minutes: Double) async -> UniversityUserStats {
-        let calendar = Calendar.current
-        let now = Date()
-        let todayKey = Self.dayFormatter.string(from: now)
-
-        let s0: UniversityUserStats
-        if let existing = stats { s0 = existing } else { s0 = await loadStats(userId: userId) }
-        var s = s0
-
-        var awardedMilestonePoints = 0
-
-        if s.lastActiveDay == todayKey {
-            // Already learned today — just accumulate minutes toward the daily goal.
-            s.todayMinutes += minutes
-        } else {
-            let dayGap = dayGap(from: s.lastActiveDay, to: todayKey, calendar: calendar)
-
-            switch dayGap {
-            case 1:
-                // Consecutive day → streak grows.
-                s.currentStreak += 1
-            case let gap where gap > 1:
-                // Missed one or more days. Spend a freeze to save a single missed day,
-                // otherwise the streak resets.
-                if gap == 2 && s.streakFreezesAvailable > 0 {
-                    s.streakFreezesAvailable -= 1
-                    s.currentStreak += 1
-                } else {
-                    s.currentStreak = 1
-                }
-            default:
-                // No previous activity (or same-day handled above) → first day.
-                s.currentStreak = max(1, s.currentStreak == 0 ? 1 : 1)
-            }
-
-            s.lastActiveDay = todayKey
-            s.todayMinutes = minutes
-            s.totalLearningDays += 1
-
-            // Maintain a rolling 30-day activity window for the calendar UI.
-            var recent = s.recentActiveDays
-            if !recent.contains(todayKey) { recent.append(todayKey) }
-            s.recentActiveDays = Array(recent.suffix(30))
-
-            // Milestone rewards on streak growth.
-            if let bonus = milestoneDays[s.currentStreak] {
-                awardedMilestonePoints = bonus
-            }
-
-            // Earn a freeze every 10-day streak (capped at 5), Duolingo-style.
-            if s.currentStreak % 10 == 0 {
-                s.streakFreezesAvailable = min(5, s.streakFreezesAvailable + 1)
-            }
-        }
-
-        s.longestStreak = max(s.longestStreak, s.currentStreak)
-        s.totalPoints += awardedMilestonePoints + basePoints(forMinutes: minutes)
-        s.updatedAt = now
-
-        stats = s
-        await persist(s)
-
-        if awardedMilestonePoints > 0 {
-            HapticManager.shared.notification(type: .success)
-            await UniversityActivityService.shared.log(
-                userId: userId,
-                type: .streakMaintained,
-                title: "\(s.currentStreak)-day streak! +\(awardedMilestonePoints) points"
-            )
-            print("🔥 [UniversityStreak] Milestone \(s.currentStreak) days → +\(awardedMilestonePoints) pts")
-        }
-
-        return s
-    }
+    //
+    // 🔒 Streak + points are now advanced SERVER-SIDE by the onUniversityWatchEvent
+    // Cloud Function (see firebase/functions/src/university.ts) from the raw watch
+    // event the client emits via UniversityWatchTrackingService.recordWatchEvent.
+    // The client no longer writes streak/points — those fields are locked to the
+    // server in firestore.rules — so the leaderboard can't be spoofed. This service
+    // now only READS stats for display and writes the user-owned daily goal.
 
     // MARK: - Goal
 
+    /// Update the user's daily learning-minutes goal. This is a user-owned field
+    /// (writable per firestore.rules); streak/points remain server-authoritative.
     func updateDailyGoal(userId: String, minutes: Int) async {
-        let s0: UniversityUserStats
-        if let existing = stats { s0 = existing } else { s0 = await loadStats(userId: userId) }
-        var s = s0
-        s.dailyGoalMinutes = max(5, minutes)
-        s.updatedAt = Date()
-        stats = s
-        await persist(s)
+        let clamped = max(5, minutes)
+        #if canImport(FirebaseFirestore)
+        do {
+            try await db.collection("university_users").document(userId).setData([
+                "dailyGoalMinutes": clamped,
+                "updatedAt": Timestamp(date: Date())
+            ], merge: true)
+        } catch {
+            print("⚠️ [UniversityStreak] updateDailyGoal failed: \(error.localizedDescription)")
+        }
+        #endif
+        if var s = stats {
+            s.dailyGoalMinutes = clamped
+            stats = s
+        }
     }
 
     // MARK: - Leaderboard mirror
 
-    /// Mirror the public-facing fields into `university_leaderboard/{userId}` so a
-    /// global leaderboard can be queried without exposing the private user doc.
+    /// Persist the user's public-facing identity + credential counts into their
+    /// own `university_users/{userId}` doc. The `onUniversityStatsWritten` Cloud
+    /// Function mirrors these — together with the authoritative points/streak in
+    /// the same doc — into the public `university_leaderboard/{userId}` entry.
+    ///
+    /// Clients can no longer write `university_leaderboard` directly (see
+    /// firestore.rules), so the public rank doc can't be spoofed on its own.
     func syncLeaderboardEntry(
         userId: String,
         name: String,
@@ -228,68 +168,22 @@ final class UniversityStreakService: ObservableObject {
         watchHours: Int
     ) async {
         #if canImport(FirebaseFirestore)
-        guard let s = stats else { return }
         let data: [String: Any] = [
-            "userId": userId,
             "name": name,
             "avatarURL": avatarURL,
-            "points": s.totalPoints,
             "certificates": certificates,
             "watchHours": watchHours,
-            "currentStreak": s.displayStreak(),
-            "longestStreak": s.longestStreak,
             "updatedAt": Timestamp(date: Date())
         ]
         do {
-            try await db.collection("university_leaderboard").document(userId).setData(data, merge: true)
+            try await db.collection("university_users").document(userId).setData(data, merge: true)
         } catch {
-            print("⚠️ [UniversityStreak] leaderboard sync failed: \(error.localizedDescription)")
+            print("⚠️ [UniversityStreak] identity sync failed: \(error.localizedDescription)")
         }
         #endif
     }
 
     // MARK: - Helpers
-
-    private func basePoints(forMinutes minutes: Double) -> Int {
-        // 1 point per minute of genuine learning, capped per session.
-        min(120, Int(minutes.rounded()))
-    }
-
-    private func dayGap(from: String, to: String, calendar: Calendar) -> Int {
-        guard !from.isEmpty,
-              let fromDate = Self.dayFormatter.date(from: from),
-              let toDate = Self.dayFormatter.date(from: to) else {
-            return Int.max // no prior activity
-        }
-        return calendar.dateComponents([.day],
-                                       from: calendar.startOfDay(for: fromDate),
-                                       to: calendar.startOfDay(for: toDate)).day ?? Int.max
-    }
-
-    private func persist(_ s: UniversityUserStats) async {
-        #if canImport(FirebaseFirestore)
-        let data: [String: Any] = [
-            "userId": s.userId,
-            "currentStreak": s.currentStreak,
-            "longestStreak": s.longestStreak,
-            "lastActiveDay": s.lastActiveDay,
-            "totalLearningDays": s.totalLearningDays,
-            "recentActiveDays": s.recentActiveDays,
-            "streakFreezesAvailable": s.streakFreezesAvailable,
-            "dailyGoalMinutes": s.dailyGoalMinutes,
-            "todayMinutes": s.todayMinutes,
-            "totalPoints": s.totalPoints,
-            "updatedAt": Timestamp(date: s.updatedAt),
-            // Preserve the seeded flag without clobbering it.
-            "seeded": true
-        ]
-        do {
-            try await db.collection("university_users").document(s.userId).setData(data, merge: true)
-        } catch {
-            print("⚠️ [UniversityStreak] persist failed: \(error.localizedDescription)")
-        }
-        #endif
-    }
 
     #if canImport(FirebaseFirestore)
     private func parse(_ data: [String: Any], userId: String) -> UniversityUserStats {

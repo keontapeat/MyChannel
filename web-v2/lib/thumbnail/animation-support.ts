@@ -130,7 +130,8 @@ export class AnimationEngine {
         resolve(blob);
       });
 
-      gif.on('error', (error: Error) => {
+      // 'error' isn't in @types/gif.js event union; cast to attach the handler.
+      (gif as any).on('error', (error: Error) => {
         reject(error);
       });
 

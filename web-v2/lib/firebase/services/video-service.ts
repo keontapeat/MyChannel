@@ -11,6 +11,7 @@ import {
   getDocs,
   getDoc,
   doc,
+  documentId,
   QueryDocumentSnapshot,
   DocumentData,
   Timestamp
@@ -253,15 +254,142 @@ class VideoService {
     }
   }
 
-  // Search videos
-  async searchVideos(
-    searchTerm: string, 
+  // Fetch a specific set of videos by ID, preserving no particular order
+  // (caller re-sorts if needed). Firestore `in` queries are capped at 30 IDs,
+  // so this chunks the request and merges the results.
+  async fetchVideosByIds(videoIds: string[]): Promise<Video[]> {
+    const ids = Array.from(new Set(videoIds)).filter(Boolean);
+    if (ids.length === 0) return [];
+
+    try {
+      const chunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += 30) {
+        chunks.push(ids.slice(i, i + 30));
+      }
+
+      const results = await Promise.all(
+        chunks.map((chunk) =>
+          getDocs(
+            query(collection(firestore, this.videosCollection), where(documentId(), 'in', chunk))
+          )
+        )
+      );
+
+      return results.flatMap((snap) => snap.docs.map((d) => this.docToVideo(d)));
+    } catch (error) {
+      console.error('🚨 Error fetching videos by ids:', error);
+      return [];
+    }
+  }
+
+  // Fetch latest public videos from a set of creators (subscriptions feed).
+  // Chunks creatorIds by 30 (Firestore `in` limit) and merges + re-sorts by date.
+  async fetchVideosByCreators(
+    creatorIds: string[],
     pageSize: number = 24
   ): Promise<Video[]> {
+    const ids = Array.from(new Set(creatorIds)).filter(Boolean);
+    if (ids.length === 0) return [];
+
     try {
-      // Note: Firestore doesn't support full-text search natively
-      // For production, use Algolia, Typesense, or Cloud Functions
-      // This is a basic prefix search on title
+      const chunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += 30) {
+        chunks.push(ids.slice(i, i + 30));
+      }
+
+      const results = await Promise.all(
+        chunks.map((chunk) =>
+          getDocs(
+            query(
+              collection(firestore, this.videosCollection),
+              where('creatorId', 'in', chunk),
+              where('isPublic', '==', true),
+              orderBy('createdAt', 'desc'),
+              limit(pageSize)
+            )
+          )
+        )
+      );
+
+      const videos = results.flatMap((snap) => snap.docs.map((d) => this.docToVideo(d)));
+      videos.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return videos.slice(0, pageSize);
+    } catch (error) {
+      console.error('🚨 Error fetching subscription feed videos:', error);
+      return [];
+    }
+  }
+
+  // Search videos.
+  // Prefers the real search backend (services/search — relevance-ranked
+  // lexical search over title/description/tags/creator, with popularity and
+  // recency boosts) when NEXT_PUBLIC_SEARCH_API_URL is configured. Falls back
+  // to a basic Firestore title-prefix match if the service is unset,
+  // unreachable, or errors — so search never fully breaks in dev or if the
+  // backend is down.
+  async searchVideos(
+    searchTerm: string,
+    pageSize: number = 24
+  ): Promise<Video[]> {
+    const term = searchTerm.trim();
+    if (!term) return [];
+
+    const apiUrl = process.env.NEXT_PUBLIC_SEARCH_API_URL;
+    if (apiUrl) {
+      try {
+        const res = await fetch(
+          `${apiUrl}/v1/search?q=${encodeURIComponent(term)}&limit=${pageSize}`,
+          { signal: AbortSignal.timeout(5000) }
+        );
+        if (res.ok) {
+          const json = await res.json();
+          const items = Array.isArray(json?.items) ? json.items : [];
+          if (items.length > 0) {
+            return items.map((item: any) => this.searchResultToVideo(item));
+          }
+          // Empty result set from the real service is still authoritative —
+          // don't fall back to the weaker prefix match in that case.
+          return [];
+        }
+      } catch (error) {
+        console.warn('⚠️ Search API unreachable, falling back to Firestore prefix search:', error);
+      }
+    }
+
+    return this.searchVideosFirestoreFallback(term, pageSize);
+  }
+
+  // Maps a services/search `/v1/search` result item to the local Video shape.
+  private searchResultToVideo(item: Record<string, any>): Video {
+    return {
+      id: item.id,
+      title: item.title || 'Untitled',
+      description: item.description || '',
+      thumbnailURL: item.thumbnailURL || '',
+      videoURL: '', // Not needed for search-result cards; fetched on watch page.
+      duration: item.duration || 0,
+      viewCount: item.viewCount || 0,
+      likeCount: item.likeCount || 0,
+      commentCount: item.commentCount || 0,
+      creator: {
+        id: item.creator?.id || '',
+        username: item.creator?.username || 'Unknown',
+        displayName: item.creator?.displayName || item.creator?.username || 'Unknown',
+        profileImageURL: item.creator?.profileImageURL || '',
+        subscriberCount: item.creator?.subscriberCount || 0,
+        isVerified: item.creator?.isVerified || false,
+      },
+      category: item.category || 'entertainment',
+      tags: [],
+      isPublic: true,
+      createdAt: item.createdAt ? new Date(item.createdAt) : new Date(),
+    };
+  }
+
+  // Basic Firestore title-prefix match — used only when the real search
+  // service isn't configured or is unreachable.
+  private async searchVideosFirestoreFallback(searchTerm: string, pageSize: number): Promise<Video[]> {
+    try {
       const q = query(
         collection(firestore, this.videosCollection),
         where('isPublic', '==', true),
@@ -300,6 +428,27 @@ class VideoService {
         .slice(0, pageSize);
     } catch (error) {
       console.error('🚨 Error fetching recommended videos:', error);
+      return [];
+    }
+  }
+
+  // Autocomplete suggestions as the user types (services/search /v1/suggest).
+  // Returns an empty list if the search backend isn't configured or errors —
+  // callers should treat this as a nice-to-have, not a hard dependency.
+  async fetchSuggestions(term: string, limitCount: number = 8): Promise<string[]> {
+    const q = term.trim();
+    const apiUrl = process.env.NEXT_PUBLIC_SEARCH_API_URL;
+    if (!q || !apiUrl) return [];
+
+    try {
+      const res = await fetch(
+        `${apiUrl}/v1/suggest?q=${encodeURIComponent(q)}&limit=${limitCount}`,
+        { signal: AbortSignal.timeout(3000) }
+      );
+      if (!res.ok) return [];
+      const json = await res.json();
+      return Array.isArray(json?.suggestions) ? json.suggestions : [];
+    } catch {
       return [];
     }
   }

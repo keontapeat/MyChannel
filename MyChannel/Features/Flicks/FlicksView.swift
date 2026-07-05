@@ -42,6 +42,7 @@ struct FlicksView: View {
     @State private var currentIndex: Int = 0
     @State private var previousIndex: Int = 0
     @State private var showUI: Bool = true
+    @State private var showSpeedBoost: Bool = false
     @State private var doubleTapHeartVisible: Bool = false
     @State private var doubleTapHeartID = UUID()
     
@@ -59,7 +60,7 @@ struct FlicksView: View {
     @AppStorage("flicks_captions") private var captionsEnabled: Bool = false
     @State private var showSpeedPicker = false
     @State private var showQualityPicker = false
-    @State private var savedVideoIds: Set<String> = UserDefaults.standard.stringArray(forKey: "saved_videos").map { Set($0) } ?? []
+
     @State private var showMoreOptions = false
     @State private var selectedMoreOptionsFlick: NuclearFlick?
     @State private var selectedSound: FlickMusicTrack?
@@ -299,17 +300,51 @@ struct FlicksView: View {
             }
             
             // 🔥 Tap layer UNDER the overlay so buttons receive taps first (like, comment, share, etc.)
-            UIKitFlicksGestureLayer(
-                onSingleTap: {
-                    NotificationCenter.default.post(name: NSNotification.Name("TogglePlayPause_\(flick.id)"), object: nil)
-                },
-                onDoubleTap: {
-                    handleDoubleTap(flick: flick)
-                },
-                onLongPressBegan: {
-                    impactMedium.impactOccurred()
+            // 🐛 FIX: This full-screen UIKit view was swallowing every touch — including drags on
+            // the scrubber (progress bar) rendered inside NuclearVideoPlayerView underneath it, so
+            // the scrubber was visible but completely non-interactive. Reserve a bottom strip here
+            // (matching FlicksLayout.scrubberBottomPadding) so those touches fall through to the
+            // scrubber's own SwiftUI DragGesture instead of being consumed by this tap catcher.
+            VStack(spacing: 0) {
+                UIKitFlicksGestureLayer(
+                    onSingleTap: {
+                        NotificationCenter.default.post(name: NSNotification.Name("TogglePlayPause_\(flick.id)"), object: nil)
+                    },
+                    onDoubleTap: {
+                        handleDoubleTap(flick: flick)
+                    },
+                    onLongPressBegan: {
+                        impactMedium.impactOccurred()
+                        NotificationCenter.default.post(name: NSNotification.Name("SetFlickRate_\(flick.id)"), object: NSNumber(value: 2.0))
+                        withAnimation(.easeOut(duration: 0.15)) { showSpeedBoost = true }
+                    },
+                    onLongPressEnded: {
+                        NotificationCenter.default.post(name: NSNotification.Name("SetFlickRate_\(flick.id)"), object: NSNumber(value: 0))
+                        withAnimation(.easeOut(duration: 0.15)) { showSpeedBoost = false }
+                    }
+                )
+                Color.clear
+                    .frame(height: FlicksLayout.scrubberHitZoneHeight)
+                    .allowsHitTesting(false)
+            }
+
+            // Hold-to-2x indicator
+            if showSpeedBoost {
+                VStack {
+                    HStack(spacing: 4) {
+                        Image(systemName: "forward.fill")
+                        Text("2x").font(.system(size: 14, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.black.opacity(0.6)))
+                    .padding(.top, 60)
+                    Spacer()
                 }
-            )
+                .transition(.opacity)
+                .allowsHitTesting(false)
+            }
             
             // UI Overlay on top so all buttons are clickable; tap-to-hide is inside overlay on video area only
             if showUI {
@@ -579,11 +614,11 @@ struct FlicksView: View {
             
             // Save button
             actionButton(
-                icon: savedVideoIds.contains(flick.id) ? "bookmark.fill" : "bookmark",
+                icon: viewModel.isSaved(flickId: flick.id) ? "bookmark.fill" : "bookmark",
                 count: "Save",
-                color: savedVideoIds.contains(flick.id) ? .yellow : .white
+                color: viewModel.isSaved(flickId: flick.id) ? .yellow : .white
             ) {
-                toggleSave(flick: flick)
+                viewModel.toggleSave(flick: flick)
                 impactMedium.impactOccurred()
             }
             
@@ -1294,7 +1329,9 @@ struct FlicksView: View {
                 
                 // Creator videos
                 ScrollView {
-                    let creatorVideos = viewModel.flicks.filter { $0.creator.id == viewModel.flicks[currentIndex].creator.id }
+                    let creatorVideos = viewModel.flicks[safe: currentIndex].map { current in
+                        viewModel.flicks.filter { $0.creator.id == current.creator.id }
+                    } ?? []
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         ForEach(creatorVideos) { flick in
                             VStack(spacing: 8) {
@@ -1336,15 +1373,7 @@ struct FlicksView: View {
         .presentationDragIndicator(.visible)
     }
     
-    private func toggleSave(flick: NuclearFlick) {
-        if savedVideoIds.contains(flick.id) {
-            savedVideoIds.remove(flick.id)
-        } else {
-            savedVideoIds.insert(flick.id)
-            notificationFeedback.notificationOccurred(.success)
-        }
-    }
-    
+
     // MARK: - Speed Picker Sheet
     private var speedPickerSheet: some View {
         NavigationStack {
@@ -1503,7 +1532,7 @@ struct FlicksView: View {
     }
     
     private func handleFlickDisappear(index: Int) {
-        if index == currentIndex, let startTime = videoStartTime {
+        if index == currentIndex, index < viewModel.flicks.count, let startTime = videoStartTime {
             let watchTime = Date().timeIntervalSince(startTime)
             let flickId = viewModel.flicks[index].id
             watchTimeByVideo[flickId, default: 0] += watchTime

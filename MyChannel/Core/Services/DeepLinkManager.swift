@@ -30,7 +30,7 @@ final class DeepLinkManager: ObservableObject {
             DeepLinkRoute(id: "live", pattern: "/live/*", destination: "LiveStreamView", requiresAuth: false, priority: 15),
             DeepLinkRoute(id: "playlist", pattern: "/playlist/*", destination: "PlaylistDetailView", requiresAuth: false, priority: 8),
             DeepLinkRoute(id: "flicks", pattern: "/flicks", destination: "FlicksView", requiresAuth: false, priority: 5),
-            DeepLinkRoute(id: "studio", pattern: "/studio", destination: "CreatorStudioView", requiresAuth: true, priority: 20),
+            DeepLinkRoute(id: "studio", pattern: "/studio", destination: "ComprehensiveCreatorStudioView", requiresAuth: true, priority: 20),
             DeepLinkRoute(id: "settings", pattern: "/settings", destination: "SettingsView", requiresAuth: true, priority: 20),
             DeepLinkRoute(id: "search", pattern: "/search/*", destination: "SearchView", requiresAuth: false, priority: 8)
         ]

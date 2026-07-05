@@ -356,8 +356,12 @@ struct MovieDetailView: View {
         Button(action: playAction) {
             let isDirect = MoviePlaybackResolver.directPlayableURL(for: movie) != nil
             let title: String = {
-                if !isDirect { return "Play Trailer" }
-                return resumeProgress > 0.05 ? "Resume" : "Play Now"
+                if isDirect { return resumeProgress > 0.05 ? "Resume" : "Play Now" }
+                if movie.trailerURL != nil { return "Play Trailer" }
+                if MoviePlaybackResolver.externalWatchURL(for: movie) != nil {
+                    return "Watch on \(movie.streamingSource.displayName)"
+                }
+                return "Play Trailer"
             }()
             let icon = "play.fill"
             VStack(spacing: 0) {
@@ -632,15 +636,14 @@ struct MovieDetailView: View {
             // Firebase: log that the user started this movie (history + analytics).
             appState.addToHistory(video: directVideo, progress: resumeProgress, position: 0)
             showPlayer = true
+        } else if movie.trailerURL != nil {
+            // No direct/legal full stream — play the trailer in-app.
+            showTrailerPlayer = true
+        } else if let watchURL = MoviePlaybackResolver.externalWatchURL(for: movie) {
+            // Remote catalog "where to watch" provider link — open externally.
+            UIApplication.shared.open(watchURL)
         } else {
-            // Prefer in-app trailer playback
-            if movie.trailerURL != nil {
-                showTrailerPlayer = true
-            } else if URL(string: movie.streamURL) != nil {
-                showUnavailableAlert = true
-            } else {
-                showUnavailableAlert = true
-            }
+            showUnavailableAlert = true
         }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }

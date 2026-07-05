@@ -6,6 +6,52 @@ import { createClient } from '@supabase/supabase-js';
 import ffmpeg from 'fluent-ffmpeg';
 import path from 'path';
 import fs from 'fs/promises';
+import admin from 'firebase-admin';
+import jwt from 'jsonwebtoken';
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || '';
+
+type AuthenticatedUser = {
+  userId: string;
+  email: string | null;
+};
+
+// Accepts either a Firebase ID token (end users) or an internal JWT signed with
+// JWT_SECRET (service-to-service callers). Mirrors services/upload + services/ingest.
+async function verifyUser(authHeader: string | undefined): Promise<AuthenticatedUser | null> {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7).trim();
+  if (!token) return null;
+
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    return { userId: decoded.uid, email: decoded.email || null };
+  } catch {}
+
+  if (!JWT_SECRET) return null;
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const userId = String(decoded.userId || decoded.uid || '').trim();
+    if (!userId) return null;
+    return { userId, email: decoded.email || null };
+  } catch {
+    return null;
+  }
+}
+
+async function requireUser(req: any, res: any): Promise<AuthenticatedUser | null> {
+  const user = await verifyUser(req.headers.authorization);
+  if (!user) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return null;
+  }
+  return user;
+}
 
 const app = express();
 const storage = new Storage();
@@ -49,6 +95,9 @@ const QUALITY_PRESETS = {
 // Pub/Sub push endpoint (for tests) or manual trigger
 app.post('/v1/transcode/ingest', async (req, res) => {
   try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
     const { videoId, inputPath, qualities = ['360p', '720p', '1080p'] } = req.body;
 
     if (!videoId || !inputPath) {
@@ -103,6 +152,9 @@ app.post('/v1/transcode/ingest', async (req, res) => {
 // Start transcoding job
 app.post('/v1/transcode/start', async (req, res) => {
   try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
     const { videoId, inputPath, qualities = ['360p', '720p', '1080p'] } = req.body;
 
     if (!videoId || !inputPath) {
@@ -157,6 +209,9 @@ app.post('/v1/transcode/start', async (req, res) => {
 // Get transcoding status
 app.get('/v1/transcode/status/:videoId', async (req, res) => {
   try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
     const { videoId } = req.params;
 
     const { data: video, error } = await supabase

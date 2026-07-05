@@ -1,6 +1,9 @@
 // ⚡ PERFORMANCE: Canvas views extracted from MusicFeatures.swift.
 import SwiftUI
 import AVFoundation
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 //
 //  MusicFeatures.swift
@@ -1203,16 +1206,9 @@ struct KaraokeModeView: View {
     @State private var vocalLevel: Double = 0.2 // 0 = no vocals, 1 = full vocals
     @State private var isPlaying: Bool = false
     @State private var currentLyricIndex: Int = 0
+    @State private var lyrics: [String] = []
+    @State private var isLoadingLyrics: Bool = true
     @Environment(\.dismiss) private var dismiss
-    
-    let sampleLyrics: [String] = [
-        "Yeah, yeah",
-        "Flint city, 810",
-        "We came from nothing",
-        "Now we running everything",
-        "Shout out to the whole gang",
-        "We been grinding all day"
-    ]
     
     var body: some View {
         ZStack {
@@ -1252,12 +1248,20 @@ struct KaraokeModeView: View {
                 
                 // Lyrics display
                 VStack(spacing: 16) {
-                    ForEach(Array(sampleLyrics.enumerated()), id: \.offset) { index, lyric in
-                        Text(lyric)
-                            .font(.system(size: index == currentLyricIndex ? 32 : 24, weight: .bold))
-                            .foregroundColor(index == currentLyricIndex ? .white : .white.opacity(0.3))
-                            .scaleEffect(index == currentLyricIndex ? 1.05 : 1.0)
-                            .animation(.spring(response: 0.3), value: currentLyricIndex)
+                    if isLoadingLyrics {
+                        ProgressView().tint(.white)
+                    } else if lyrics.isEmpty {
+                        Text("Lyrics not available")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.5))
+                    } else {
+                        ForEach(Array(lyrics.enumerated()), id: \.offset) { index, lyric in
+                            Text(lyric)
+                                .font(.system(size: index == currentLyricIndex ? 32 : 24, weight: .bold))
+                                .foregroundColor(index == currentLyricIndex ? .white : .white.opacity(0.3))
+                                .scaleEffect(index == currentLyricIndex ? 1.05 : 1.0)
+                                .animation(.spring(response: 0.3), value: currentLyricIndex)
+                        }
                     }
                 }
                 .padding(.horizontal, 30)
@@ -1305,16 +1309,41 @@ struct KaraokeModeView: View {
                 .padding(.bottom, 40)
             }
         }
+        .task { await loadLyrics() }
     }
-    
+
+    private func loadLyrics() async {
+        let fetched = await Self.fetchLyrics(trackId: track.id)
+        await MainActor.run {
+            lyrics = fetched
+            isLoadingLyrics = false
+        }
+    }
+
+    private static func fetchLyrics(trackId: String) async -> [String] {
+        #if canImport(FirebaseFirestore)
+        let db = Firestore.firestore()
+        guard
+            let snap = try? await db.collection("music_tracks").document(trackId).getDocument(),
+            let raw = snap.data()?["lyrics"] as? String
+        else { return [] }
+        return raw
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        #else
+        return []
+        #endif
+    }
+
     private func startKaraoke() {
         Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { timer in
-            if !isPlaying {
+            if !isPlaying || lyrics.isEmpty {
                 timer.invalidate()
                 return
             }
             withAnimation {
-                currentLyricIndex = (currentLyricIndex + 1) % sampleLyrics.count
+                currentLyricIndex = (currentLyricIndex + 1) % lyrics.count
             }
         }
     }

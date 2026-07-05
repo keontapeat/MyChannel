@@ -24,9 +24,9 @@ enum TabItem: String, CaseIterable, Hashable {
     func iconName(isSelected: Bool) -> String {
         switch self {
         case .home:          return isSelected ? "house.fill" : "house"
-        case .flicks:        return isSelected ? "play.rectangle.fill" : "play.rectangle"
+        case .flicks:        return isSelected ? "play.rectangle.on.rectangle.fill" : "play.rectangle.on.rectangle"
         case .upload:        return "plus.circle.fill"
-        case .subscriptions: return isSelected ? "bell.fill" : "bell"
+        case .subscriptions: return "person.fill.checkmark"
         case .search:        return isSelected ? "magnifyingglass.circle.fill" : "magnifyingglass"
         case .profile:       return isSelected ? "person.fill" : "person"
         }

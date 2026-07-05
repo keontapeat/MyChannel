@@ -26,6 +26,97 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // Platform fee percentage (10%)
 const PLATFORM_FEE_PERCENT = 0.10;
 
+// ⚖️ WAGER POLICY — server-side source of truth. Mirrors the iOS WagerPolicy /
+// VSMatchComplianceService so the client gate cannot be bypassed by a modified
+// app. Client checks are UX only; THIS is authoritative for money.
+const WAGER_POLICY = {
+  minimumAge: 18,
+  kycRequiredAboveDollars: 500,
+  // Per-account-tier daily wager limit (USD). Must match WagerPolicy.dailyLimitDollars.
+  dailyLimitDollars: { new: 100, verified: 1000, premium: 10000, vip: 100000 },
+  // US states + DC where skill-based real-money play is offered.
+  allowedRegions: new Set([
+    'US-CA', 'US-NY', 'US-TX', 'US-FL', 'US-IL', 'US-PA', 'US-OH',
+    'US-GA', 'US-NC', 'US-MI', 'US-NJ', 'US-VA', 'US-WA', 'US-AZ',
+    'US-MA', 'US-TN', 'US-IN', 'US-MO', 'US-MD', 'US-WI', 'US-CO',
+    'US-MN', 'US-SC', 'US-AL', 'US-LA', 'US-KY', 'US-OR', 'US-OK',
+    'US-CT', 'US-IA', 'US-UT', 'US-AR', 'US-NV', 'US-MS', 'US-KS',
+    'US-NM', 'US-NE', 'US-WV', 'US-ID', 'US-HI', 'US-NH', 'US-ME',
+    'US-RI', 'US-MT', 'US-DE', 'US-SD', 'US-ND', 'US-AK', 'US-DC',
+    'US-VT', 'US-WY',
+  ]),
+};
+
+/**
+ * 🔒 SERVER-SIDE COMPLIANCE GATE for real-money match wagers.
+ * Mirrors VSMatchComplianceService.canUserWager. Throws a 403 (with a combined
+ * reason) if the authenticated user is not eligible to wager `amountCents`.
+ * Enforced BEFORE any PaymentIntent is created, so funds are never held for an
+ * ineligible user even if the client skipped its own gate.
+ */
+async function assertWagerCompliance(uid, amountCents) {
+  const amountDollars = amountCents / 100;
+  const reasons = [];
+
+  // Compliance profile (age / KYC / terms) + user profile (region / status / tier).
+  const [complianceSnap, userSnap] = await Promise.all([
+    db.collection('vs_match_compliance').doc(uid).get(),
+    db.collection('users').doc(uid).get(),
+  ]);
+  const compliance = complianceSnap.exists ? complianceSnap.data() : {};
+  const user = userSnap.exists ? userSnap.data() : {};
+
+  // 1. Age (18+). Require the verified flag; also re-check stored age if present.
+  const ageOK = compliance.ageVerified === true &&
+    (typeof compliance.age !== 'number' || compliance.age >= WAGER_POLICY.minimumAge);
+  if (!ageOK) reasons.push('Age verification required (18+)');
+
+  // 2. KYC for wagers over $500.
+  if (amountDollars > WAGER_POLICY.kycRequiredAboveDollars && compliance.kycStatus !== 'approved') {
+    reasons.push('KYC verification required for wagers over $500');
+  }
+
+  // 3. Terms of Service acceptance.
+  if (compliance.termsAccepted !== true) {
+    reasons.push('Terms of Service must be accepted');
+  }
+
+  // 4. Region allowlist. Mirror the client default (US-CA) when unset so the two
+  //    layers agree; region should ideally come from a verified geo/KYC signal.
+  const region = user.region || 'US-CA';
+  if (!WAGER_POLICY.allowedRegions.has(region)) {
+    reasons.push('Real-money wagering is not available in your region');
+  }
+
+  // 5. Account status.
+  const accountStatus = user.accountStatus || 'active';
+  if (accountStatus !== 'active') {
+    reasons.push('Account is not active for wagering');
+  }
+
+  // 6. Daily wager limit (sum of today's prior wagers + this one <= tier limit).
+  const tier = user.accountTier || 'new';
+  const dailyLimit = WAGER_POLICY.dailyLimitDollars[tier] ?? WAGER_POLICY.dailyLimitDollars.new;
+  const startOfDay = new Date();
+  startOfDay.setUTCHours(0, 0, 0, 0);
+  const wagerSnap = await db.collection('vs_match_transactions')
+    .where('userId', '==', uid)
+    .where('type', '==', 'wager')
+    .where('createdAt', '>', admin.firestore.Timestamp.fromDate(startOfDay))
+    .get();
+  let wageredTodayUSD = 0;
+  wagerSnap.forEach((d) => { wageredTodayUSD += Number(d.data().amount) || 0; });
+  if (wageredTodayUSD + amountDollars > dailyLimit) {
+    reasons.push('Daily wager limit exceeded');
+  }
+
+  if (reasons.length > 0) {
+    const err = new Error(`Not eligible to wager: ${reasons.join('; ')}`);
+    err.status = 403;
+    throw err;
+  }
+}
+
 // 🔒 Strict CORS allowlist — never reflect arbitrary origins on money endpoints.
 const ALLOWED_ORIGINS = new Set([
   'https://mychannel.live',
@@ -161,6 +252,12 @@ async function handleCreateEscrowPayment(req, res) {
     if (!isAdmin(decoded) && !participants.includes(decoded.uid)) {
       return res.status(403).json({ error: 'You are not a participant in this match' });
     }
+
+    // 🔒 COMPLIANCE GATE (server-authoritative). Mirrors the iOS gate: 18+, KYC
+    // for $500+, terms, region, account status, and daily limit. Enforced here
+    // so a modified client can never hold funds for an ineligible wager.
+    // Throws 403 with a combined reason on failure.
+    await assertWagerCompliance(decoded.uid, amount);
   }
 
   // 🔐 Resolve the Stripe customer SERVER-SIDE from the authenticated uid. We
@@ -206,6 +303,21 @@ async function handleCreateEscrowPayment(req, res) {
     status: 'requires_capture',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+
+  // 📋 Compliance: for real-money match wagers, record a 'wager' transaction so the
+  // per-user daily wager limit can be enforced. VSMatchComplianceService.getDailyWagerAmount
+  // sums vs_match_transactions where userId==uid, type=='wager', createdAt>startOfDay, and
+  // reads `amount` in DOLLARS. Without this record the daily limit always summed to $0.
+  if (!isWalletDeposit) {
+    await db.collection('vs_match_transactions').add({
+      userId: decoded.uid,
+      type: 'wager',
+      amount: amount / 100, // dollars, to match the limit reader
+      matchId: matchId,
+      paymentIntentId: paymentIntent.id,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
 
   console.log(`✅ PaymentIntent created: ${paymentIntent.id}`);
 
@@ -417,6 +529,17 @@ async function handleCreateTransfer(req, res) {
     amount: platformFee,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+
+  // 🏆 Update player stats + championship points SERVER-SIDE. These were
+  // previously client-writable and therefore forgeable. This runs exactly once
+  // per match (guarded above by the payoutTransferId single-settle check).
+  // Best-effort: a stats failure must not fail the (already-completed) payout.
+  try {
+    const loserId = participants.find((p) => p !== winnerId) || null;
+    await settleMatchStats({ matchId, winnerId, loserId, escrowQuery, transferAmount, platformFee });
+  } catch (statsErr) {
+    console.error(`⚠️ Stats settlement failed for match ${matchId} (payout already sent):`, statsErr.message);
+  }
 
   console.log(`✅ Transfer created: ${transfer.id} ($${transferAmount/100} after $${platformFee/100} fee)`);
 
@@ -699,6 +822,56 @@ async function creditWallet(userId, amountCents, kind, sourceId) {
     });
   });
   console.log(`✅ Credited $${amountUSD} to wallet ${userId} (${kind})`);
+}
+
+/**
+ * 🏆 Server-authoritative match stats settlement. Writes win/loss records,
+ * net earnings, and championship points from the VERIFIED match outcome and the
+ * captured escrow legs — never from client input. Amounts are stored in dollars
+ * to match the existing readers (player_stats.totalEarnings, etc.).
+ */
+async function settleMatchStats({ matchId, winnerId, loserId, escrowQuery, transferAmount, platformFee }) {
+  // Per-user captured stake (cents) from the escrow legs.
+  const stakeByUser = {};
+  escrowQuery.forEach((d) => {
+    const row = d.data();
+    if (row.userId) stakeByUser[row.userId] = (stakeByUser[row.userId] || 0) + (Number(row.amount) || 0);
+  });
+
+  const winnerStakeCents = stakeByUser[winnerId] || 0;
+  const loserStakeCents = loserId
+    ? (stakeByUser[loserId] || 0)
+    : Math.max(0, (transferAmount + platformFee) - winnerStakeCents);
+  // Net profit for the winner = what they received minus what they staked.
+  const winnerProfitUSD = Math.max(0, (transferAmount - winnerStakeCents)) / 100;
+  const loserLossUSD = loserStakeCents / 100;
+  // Championship points: 100 base + 1 point per $10 wagered (winner's stake).
+  const points = 100 + Math.floor((winnerStakeCents / 100) / 10);
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const inc = admin.firestore.FieldValue.increment;
+
+  const batch = db.batch();
+  batch.set(db.collection('player_stats').doc(winnerId), {
+    wins: inc(1),
+    totalEarnings: inc(winnerProfitUSD),
+    lastMatchDate: now,
+  }, { merge: true });
+
+  if (loserId) {
+    batch.set(db.collection('player_stats').doc(loserId), {
+      losses: inc(1),
+      totalLosses: inc(loserLossUSD),
+      lastMatchDate: now,
+    }, { merge: true });
+  }
+
+  batch.set(db.collection('championship_rankings').doc(winnerId), {
+    points: inc(points),
+    lastWin: now,
+  }, { merge: true });
+
+  await batch.commit();
+  console.log(`🏆 Settled stats for match ${matchId}: winner +${points} pts, +$${winnerProfitUSD}`);
 }
 
 // Webhook handlers

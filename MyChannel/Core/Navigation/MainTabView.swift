@@ -55,7 +55,83 @@ struct MainTabView: View {
     @State private var showingCreatorStudio: Bool = false
     @State private var videoIdForStudio: String?
 
+    // MARK: - Body (split into small @ViewBuilder vars to avoid stack overflow)
+    // The Swift compiler builds a single stack frame per @ViewBuilder getter.
+    // A monolithic body with 20+ chained modifiers produces a frame > 512KB on
+    // arm64, hitting the main-thread stack guard page → EXC_BAD_ACCESS crash.
+    // Splitting into sub-views keeps each frame well under the limit.
+
     var body: some View {
+        rootZStack
+            .modifier(LifecycleModifiers(
+                onAppearAction: { setupInitialState(); deferredInboxFetch() },
+                onDisappearAction: cleanup,
+                authUser: authManager.currentUser,
+                onAuthUserChange: handleAuthUserChange,
+                unreadCount: inbox.unreadCount,
+                onUnreadChange: updateProfileBadge
+            ))
+            .modifier(TabNavigationReceivers(
+                selectedTab: $selectedTab,
+                showingUpload: $showingUpload,
+                historyVideoToOpen: $historyVideoToOpen,
+                globalPlayer: globalPlayer
+            ))
+            .ignoresSafeArea(.keyboard)
+            .modifier(AccountAndHistoryReceivers(
+                presentAccountSwitcher: $presentAccountSwitcher,
+                presentGoogleAccount: $presentGoogleAccount,
+                presentSignInSheet: $presentSignInSheet,
+                presentFullHistory: $presentFullHistory,
+                presentHistoryManagement: $presentHistoryManagement,
+                historyVideoToOpen: $historyVideoToOpen,
+                historyLiveTVToOpen: $historyLiveTVToOpen,
+                historyCreatorToOpen: $historyCreatorToOpen,
+                appState: appState
+            ))
+            .modifier(DeepNavigationReceivers(
+                historyVideoToOpen: $historyVideoToOpen,
+                presentGlobalNowPlaying: $presentGlobalNowPlaying,
+                presentNotificationsInbox: $presentNotificationsInbox,
+                showingCreatorStudio: $showingCreatorStudio,
+                videoIdForStudio: $videoIdForStudio
+            ))
+            .modifier(PresentationModifiers(
+                showingCreatorStudio: $showingCreatorStudio,
+                videoIdForStudio: videoIdForStudio,
+                presentAccountSwitcher: $presentAccountSwitcher,
+                presentGoogleAccount: $presentGoogleAccount,
+                presentSignInSheet: $presentSignInSheet,
+                presentFullHistory: $presentFullHistory,
+                presentHistoryManagement: $presentHistoryManagement,
+                presentGlobalNowPlaying: $presentGlobalNowPlaying,
+                presentNotificationsInbox: $presentNotificationsInbox,
+                historyVideoToOpen: $historyVideoToOpen,
+                historyLiveTVToOpen: $historyLiveTVToOpen,
+                historyCreatorToOpen: $historyCreatorToOpen,
+                showAuthGate: $showAuthGate,
+                selectedTab: $selectedTab,
+                authManager: authManager,
+                appState: appState
+            ))
+            .onChange(of: authManager.isAuthenticated) { isAuth in
+                if isAuth {
+                    if showAuthGate { showAuthGate = false }
+                    if presentSignInSheet { presentSignInSheet = false }
+                }
+            }
+            .onChange(of: selectedTab) { newTab in
+                handleSelectedTabChange(newTab)
+            }
+            .onChange(of: scenePhase) { newPhase in
+                handleScenePhaseChange(newPhase)
+            }
+    }
+
+    // MARK: - Root ZStack (content selection)
+
+    @ViewBuilder
+    private var rootZStack: some View {
         ZStack {
             if authManager.authState == .banned {
                 AccountBlockedView(
@@ -77,213 +153,19 @@ struct MainTabView: View {
                 errorView
             } else {
                 mainContent
-                    // 🔥 Native iOS PiP ONLY: Custom mini player removed, using native PiP everywhere
             }
         }
-        .onAppear {
-            setupInitialState()
-            
-            // Delay inbox fetch slightly to avoid blocking launch
-            Task {
-                try? await Task.sleep(nanoseconds: 500_000_000)
-                if let uid = authManager.currentUser?.id {
-                    try? await inbox.fetchNotifications(userId: uid)
-                    print("📨 [MainTabView] Started inbox listener for user: \(uid)")
-                }
-            }
-        }
-        .onChange(of: authManager.currentUser) { newValue in
-            handleAuthUserChange(newValue)
-        }
-        .onDisappear {
-            cleanup()
-        }
-        .onChange(of: inbox.unreadCount) { unread in
-            updateProfileBadge(unread)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToHomeTab"))) { _ in
-            selectedTab = .home
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToSearchTab"))) { _ in
-            selectedTab = .search
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToProfileTab"))) { _ in
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                selectedTab = .profile
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowUpload"))) { _ in
-            showingUpload = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .scrollToTopProfile)) { _ in
-            // Handle scroll to top for profile
-        }
-        // 🔥 Native PiP: User tapped PiP window - expand to fullscreen
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PresentVideoDetail"))) { notification in
-            print("📺 [MainTabView] Received PresentVideoDetail - opening fullscreen")
-            if let video = notification.object as? Video {
-                historyVideoToOpen = video
-            } else if let video = globalPlayer.currentVideo {
-                historyVideoToOpen = video
-            }
-        }
-        .ignoresSafeArea(.keyboard)
+    }
 
-        .onReceive(NotificationCenter.default.publisher(for: .navigateToAccountSwitcher)) { _ in
-            presentAccountSwitcher = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openGoogleAccount)) { _ in
-            presentGoogleAccount = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .presentSignInSheet)) { _ in
-            presentSignInSheet = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openFullHistory)) { _ in
-            if appState.requireAuthentication(hint: "Sign in to view your watch history.") {
-                presentFullHistory = true
+    // MARK: - Deferred Inbox Fetch
+
+    private func deferredInboxFetch() {
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if let uid = authManager.currentUser?.id {
+                try? await inbox.fetchNotifications(userId: uid)
+                print("📨 [MainTabView] Started inbox listener for user: \(uid)")
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenHistoryManagement"))) { _ in
-            if appState.requireAuthentication(hint: "Sign in to manage your watch history.") {
-                presentHistoryManagement = true
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("OpenVideoEditor"))) { note in
-            if let video = note.object as? Video {
-                // Reuse UploadView in edit mode by preloading the video URL and jumping to the details step
-                // We signal via AppState and a dedicated notification to keep coupling low
-                NotificationCenter.default.post(name: Notification.Name("PresentUploadEditorForVideo"), object: video)
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openVideoFromHistory)) { note in
-            if let video = note.object as? Video {
-                historyVideoToOpen = video
-            }
-        }
-        // 🔥 PARITY FIX: History items for Live TV / Stories / Posts previously posted
-        // notifications that had no observer, so tapping them did nothing. Wire them up.
-        .onReceive(NotificationCenter.default.publisher(for: .openLiveTVFromHistory)) { note in
-            guard let item = note.object as? WatchHistoryItem else { return }
-            let channels = LiveTVManager.shared.channels.isEmpty ? LiveTVChannel.sampleChannels : LiveTVManager.shared.channels
-            if let channel = channels.first(where: { $0.id == item.contentId }) {
-                historyLiveTVToOpen = channel
-            } else {
-                NotificationCenter.default.post(name: NSNotification.Name("SwitchToHomeTab"), object: nil)
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openStoryFromHistory)) { note in
-            guard let item = note.object as? WatchHistoryItem else { return }
-            Task {
-                let creator = try? await UserFirestoreService.shared.fetchUser(id: item.creatorId)
-                await MainActor.run {
-                    if let creator { historyCreatorToOpen = creator }
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("openPostFromHistory"))) { note in
-            guard let item = note.object as? WatchHistoryItem else { return }
-            Task {
-                let creator = try? await UserFirestoreService.shared.fetchUser(id: item.creatorId)
-                await MainActor.run {
-                    if let creator { historyCreatorToOpen = creator }
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToVideo"))) { notification in
-            if let video = notification.object as? Video {
-                // Open video directly to play it
-                historyVideoToOpen = video
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PresentGlobalNowPlayingSheet"))) { _ in
-            presentGlobalNowPlaying = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PresentNotificationsInbox"))) { _ in
-            presentNotificationsInbox = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenVideoAnalytics"))) { notification in
-            if let video = notification.object as? Video {
-                // Open Creator Studio focused on this video's analytics
-                videoIdForStudio = video.id
-                showingCreatorStudio = true
-            }
-        }
-        .fullScreenCover(isPresented: $showingCreatorStudio) {
-            ComprehensiveCreatorStudioView(videoId: videoIdForStudio)
-                .environmentObject(authManager)
-                .environmentObject(appState)
-        }
-        // Remove global auth flow listener to prevent unintended popups
-        .sheet(isPresented: $presentAccountSwitcher) {
-            AccountSwitcherView()
-        }
-        .sheet(isPresented: $presentGoogleAccount) { GoogleAccountView() }
-        .sheet(isPresented: $presentSignInSheet) { SignInSheetView() }
-        .fullScreenCover(isPresented: $presentFullHistory) {
-            WatchHistoryView()
-        }
-        .sheet(isPresented: $presentHistoryManagement) {
-            HistoryManagementView()
-                .environmentObject(appState)
-        }
-        .sheet(isPresented: $presentGlobalNowPlaying) {
-            NowPlayingSheet()
-        }
-        .fullScreenCover(isPresented: $presentNotificationsInbox) {
-            NotificationsInboxView()
-        }
-        .fullScreenCover(item: $historyVideoToOpen) { video in
-            VideoDetailView(video: video)
-        }
-        .fullScreenCover(item: $historyLiveTVToOpen) { channel in
-            LiveTVPlayerView(channel: channel)
-                .environmentObject(appState)
-        }
-        .fullScreenCover(item: $historyCreatorToOpen) { creator in
-            NavigationStack {
-                PublicProfileView(user: creator)
-                    .environmentObject(authManager)
-                    .environmentObject(appState)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button {
-                                historyCreatorToOpen = nil
-                            } label: {
-                                Image(systemName: "xmark")
-                            }
-                        }
-                    }
-            }
-        }
-        // Auth gate: if user selects profile while unauthenticated
-        .fullScreenCover(isPresented: $showAuthGate, onDismiss: {
-            if authManager.isAuthenticated {
-                selectedTab = .profile
-            } else {
-                selectedTab = .home
-            }
-        }) {
-            AuthenticationView()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .userDidLogin)) { _ in
-            if showAuthGate { showAuthGate = false }
-            if presentSignInSheet { presentSignInSheet = false }
-        }
-        // 🔥 FIX 2.1(a): Dismiss ALL auth UI when sign-in succeeds (belt-and-suspenders)
-        .onChange(of: authManager.isAuthenticated) { isAuth in
-            if isAuth {
-                if showAuthGate { showAuthGate = false }
-                if presentSignInSheet { presentSignInSheet = false }
-            }
-        }
-        // Ensure mini-player pauses on Flicks, resumes otherwise (covers programmatic tab changes too)
-        .onChange(of: selectedTab) { newTab in
-            handleSelectedTabChange(newTab)
-        }
-        // 🔥 AUTO PiP logging: GlobalVideoPlayerManager handles the transitions
-        .onChange(of: scenePhase) { newPhase in
-            handleScenePhaseChange(newPhase)
         }
     }
     
@@ -336,6 +218,11 @@ struct MainTabView: View {
                         }
                         .zIndex(999)
                     }
+
+                    // 🔥 MINI PLAYER: Custom YouTube-style PiP mini player (ONLY mini player allowed).
+                    // FloatingMiniPlayer is free-floating and manages its own zIndex/positioning —
+                    // never swap this for VideoMiniPlayerBar (the long rectangular bar variant).
+                    FloatingMiniPlayer()
                 }
             }
             .ignoresSafeArea(.keyboard)
@@ -366,12 +253,12 @@ struct MainTabView: View {
                     .safeAreaInset(edge: .bottom) {
                         // Flicks tab is fullscreen - no inset needed, overlay handles its own bottom clearance
                         if selectedTab != .flicks {
-                            VStack(spacing: 8) {
+                            VStack(spacing: 0) {
                                 // Show audio bar when not in fullscreen (PiP doesn't affect layout)
                                 if !globalPlayer.showingFullscreen {
                                     GlobalNowPlayingBar()
                                 }
-                                // Reserve tab bar space (no mini player padding needed - native PiP floats)
+                                // Reserve tab bar space
                                 Color.clear.frame(height: tabBarReservedBottomInset)
                             }
                         }
@@ -397,9 +284,11 @@ struct MainTabView: View {
                 .zIndex(999)
                 .allowsHitTesting(true)
 
-                // Native iOS PiP replaces the custom mini player bar.
-                // When user swipes down or backgrounds the app, the system PiP
-                // floating window appears automatically — no custom overlay needed.
+                // 🔥 MINI PLAYER: Custom YouTube-style PiP mini player (ONLY mini player allowed).
+                // Appears when a video is playing but VideoDetailView is dismissed.
+                // Free-floating, draggable, swipe to dismiss/expand — never swap this for
+                // VideoMiniPlayerBar (the long rectangular bar variant); see file-safety notes.
+                FloatingMiniPlayer()
             }
             .ignoresSafeArea(.keyboard)
             .fullScreenCover(isPresented: $showingUpload) {
@@ -614,7 +503,7 @@ struct iPadSidebar: View {
     
     var body: some View {
         VStack(spacing: 24) {
-            ForEach([TabItem.home, .flicks, .upload, .search, .profile], id: \.self) { tab in
+            ForEach([TabItem.home, .flicks, .upload, .subscriptions, .search, .profile], id: \.self) { tab in
                 Button {
                     if tab == .upload {
                         onUploadTap()

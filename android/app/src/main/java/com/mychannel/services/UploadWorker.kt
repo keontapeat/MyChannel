@@ -63,6 +63,10 @@ class UploadWorker @AssistedInject constructor(
             .split(",")
             .map { it.trim() }
             .filter { it.isNotEmpty() }
+        val ageRestricted = inputData.getBoolean("ageRestricted", false)
+        val madeForKids = inputData.getBoolean("madeForKids", false)
+        val isPremiere = inputData.getBoolean("isPremiere", false)
+        val scheduledAtMs = inputData.getLong("scheduledAtMs", 0L)
 
         // Deterministic id so the storage object and Firestore doc line up and
         // retries don't create duplicate documents.
@@ -98,7 +102,11 @@ class UploadWorker @AssistedInject constructor(
                 durationSeconds = durationSeconds,
                 tags = tags,
                 category = category,
-                privacy = privacy
+                privacy = privacy,
+                ageRestricted = ageRestricted,
+                madeForKids = madeForKids,
+                isPremiere = isPremiere,
+                scheduledAtMs = scheduledAtMs
             )
 
             Result.success(workDataOf(KEY_VIDEO_ID to videoId))
@@ -164,7 +172,11 @@ class UploadWorker @AssistedInject constructor(
         durationSeconds: Long,
         tags: List<String>,
         category: String,
-        privacy: String
+        privacy: String,
+        ageRestricted: Boolean = false,
+        madeForKids: Boolean = false,
+        isPremiere: Boolean = false,
+        scheduledAtMs: Long = 0L
     ) {
         val isShort = durationSeconds in 1..SHORT_MAX_SECONDS
         val document = hashMapOf(
@@ -186,9 +198,23 @@ class UploadWorker @AssistedInject constructor(
             "isLive" to false,
             "isShort" to isShort,
             "privacyStatus" to privacy,
-            // Cloud Function `onFinalize` advances this to "ready" once processed.
-            "status" to STATUS_PROCESSING
+            "ageRestricted" to ageRestricted,
+            "madeForKids" to madeForKids,
+            "isPremiere" to isPremiere,
+            // `status` is the VISIBILITY field on this collection (matches
+            // `privacyStatus` above / web-v2's upload flow: public/unlisted/
+            // private/scheduled) — NOT the transcode lifecycle. Scheduling a
+            // premiere is a visibility state (video isn't public yet), so it
+            // belongs here. Processing lifecycle ("processing"/"ready"/
+            // "transcode_failed") lives in the separate `processingStatus`
+            // field, written by the backend transcode pipeline
+            // (functions/main.py), never by the client.
+            "status" to if (isPremiere && scheduledAtMs > 0) STATUS_SCHEDULED else privacy,
+            "processingStatus" to STATUS_PROCESSING
         )
+        if (isPremiere && scheduledAtMs > 0) {
+            document["scheduledAt"] = com.google.firebase.Timestamp(scheduledAtMs / 1000, 0)
+        }
         firestore.collection(VIDEOS).document(videoId).set(document).await()
     }
 
@@ -218,6 +244,7 @@ class UploadWorker @AssistedInject constructor(
         const val PRIVACY_PRIVATE = "private"
 
         const val STATUS_PROCESSING = "processing"
+        const val STATUS_SCHEDULED = "scheduled"
 
         private const val VIDEOS = "videos"
         private const val SHORT_MAX_SECONDS = 60L

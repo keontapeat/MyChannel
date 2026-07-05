@@ -373,7 +373,7 @@ struct GamingEsportsView: View {
                         .frame(height: 52)
                         .background(
                             LinearGradient(
-                                colors: [Color(hexString: "#DC143C") ?? .red, Color(hexString: "#8B0000") ?? Color(red: 0.55, green: 0, blue: 0)],
+                                colors: [Color(hexString: "#DC143C"), Color(hexString: "#8B0000")],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -390,7 +390,7 @@ struct GamingEsportsView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(LinearGradient(
-                        colors: [(Color(hexString: "#FFD700") ?? .yellow).opacity(0.5), (Color(hexString: "#DC143C") ?? .red).opacity(0.5)],
+                        colors: [Color(hexString: "#FFD700").opacity(0.5), Color(hexString: "#DC143C").opacity(0.5)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ), lineWidth: 2)
@@ -796,7 +796,7 @@ struct GamingEsportsView: View {
             
             Text(match.formattedWager)
                 .font(.system(size: 18, weight: .bold))
-                .foregroundColor(Color(hexString: "#FFD700") ?? .yellow)
+                .foregroundColor(Color(hexString: "#FFD700"))
         }
     }
     
@@ -1140,9 +1140,9 @@ struct GamingEsportsView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: rank == 1 ? [Color(hexString: "#FFD700") ?? .yellow, Color(hexString: "#FFA500") ?? .orange] :
-                                    rank == 2 ? [Color(hexString: "#C0C0C0") ?? .gray, Color(hexString: "#A8A8A8") ?? .gray] :
-                                    [Color(hexString: "#CD7F32") ?? .brown, Color(hexString: "#8B4513") ?? .brown],
+                            colors: rank == 1 ? [Color(hexString: "#FFD700"), Color(hexString: "#FFA500")] :
+                                    rank == 2 ? [Color(hexString: "#C0C0C0"), Color(hexString: "#A8A8A8")] :
+                                    [Color(hexString: "#CD7F32"), Color(hexString: "#8B4513")],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -1183,9 +1183,9 @@ struct GamingEsportsView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(
-                            (rank == 1 ? (Color(hexString: "#FFD700") ?? .yellow).opacity(0.5) :
-                             rank == 2 ? (Color(hexString: "#C0C0C0") ?? .gray).opacity(0.5) :
-                             (Color(hexString: "#CD7F32") ?? .brown).opacity(0.5)),
+                            (rank == 1 ? Color(hexString: "#FFD700").opacity(0.5) :
+                             rank == 2 ? Color(hexString: "#C0C0C0").opacity(0.5) :
+                             Color(hexString: "#CD7F32").opacity(0.5)),
                             lineWidth: 2
                         )
                 )
@@ -1271,7 +1271,7 @@ struct GamingEsportsView: View {
                     value: viewModel.totalEarnings,
                     prefix: "$",
                     font: .system(size: 42, weight: .black),
-                    color: Color(hexString: "#FFD700") ?? .yellow
+                    color: Color(hexString: "#FFD700")
                 )
             }
             .accessibilityElement(children: .combine)
@@ -1370,7 +1370,7 @@ struct GamingEsportsView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(
                             LinearGradient(
-                                colors: [(Color(hexString: "#FFD700") ?? .yellow).opacity(0.3), (Color(hexString: "#DC143C") ?? .red).opacity(0.3)],
+                                colors: [Color(hexString: "#FFD700").opacity(0.3), Color(hexString: "#DC143C").opacity(0.3)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -1385,7 +1385,7 @@ struct GamingEsportsView: View {
             GridItem(.flexible()),
             GridItem(.flexible())
         ], spacing: 12) {
-            statCard(title: "Tournaments Won", value: "\(viewModel.tournamentsWon)", icon: "trophy.fill", color: Color(hexString: "#FFD700") ?? .yellow)
+            statCard(title: "Tournaments Won", value: "\(viewModel.tournamentsWon)", icon: "trophy.fill", color: Color(hexString: "#FFD700"))
             statCard(title: "VS Wins", value: "\(viewModel.vsWins)", icon: "flag.checkered", color: AppTheme.Colors.primary)
             statCard(title: "Win Rate", value: "\(viewModel.winRate)%", icon: "chart.line.uptrend.xyaxis", color: Color.green)
             statCard(title: "Total Matches", value: "\(viewModel.totalMatches)", icon: "gamecontroller.fill", color: Color.blue)

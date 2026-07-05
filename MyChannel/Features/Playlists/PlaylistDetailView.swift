@@ -47,7 +47,12 @@ struct PlaylistDetailView: View {
                     Button("Change Thumbnail") { pickingThumb = true }
                     
                     Button("Share Playlist") {
-                        // TODO: Share functionality
+                        let shareURL = URL(string: "https://mychannel.live/playlists/\(playlist.id)")!
+                        let activityVC = UIActivityViewController(activityItems: [shareURL], applicationActivities: nil)
+                        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                           let root = scene.windows.first?.rootViewController {
+                            root.present(activityVC, animated: true)
+                        }
                     }
                     
                     Divider()
@@ -281,7 +286,8 @@ struct PlaylistDetailView: View {
                         .foregroundColor(.secondary)
                     
                     Button("Add Videos") {
-                        // TODO: Add videos functionality
+                        // Navigate to search so user can find and add videos
+                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToSearchTab"), object: nil)
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -331,8 +337,7 @@ struct PlaylistDetailView: View {
     }
     
     private func playVideo(_ video: Video) {
-        // TODO: Navigate to video player
-        print("Playing video: \(video.title)")
+        GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: true)
     }
     
     private func removeVideo(_ video: Video) {
@@ -344,8 +349,13 @@ struct PlaylistDetailView: View {
     }
     
     private func downloadPlaylist() {
-        // TODO: Download playlist functionality
-        print("Downloading playlist: \(playlist.title)")
+        // Queue each video for offline download via the canonical OfflineDownloadService.
+        Task { @MainActor in
+            for video in playlistVideos {
+                guard !OfflineDownloadService.shared.hasDownload(videoId: video.id) else { continue }
+                _ = try? await OfflineDownloadService.shared.downloadVideo(video)
+            }
+        }
     }
     
     private func formatTotalDuration() -> String {

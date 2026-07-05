@@ -1,9 +1,14 @@
 import SwiftUI
 import TVUIKit
+import AVKit
+import AVFoundation
 
 struct TVContentView: View {
-    @StateObject private var appState = AppState()
-    @StateObject private var authManager = AuthenticationManager.shared
+    // Use @EnvironmentObject to consume the instances injected by MyChannelTVApp,
+    // not create new independent instances (which would cause duplicate state).
+    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var authManager: AuthenticationManager
+    @StateObject private var feedVM = TVFeedViewModel()
     @State private var selectedTab: TVTab = .home
     
     enum TVTab: String, CaseIterable {
@@ -30,25 +35,25 @@ struct TVContentView: View {
     
     var body: some View {
         TabView(selection: $selectedTab) {
-            TVHomeView()
+            TVHomeView(feedVM: feedVM)
                 .tabItem {
                     Label(TVTab.home.title, systemImage: TVTab.home.icon)
                 }
                 .tag(TVTab.home)
             
-            TVSearchView()
+            TVSearchView(feedVM: feedVM)
                 .tabItem {
                     Label(TVTab.search.title, systemImage: TVTab.search.icon)
                 }
                 .tag(TVTab.search)
             
-            TVLibraryView()
+            TVLibraryView(feedVM: feedVM)
                 .tabItem {
                     Label(TVTab.library.title, systemImage: TVTab.library.icon)
                 }
                 .tag(TVTab.library)
             
-            TVLiveView()
+            TVLiveView(feedVM: feedVM)
                 .tabItem {
                     Label(TVTab.live.title, systemImage: TVTab.live.icon)
                 }
@@ -56,53 +61,64 @@ struct TVContentView: View {
         }
         .environmentObject(appState)
         .environmentObject(authManager)
+        .task {
+            if let uid = authManager.currentUser?.id {
+                await feedVM.loadLibrary(userId: uid)
+            }
+        }
+        .onChange(of: authManager.currentUser) { user in
+            if let uid = user?.id {
+                Task { await feedVM.loadLibrary(userId: uid) }
+            }
+        }
     }
 }
 
 struct TVHomeView: View {
-    @EnvironmentObject private var appState: AppState
-    @State private var featuredVideos: [Video] = []
-    @State private var trendingVideos: [Video] = []
+    @ObservedObject var feedVM: TVFeedViewModel
+    @State private var selectedVideo: Video? = nil
     
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 40) {
-                // Hero section
-                if !featuredVideos.isEmpty {
-                    TVHeroSection(videos: featuredVideos)
+                // Hero section — real featured videos
+                if !feedVM.featuredVideos.isEmpty {
+                    TVHeroSection(videos: feedVM.featuredVideos, onPlay: { selectedVideo = $0 })
                 }
-                
+
                 // Continue watching
-                if !appState.watchHistory.isEmpty {
+                if !feedVM.continueWatching.isEmpty {
                     TVSection(title: "Continue Watching") {
-                        TVVideoRow(videos: Array(Video.sampleVideos.prefix(8)))
+                        TVVideoRow(videos: feedVM.continueWatching, onPlay: { selectedVideo = $0 })
                     }
                 }
-                
+
                 // Trending
-                TVSection(title: "Trending") {
-                    TVVideoRow(videos: trendingVideos)
+                if feedVM.isLoading {
+                    ProgressView()
+                        .padding(.horizontal, 80)
+                } else if !feedVM.trendingVideos.isEmpty {
+                    TVSection(title: "Trending") {
+                        TVVideoRow(videos: feedVM.trendingVideos, onPlay: { selectedVideo = $0 })
+                    }
                 }
-                
+
                 // Categories
                 TVCategoriesSection()
             }
             .padding(.horizontal, 80)
             .padding(.vertical, 40)
         }
-        .onAppear {
-            loadContent()
+        .fullScreenCover(item: $selectedVideo) { video in
+            TVVideoPlayerView(video: video, relatedVideos: feedVM.trendingVideos)
         }
-    }
-    
-    private func loadContent() {
-        featuredVideos = Array(Video.sampleVideos.prefix(5))
-        trendingVideos = Array(Video.sampleVideos.shuffled().prefix(12))
+        .refreshable { await feedVM.loadHomeFeed() }
     }
 }
 
 struct TVHeroSection: View {
     let videos: [Video]
+    var onPlay: (Video) -> Void = { _ in }
     @State private var selectedIndex = 0
     
     var body: some View {
@@ -221,12 +237,13 @@ struct TVSection<Content: View>: View {
 
 struct TVVideoRow: View {
     let videos: [Video]
+    var onPlay: (Video) -> Void = { _ in }
     
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 30) {
                 ForEach(videos) { video in
-                    TVVideoCard(video: video)
+                    TVVideoCard(video: video, onPlay: onPlay)
                 }
             }
             .padding(.horizontal, 40)
@@ -236,10 +253,12 @@ struct TVVideoRow: View {
 
 struct TVVideoCard: View {
     let video: Video
+    var onPlay: (Video) -> Void = { _ in }
     @State private var isFocused = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        Button { onPlay(video) } label: {
+            VStack(alignment: .leading, spacing: 12) {
             AsyncImage(url: URL(string: video.thumbnailURL)) { image in
                 image
                     .resizable()
@@ -274,6 +293,7 @@ struct TVVideoCard: View {
             }
             .frame(width: 320, alignment: .leading)
         }
+        } // end Button label
         .focusable()
         .onFocusChange { focused in
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -284,9 +304,128 @@ struct TVVideoCard: View {
     }
 }
 
+// MARK: - TVVideoPlayerView (real AVPlayer)
+struct TVVideoPlayerView: View {
+    let video: Video
+    var relatedVideos: [Video] = []
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var player = AVPlayer()
+    @State private var index = 0
+    @State private var currentVideo: Video
+    @State private var showInfo = true
+    @State private var endObserver: NSObjectProtocol?
+    @State private var infoHideTask: DispatchWorkItem?
+
+    init(video: Video, relatedVideos: [Video] = []) {
+        self.video = video
+        self.relatedVideos = relatedVideos
+        _currentVideo = State(initialValue: video)
+    }
+
+    /// Playback queue: the chosen video followed by deduped related videos (up-next).
+    private var playlist: [Video] {
+        [video] + relatedVideos.filter { $0.id != video.id }
+    }
+
+    private var fallbackURL: URL {
+        URL(string: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8")!
+    }
+
+    var body: some View {
+        VideoPlayer(player: player)
+            .ignoresSafeArea()
+            .overlay(alignment: .topLeading) {
+                if showInfo {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(currentVideo.title)
+                            .font(.system(size: 34, weight: .bold))
+                            .lineLimit(2)
+                        Text(currentVideo.creator.displayName)
+                            .font(.system(size: 22))
+                            .foregroundColor(.secondary)
+                        HStack(spacing: 8) {
+                            Text("\(currentVideo.formattedViewCount) views")
+                            Text("•")
+                            Text(currentVideo.timeAgo)
+                        }
+                        .font(.system(size: 18))
+                        .foregroundColor(.secondary)
+                    }
+                    .padding(28)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+                    .padding(60)
+                    .transition(.opacity)
+                }
+            }
+            .onAppear { start(at: index) }
+            .onDisappear { saveProgress(); cleanup() }
+            .onExitCommand { dismiss() }
+    }
+
+    private func start(at i: Int) {
+        guard i >= 0 && i < playlist.count else { return }
+        let v = playlist[i]
+        currentVideo = v
+        let url = URL(string: v.videoURL) ?? fallbackURL
+        let item = AVPlayerItem(url: url)
+        player.replaceCurrentItem(with: item)
+
+        // Resume from saved position (skip the very start / near-end)
+        let saved = UserDefaults.standard.double(forKey: "tv.resume.\(v.id)")
+        if saved > 5 {
+            player.seek(to: CMTime(seconds: saved, preferredTimescale: 600))
+        }
+        player.play()
+        revealInfo()
+        observeEnd(of: item)
+    }
+
+    private func revealInfo() {
+        infoHideTask?.cancel()
+        withAnimation { showInfo = true }
+        let task = DispatchWorkItem { withAnimation { showInfo = false } }
+        infoHideTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: task)
+    }
+
+    private func observeEnd(of item: AVPlayerItem) {
+        if let obs = endObserver { NotificationCenter.default.removeObserver(obs) }
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
+        ) { _ in playNext() }
+    }
+
+    private func playNext() {
+        UserDefaults.standard.removeObject(forKey: "tv.resume.\(currentVideo.id)")
+        let next = index + 1
+        if next < playlist.count {
+            index = next
+            start(at: next)
+        } else {
+            dismiss()
+        }
+    }
+
+    private func saveProgress() {
+        let t = player.currentTime().seconds
+        if t.isFinite && t > 5 {
+            UserDefaults.standard.set(t, forKey: "tv.resume.\(currentVideo.id)")
+        }
+    }
+
+    private func cleanup() {
+        infoHideTask?.cancel()
+        if let obs = endObserver { NotificationCenter.default.removeObserver(obs) }
+        endObserver = nil
+        player.pause()
+    }
+}
+
 struct TVSearchView: View {
+    @ObservedObject var feedVM: TVFeedViewModel
     @State private var searchText = ""
-    @State private var searchResults: [Video] = []
+    @State private var selectedVideo: Video? = nil
     
     var body: some View {
         VStack(spacing: 40) {
@@ -299,16 +438,18 @@ struct TVSearchView: View {
                     .font(.system(size: 24))
                     .frame(maxWidth: 800)
                     .onSubmit {
-                        performSearch()
+                        Task { await feedVM.search(query: searchText) }
                     }
             }
             .padding(.top, 100)
             
-            if !searchResults.isEmpty {
+            if feedVM.isSearching {
+                ProgressView()
+            } else if !feedVM.searchResults.isEmpty {
                 ScrollView {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 30) {
-                        ForEach(searchResults) { video in
-                            TVVideoCard(video: video)
+                        ForEach(feedVM.searchResults) { video in
+                            TVVideoCard(video: video, onPlay: { selectedVideo = $0 })
                         }
                     }
                     .padding(.horizontal, 40)
@@ -318,19 +459,16 @@ struct TVSearchView: View {
             Spacer()
         }
         .padding(.horizontal, 80)
-    }
-    
-    private func performSearch() {
-        // Simulate search
-        searchResults = Video.sampleVideos.filter { video in
-            video.title.localizedCaseInsensitiveContains(searchText) ||
-            video.description.localizedCaseInsensitiveContains(searchText)
+        .fullScreenCover(item: $selectedVideo) { video in
+            TVVideoPlayerView(video: video, relatedVideos: feedVM.searchResults)
         }
     }
 }
 
 struct TVLibraryView: View {
+    @ObservedObject var feedVM: TVFeedViewModel
     @EnvironmentObject private var appState: AppState
+    @State private var selectedVideo: Video? = nil
     
     var body: some View {
         VStack(spacing: 40) {
@@ -340,15 +478,18 @@ struct TVLibraryView: View {
             
             if appState.isAuthenticated {
                 TVSection(title: "Watch Later") {
-                    TVVideoRow(videos: Array(Video.sampleVideos.prefix(8)))
+                    TVVideoRow(videos: feedVM.watchLater.isEmpty
+                        ? []
+                        : feedVM.watchLater,
+                    onPlay: { selectedVideo = $0 })
                 }
                 
                 TVSection(title: "Watch History") {
-                    TVVideoRow(videos: Array(Video.sampleVideos.prefix(8)))
+                    TVVideoRow(videos: feedVM.watchHistory, onPlay: { selectedVideo = $0 })
                 }
                 
                 TVSection(title: "Liked Videos") {
-                    TVVideoRow(videos: Array(Video.sampleVideos.prefix(8)))
+                    TVVideoRow(videos: feedVM.likedVideos, onPlay: { selectedVideo = $0 })
                 }
             } else {
                 VStack(spacing: 20) {
@@ -367,43 +508,48 @@ struct TVLibraryView: View {
             Spacer()
         }
         .padding(.horizontal, 80)
+        .fullScreenCover(item: $selectedVideo) { video in
+            TVVideoPlayerView(video: video)
+        }
     }
 }
 
 struct TVLiveView: View {
-    @State private var liveChannels: [LiveTVChannel] = []
-    
+    @ObservedObject var feedVM: TVFeedViewModel
+
     var body: some View {
         VStack(spacing: 40) {
             Text("Live TV")
                 .font(.system(size: 48, weight: .bold))
                 .padding(.top, 100)
             
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 40) {
-                ForEach(liveChannels) { channel in
-                    TVChannelCard(channel: channel)
+            if feedVM.liveStreams.isEmpty && feedVM.isLoading {
+                ProgressView()
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 40) {
+                    ForEach(feedVM.liveStreams) { channel in
+                        TVChannelCard(channel: channel)
+                    }
                 }
+                .padding(.horizontal, 80)
             }
-            .padding(.horizontal, 80)
             
             Spacer()
         }
-        .onAppear {
-            loadLiveChannels()
-        }
-    }
-    
-    private func loadLiveChannels() {
-        liveChannels = Array(LiveTVChannel.sampleChannels.prefix(12))
+        .refreshable { await feedVM.loadHomeFeed() }
     }
 }
 
 struct TVChannelCard: View {
     let channel: LiveTVChannel
     @State private var isFocused = false
-    
+    @State private var isPlaying = false
+
     var body: some View {
-        VStack(spacing: 12) {
+        Button {
+            isPlaying = true
+        } label: {
+            VStack(spacing: 12) {
             AsyncImage(url: URL(string: channel.logoURL)) { image in
                 image
                     .resizable()
@@ -434,7 +580,7 @@ struct TVChannelCard: View {
                 }
             }
             .frame(width: 280)
-        }
+        } // end Button label
         .focusable()
         .onFocusChange { focused in
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -442,6 +588,28 @@ struct TVChannelCard: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
+        .fullScreenCover(isPresented: $isPlaying) {
+            TVLivePlayerView(streamURL: channel.streamURL)
+        }
+    }
+}
+
+// MARK: - TVLivePlayerView (real HLS playback for live channels)
+struct TVLivePlayerView: View {
+    let streamURL: String
+    @Environment(\.dismiss) private var dismiss
+
+    private var player: AVPlayer {
+        let url = URL(string: streamURL) ?? URL(string: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8")!
+        return AVPlayer(url: url)
+    }
+
+    var body: some View {
+        VideoPlayer(player: player)
+            .ignoresSafeArea()
+            .onAppear { player.play() }
+            .onDisappear { player.pause() }
+            .onExitCommand { dismiss() }
     }
 }
 

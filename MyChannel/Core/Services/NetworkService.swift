@@ -23,7 +23,7 @@ class NetworkService: ObservableObject {
         #if DEBUG
         return []
         #else
-        // TODO: Replace with real base64 SHA-256 SPKI pins for api.mychannel.app when cert is final
+        // SECURITY: Run: openssl s_client -connect api.mychannel.live:443 | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64
         return []
         #endif
     }()

@@ -393,8 +393,10 @@ def notify_creator_video_ready(
     try:
         before = event.data.before.to_dict() or {}
         after  = event.data.after.to_dict()  or {}
-        if before.get("status") == after.get("status"): return
-        if after.get("status") != "ready": return
+        # `processingStatus`, not `status` — `status` is a client-owned
+        # VISIBILITY field on this collection (see functions/main.py notes).
+        if before.get("processingStatus") == after.get("processingStatus"): return
+        if after.get("processingStatus") != "ready": return
         video_id   = event.params["videoId"]
         creator_id = after.get("creatorId") or ""
         if not creator_id: return
@@ -599,8 +601,9 @@ def detect_duplicate_upload(
             now  = firestore.SERVER_TIMESTAMP
             db.collection("video_transcode_jobs").document(job_id).update(
                 {"status": "duplicate", "duplicateOf": orig, "updatedAt": now})
+            # `processingStatus`, not `status` — see notify_creator_video_ready.
             db.collection("videos").document(video_id).update(
-                {"status": "duplicate", "duplicateOf": orig, "updatedAt": now})
+                {"processingStatus": "duplicate", "duplicateOf": orig, "updatedAt": now})
             db.collection("notifications").add({
                 "userId": creator_id, "type": "duplicate_upload",
                 "title": "Duplicate video detected",
@@ -692,8 +695,9 @@ def auto_generate_captions(
     try:
         before = event.data.before.to_dict() or {}
         after  = event.data.after.to_dict()  or {}
-        if before.get("status") == after.get("status"): return
-        if after.get("status") != "ready": return
+        # `processingStatus`, not `status` — see notify_creator_video_ready.
+        if before.get("processingStatus") == after.get("processingStatus"): return
+        if after.get("processingStatus") != "ready": return
 
         video_id = event.params["videoId"]
         hls_url  = after.get("hlsURL") or after.get("videoURL") or ""
@@ -1149,11 +1153,21 @@ def premiere_scheduler(event: scheduler_fn.ScheduledEvent) -> None:
 
             # T-0: publish the video
             if mins_until <= 0 and status != "published":
-                # Make video public
+                # Make video public.
+                # NOTE: `status` on videos/{videoId} is owned by clients as a
+                # VISIBILITY value ('public'/'unlisted'/'private'/'scheduled')
+                # — web's upload flow writes status="scheduled" for this same
+                # premiere at creation time. Writing status="ready" here would
+                # stomp that with a lifecycle value belonging to the transcode
+                # pipeline's `processingStatus` field instead. Flip visibility
+                # via `status`+`visibility`+`isPublic` (all VISIBILITY-flavored,
+                # consistent with the creation-time write) and leave
+                # `processingStatus` untouched — the transcode pipeline manages
+                # that independently.
                 if video_id:
                     db.collection("videos").document(video_id).update({
                         "isPublic": True,
-                        "status": "ready",
+                        "status": "public",
                         "visibility": "public",
                         "publishedAt": firestore.SERVER_TIMESTAMP,
                         "updatedAt": firestore.SERVER_TIMESTAMP,

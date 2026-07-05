@@ -70,57 +70,65 @@ export class StorageService {
   }
 
   // Upload video file
+  // Path MUST match storage.rules: videos/{userId}/{videoId}/{filename}
   static async uploadVideo(
     file: File,
+    userId: string,
     videoId: string,
     onProgress?: (progress: UploadProgress) => void
   ): Promise<string> {
-    const fileName = `${videoId}.mp4`;
-    const path = `videos/${fileName}`;
+    if (!userId) throw new Error('uploadVideo requires an authenticated userId');
+    const path = `videos/${userId}/${videoId}/video.mp4`;
     return this.uploadFile(file, path, onProgress);
   }
 
   // Upload thumbnail
+  // Path MUST match storage.rules: thumbnails/{userId}/{videoId}/{filename}
   static async uploadThumbnail(
     file: File,
+    userId: string,
     videoId: string,
     onProgress?: (progress: UploadProgress) => void
   ): Promise<string> {
-    const fileName = `${videoId}.jpg`;
-    const path = `thumbnails/${fileName}`;
+    if (!userId) throw new Error('uploadThumbnail requires an authenticated userId');
+    const path = `thumbnails/${userId}/${videoId}/thumb.jpg`;
     return this.uploadFile(file, path, onProgress);
   }
 
   // Upload profile image
+  // Path MUST match storage.rules: profile_images/{userId}/{filename}
   static async uploadProfileImage(
     file: File,
     userId: string,
     onProgress?: (progress: UploadProgress) => void
   ): Promise<string> {
-    const fileName = `${userId}.jpg`;
-    const path = `profile-images/${fileName}`;
+    if (!userId) throw new Error('uploadProfileImage requires an authenticated userId');
+    const path = `profile_images/${userId}/${Date.now()}.jpg`;
     return this.uploadFile(file, path, onProgress);
   }
 
   // Upload banner image
+  // Path MUST match storage.rules: banner_images/{userId}/{filename}
   static async uploadBannerImage(
     file: File,
     userId: string,
     onProgress?: (progress: UploadProgress) => void
   ): Promise<string> {
-    const fileName = `${userId}.jpg`;
-    const path = `banner-images/${fileName}`;
+    if (!userId) throw new Error('uploadBannerImage requires an authenticated userId');
+    const path = `banner_images/${userId}/${Date.now()}.jpg`;
     return this.uploadFile(file, path, onProgress);
   }
 
   // Upload Flick video
+  // Path MUST match storage.rules: flicks/{userId}/{flickId}
   static async uploadFlick(
     file: File,
+    userId: string,
     flickId: string,
     onProgress?: (progress: UploadProgress) => void
   ): Promise<string> {
-    const fileName = `${flickId}.mp4`;
-    const path = `flicks/${fileName}`;
+    if (!userId) throw new Error('uploadFlick requires an authenticated userId');
+    const path = `flicks/${userId}/${flickId}.mp4`;
     return this.uploadFile(file, path, onProgress);
   }
 
@@ -137,16 +145,14 @@ export class StorageService {
   }
 
   // Delete video
-  static async deleteVideo(videoId: string): Promise<void> {
-    const fileName = `${videoId}.mp4`;
-    const path = `videos/${fileName}`;
+  static async deleteVideo(userId: string, videoId: string): Promise<void> {
+    const path = `videos/${userId}/${videoId}/video.mp4`;
     return this.deleteFile(path);
   }
 
   // Delete thumbnail
-  static async deleteThumbnail(videoId: string): Promise<void> {
-    const fileName = `${videoId}.jpg`;
-    const path = `thumbnails/${fileName}`;
+  static async deleteThumbnail(userId: string, videoId: string): Promise<void> {
+    const path = `thumbnails/${userId}/${videoId}/thumb.jpg`;
     return this.deleteFile(path);
   }
 

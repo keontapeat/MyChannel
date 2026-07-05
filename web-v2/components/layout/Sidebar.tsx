@@ -8,7 +8,7 @@ import {
   Flag, ShoppingBag, Music2,
 } from 'lucide-react';
 
-interface SidebarProps { isCollapsed?: boolean }
+interface SidebarProps { isCollapsed?: boolean; mobileOpen?: boolean }
 interface Item { icon: React.ElementType; label: string; href: string; badge?: string }
 
 const MAIN: Item[] = [
@@ -93,7 +93,7 @@ function SectionHead({ label }: { label: string }) {
   );
 }
 
-export default function Sidebar({ isCollapsed = false }: SidebarProps) {
+export default function Sidebar({ isCollapsed = false, mobileOpen = false }: SidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -101,8 +101,9 @@ export default function Sidebar({ isCollapsed = false }: SidebarProps) {
       fixed left-0 top-14 h-[calc(100vh-3.5rem)]
       bg-[rgb(var(--color-background))]
       overflow-y-auto overflow-x-hidden scrollbar-hide
-      transition-[width] duration-200 ease-in-out z-40
-      ${isCollapsed ? 'w-[74px]' : 'w-60'}
+      transition-transform duration-200 ease-in-out z-40
+      w-60 ${isCollapsed ? 'lg:w-[74px]' : 'lg:w-60'}
+      ${mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} lg:translate-x-0 lg:shadow-none
     `}>
       <nav className="py-2 px-2">
 

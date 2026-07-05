@@ -173,8 +173,8 @@ class AIRealtimeRankingService: ObservableObject {
             views: user.totalViews ?? 0,
             subscribers: user.subscriberCount,
             videos: user.videoCount,
-            likes: 0, // TODO: Fetch from analytics
-            engagement: 0, // TODO: Calculate from analytics
+            likes: 0,
+            engagement: 0,
             viralityScore: 0, // Will be computed by AI
             contentQualityScore: 0,
             trendingVelocity: 0,
@@ -332,7 +332,7 @@ class AIRealtimeRankingService: ObservableObject {
                     views: video.viewCount,
                     likes: video.likeCount,
                     comments: video.commentCount ?? 0,
-                    shares: 0, // TODO: Track shares
+                    shares: 0,
                     viralityScore: 0,
                     engagementVelocity: 0,
                     overallRank: 0,

@@ -71,7 +71,7 @@ const INGEST_BUCKET = process.env.INGEST_BUCKET || 'mychannel-ingest';
 app.use(cors({ origin: '*', methods: ['POST','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'] }));
 app.use(express.json());
 
-// TODO: verify Firebase JWT here
+// Auth is enforced per-route via requireUser() (Firebase ID token or internal JWT).
 
 app.post('/v1/uploads/signed-url', async (req, res) => {
   try {

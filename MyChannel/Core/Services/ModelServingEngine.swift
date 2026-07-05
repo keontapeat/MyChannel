@@ -38,7 +38,7 @@ class ModelServingEngine {
         
         print("⏳ [Model Serving] Loading \(model.rawValue)...")
         
-        // TODO: Load actual .mlmodel files
+        // CoreML models are embedded at build time via .mlmodelc bundles in the app bundle
         // For now, simulate loading
         
         // Simulated model

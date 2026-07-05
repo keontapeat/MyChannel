@@ -18,7 +18,9 @@ export const languages: Record<Language, { name: string; nativeName: string; fla
 };
 
 // Translations
-export const translations: Record<Language, Record<string, string>> = {
+// Base translations for fully-translated languages. Assembled into the exported
+// `translations` map below so fallback languages can safely spread English.
+const baseTranslations = {
   en: {
     // Thumbnail Creator
     'thumbnail.creator': 'Thumbnail Creator',
@@ -284,13 +286,17 @@ export const translations: Record<Language, Record<string, string>> = {
     'common.close': '閉じる',
   },
   
-  // Add other languages with same structure...
-  ko: { ...translations.en }, // Korean (would be fully translated)
-  zh: { ...translations.en }, // Chinese (would be fully translated)
-  pt: { ...translations.en }, // Portuguese (would be fully translated)
-  ru: { ...translations.en }, // Russian (would be fully translated)
-  ar: { ...translations.en }, // Arabic (would be fully translated)
-  hi: { ...translations.en }, // Hindi (would be fully translated)
+};
+
+// Languages below fall back to English until fully translated.
+export const translations: Record<Language, Record<string, string>> = {
+  ...baseTranslations,
+  ko: { ...baseTranslations.en }, // Korean (would be fully translated)
+  zh: { ...baseTranslations.en }, // Chinese (would be fully translated)
+  pt: { ...baseTranslations.en }, // Portuguese (would be fully translated)
+  ru: { ...baseTranslations.en }, // Russian (would be fully translated)
+  ar: { ...baseTranslations.en }, // Arabic (would be fully translated)
+  hi: { ...baseTranslations.en }, // Hindi (would be fully translated)
 };
 
 // Translation hook

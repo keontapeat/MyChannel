@@ -10,6 +10,8 @@
     "dev:search": "tsx search/main.ts",
     "dev:moderation": "tsx moderation/main.ts",
     "dev:creator": "tsx creator/main.ts",
+    "dev:video-content-id": "tsx video-content-id/main.ts",
+    "test:video-content-id": "tsx video-content-id/test/fingerprint.test.mjs",
     "build": "tsc",
     "build:content": "tsc -p tsconfig.json"
   },

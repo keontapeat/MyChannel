@@ -19,6 +19,21 @@ class AITargetingEngine: ObservableObject {
     #if canImport(FirebaseFirestore)
     private var db: Firestore { Firestore.firestore() }
     #endif
+
+    // MARK: - Fraud Signals
+
+    /// Flags an IP address as suspicious for ad-fraud review. Idempotent: repeated
+    /// flags increment a counter and refresh the timestamp rather than creating duplicates.
+    func flagSuspiciousIP(ip: String) async {
+        guard !ip.isEmpty else { return }
+        #if canImport(FirebaseFirestore)
+        try? await db.collection("flagged_ips").document(ip).setData([
+            "ipAddress": ip,
+            "flagCount": FieldValue.increment(Int64(1)),
+            "lastFlaggedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+        #endif
+    }
     
     // MARK: - User Profile Analysis (500+ signals!)
     
@@ -640,7 +655,7 @@ class FraudDetectionEngine: ObservableObject {
     }
     
     private func flagSource(ipAddress: String) async {
-        // TODO: Flag IP in database
+        await AITargetingEngine.shared.flagSuspiciousIP(ip: ipAddress)
         print("🚩 [FraudDetection] Flagged IP: \(ipAddress)")
     }
 }

@@ -3,10 +3,14 @@
 // FlickCard Component - Individual Flick with Video Player and Interactions
 
 import { useRef, useEffect, useState } from 'react';
-import { Heart, MessageCircle, Share2, Music, CheckCircle, MoreVertical } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Music, CheckCircle, MoreVertical, Check } from 'lucide-react';
 import { formatViewCount } from '@/lib/utils/format';
 import type { Flick } from '@/types/flick';
 import VideoPlayer from '@/components/video/VideoPlayer';
+import {
+  collection, addDoc, doc, getDoc, setDoc, deleteDoc, updateDoc, increment, serverTimestamp,
+} from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase/config';
 
 interface FlickCardProps {
   flick: Flick;
@@ -18,25 +22,100 @@ const FlickCard = ({ flick, isActive, isVisible }: FlickCardProps) => {
   const [isLiked, setIsLiked] = useState(false);
   const [localLikeCount, setLocalLikeCount] = useState(flick.likeCount);
   const [showDescription, setShowDescription] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState(false);
+  const viewedRef = useRef(false);
 
-  const handleLike = () => {
-    if (isLiked) {
-      setIsLiked(false);
-      setLocalLikeCount(localLikeCount - 1);
-    } else {
-      setIsLiked(true);
-      setLocalLikeCount(localLikeCount + 1);
+  const isSeed = flick.id.startsWith('seed-');
+
+  // Log a flick event (view/like/unlike/share) — the on_short_event_created
+  // trigger increments the flick's aggregate counters server-side.
+  const logEvent = async (type: 'view' | 'like' | 'unlike' | 'share') => {
+    const uid = auth?.currentUser?.uid;
+    if (!uid || isSeed) return;
+    try {
+      await addDoc(collection(db, 'flicks', flick.id, 'events'), {
+        userId: uid, type, createdAt: serverTimestamp(),
+      });
+    } catch { /* non-fatal */ }
+  };
+
+  // Load per-user like state + follow state
+  useEffect(() => {
+    const uid = auth?.currentUser?.uid;
+    if (!uid || isSeed) return;
+    let cancelled = false;
+    getDoc(doc(db, 'users', uid, 'flickLikes', flick.id))
+      .then((s) => { if (!cancelled) setIsLiked(s.exists()); }).catch(() => {});
+    if (flick.creator.id) {
+      getDoc(doc(db, 'users', uid, 'subscriptions', flick.creator.id))
+        .then((s) => { if (!cancelled) setIsFollowing(s.exists()); }).catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [flick.id, flick.creator.id, isSeed]);
+
+  // Count a view once when the flick becomes active
+  useEffect(() => {
+    if (isActive && !viewedRef.current) {
+      viewedRef.current = true;
+      logEvent('view');
+    }
+  }, [isActive]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleLike = async () => {
+    const uid = auth?.currentUser?.uid;
+    const next = !isLiked;
+    setIsLiked(next);
+    setLocalLikeCount((n) => n + (next ? 1 : -1));
+    if (!uid || isSeed) return;
+    try {
+      const ref = doc(db, 'users', uid, 'flickLikes', flick.id);
+      if (next) await setDoc(ref, { flickId: flick.id, createdAt: serverTimestamp() });
+      else await deleteDoc(ref);
+      await logEvent(next ? 'like' : 'unlike');
+    } catch {
+      setIsLiked(!next);
+      setLocalLikeCount((n) => n + (next ? -1 : 1));
     }
   };
 
-  const handleShare = () => {
-    // Share functionality
-    console.log('Share flick:', flick.id);
+  const handleShare = async () => {
+    const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/flicks`;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({ title: flick.title, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        setShareFeedback(true);
+        setTimeout(() => setShareFeedback(false), 1500);
+      }
+      logEvent('share');
+    } catch { /* cancelled */ }
   };
 
   const handleComment = () => {
-    // Open comments
-    console.log('Open comments for:', flick.id);
+    // Comments sheet lands in a follow-up; scroll indicator stays interactive.
+  };
+
+  const handleFollow = async () => {
+    const uid = auth?.currentUser?.uid;
+    const creatorId = flick.creator.id;
+    if (!creatorId) return;
+    const next = !isFollowing;
+    setIsFollowing(next);
+    if (!uid || isSeed) return;
+    try {
+      const ref = doc(db, 'users', uid, 'subscriptions', creatorId);
+      if (next) {
+        await setDoc(ref, { channelId: creatorId, subscribedAt: serverTimestamp() });
+        await updateDoc(doc(db, 'users', creatorId), { subscriberCount: increment(1) });
+      } else {
+        await deleteDoc(ref);
+        await updateDoc(doc(db, 'users', creatorId), { subscriberCount: increment(-1) });
+      }
+    } catch {
+      setIsFollowing(!next);
+    }
   };
 
   return (
@@ -77,8 +156,13 @@ const FlickCard = ({ flick, isActive, isVisible }: FlickCardProps) => {
               @{flick.creator.username}
             </span>
           </div>
-          <button className="ml-2 px-4 py-1.5 bg-red-600 hover:bg-red-700 rounded-full text-white text-sm font-semibold transition-colors">
-            Follow
+          <button
+            onClick={handleFollow}
+            className={`ml-2 px-4 py-1.5 rounded-full text-white text-sm font-semibold transition-colors ${
+              isFollowing ? 'bg-white/25 hover:bg-white/30' : 'bg-red-600 hover:bg-red-700'
+            }`}
+          >
+            {isFollowing ? 'Following' : 'Follow'}
           </button>
         </div>
 
@@ -169,9 +253,9 @@ const FlickCard = ({ flick, isActive, isVisible }: FlickCardProps) => {
           className="flex flex-col items-center gap-1 group"
         >
           <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur flex items-center justify-center group-hover:bg-white/20 transition-colors">
-            <Share2 size={24} className="text-white" />
+            {shareFeedback ? <Check size={24} className="text-green-400" /> : <Share2 size={24} className="text-white" />}
           </div>
-          <span className="text-white text-xs font-medium">Share</span>
+          <span className="text-white text-xs font-medium">{shareFeedback ? 'Copied' : 'Share'}</span>
         </button>
 
         {/* Music Album Art (spinning) */}

@@ -589,20 +589,9 @@ struct MusicUploadSheet: View {
 
             let isrc = generateISRC()
 
-            var contentIDReferenceId: String? = nil
-            if protectWithContentID {
-                contentIDReferenceId = await ContentIDService.shared.uploadReferenceFile(
-                    title: trackTitle.trimmingCharacters(in: .whitespaces),
-                    rightsholder: artistName.trimmingCharacters(in: .whitespaces),
-                    ownerId: artistId,
-                    sourceTrackId: trackId,
-                    videoURL: "",
-                    audioURL: audioDownloadURL,
-                    policy: selectedContentPolicy
-                )
-            }
-
-            // 3. Save metadata to Firestore
+            // 3. Save metadata to Firestore FIRST — the Content ID backend looks
+            // up this doc to verify ownership (artistId == caller), so it must
+            // exist before registerMusicTrack is called below.
             let trackData: [String: Any] = [
                 "id": trackId,
                 "title": trackTitle.trimmingCharacters(in: .whitespaces),
@@ -635,10 +624,22 @@ struct MusicUploadSheet: View {
                 "scheduledRelease": scheduleRelease,
                 "releaseDate": scheduleRelease ? Timestamp(date: releaseDate) : FieldValue.serverTimestamp(),
                 "contentIdProtected": protectWithContentID,
-                "contentIdPolicy": selectedContentPolicy.rawValue,
-                "contentIdReferenceId": contentIDReferenceId as Any
+                "contentIdPolicy": selectedContentPolicy.rawValue
             ]
             try await db.collection("music_tracks").document(trackId).setData(trackData)
+
+            if protectWithContentID {
+                let contentIDReferenceId = await ContentIDService.shared.registerMusicTrack(
+                    trackId: trackId,
+                    audioURL: audioDownloadURL,
+                    policy: selectedContentPolicy
+                )
+                if let contentIDReferenceId {
+                    try await db.collection("music_tracks").document(trackId).updateData([
+                        "contentIdReferenceId": contentIDReferenceId
+                    ])
+                }
+            }
             uploadProgress = 1.0
             uploadState = .done
             showSuccess = true

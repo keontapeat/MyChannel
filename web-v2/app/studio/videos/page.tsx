@@ -63,9 +63,15 @@ export default function VideoManagerPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [uid, setUid] = useState<string | null>(auth?.currentUser?.uid ?? null);
+
+  // Wait for Firebase auth to resolve before deciding the user is signed out.
+  useEffect(() => {
+    const unsub = auth?.onAuthStateChanged?.((u) => setUid(u?.uid ?? null));
+    return () => { if (typeof unsub === 'function') unsub(); };
+  }, []);
 
   useEffect(() => {
-    const uid = auth?.currentUser?.uid;
     if (!uid) { setLoading(false); return; }
     let cancelled = false;
 
@@ -104,7 +110,7 @@ export default function VideoManagerPage() {
 
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [uid]);
 
   const filtered = videos
     .filter((v) => {
