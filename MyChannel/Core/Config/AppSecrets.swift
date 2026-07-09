@@ -136,17 +136,10 @@ struct AppSecrets {
         return ""
     }
     
-    static var stripeSecretKey: String {
-        // SECRET KEY - Never expose in client app!
-        // Should only be used server-side or in secure backend
-        if let keychainValue = KeychainManager.shared.get("STRIPE_SECRET_KEY"),
-           !keychainValue.isEmpty {
-            return keychainValue
-        }
-        let env = ProcessInfo.processInfo.environment["STRIPE_SECRET_KEY"] ?? ""
-        if !env.isEmpty { return env }
-        return ""
-    }
+    // stripeSecretKey intentionally removed from the iOS client.
+    // All Stripe secret-key operations (PaymentIntents, Identity, payouts)
+    // must go through authenticated Cloud Functions. Never reintroduce a
+    // client-side STRIPE_SECRET_KEY accessor.
     
     // MARK: - Non-Sensitive Keys (Can stay in plist)
     

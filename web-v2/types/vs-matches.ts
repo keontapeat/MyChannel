@@ -227,3 +227,20 @@ export const getWagerRange = (division: MedalDivision): string => {
   }
 };
 
+
+// Shared wager policy (mirrors iOS WagerPolicy / MoneyMath)
+export {
+  WAGER_POLICY,
+  isOfAge,
+  requiresKYC,
+  isValidWagerAmount,
+  dailyLimitDollars,
+  isWithinDailyLimit,
+  isRegionAllowed,
+  centsFromDollars,
+  dollarsFromCents,
+  platformFeeCents,
+  winnerPayoutCents,
+  canWagerClientPreflight,
+} from '../lib/wager-policy';
+export type { AccountTier as WagerAccountTier } from '../lib/wager-policy';

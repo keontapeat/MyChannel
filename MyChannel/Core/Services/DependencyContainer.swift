@@ -80,7 +80,7 @@ final class DependencyContainer: @unchecked Sendable {
     
     // MARK: - App Defaults
     private func registerDefaultServices() {
-        // Register core network and cache services
+        // Network / cache
         register(NetworkService.self) { NetworkService.shared }
         register(RedisCacheService.self) { RedisCacheService.shared }
         register(ObjectStorageOrchestrator.self) { ObjectStorageOrchestrator.shared }
@@ -88,5 +88,16 @@ final class DependencyContainer: @unchecked Sendable {
         register(AgentAPIService.self) { AgentAPIService.shared }
         register(VideoFirestoreService.self) { VideoFirestoreService.shared }
         register(SeedCatalogService.self) { SeedCatalogService.shared }
+
+        // Auth
+        register(AuthenticationManager.self) { AuthenticationManager.shared }
+
+        // Playback
+        register(GlobalVideoPlayerManager.self) { GlobalVideoPlayerManager.shared }
+
+        // Monetization / compliance / offline
+        register(MoneyEscrowService.self) { MoneyEscrowService.shared }
+        register(VSMatchComplianceService.self) { VSMatchComplianceService.shared }
+        register(OfflineDownloadService.self) { OfflineDownloadService.shared }
     }
 }

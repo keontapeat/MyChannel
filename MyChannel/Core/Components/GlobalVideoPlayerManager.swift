@@ -31,9 +31,13 @@ class GlobalVideoPlayerManager: ObservableObject {
     @Published private(set) var fullscreenRequestToken = UUID()
     @Published var hasActivePlaybackSession = false  // 🔥 NUCLEAR: Only true when actively playing a video
     
-    // 🔥 YOUTUBE PARITY: Video Queue for Up Next
-    @Published var videoQueue: [Video] = []
-    @Published var queueIndex: Int = 0
+    // 🔥 YOUTUBE PARITY: Video Queue for Up Next (backed by VideoPlaybackQueue)
+    @Published var videoQueue: [Video] = [] {
+        didSet { playbackQueue.videos = videoQueue }
+    }
+    @Published var queueIndex: Int = 0 {
+        didSet { playbackQueue.index = queueIndex }
+    }
     
     // 🔥 REAL-TIME VIEW TRACKING: AI monitoring integration
     private let viewTracker = RealtimeViewTracker.shared
@@ -70,22 +74,13 @@ class GlobalVideoPlayerManager: ObservableObject {
     // 🔥 YOUTUBE PARITY: Native PiP for background playback
     private let pipController = NativePiPController.shared
     
-    // 🔥 THERMONUCLEAR: Video pre-loading for instant next video
-    private var preloadedAsset: AVURLAsset?
-    private var preloadTask: Task<Void, Never>?
+    // Extracted queue + preload helpers (see VideoPlaybackQueue.swift)
+    private var playbackQueue = VideoPlaybackQueue()
+    private let assetPreloader = VideoAssetPreloader()
     
-    var upNextVideo: Video? {
-        guard queueIndex + 1 < videoQueue.count else { return nil }
-        return videoQueue[queueIndex + 1]
-    }
-    
-    var hasPreviousVideo: Bool {
-        queueIndex > 0
-    }
-    
-    var hasNextVideo: Bool {
-        queueIndex + 1 < videoQueue.count
-    }
+    var upNextVideo: Video? { playbackQueue.upNext }
+    var hasPreviousVideo: Bool { playbackQueue.hasPrevious }
+    var hasNextVideo: Bool { playbackQueue.hasNext }
 
     var player: AVPlayer? {
         playerManager?.player
@@ -645,16 +640,16 @@ class GlobalVideoPlayerManager: ObservableObject {
             videoQueue = [video]
             queueIndex = 0
         }
+        syncPlaybackQueueFromPublished()
         
         // ⚡ Use pre-buffered asset if it matches this video's URL (instant start)
-        if let preloaded = preloadedAsset,
+        if let preloaded = assetPreloader.takePreloadedAsset(),
            let videoURL = URL(string: video.videoURL),
            preloaded.url == videoURL {
             let playerItem = AVPlayerItem(asset: preloaded)
             playerItem.preferredForwardBufferDuration = 10.0
             playerManager?.player?.replaceCurrentItem(with: playerItem)
             playerManager?.requestAutoPlay()
-            preloadedAsset = nil
             print("⚡ [GlobalPlayer] Playing from pre-buffered asset — INSTANT: \(video.title)")
         } else {
             playerManager?.setupPlayer(with: video)
@@ -701,41 +696,35 @@ class GlobalVideoPlayerManager: ObservableObject {
         } else {
             videoQueue.append(video)
         }
+        syncPlaybackQueueFromPublished()
         preloadNextVideo()
     }
     
     // 🔥 YOUTUBE PARITY: Navigate to next video in queue
     func playNextVideo() {
-        guard hasNextVideo else {
+        guard let nextVideo = playbackQueue.advance() else {
             print("⚠️ [GlobalVideoPlayerManager] No next video in queue")
             return
         }
         
-        queueIndex += 1
-        let nextVideo = videoQueue[queueIndex]
+        queueIndex = playbackQueue.index
+        videoQueue = playbackQueue.videos
         currentVideo = nextVideo
         
-        // 🔥 THERMONUCLEAR: Use pre-loaded asset if available (INSTANT START!)
-        if let preloadedAsset = preloadedAsset {
-            let playerItem = AVPlayerItem(asset: preloadedAsset)
-            playerItem.preferredForwardBufferDuration = 10.0  // 10s buffer
+        if let preloaded = assetPreloader.takePreloadedAsset() {
+            let playerItem = AVPlayerItem(asset: preloaded)
+            playerItem.preferredForwardBufferDuration = 10.0
             playerManager?.player?.replaceCurrentItem(with: playerItem)
             playerManager?.play()
             print("⚡ [GlobalVideoPlayerManager] Playing next video from pre-loaded asset (INSTANT!)")
-            
-            // Clear pre-loaded asset
-            self.preloadedAsset = nil
         } else {
-            // Fallback to regular setup (don't call stopImmediately — it clears currentVideo)
             playerManager?.pause()
             playerManager?.setupPlayer(with: nextVideo)
             playerManager?.requestAutoPlay()
             print("▶️ [GlobalVideoPlayerManager] Playing next video: \(nextVideo.title)")
         }
         
-        // Pre-load the NEXT next video
         preloadNextVideo()
-        
         HapticManager.shared.impact(style: .medium)
     }
     
@@ -744,75 +733,25 @@ class GlobalVideoPlayerManager: ObservableObject {
     /// Call this as soon as you know a video URL will be played soon (e.g. profile load).
     /// Warms the AVURLAsset and fills PlayerPoolManager's cache so first-frame is instant.
     func preloadVideo(url: String) {
-        guard !isCleanedUp, let assetURL = URL(string: url) else { return }
-
-        preloadTask?.cancel()
-        preloadTask = Task { [weak self] in
-            guard let self = self else { return }
-
-            let options: [String: Any] = [
-                AVURLAssetPreferPreciseDurationAndTimingKey: false,  // faster for streaming
-                "AVURLAssetHTTPHeaderFieldsKey": ["Range": "bytes=0-524287"]  // prefetch first 512 KB
-            ]
-            let asset = AVURLAsset(url: assetURL, options: options)
-            asset.resourceLoader.preloadsEligibleContentKeys = true
-
-            async let tracks = asset.load(.tracks)
-            async let isPlayable = asset.load(.isPlayable)
-            _ = try? await (tracks, isPlayable)
-
-            await MainActor.run { [weak self] in
-                guard let self = self, !self.isCleanedUp else { return }
-                self.preloadedAsset = asset
-                print("⚡ [GlobalPlayer] Pre-buffered intro: \(assetURL.lastPathComponent)")
-            }
-        }
-
-        // Also warm PlayerPoolManager so the player is ready to go
+        guard !isCleanedUp else { return }
+        assetPreloader.preload(urlString: url)
         PlayerPoolManager.shared.preloadAsset(for: url)
     }
 
-    // 🔥🔥🔥 THERMONUCLEAR: Pre-load next video for INSTANT playback (<100ms)
+    private func syncPlaybackQueueFromPublished() {
+        playbackQueue.videos = videoQueue
+        playbackQueue.index = queueIndex
+    }
+
+    // Pre-load next video for instant playback
     private func preloadNextVideo() {
-        guard hasNextVideo else {
-            preloadedAsset = nil
-            preloadTask?.cancel()
+        guard let next = playbackQueue.upNext else {
+            assetPreloader.cancel()
             return
         }
+        preloadVideo(url: next.videoURL)
         
-        let nextVideo = videoQueue[queueIndex + 1]
-        
-        // Cancel previous preload
-        preloadTask?.cancel()
-        
-        preloadTask = Task { [weak self] in
-            guard let self = self else { return }
-            guard let url = URL(string: nextVideo.videoURL) else { return }
-            
-            let asset = AVURLAsset(url: url, options: [
-                AVURLAssetPreferPreciseDurationAndTimingKey: true
-            ])
-            asset.resourceLoader.preloadsEligibleContentKeys = true
-            
-            // 🔥 THERMONUCLEAR: Pre-load ALL critical properties
-            async let tracks = asset.load(.tracks)
-            async let duration = asset.load(.duration)
-            async let isPlayable = asset.load(.isPlayable)
-            async let preferredMediaSelection = asset.load(.preferredMediaSelection)
-            
-            // Wait for all to complete in parallel
-            _ = try? await (tracks, duration, isPlayable, preferredMediaSelection)
-            
-            await MainActor.run { [weak self] in
-                guard let self = self, !self.isCleanedUp else { return }
-                self.preloadedAsset = asset
-                
-                // 🔥 PERF: Also cache in PlayerPoolManager for instant reuse
-                PlayerPoolManager.shared.preloadAsset(for: nextVideo.videoURL)
-            }
-        }
-        
-        // 🔥 THERMONUCLEAR: Pre-load 2 more videos ahead
+        // Also warm 2–3 videos ahead in the player pool
         if queueIndex + 2 < videoQueue.count {
             PlayerPoolManager.shared.preloadAsset(for: videoQueue[queueIndex + 2].videoURL)
         }
@@ -823,13 +762,13 @@ class GlobalVideoPlayerManager: ObservableObject {
     
     // 🔥 YOUTUBE PARITY: Navigate to previous video in queue
     func playPreviousVideo() {
-        guard hasPreviousVideo else {
+        guard let previousVideo = playbackQueue.retreat() else {
             print("⚠️ [GlobalVideoPlayerManager] No previous video in queue")
             return
         }
         
-        queueIndex -= 1
-        let previousVideo = videoQueue[queueIndex]
+        queueIndex = playbackQueue.index
+        videoQueue = playbackQueue.videos
         currentVideo = previousVideo
         
         stopImmediately()
@@ -955,6 +894,7 @@ class GlobalVideoPlayerManager: ObservableObject {
             isPlaying = false
             hasActivePlaybackSession = false
         }
+        assetPreloader.cancel()
         
         print("✅ [GlobalPlayer] closePlayer() complete - currentVideo: \(currentVideo == nil ? "nil" : "NOT NIL")")
         
@@ -986,6 +926,8 @@ class GlobalVideoPlayerManager: ObservableObject {
         currentVideo = nil
         videoQueue = []
         queueIndex = 0
+        playbackQueue.reset()
+        assetPreloader.cancel()
         isPlaying = false
         currentProgress = 0.0
         currentTime = 0

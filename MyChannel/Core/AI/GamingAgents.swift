@@ -109,7 +109,8 @@ final class MatchOrchestrator: ObservableObject {
                 let winner = try await determineWinner(matchId: matchId, data: data)
                 let loser = winner == creator1Id ? creator2Id : creator1Id
                 try await finalizeMatch(matchId: matchId, winnerId: winner, loserId: loser, wagerAmount: wagerAmount)
-                metrics.revenue += wagerAmount * 0.1 // 10% platform fee
+                let potCents = MoneyMath.cents(fromDollars: wagerAmount) * 2
+                metrics.revenue += MoneyMath.dollars(fromCents: MoneyMath.platformFeeCents(grossCents: potCents))
             }
         }
         
@@ -161,15 +162,17 @@ final class MatchOrchestrator: ObservableObject {
         #if canImport(FirebaseFirestore)
         let db = Firestore.firestore()
         
-        // Calculate payouts
-        let platformFee = wagerAmount * 0.1
-        let winnerPayout = (wagerAmount * 2) - platformFee
+        // Calculate payouts in integer cents (MoneyMath) — never raw Double * 0.1
+        let potCents = MoneyMath.cents(fromDollars: wagerAmount) * 2
+        let platformFee = MoneyMath.dollars(fromCents: MoneyMath.platformFeeCents(grossCents: potCents))
+        let winnerPayout = MoneyMath.dollars(fromCents: MoneyMath.winnerPayoutCents(grossCents: potCents))
         
         // Update match
         try await db.collection("vs-matches").document(matchId).updateData([
             "status": "completed",
             "winnerId": winnerId,
             "winnerPayout": winnerPayout,
+            "platformFee": platformFee,
             "completedAt": FieldValue.serverTimestamp()
         ])
         

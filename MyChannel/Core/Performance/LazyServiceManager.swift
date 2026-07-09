@@ -142,15 +142,16 @@ class LazyServiceManager: ObservableObject {
             await LiveTVService.shared.preloadFireChannels(count: 12)
         }
 
-        register("OpenAIAgent", priority: .medium) {
+        // AI agents deferred — do not touch cold-start path
+        register("OpenAIAgent", priority: .deferred) {
             _ = OpenAIAgentService.shared
         }
 
-        register("AgentLog", priority: .medium) {
+        register("AgentLog", priority: .deferred) {
             _ = AgentLogService.shared
         }
 
-        register("AlamofireAdmin", priority: .medium) {
+        register("AlamofireAdmin", priority: .low) {
             _ = AlamofireAdminNetworkService.shared
         }
 

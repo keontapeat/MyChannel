@@ -65,35 +65,70 @@ final class VSMatchComplianceService: ObservableObject {
     
     // MARK: - 🆔 KYC (Know Your Customer) Verification
     
-    /// Complete KYC verification (ID document upload)
+    /// Complete KYC verification (ID document upload).
+    /// Creates a Stripe Identity VerificationSession via Cloud Function, persists
+    /// pending status locally, and returns a client secret the UI can use to present
+    /// `IdentityVerificationSheet` once StripeIdentityKit is linked.
     func completeKYC(userId: String, idDocument: IDDocument) async throws -> KYCResult {
-        // Validate document
         guard idDocument.isValid else {
             throw ComplianceError.invalidDocument
         }
-        
-        // KYC document verification via Stripe Identity
-        // The iOS Stripe Identity SDK verifies documents in-app.
-        // For now, mark as pending — a Cloud Function with Stripe Identity webhook
-        // will advance status to 'approved' after server-side verification.
-        // To enable: integrate StripeIdentityKit SPM package and call
-        // IdentityVerificationSheet.create(ephemeralKeySecret:) from the app.
-        
+
+        let session = try await createStripeIdentitySession(userId: userId)
+
         #if canImport(FirebaseFirestore)
         try await db.collection("vs_match_compliance").document(userId).setData([
             "kycStatus": "pending",
             "kycSubmittedAt": FieldValue.serverTimestamp(),
+            "stripeIdentitySessionId": session.sessionId,
             "idDocumentType": idDocument.type.rawValue,
             "idDocumentNumber": idDocument.number,
             "idDocumentCountry": idDocument.country
         ], merge: true)
         #endif
-        
+
         return KYCResult(
             userId: userId,
             status: .pending,
-            submittedAt: Date()
+            submittedAt: Date(),
+            stripeIdentityClientSecret: session.clientSecret,
+            stripeIdentitySessionId: session.sessionId
         )
+    }
+
+    /// Asks the authenticated backend to create a Stripe Identity VerificationSession.
+    /// Secret key never leaves the server.
+    func createStripeIdentitySession(userId: String) async throws -> StripeIdentitySession {
+        let base = "https://us-central1-mychannel-ca26d.cloudfunctions.net"
+        guard let url = URL(string: "\(base)/create_stripe_identity_session") else {
+            throw ComplianceError.kycSessionFailed("Invalid backend URL")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await AuthTokenProvider.authorize(&request)
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "userId": userId,
+            "returnUrl": "mychannel://kyc-complete"
+        ])
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw ComplianceError.kycSessionFailed("HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0): \(body)")
+        }
+
+        guard
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let sessionId = json["sessionId"] as? String,
+            let clientSecret = json["clientSecret"] as? String,
+            !sessionId.isEmpty,
+            !clientSecret.isEmpty
+        else {
+            throw ComplianceError.kycSessionFailed("Malformed Identity session response")
+        }
+
+        return StripeIdentitySession(sessionId: sessionId, clientSecret: clientSecret)
     }
     
     /// Check KYC status
@@ -311,6 +346,14 @@ struct KYCResult {
     let userId: String
     let status: KYCStatus
     let submittedAt: Date
+    /// Present with Stripe IdentityVerificationSheet when StripeIdentityKit is linked.
+    var stripeIdentityClientSecret: String? = nil
+    var stripeIdentitySessionId: String? = nil
+}
+
+struct StripeIdentitySession {
+    let sessionId: String
+    let clientSecret: String
 }
 
 enum KYCStatus: String {
@@ -350,6 +393,7 @@ enum ComplianceError: LocalizedError {
     case accountSuspended
     case dailyLimitExceeded
     case invalidDocument
+    case kycSessionFailed(String)
     case multipleErrors([ComplianceError])
     
     var errorDescription: String? {
@@ -370,6 +414,8 @@ enum ComplianceError: LocalizedError {
             return "Daily wager limit exceeded"
         case .invalidDocument:
             return "Invalid ID document"
+        case .kycSessionFailed(let detail):
+            return "KYC session failed: \(detail)"
         case .multipleErrors(let errors):
             return errors.map { $0.localizedDescription ?? "Unknown error" }.joined(separator: ", ")
         }

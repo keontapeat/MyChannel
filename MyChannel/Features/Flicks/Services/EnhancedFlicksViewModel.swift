@@ -9,8 +9,9 @@ import Foundation
 import SwiftUI
 import Combine
 
-// 🚀 Enhanced Flicks ViewModel with Industry-Standard Backend
-// Integrates all enterprise services with existing FlicksView
+// DEPRECATED: Not wired into FlicksView. Canonical ViewModel is NuclearFlicksViewModel.
+// Kept for reference / future merge — do not instantiate from production UI.
+@available(*, deprecated, message: "Use NuclearFlicksViewModel — this type is unwired")
 @MainActor
 class EnhancedFlicksViewModel: ObservableObject {
     @Published var flicks: [NuclearFlick] = []

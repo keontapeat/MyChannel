@@ -24,6 +24,15 @@ struct LiveVersusMatchView: View {
         guard value.isFinite else { return fallback }
         return Int(value.rounded())
     }
+
+    /// Prize pool and winner take-home via MoneyMath (integer cents) — never Double * 0.9.
+    private var prizePoolGrossCents: Int {
+        MoneyMath.cents(fromDollars: match.wagerAmount) * 2
+    }
+
+    private var winnerPayoutCents: Int {
+        MoneyMath.winnerPayoutCents(grossCents: prizePoolGrossCents)
+    }
     
     var body: some View {
         ScrollView {
@@ -258,7 +267,7 @@ struct LiveVersusMatchView: View {
                 .font(.system(size: 16))
                 .foregroundColor(.secondary)
             
-            Text("$\(safeInt(match.wagerAmount * 2))")
+            Text("$\(MoneyMath.dollars(fromCents: prizePoolGrossCents).formatted(.number.precision(.fractionLength(0...2))))")
                 .font(.system(size: 48, weight: .black))
                 .foregroundStyle(
                     LinearGradient(
@@ -268,7 +277,7 @@ struct LiveVersusMatchView: View {
                     )
                 )
             
-            Text("Winner takes home $\(safeInt(match.wagerAmount * 2 * 0.9))")
+            Text("Winner takes home $\(MoneyMath.dollars(fromCents: winnerPayoutCents).formatted(.number.precision(.fractionLength(0...2))))")
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
         }

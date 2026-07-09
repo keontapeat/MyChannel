@@ -82,169 +82,22 @@ struct MovieDetailView: View {
     
     // MARK: - Hero Section
     private func heroSection(geometry: GeometryProxy) -> some View {
-        ZStack(alignment: .bottom) {
-            heroParallaxBackground(geometry: geometry)
-            heroGradientOverlay
-            heroContentInfo
-        }
-        .frame(height: headerHeight)
-        .background(GeometryReader { proxy in
-            Color.clear.preference(
-                key: AScrollOffsetPreferenceKey.self,
-                value: proxy.frame(in: .named("scroll")).minY
-            )
-        })
-    }
-    
-    // MARK: - Hero Parallax Background
-    private func heroParallaxBackground(geometry: GeometryProxy) -> some View {
-        MultiSourceAsyncImage(
-            urls: movie.posterCandidates + [URL(string: movie.backdropURL ?? "")].compactMap { $0 },
-            content: { image in
-                image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(
-                        width: geometry.size.width,
-                        height: headerHeight + max(0, scrollOffset)
-                    )
-                    .offset(y: -scrollOffset * 0.5)
-                    .blur(radius: max(0, scrollOffset * 0.01))
+        MovieDetailHero(
+            movie: movie,
+            geometry: geometry,
+            headerHeight: headerHeight,
+            scrollOffset: scrollOffset,
+            posterWidth: posterWidth,
+            posterHeight: posterHeight,
+            isWatchlisted: isWatchlisted,
+            onToggleWatchlist: {
+                toggleWatchlist()
             },
-            placeholder: {
-                LinearGradient(
-                    colors: [
-                        AppTheme.Colors.primary.opacity(0.3),
-                        Color.black.opacity(0.8),
-                        Color.black
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .frame(width: geometry.size.width, height: headerHeight)
+            onPlayTrailer: {
+                HapticManager.shared.impact(style: .medium)
+                showTrailerPlayer = true
             }
         )
-        .clipped()
-    }
-    
-    // MARK: - Hero Gradient Overlay
-    private var heroGradientOverlay: some View {
-        VStack(spacing: 0) {
-            LinearGradient(
-                colors: [
-                    Color.black.opacity(0.4),
-                    Color.clear,
-                    Color.clear,
-                    Color.black.opacity(0.8),
-                    Color.black
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
-        .allowsHitTesting(false)
-    }
-    
-    // MARK: - Hero Content Info
-    private var heroContentInfo: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            
-            HStack(alignment: .bottom, spacing: 16) {
-                heroPosterCard
-                heroMovieInfo
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
-        }
-    }
-    
-    // MARK: - Hero Poster Card
-    private var heroPosterCard: some View {
-        MultiSourceAsyncImage(
-            urls: movie.posterCandidates,
-            content: { image in
-                image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: posterWidth, height: posterHeight)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.2), .clear],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-                    .shadow(color: .black.opacity(0.5), radius: 20, x: 0, y: 10)
-            },
-            placeholder: {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .frame(width: posterWidth, height: posterHeight)
-                    .overlay(
-                        Image(systemName: "film.stack")
-                            .font(.system(size: 32))
-                            .foregroundColor(.white.opacity(0.3))
-                    )
-                    .shimmer(active: true)
-            }
-        )
-        .scaleEffect(max(0.8, 1 - scrollOffset * 0.001))
-        .animation(AppTheme.AnimationPresets.spring, value: scrollOffset)
-    }
-    
-    // MARK: - Hero Movie Info
-    private var heroMovieInfo: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(movie.title)
-                .font(.system(size: 28, weight: .heavy, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.white, .white.opacity(0.8)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .lineLimit(2)
-                .shadow(color: .black.opacity(0.8), radius: 4, x: 0, y: 2)
-            
-            HStack(spacing: 8) {
-                movieInfoChip(movie.rating, color: .red, icon: "exclamationmark.triangle.fill")
-                movieInfoChip("\(movie.year)", color: .blue, icon: "calendar")
-                movieInfoChip(movie.formattedRuntime, color: .green, icon: "clock.fill")
-            }
-            
-            movieRatingSection
-        }
-    }
-    
-    // MARK: - Movie Rating Section
-    private var movieRatingSection: some View {
-        HStack(spacing: 6) {
-            ForEach(0..<5) { index in
-                Image(systemName: "star.fill")
-                    .foregroundColor(
-                        index < Int(movie.imdbRating / 2) ? .yellow : .white.opacity(0.3)
-                    )
-                    .font(.system(size: 14))
-            }
-            Text("\(movie.imdbRating, specifier: "%.1f")")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white)
-            Spacer()
-            Text("IMDb")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.yellow)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.yellow.opacity(0.2), in: Capsule())
-        }
     }
     
     // MARK: - Floating Header
@@ -550,22 +403,6 @@ struct MovieDetailView: View {
                 in: Capsule()
             )
             .overlay(Capsule().stroke(.white.opacity(0.2), lineWidth: 1))
-    }
-    
-    // MARK: - Movie Info Chip Helper
-    private func movieInfoChip(_ text: String, color: Color, icon: String) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 10, weight: .bold))
-            Text(text)
-                .font(.system(size: 12, weight: .bold))
-        }
-        .foregroundColor(.white)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(color.opacity(0.3), in: Capsule())
-        .overlay(Capsule().stroke(color.opacity(0.5), lineWidth: 1))
-        .shadow(color: color.opacity(0.3), radius: 4, x: 0, y: 2)
     }
     
     // MARK: - Movie Detail Card Helper

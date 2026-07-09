@@ -205,6 +205,8 @@ class OfflineDownloadService: ObservableObject {
         
         // Remove from downloads
         downloads.remove(at: downloadIndex)
+        persistDownloads()
+        RealmOfflineService.shared.deleteOfflineDownload(videoId: download.videoId)
         
         // Update storage info
         updateStorageInfo()
@@ -353,18 +355,48 @@ class OfflineDownloadService: ObservableObject {
         }
         persistDownloads()
 
+        let destinationURL = downloadsDirectory.appendingPathComponent("\(download.videoId).mp4")
+        let remoteURL = download.remoteVideoURL
+
+        // HLS / m3u8 → AVAssetDownload (DRM-capable). Progressive → Firebase Storage / HTTP.
+        if isHLSURL(remoteURL), let assetURL = URL(string: remoteURL) {
+            do {
+                let localURL = try await HLSDownloadManager.shared.downloadAndWait(
+                    url: assetURL,
+                    title: download.title,
+                    progressHandler: { [weak self] progress in
+                        Task { @MainActor in
+                            self?.updateDownloadProgress(downloadId: download.id, progress: progress)
+                        }
+                    }
+                )
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    try? fileManager.removeItem(at: destinationURL)
+                }
+                // Persist bookmark / move HLS package beside our manifest naming
+                try? fileManager.moveItem(at: localURL, to: destinationURL)
+                await markDownloadCompleted(download: download, destinationURL: destinationURL)
+            } catch {
+                await markDownloadFailed(downloadId: download.id)
+                print("⚠️ [OfflineDownload] HLS download failed: \(error)")
+            }
+            return
+        }
+
         // Download using Firebase Storage SDK (handles auth automatically)
         let storage = Storage.storage()
-        let gsURL = download.remoteVideoURL
+        let gsURL = remoteURL
 
         // Check if it's a gs:// URL or https:// Firebase Storage URL
         let reference: StorageReference?
         if gsURL.hasPrefix("gs://") {
             reference = storage.reference(forURL: gsURL)
-        } else {
+        } else if gsURL.contains("firebasestorage.googleapis.com") {
             // Convert https:// to gs:// format
             let path = gsURL.replacingOccurrences(of: "https://firebasestorage.googleapis.com/v0/b/", with: "gs://")
             reference = storage.reference(forURL: path)
+        } else {
+            reference = nil
         }
 
         guard let ref = reference else {
@@ -374,8 +406,6 @@ class OfflineDownloadService: ObservableObject {
             }
             return
         }
-
-        let destinationURL = downloadsDirectory.appendingPathComponent("\(download.videoId).mp4")
 
         do {
             // Download to temp file first, then move to final location
@@ -395,6 +425,7 @@ class OfflineDownloadService: ObservableObject {
                 downloads[index].fileSize = Int64(try destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0)
                 persistDownloads()
                 updateStorageInfo()
+                syncRealmMetadata(for: downloads[index], localPath: destinationURL.path)
             }
         } catch {
             if let index = downloads.firstIndex(where: { $0.id == download.id }) {
@@ -403,6 +434,51 @@ class OfflineDownloadService: ObservableObject {
             }
             print("Download failed: \(error)")
         }
+    }
+
+    private func isHLSURL(_ urlString: String) -> Bool {
+        let lower = urlString.lowercased()
+        return lower.contains(".m3u8") || lower.contains("application/vnd.apple.mpegurl")
+    }
+
+    private func updateDownloadProgress(downloadId: String, progress: Double) {
+        if let index = downloads.firstIndex(where: { $0.id == downloadId }) {
+            downloads[index].progress = progress
+            downloads[index].status = .downloading
+        }
+        totalDownloadProgress = downloads.isEmpty
+            ? progress
+            : downloads.map(\.progress).reduce(0, +) / Double(max(1, downloads.count))
+    }
+
+    private func markDownloadCompleted(download: OfflineDownload, destinationURL: URL) async {
+        if let index = downloads.firstIndex(where: { $0.id == download.id }) {
+            downloads[index].status = .completed
+            downloads[index].progress = 1.0
+            downloads[index].fileSize = Int64(
+                (try? destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            )
+            persistDownloads()
+            updateStorageInfo()
+            syncRealmMetadata(for: downloads[index], localPath: destinationURL.path)
+        }
+    }
+
+    private func markDownloadFailed(downloadId: String) async {
+        if let index = downloads.firstIndex(where: { $0.id == downloadId }) {
+            downloads[index].status = .failed
+            persistDownloads()
+        }
+    }
+
+    /// Keep Realm download count in sync with the canonical OfflineDownloadService manifest.
+    private func syncRealmMetadata(for download: OfflineDownload, localPath: String) {
+        RealmOfflineService.shared.saveOfflineDownload(
+            videoId: download.videoId,
+            localPath: localPath,
+            quality: download.quality.rawValue,
+            size: Int(download.fileSize)
+        )
     }
     
     // MARK: - Storage Management
