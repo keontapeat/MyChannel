@@ -65,10 +65,30 @@ final class VSMatchComplianceService: ObservableObject {
     
     // MARK: - 🆔 KYC (Know Your Customer) Verification
     
-    /// Complete KYC verification (ID document upload).
-    /// Creates a Stripe Identity VerificationSession via Cloud Function, persists
-    /// pending status locally, and returns a client secret the UI can use to present
-    /// `IdentityVerificationSheet` once StripeIdentityKit is linked.
+    /// Start KYC via Stripe Identity (document collected in-sheet — no local ID fields required).
+    /// Returns session id + ephemeral key for `IdentityVerificationSheet`.
+    func startKYCVerification(userId: String) async throws -> KYCResult {
+        let session = try await createStripeIdentitySession(userId: userId)
+
+        #if canImport(FirebaseFirestore)
+        try await db.collection("vs_match_compliance").document(userId).setData([
+            "kycStatus": "pending",
+            "kycSubmittedAt": FieldValue.serverTimestamp(),
+            "stripeIdentitySessionId": session.sessionId,
+            "verificationMethod": "stripe_identity"
+        ], merge: true)
+        #endif
+
+        return KYCResult(
+            userId: userId,
+            status: .pending,
+            submittedAt: Date(),
+            stripeIdentitySessionId: session.sessionId,
+            stripeIdentityEphemeralKeySecret: session.ephemeralKeySecret
+        )
+    }
+
+    /// Legacy path that also stores submitted document metadata, then starts Identity.
     func completeKYC(userId: String, idDocument: IDDocument) async throws -> KYCResult {
         guard idDocument.isValid else {
             throw ComplianceError.invalidDocument
@@ -83,7 +103,8 @@ final class VSMatchComplianceService: ObservableObject {
             "stripeIdentitySessionId": session.sessionId,
             "idDocumentType": idDocument.type.rawValue,
             "idDocumentNumber": idDocument.number,
-            "idDocumentCountry": idDocument.country
+            "idDocumentCountry": idDocument.country,
+            "verificationMethod": "stripe_identity"
         ], merge: true)
         #endif
 
@@ -91,13 +112,13 @@ final class VSMatchComplianceService: ObservableObject {
             userId: userId,
             status: .pending,
             submittedAt: Date(),
-            stripeIdentityClientSecret: session.clientSecret,
-            stripeIdentitySessionId: session.sessionId
+            stripeIdentitySessionId: session.sessionId,
+            stripeIdentityEphemeralKeySecret: session.ephemeralKeySecret
         )
     }
 
-    /// Asks the authenticated backend to create a Stripe Identity VerificationSession.
-    /// Secret key never leaves the server.
+    /// Asks the authenticated backend to create a Stripe Identity VerificationSession
+    /// plus an ephemeral key for the iOS SDK. Secret key never leaves the server.
     func createStripeIdentitySession(userId: String) async throws -> StripeIdentitySession {
         let base = "https://us-central1-mychannel-ca26d.cloudfunctions.net"
         guard let url = URL(string: "\(base)/create_stripe_identity_session") else {
@@ -108,8 +129,7 @@ final class VSMatchComplianceService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         try await AuthTokenProvider.authorize(&request)
         request.httpBody = try JSONSerialization.data(withJSONObject: [
-            "userId": userId,
-            "returnUrl": "mychannel://kyc-complete"
+            "userId": userId
         ])
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -121,14 +141,14 @@ final class VSMatchComplianceService: ObservableObject {
         guard
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
             let sessionId = json["sessionId"] as? String,
-            let clientSecret = json["clientSecret"] as? String,
+            let ephemeralKeySecret = json["ephemeralKeySecret"] as? String,
             !sessionId.isEmpty,
-            !clientSecret.isEmpty
+            !ephemeralKeySecret.isEmpty
         else {
             throw ComplianceError.kycSessionFailed("Malformed Identity session response")
         }
 
-        return StripeIdentitySession(sessionId: sessionId, clientSecret: clientSecret)
+        return StripeIdentitySession(sessionId: sessionId, ephemeralKeySecret: ephemeralKeySecret)
     }
     
     /// Check KYC status
@@ -346,14 +366,14 @@ struct KYCResult {
     let userId: String
     let status: KYCStatus
     let submittedAt: Date
-    /// Present with Stripe IdentityVerificationSheet when StripeIdentityKit is linked.
-    var stripeIdentityClientSecret: String? = nil
+    /// Present with Stripe IdentityVerificationSheet (session id + ephemeral key).
     var stripeIdentitySessionId: String? = nil
+    var stripeIdentityEphemeralKeySecret: String? = nil
 }
 
 struct StripeIdentitySession {
     let sessionId: String
-    let clientSecret: String
+    let ephemeralKeySecret: String
 }
 
 enum KYCStatus: String {

@@ -3731,7 +3731,8 @@ def create_stripe_identity_session(req: https_fn.Request) -> https_fn.Response:
     Create a Stripe Identity VerificationSession for VS Match KYC.
     Body: { userId, returnUrl? }
     Authorization: Bearer <Firebase ID token>
-    Returns: { sessionId, clientSecret }
+    Returns: { sessionId, ephemeralKeySecret }
+    iOS IdentityVerificationSheet requires session id + ephemeral key (not client_secret).
     """
     cors = {
         "Access-Control-Allow-Origin": "*",
@@ -3757,7 +3758,6 @@ def create_stripe_identity_session(req: https_fn.Request) -> https_fn.Response:
         if user_id != caller_uid:
             return https_fn.Response({"error": "forbidden"}, status=403, headers=cors)
 
-        return_url = str(body.get("returnUrl") or "mychannel://kyc-complete").strip()
         stripe_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
         if not stripe_key:
             return https_fn.Response({"error": "stripe_not_configured"}, status=503, headers=cors)
@@ -3769,7 +3769,13 @@ def create_stripe_identity_session(req: https_fn.Request) -> https_fn.Response:
             type="document",
             metadata={"userId": user_id, "purpose": "vs_match_kyc"},
             options={"document": {"require_matching_selfie": True}},
-            return_url=return_url,
+        )
+
+        # Ephemeral key scoped to this VerificationSession for the iOS SDK.
+        # stripe_version must be passed for EphemeralKey.create (Stripe API requirement).
+        ephemeral_key = stripe.EphemeralKey.create(
+            verification_session=session.id,
+            stripe_version="2024-06-20",
         )
 
         client = firestore.client()
@@ -3783,7 +3789,12 @@ def create_stripe_identity_session(req: https_fn.Request) -> https_fn.Response:
         )
 
         return https_fn.Response(
-            {"sessionId": session.id, "clientSecret": session.client_secret},
+            {
+                "sessionId": session.id,
+                "ephemeralKeySecret": ephemeral_key.secret,
+                # Kept for web/modal clients; iOS uses ephemeralKeySecret.
+                "clientSecret": session.client_secret,
+            },
             status=200,
             headers={**cors, "Content-Type": "application/json"},
         )

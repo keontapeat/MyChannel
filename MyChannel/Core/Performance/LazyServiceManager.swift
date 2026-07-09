@@ -155,11 +155,11 @@ class LazyServiceManager: ObservableObject {
             _ = AlamofireAdminNetworkService.shared
         }
 
-        register("PerspectiveModeration", priority: .low) {
+        register("PerspectiveModeration", priority: .deferred) {
             _ = PerspectiveModerationService.shared
         }
 
-        register("CommandCenterReport", priority: .low) {
+        register("CommandCenterReport", priority: .deferred) {
             _ = CommandCenterReportService.shared
         }
 
@@ -175,7 +175,7 @@ class LazyServiceManager: ObservableObject {
             SharePlayWatchService.shared.configureGroupSessions()
         }
 
-        register("AutoCaption", priority: .low) {
+        register("AutoCaption", priority: .deferred) {
             _ = AutoCaptionService.shared
         }
 

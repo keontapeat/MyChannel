@@ -185,9 +185,21 @@ struct VSMatchComplianceSheet: View {
             done: kycStatus == .approved,
             icon: "creditcard.and.123"
         ) {
-            Text(kycMessage)
-                .font(.system(size: 13))
-                .foregroundColor(AppTheme.Colors.textSecondary)
+            VStack(alignment: .leading, spacing: 12) {
+                Text(kycMessage)
+                    .font(.system(size: 13))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+
+                if kycStatus == .notStarted || kycStatus == .rejected || kycStatus == .expired {
+                    Button {
+                        Task { await startKYC() }
+                    } label: {
+                        actionLabel(kycStatus == .notStarted ? "Verify Identity" : "Re-verify Identity")
+                    }
+                    .disabled(isWorking)
+                    .accessibilityLabel("Start identity verification")
+                }
+            }
         }
     }
 
@@ -198,11 +210,11 @@ struct VSMatchComplianceSheet: View {
         case .pending:
             return "Your identity verification is under review. You'll be able to place wagers over $500 once it's approved."
         case .rejected:
-            return "Identity verification was declined. Contact support to resolve this before wagering over $500."
+            return "Identity verification was declined. You can try again, or contact support."
         case .expired:
             return "Your identity verification expired. Please re-verify to wager over $500."
         case .notStarted:
-            return "Wagers over $500 require identity verification. Lower your wager to $500 or less, or complete verification in Settings once available."
+            return "Wagers over $500 require identity verification via Stripe Identity (government ID + selfie)."
         }
     }
 
@@ -328,6 +340,50 @@ struct VSMatchComplianceSheet: View {
             )
             termsAccepted = true
             HapticManager.shared.notification(type: .success)
+        } catch {
+            errorMessage = error.localizedDescription
+            HapticManager.shared.notification(type: .error)
+        }
+    }
+
+    private func startKYC() async {
+        isWorking = true
+        errorMessage = nil
+        defer { isWorking = false }
+        do {
+            let result = try await compliance.startKYCVerification(userId: userId)
+            guard
+                let sessionId = result.stripeIdentitySessionId, !sessionId.isEmpty,
+                let ephemeralKey = result.stripeIdentityEphemeralKeySecret, !ephemeralKey.isEmpty
+            else {
+                errorMessage = "Could not start identity verification. Try again."
+                HapticManager.shared.notification(type: .error)
+                return
+            }
+
+            let presentation = await StripeIdentityPresenter.present(
+                sessionId: sessionId,
+                ephemeralKeySecret: ephemeralKey
+            )
+            switch presentation {
+            case .completed:
+                // Webhook is authoritative; optimistically mark pending until approved.
+                kycStatus = .pending
+                HapticManager.shared.notification(type: .success)
+                // Refresh in case webhook already flipped to approved (fast path / test mode).
+                kycStatus = await compliance.getKYCStatus(userId: userId)
+            case .canceled:
+                errorMessage = "Identity verification was canceled."
+                HapticManager.shared.impact(style: .light)
+            case .failed(let message):
+                errorMessage = message
+                HapticManager.shared.notification(type: .error)
+            case .unavailable:
+                // Session created server-side; user can finish later once SDK is linked.
+                kycStatus = .pending
+                errorMessage = "Identity session started. Finish verification when prompted, or try again after updating the app."
+                HapticManager.shared.notification(type: .warning)
+            }
         } catch {
             errorMessage = error.localizedDescription
             HapticManager.shared.notification(type: .error)

@@ -117,10 +117,10 @@ struct FlicksView: View {
             ShareModalView(video: flick.toVideo())
         }
         .sheet(isPresented: $showSpeedPicker) {
-            speedPickerSheet
+            FlicksSpeedPickerSheet(playbackSpeed: $playbackSpeed, isPresented: $showSpeedPicker)
         }
         .sheet(isPresented: $showQualityPicker) {
-            qualityPickerSheet
+            FlicksQualityPickerSheet(preferredQuality: $preferredQuality, isPresented: $showQualityPicker)
         }
         .sheet(item: $selectedMoreOptionsFlick) { flick in
             moreOptionsSheet(flick: flick)
@@ -797,52 +797,6 @@ struct FlicksView: View {
         }
     }
     
-    // MARK: - Quality Picker Sheet
-    private var qualityPickerSheet: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                Text("Video Quality")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.top, 20)
-                
-                VStack(spacing: 12) {
-                    ForEach(["auto", "360p", "480p", "720p", "1080p"], id: \.self) { quality in
-                        Button {
-                            preferredQuality = quality
-                            showQualityPicker = false
-                            impactMedium.impactOccurred()
-                        } label: {
-                            HStack {
-                                Text(quality.uppercased())
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundColor(.white)
-                                Spacer()
-                                if preferredQuality == quality {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 18, weight: .bold))
-                                        .foregroundColor(.blue)
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(preferredQuality == quality ? Color.blue.opacity(0.2) : Color.gray.opacity(0.2))
-                            )
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-                
-                Spacer()
-            }
-            .background(Color.black)
-            .navigationBarHidden(true)
-        }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-    }
     
     private func moreOptionsSheet(flick: NuclearFlick) -> some View {
         NavigationStack {
@@ -1374,52 +1328,6 @@ struct FlicksView: View {
     }
     
 
-    // MARK: - Speed Picker Sheet
-    private var speedPickerSheet: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                Text("Playback Speed")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.top, 20)
-                
-                VStack(spacing: 12) {
-                    ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
-                        Button {
-                            playbackSpeed = speed
-                            showSpeedPicker = false
-                            impactMedium.impactOccurred()
-                        } label: {
-                            HStack {
-                                Text("\(speed)x")
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundColor(.white)
-                                Spacer()
-                                if playbackSpeed == speed {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 18, weight: .bold))
-                                        .foregroundColor(.blue)
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(playbackSpeed == speed ? Color.blue.opacity(0.2) : Color.gray.opacity(0.2))
-                            )
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-                
-                Spacer()
-            }
-            .background(Color.black)
-            .navigationBarHidden(true)
-        }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-    }
     
     // MARK: - Error View
     private func errorView(error: String) -> some View {
