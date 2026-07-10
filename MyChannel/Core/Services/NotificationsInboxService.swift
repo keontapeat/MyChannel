@@ -8,7 +8,12 @@
 //
 
 import Foundation
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
+#if canImport(FirebaseFirestore)
 import FirebaseFirestore
+#endif
 
 struct NotificationItem: Codable, Identifiable {
     let id: String
@@ -30,9 +35,19 @@ final class NotificationsInboxService: ObservableObject {
     private init() {}
     @Published private(set) var notifications: [NotificationItem] = []
     @Published private(set) var unreadCount: Int = 0
-    private let db = Firestore.firestore()
+
+    /// Fail closed until Firebase is configured — avoids launch crash when
+    /// MainTabView touches this singleton before `FirebaseApp.configure()`.
+    #if canImport(FirebaseFirestore)
+    private var db: Firestore? {
+        guard FirebaseApp.app() != nil else { return nil }
+        return Firestore.firestore()
+    }
+    #endif
 
     func fetchNotifications(userId: String, limit: Int = 30) async throws {
+        #if canImport(FirebaseFirestore)
+        guard let db else { return }
         let snapshot = try await db.collection("notifications")
             .whereField("userId", isEqualTo: userId)
             .order(by: "createdAt", descending: true)
@@ -47,9 +62,12 @@ final class NotificationsInboxService: ObservableObject {
                 isRead: d["isRead"] as? Bool ?? false, createdAt: Date(), groupedCount: d["groupedCount"] as? Int ?? 1)
         }
         unreadCount = notifications.filter { !$0.isRead }.count
+        #endif
     }
 
     func markRead(notificationId: String) async throws {
+        #if canImport(FirebaseFirestore)
+        guard let db else { return }
         try await db.collection("notifications").document(notificationId).updateData(["isRead": true])
         if let idx = notifications.firstIndex(where: { $0.id == notificationId }) {
             let old = notifications[idx]
@@ -57,9 +75,12 @@ final class NotificationsInboxService: ObservableObject {
                 body: old.body, imageURL: old.imageURL, deepLink: old.deepLink, isRead: true, createdAt: old.createdAt, groupedCount: old.groupedCount)
         }
         unreadCount = max(0, unreadCount - 1)
+        #endif
     }
 
     func markAllRead(userId: String) async throws {
+        #if canImport(FirebaseFirestore)
+        guard let db else { return }
         let batch = db.batch()
         for n in notifications where !n.isRead {
             batch.updateData(["isRead": true], forDocument: db.collection("notifications").document(n.id))
@@ -68,5 +89,6 @@ final class NotificationsInboxService: ObservableObject {
         notifications = notifications.map { NotificationItem(id: $0.id, userId: $0.userId, type: $0.type, title: $0.title,
             body: $0.body, imageURL: $0.imageURL, deepLink: $0.deepLink, isRead: true, createdAt: $0.createdAt, groupedCount: $0.groupedCount) }
         unreadCount = 0
+        #endif
     }
 }

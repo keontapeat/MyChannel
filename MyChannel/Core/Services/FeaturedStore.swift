@@ -1,6 +1,9 @@
 import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
@@ -25,7 +28,11 @@ final class FeaturedStore: ObservableObject {
     private let decoder = JSONDecoder()
     
     #if canImport(FirebaseFirestore)
-    private var db: Firestore { Firestore.firestore() }
+    /// Guarded — calling `Firestore.firestore()` before `FirebaseApp.configure()` traps.
+    private var db: Firestore? {
+        guard FirebaseApp.app() != nil else { return nil }
+        return Firestore.firestore()
+    }
     private var activeListener: ListenerRegistration?
     #endif
     
@@ -64,6 +71,11 @@ final class FeaturedStore: ObservableObject {
     func startFirestoreListener() {
         #if canImport(FirebaseFirestore)
         if activeListener != nil { return } // Already listening
+        guard let db else {
+            hasSyncedFromFirestore = true
+            isLoading = false
+            return
+        }
         isLoading = true
         
         // Listen to the featured_videos collection (same as ThermonuclearFeaturedManager uses)
@@ -91,6 +103,11 @@ final class FeaturedStore: ObservableObject {
     
     private func loadVideosFromFirestoreSnapshot(snap: Any?) async {
         #if canImport(FirebaseFirestore)
+        guard let db else {
+            isLoading = false
+            hasSyncedFromFirestore = true
+            return
+        }
         guard let snap = snap as? QuerySnapshot else {
             isLoading = false
             hasSyncedFromFirestore = true
@@ -298,6 +315,7 @@ final class FeaturedStore: ObservableObject {
 
     private func persistFeaturedVideoToFirestore(_ video: Video) async {
         #if canImport(FirebaseFirestore)
+        guard let db else { return }
         do {
             let existing = try await db.collection("featured_videos")
                 .whereField("videoId", isEqualTo: video.id)
@@ -342,6 +360,7 @@ final class FeaturedStore: ObservableObject {
 
     private func removeFeaturedVideoFromFirestore(_ id: String) async {
         #if canImport(FirebaseFirestore)
+        guard let db else { return }
         do {
             let snapshot = try await db.collection("featured_videos")
                 .whereField("videoId", isEqualTo: id)
@@ -357,6 +376,7 @@ final class FeaturedStore: ObservableObject {
 
     private func updateFeaturedPrioritiesInFirestore() async {
         #if canImport(FirebaseFirestore)
+        guard let db else { return }
         for (index, item) in featured.enumerated() {
             do {
                 let snapshot = try await db.collection("featured_videos")
