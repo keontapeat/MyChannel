@@ -148,6 +148,8 @@ class AppState: ObservableObject {
                 SentryObservabilityService.shared.clearUser()
                 PostHogAnalyticsService.shared.reset()
                 RevenueCatService.shared.logOut()
+                // Drop user-scoped DI caches so wallet/compliance cannot leak across accounts.
+                DependencyContainer.shared.unregisterUserScopedServices()
             }
             .store(in: &cancellables)
         

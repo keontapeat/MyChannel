@@ -187,7 +187,10 @@ class EnhancedVideoService: ObservableObject {
     
     // The Movie Database (TMDB) Integration
     private func fetchFromTMDB(page: Int, query: String?) async throws -> [Video] {
-        let apiKey = "your_tmdb_api_key" // Get free from https://www.themoviedb.org/settings/api
+        let apiKey = AppSecrets.tmdbAPIKey
+        guard !apiKey.isEmpty else {
+            return []
+        }
         let baseURL = "https://api.themoviedb.org/3"
         
         let endpoint = query != nil 

@@ -52,11 +52,11 @@ class ImagePrefetcher {
             do {
                 let (data, _) = try await self?.session.data(from: url) ?? (Data(), URLResponse())
                 
-                // Parse on background thread for speed
+                // Parse on background thread; downsample to cap RAM (docs/launch-perf-flicks.md)
                 let image = await Task.detached(priority: .utility) {
-                    UIImage(data: data)
+                    ImageCache.downsample(data: data, maxPixelSize: 720) ?? UIImage(data: data)
                 }.value
-                
+
                 if let image = image {
                     await MainActor.run {
                         ImageCache.shared.store(image, for: url)
@@ -196,6 +196,28 @@ class ImageCache {
     func store(_ image: UIImage, for url: URL) {
         let cost = Int(image.size.width * image.size.height * 4)
         cache.setObject(image, forKey: url as NSURL, cost: cost)
+    }
+
+    /// Downsample JPEG/PNG data before caching — avoids full-res decode on main thread.
+    /// Uses `CGImageSource` thumbnail generation (max edge = `maxPixelSize`).
+    /// See docs/launch-perf-flicks.md § Image downsample.
+    static func downsample(data: Data, maxPixelSize: Int = 720) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceShouldCacheImmediately: false,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
+    }
+
+    func storeDownsampled(_ data: Data, for url: URL, maxPixelSize: Int = 720) {
+        guard let image = Self.downsample(data: data, maxPixelSize: maxPixelSize) else { return }
+        store(image, for: url)
     }
     
     // 🔥 Track cache performance

@@ -1,0 +1,33 @@
+{
+  "batch": "batch6-ai-di",
+  "completed_at": "2026-07-09",
+  "done_titles": [
+    "AI: @available deprecated AGIMasterOrchestrator, EnterpriseAITeam, AIConversationOrchestrator",
+    "AI: docs/ai-file-cull-list.md (unused orchestrators — no deletes)",
+    "AI: AppConfig.AI maxAICallsPerMinute + apiCostBudgetPerAgentUSD + requestTimeoutSeconds",
+    "AI: LazyServiceManager deferred AgentAPIService + VertexAIManager (not critical tier)",
+    "AI: MyChannelAI fake training gated behind AppConfig.aiEnabled",
+    "AI: docs/ai-provider-consolidation.md (OpenAIService vs OpenAIAgentService)",
+    "AI: CreatorIntelligenceService 8s timeout + 1 retry wrapper",
+    "AI: CreatorIntelligenceCircuitState circuit breaker stub",
+    "AI: UITest disable via -UITests / UITEST_DISABLE_AI in CreatorIntelligenceService",
+    "AI: RealtimeViewTracker verified — MyChannelAI not held (cold start zero alloc)",
+    "DI: scripts/lint-no-new-shared.sh + .swiftlint.yml ban_new_shared_singleton comment",
+    "DI: DependencyContainer verified AuthenticationManager, GlobalVideoPlayerManager, OfflineDownloadService, VersusMatchService",
+    "DI: docs/injected-property-wrapper.md",
+    "DI: DependencyContainer.preview static alias",
+    "DI: docs/singleton-baseline.md (3311 refs / 637 files)",
+    "SECRETS: .gitignore explicit functions/.env",
+    "SECRETS: docs/certificate-pinning-plan.md stub",
+    "SECRETS: AuthTokenProvider audit in docs/app-check-money.md (money CF calls authorized)",
+    "SECRETS: secret-scan job in .github/workflows/unit-tests.yml (+ pre-commit via .githooks)",
+    "SECRETS: AppSecrets keychain-first comments for Runway/ElevenLabs/Stability",
+    "SECRETS: docs/app-check-money.md stub",
+    "BACKEND: create-transfer server-derived ASSERT comment in index.js",
+    "BACKEND: reset_daily_wager_limits stub + runbook note",
+    "BACKEND: stripe_identity_webhook kycStatus approved verified in functions/main.py",
+    "BACKEND: explicit reject amountCents <= 0 in create-escrow-payment",
+    "BACKEND: CORS comment hardened on money endpoints",
+    "BACKEND: staging Stripe keys note in docs/backend-money-runbook.md"
+  ]
+}

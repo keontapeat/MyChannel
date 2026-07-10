@@ -21,6 +21,7 @@
 import Foundation
 import Combine
 
+@available(*, deprecated, message: "Use CreatorIntelligenceService")
 @MainActor
 final class AGIMasterOrchestrator: ObservableObject {
     static let shared = AGIMasterOrchestrator()

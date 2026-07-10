@@ -12,7 +12,7 @@ import FirebaseFirestore
 #endif
 
 @MainActor
-final class VSMatchWalletService: ObservableObject {
+final class VSMatchWalletService: ObservableObject, VSMatchWalleting {
     static let shared = VSMatchWalletService()
     private init() {}
     
@@ -138,7 +138,7 @@ final class VSMatchWalletService: ObservableObject {
         // Cloud Function (secret key stays server-side). The wallet is credited
         // SERVER-SIDE by the Stripe webhook once the charge actually succeeds — the
         // client must never credit its own balance (Firestore rules enforce this).
-        let amountInCents = Int(amount * 100)
+        let amountInCents = MoneyMath.cents(fromDollars: amount)
         let paymentIntentId = try await MoneyEscrowService.shared.createWalletDepositIntent(
             userId: userId,
             amountCents: amountInCents
@@ -392,6 +392,9 @@ struct VSMatchTransaction: Identifiable {
     let createdAt: Date
     let description: String
     let matchId: String?
+
+    /// Canonical integer cents (MoneyMath rounding).
+    var amountCents: Int { MoneyMath.cents(fromDollars: amount) }
 }
 
 enum VSMatchTransactionType: String {

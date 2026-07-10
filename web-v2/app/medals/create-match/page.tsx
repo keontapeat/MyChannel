@@ -2,39 +2,124 @@
 
 // Create VS Match - Challenge a Competitor
 
-import { Trophy, DollarSign, Users, Calendar, Info } from 'lucide-react';
+import { Trophy, DollarSign, Users, Gamepad2, Eye, Heart, MessageCircle, Wallet, Palette, ChefHat, Music, Sparkles, Trophy as SportsIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   VSMatchCategory,
-  MedalDivision,
   getMedalIcon,
   getMedalName,
-  getMedalDivision,
+  type MedalDivision,
 } from '@/types/vs-matches';
+import {
+  WAGER_POLICY,
+  canWagerClientPreflight,
+  centsFromDollars,
+  dollarsFromCents,
+  getMedalDivision,
+  isValidWagerAmount,
+  platformFeeCents,
+  winnerPayoutCents,
+} from '@/lib/wager-policy';
+import { createVersusMatchWithEscrow } from '@/lib/vs-match-create';
+import { ComplianceStatusBanner } from '@/components/compliance/ComplianceStatusBanner';
+import { AgeGateModal } from '@/components/compliance/AgeGateModal';
 
 export default function CreateMatchPage() {
   const [wagerAmount, setWagerAmount] = useState(500);
   const [selectedCategory, setSelectedCategory] = useState<VSMatchCategory>(VSMatchCategory.GAMING);
   const [opponentUsername, setOpponentUsername] = useState('');
   const [description, setDescription] = useState('');
+  // Client preflight inputs — replace with live profile when auth is wired.
+  const [age, setAge] = useState(21);
+  const [showAgeGate, setShowAgeGate] = useState(false);
+  const [kycApproved] = useState(false);
+  const [region] = useState('US-CA');
+  const [alreadyWageredToday] = useState(0);
+  const [termsAcceptedVersion] = useState<string | null>(WAGER_POLICY.currentTermsVersion);
+  const [preflightReasons, setPreflightReasons] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
 
   const categories = [
-    { value: VSMatchCategory.GAMING, label: 'Gaming', icon: '🎮' },
-    { value: VSMatchCategory.VIEWS, label: 'Views', icon: '👀' },
-    { value: VSMatchCategory.LIKES, label: 'Likes', icon: '❤️' },
-    { value: VSMatchCategory.COMMENTS, label: 'Comments', icon: '💬' },
-    { value: VSMatchCategory.DONATIONS, label: 'Donations', icon: '💰' },
-    { value: VSMatchCategory.CREATIVE, label: 'Creative', icon: '🎨' },
-    { value: VSMatchCategory.COOKING, label: 'Cooking', icon: '🍳' },
-    { value: VSMatchCategory.MUSIC, label: 'Music', icon: '🎵' },
-    { value: VSMatchCategory.DANCE, label: 'Dance', icon: '💃' },
-    { value: VSMatchCategory.SPORTS, label: 'Sports', icon: '⚽' },
+    { value: VSMatchCategory.GAMING, label: 'Gaming', icon: '🎮', LucideIcon: Gamepad2 },
+    { value: VSMatchCategory.VIEWS, label: 'Views', icon: '👀', LucideIcon: Eye },
+    { value: VSMatchCategory.LIKES, label: 'Likes', icon: '❤️', LucideIcon: Heart },
+    { value: VSMatchCategory.COMMENTS, label: 'Comments', icon: '💬', LucideIcon: MessageCircle },
+    { value: VSMatchCategory.DONATIONS, label: 'Donations', icon: '💰', LucideIcon: Wallet },
+    { value: VSMatchCategory.CREATIVE, label: 'Creative', icon: '🎨', LucideIcon: Palette },
+    { value: VSMatchCategory.COOKING, label: 'Cooking', icon: '🍳', LucideIcon: ChefHat },
+    { value: VSMatchCategory.MUSIC, label: 'Music', icon: '🎵', LucideIcon: Music },
+    { value: VSMatchCategory.DANCE, label: 'Dance', icon: '💃', LucideIcon: Sparkles },
+    { value: VSMatchCategory.SPORTS, label: 'Sports', icon: '⚽', LucideIcon: SportsIcon },
   ];
 
-  const platformFee = wagerAmount * 0.1; // 10% fee
-  const potentialWinnings = wagerAmount * 2 - platformFee;
-  const medal = getMedalDivision(wagerAmount);
+  const { platformFee, potentialWinnings, wagerValid, preflightOk, liveReasons } = useMemo(() => {
+    const potCents = centsFromDollars(wagerAmount) * 2;
+    const preflight = canWagerClientPreflight({
+      age,
+      kycApproved,
+      amountDollars: wagerAmount,
+      region,
+      alreadyWageredToday,
+      tier: kycApproved ? 'verified' : 'new',
+      termsAcceptedVersion,
+    });
+    return {
+      platformFee: dollarsFromCents(platformFeeCents(potCents)),
+      potentialWinnings: dollarsFromCents(winnerPayoutCents(potCents)),
+      wagerValid: isValidWagerAmount(wagerAmount),
+      preflightOk: preflight.ok,
+      liveReasons: preflight.ok ? [] : preflight.reasons,
+    };
+  }, [wagerAmount, age, kycApproved, region, alreadyWageredToday, termsAcceptedVersion]);
+  const medal = getMedalDivision(wagerAmount) as MedalDivision;
+
+  const canCreate = wagerValid && preflightOk && !isSubmitting;
+  const shownReasons = preflightReasons.length > 0 ? preflightReasons : liveReasons;
+
+  async function handleCreateMatch() {
+    const result = canWagerClientPreflight({
+      age,
+      kycApproved,
+      amountDollars: wagerAmount,
+      region,
+      alreadyWageredToday,
+      tier: kycApproved ? 'verified' : 'new',
+      termsAcceptedVersion,
+    });
+    if (!result.ok) {
+      setPreflightReasons(result.reasons);
+      const hasAgeBlock = result.reasons.some((r) => r.includes('18+'));
+      if (hasAgeBlock) setShowAgeGate(true);
+      setSubmitMessage(
+        `Compliance check failed: ${result.reasons.join(' · ')}. Fix the items above before creating a match.`
+      );
+      return;
+    }
+    setPreflightReasons([]);
+    setSubmitMessage(null);
+    setIsSubmitting(true);
+    try {
+      const created = await createVersusMatchWithEscrow({
+        wagerAmountDollars: wagerAmount,
+        category: selectedCategory,
+        opponentUsername: opponentUsername || undefined,
+        description: description || undefined,
+      });
+      if (!created.ok) {
+        setSubmitMessage(created.error);
+        return;
+      }
+      setSubmitMessage(
+        created.paymentIntentId
+          ? `Match ${created.matchId} created — escrow held (${created.paymentIntentId}).`
+          : `Match ${created.matchId} created.`
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
@@ -73,29 +158,39 @@ export default function CreateMatchPage() {
 
           {/* Wager Amount */}
           <section className="mb-8">
-            <label className="block text-lg font-bold mb-4">Wager Amount</label>
+            <label htmlFor="wager-amount" className="block text-lg font-bold mb-4">
+              Wager Amount
+            </label>
             <div className="bg-gray-800 p-6 rounded-xl">
               <div className="flex items-center gap-2 mb-4">
-                <DollarSign size={32} className="text-green-500" />
+                <DollarSign size={32} className="text-green-500" aria-hidden />
                 <input
+                  id="wager-amount"
                   type="number"
                   min="1"
                   max="100000"
                   value={wagerAmount}
                   onChange={(e) => setWagerAmount(Number(e.target.value))}
+                  aria-label="Wager amount in US dollars"
+                  aria-describedby="wager-fee-breakdown"
                   className="flex-1 bg-gray-700 text-white text-3xl font-bold px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
-              <div className="space-y-2 text-sm">
+              <div id="wager-fee-breakdown" className="space-y-2 text-sm">
                 <div className="flex justify-between text-gray-400">
-                  <span>Platform Fee (10%)</span>
+                  <span>Platform Fee ({Math.round(WAGER_POLICY.platformFeePercent * 100)}%)</span>
                   <span className="text-white font-bold">-${platformFee.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-gray-400">
                   <span>Potential Winnings</span>
                   <span className="text-green-500 font-bold">${potentialWinnings.toFixed(2)}</span>
                 </div>
+                {!wagerValid && (
+                  <p className="text-red-400 text-xs pt-1">
+                    Wager must be ${WAGER_POLICY.minWagerDollars}–${WAGER_POLICY.maxWagerDollars.toLocaleString()}
+                  </p>
+                )}
               </div>
 
               {/* Wager Range Presets */}
@@ -131,7 +226,10 @@ export default function CreateMatchPage() {
                       : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                   }`}
                 >
-                  <div className="text-3xl mb-2">{category.icon}</div>
+                  <div className="text-3xl mb-2 flex items-center justify-center gap-1">
+                    <category.LucideIcon size={22} className="opacity-80" aria-hidden />
+                    <span aria-hidden>{category.icon}</span>
+                  </div>
                   <div className="font-bold text-sm">{category.label}</div>
                 </button>
               ))}
@@ -168,29 +266,53 @@ export default function CreateMatchPage() {
             />
           </section>
 
-          {/* Compliance Notice */}
-          <section className="mb-8">
-            <div className="bg-blue-900/30 border border-blue-500/30 p-4 rounded-xl">
-              <div className="flex items-start gap-3">
-                <Info className="text-blue-400 flex-shrink-0 mt-1" size={20} />
-                <div className="text-sm text-blue-100">
-                  <p className="font-bold mb-2">Compliance Requirements:</p>
-                  <ul className="space-y-1 text-blue-200">
-                    <li>• Must be 18+ years old</li>
-                    <li>• KYC required for wagers over $500</li>
-                    <li>• Daily wager limits apply</li>
-                    <li>• Funds will be held in escrow</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </section>
+          {/* Compliance preflight — KYC / region / daily / terms */}
+          <ComplianceStatusBanner
+            className="mb-8"
+            preflight={{
+              age,
+              kycApproved,
+              region,
+              alreadyWageredToday,
+              tier: kycApproved ? 'verified' : 'new',
+              termsAcceptedVersion,
+              wagerAmountDollars: wagerAmount,
+            }}
+          />
 
-          {/* Create Match Button */}
+          {shownReasons.length > 0 && (
+            <section
+              className="mb-4 rounded-xl border border-red-500/40 bg-red-950/30 p-4"
+              role="alert"
+              aria-live="assertive"
+            >
+              <p className="mb-2 text-sm font-semibold text-red-200">Compliance requirements not met</p>
+              <ul className="text-sm text-red-400 space-y-1">
+                {shownReasons.map((reason) => (
+                  <li key={reason}>• {reason}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {submitMessage && (
+            <p className="mb-4 text-sm text-gray-200" role="status">
+              {submitMessage}
+            </p>
+          )}
+
+          {/* Create Match Button — disabled until wager + compliance preflight pass */}
           <button
-            className="w-full py-4 bg-gradient-to-r from-green-600 to-green-700 text-white text-lg font-bold rounded-full hover:from-green-700 hover:to-green-800 transition-all shadow-xl"
+            type="button"
+            disabled={!canCreate}
+            onClick={() => {
+              void handleCreateMatch();
+            }}
+            className="min-h-[44px] w-full py-4 bg-gradient-to-r from-green-600 to-green-700 text-white text-lg font-bold rounded-full hover:from-green-700 hover:to-green-800 transition-all shadow-xl disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Create Match • ${wagerAmount.toFixed(2)}
+            {isSubmitting
+              ? 'Creating…'
+              : `Create Match • $${wagerAmount.toFixed(2)}`}
           </button>
 
           {/* Cancel Button */}
@@ -201,6 +323,18 @@ export default function CreateMatchPage() {
             Cancel
           </Link>
         </main>
+
+        <AgeGateModal
+          isOpen={showAgeGate}
+          onClose={() => setShowAgeGate(false)}
+          onConfirmAge={(confirmedAge) => {
+            setAge(confirmedAge);
+            setShowAgeGate(false);
+            if (confirmedAge < WAGER_POLICY.minimumAge) {
+              setSubmitMessage('You must be 18+ to create real-money VS Matches.');
+            }
+          }}
+        />
       </div>
     </div>
   );

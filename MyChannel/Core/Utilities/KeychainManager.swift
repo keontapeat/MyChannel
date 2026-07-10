@@ -43,10 +43,10 @@ final class KeychainManager {
         let status = SecItemAdd(query as CFDictionary, nil)
         
         if status == errSecSuccess {
-            print("✅ [Keychain] Saved: \(key)")
+            print("✅ [Keychain] Saved key: \(key)")
             return true
         } else {
-            print("❌ [Keychain] Failed to save \(key): \(status)")
+            print("❌ [Keychain] Failed to save key \(key): \(status)")
             return false
         }
     }

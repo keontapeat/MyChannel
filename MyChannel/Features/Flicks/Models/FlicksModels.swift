@@ -76,7 +76,7 @@ struct FlickMusicTrack: Identifiable, Hashable {
 }
 
 /// Shared layout constants for the Flicks player so the tap-catcher
-/// (`UIKitFlicksGestureLayer` in FlicksView) and the scrubber it sits above
+/// (`UIKitFlicksGestureLayer` in FlicksGestureLayer.swift) and the scrubber it sits above
 /// (in `NuclearVideoPlayerView`) always agree on where the interactive
 /// scrubber strip is. Keeping this in one place avoids the two views
 /// drifting apart and the scrubber becoming untappable again.

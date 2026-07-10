@@ -15,7 +15,7 @@ import FirebaseFirestore
 #endif
 
 @MainActor
-class MoneyEscrowService: ObservableObject {
+class MoneyEscrowService: ObservableObject, MoneyEscrowing {
     static let shared = MoneyEscrowService()
     
     // MARK: - Published State
@@ -24,7 +24,9 @@ class MoneyEscrowService: ObservableObject {
     @Published var lastError: String?
     
     // MARK: - Configuration
-    private let platformFeePercent: Double = 0.10 // 10% platform fee
+    // Platform fee lives in MoneyMath.platformFeePercent — do not duplicate here.
+    // 🔐 Money paths NEVER use AppSecrets AI keys — all Stripe ops go through
+    // authenticated Cloud Functions with Firebase ID tokens only.
     private let stripeAPIBaseURL = "https://api.stripe.com/v1"
     private let backendAPIBaseURL = "https://us-central1-mychannel-ca26d.cloudfunctions.net"
     
@@ -41,8 +43,23 @@ class MoneyEscrowService: ObservableObject {
     
     // MARK: - 🔒 HOLD FUNDS (Creates Payment Intent)
     
-    func holdFunds(userId: String, amount: Double, matchId: String) async throws {
-        print("🔒 [Escrow] Holding $\(amount) from user \(userId) for match \(matchId)")
+    func holdFunds(userId: String, amount: Double, matchId: String, currency: String = EscrowCurrency.usd) async throws {
+        try await holdFunds(
+            userId: userId,
+            amountCents: MoneyMath.cents(fromDollars: amount),
+            matchId: matchId,
+            currency: currency
+        )
+    }
+
+    /// Preferred entry: integer cents (canonical). Dollars overload rounds via MoneyMath.
+    func holdFunds(userId: String, amountCents: Int, matchId: String, currency: String = EscrowCurrency.usd) async throws {
+        try EscrowCurrency.assertUSDOnly(currency)
+        guard amountCents > 0 else { throw EscrowError.invalidAmount }
+        let amount = MoneyMath.dollars(fromCents: amountCents)
+        print("🔒 [Escrow] Holding $\(amount) (\(amountCents)¢) from user \(userId) for match \(matchId)")
+        // Crashlytics: tag escrow failures with `money_domain=escrow` via ErrorReportingManager
+        // when hold/capture/transfer throws — never attach card or bank PII to custom keys.
         isProcessing = true
         defer { isProcessing = false }
         
@@ -59,18 +76,20 @@ class MoneyEscrowService: ObservableObject {
         // 3. Create Payment Intent with capture_method=manual (hold funds)
         let paymentIntentId = try await createPaymentIntent(
             customerId: stripeCustomerId,
-            amount: amount,
+            amountCents: amountCents,
             matchId: matchId
         )
         
-        // 4. Create escrow record in Firestore
+        // 4. Create escrow record in Firestore (dollars + canonical cents)
+        let platformFeeCents = MoneyMath.platformFeeCents(grossCents: amountCents)
+        let netAmountCents = MoneyMath.winnerPayoutCents(grossCents: amountCents)
         let escrow = EscrowedFunds(
             id: UUID().uuidString,
             matchId: matchId,
             userId: userId,
             amount: amount,
-            platformFee: MoneyMath.dollars(fromCents: MoneyMath.platformFeeCents(grossCents: MoneyMath.cents(fromDollars: amount))),
-            netAmount: MoneyMath.dollars(fromCents: MoneyMath.winnerPayoutCents(grossCents: MoneyMath.cents(fromDollars: amount))),
+            platformFee: MoneyMath.dollars(fromCents: platformFeeCents),
+            netAmount: MoneyMath.dollars(fromCents: netAmountCents),
             status: .held,
             stripePaymentIntentId: paymentIntentId,
             heldAt: Date()
@@ -84,6 +103,9 @@ class MoneyEscrowService: ObservableObject {
             "amount": escrow.amount,
             "platformFee": escrow.platformFee,
             "netAmount": escrow.netAmount,
+            "amountCents": amountCents,
+            "platformFeeCents": platformFeeCents,
+            "netAmountCents": netAmountCents,
             "status": "held",
             "stripePaymentIntentId": paymentIntentId,
             "heldAt": FieldValue.serverTimestamp()
@@ -108,6 +130,13 @@ class MoneyEscrowService: ObservableObject {
         guard let winnerEscrow = heldFunds[winnerEscrowKey],
               let loserEscrow = heldFunds[loserEscrowKey] else {
             throw EscrowError.noFundsHeld
+        }
+
+        // 🔒 Dispute holds funds frozen — never capture or transfer while either side
+        // is disputed. Ops must resolve the dispute and return rows to `held` first.
+        guard winnerEscrow.status != .disputed, loserEscrow.status != .disputed else {
+            print("🔒 [Escrow] Match \(matchId) funds frozen due to dispute — release blocked")
+            throw EscrowError.fundsFrozenDispute
         }
 
         // 🔒 Idempotency: only release funds that are still held. Guards against a
@@ -219,17 +248,26 @@ class MoneyEscrowService: ObservableObject {
         escrow.releasedAt = Date()
         heldFunds[escrowKey] = escrow
         
-        print("✅ [Escrow] Refund processed - Payment intent cancelled")
+        let refundCents = escrow.amountCents
+        print("✅ [Escrow] Refund processed - \(refundCents)¢ ($\(MoneyMath.dollars(fromCents: refundCents))) Payment intent cancelled")
     }
     
     // MARK: - 🔥 STRIPE API CALLS
+    
+    private func backendURL(_ path: String) throws -> URL {
+        guard let url = URL(string: "\(backendAPIBaseURL)/\(path)") else {
+            throw EscrowError.networkError
+        }
+        return url
+    }
     
     /// 🔐 Create a wallet-deposit PaymentIntent through the AUTHENTICATED escrow
     /// backend. The secret key stays server-side; the wallet is credited by the
     /// Stripe webhook after the charge actually succeeds (never by the client).
     /// Returns the PaymentIntent id (to confirm via the Stripe Payment Sheet).
-    func createWalletDepositIntent(userId: String, amountCents: Int) async throws -> String {
-        let url = URL(string: "\(backendAPIBaseURL)/create-escrow-payment")!
+    func createWalletDepositIntent(userId: String, amountCents: Int, currency: String = EscrowCurrency.usd) async throws -> String {
+        try EscrowCurrency.assertUSDOnly(currency)
+        let url = try backendURL("create-escrow-payment")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -252,8 +290,9 @@ class MoneyEscrowService: ObservableObject {
         return id
     }
     
-    private func createPaymentIntent(customerId: String, amount: Double, matchId: String) async throws -> String {
-        let url = URL(string: "\(backendAPIBaseURL)/create-escrow-payment")!
+    private func createPaymentIntent(customerId: String, amountCents: Int, matchId: String) async throws -> String {
+        guard amountCents > 0 else { throw EscrowError.invalidAmount }
+        let url = try backendURL("create-escrow-payment")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -261,7 +300,7 @@ class MoneyEscrowService: ObservableObject {
         
         let body: [String: Any] = [
             "customerId": customerId,
-            "amount": MoneyMath.cents(fromDollars: amount), // integer cents, rounded
+            "amount": amountCents, // integer cents — never Double dollars
             "matchId": matchId,
             "captureMethod": "manual" // Hold funds, don't capture yet
         ]
@@ -284,7 +323,7 @@ class MoneyEscrowService: ObservableObject {
     }
     
     private func capturePaymentIntent(paymentIntentId: String) async throws {
-        let url = URL(string: "\(backendAPIBaseURL)/capture-payment")!
+        let url = try backendURL("capture-payment")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -300,7 +339,7 @@ class MoneyEscrowService: ObservableObject {
     }
     
     private func cancelPaymentIntent(paymentIntentId: String) async throws {
-        let url = URL(string: "\(backendAPIBaseURL)/cancel-payment")!
+        let url = try backendURL("cancel-payment")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -316,7 +355,7 @@ class MoneyEscrowService: ObservableObject {
     }
     
     private func createTransfer(amount: Double, destinationAccountId: String, matchId: String) async throws {
-        let url = URL(string: "\(backendAPIBaseURL)/create-transfer")!
+        let url = try backendURL("create-transfer")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -417,16 +456,22 @@ class MoneyEscrowService: ObservableObject {
     }
     
     func getEscrowStats() -> EscrowStatistics {
+        // Active = funds still in escrow awaiting capture/release.
+        // Disputed and expired rows are excluded — they are not actionable holds.
         let held = heldFunds.values.filter { $0.status == .held }
         let released = heldFunds.values.filter { $0.status == .released }
         let refunded = heldFunds.values.filter { $0.status == .refunded }
-        
+        let disputed = heldFunds.values.filter { $0.status == .disputed }
+        let expired = heldFunds.values.filter { $0.status == .expired }
+
         return EscrowStatistics(
             totalHeld: held.reduce(0) { $0 + $1.amount },
             totalReleased: released.reduce(0) { $0 + $1.amount },
             totalRefunded: refunded.reduce(0) { $0 + $1.amount },
             activeEscrows: held.count,
-            completedEscrows: released.count + refunded.count
+            completedEscrows: released.count + refunded.count,
+            disputedEscrows: disputed.count,
+            expiredEscrows: expired.count
         )
     }
     
@@ -444,12 +489,22 @@ struct EscrowedFunds: Identifiable, Codable {
     let matchId: String
     let userId: String
     let amount: Double
+    /// Legacy display dollars — prefer `platformFeeCents` / `platformFeeMoney` for math.
+    @available(*, deprecated, message: "Use platformFeeCents or platformFeeMoney — Double drifts on settlement")
     let platformFee: Double
     let netAmount: Double
     var status: EscrowStatus
     let stripePaymentIntentId: String?
     let heldAt: Date
     var releasedAt: Date?
+    
+    /// Canonical Money views (integer cents) — prefer these for settlement math.
+    var amountMoney: Money { Money(dollars: amount) }
+    var platformFeeMoney: Money { Money(dollars: platformFee) }
+    var netAmountMoney: Money { Money(dollars: netAmount) }
+    var amountCents: Int { amountMoney.cents }
+    var platformFeeCents: Int { platformFeeMoney.cents }
+    var netAmountCents: Int { netAmountMoney.cents }
     
     enum EscrowStatus: String, Codable {
         case held
@@ -466,9 +521,37 @@ struct EscrowStatistics {
     let totalRefunded: Double
     let activeEscrows: Int
     let completedEscrows: Int
+    /// Rows frozen by dispute — not counted in `activeEscrows`.
+    var disputedEscrows: Int = 0
+    /// Holds past expiry window — awaiting cleanup job.
+    var expiredEscrows: Int = 0
     
     var platformRevenueTotal: Double {
-        totalReleased * 0.10 // 10% platform fee
+        let releasedCents = MoneyMath.cents(fromDollars: totalReleased)
+        return MoneyMath.dollars(fromCents: MoneyMath.platformFeeCents(grossCents: releasedCents))
+    }
+}
+
+/// Firestore write DTO with canonical `Money` cents fields (Codable escrow contract).
+struct EscrowFirestoreDTO: Codable {
+    let id: String
+    let matchId: String
+    let userId: String
+    let amount: Money
+    let platformFee: Money
+    let netAmount: Money
+    let status: String
+    let stripePaymentIntentId: String?
+
+    init(from escrow: EscrowedFunds, amountCents: Int, platformFeeCents: Int, netAmountCents: Int) {
+        id = escrow.id
+        matchId = escrow.matchId
+        userId = escrow.userId
+        amount = Money(cents: amountCents)
+        platformFee = Money(cents: platformFeeCents)
+        netAmount = Money(cents: netAmountCents)
+        status = escrow.status.rawValue
+        stripePaymentIntentId = escrow.stripePaymentIntentId
     }
 }
 
@@ -481,7 +564,9 @@ enum EscrowError: LocalizedError {
     case stripeError(String)
     case networkError
     case invalidAmount
-    
+    case unsupportedCurrency(String)
+    case fundsFrozenDispute
+
     var errorDescription: String? {
         switch self {
         case .insufficientFunds:
@@ -500,7 +585,32 @@ enum EscrowError: LocalizedError {
             return "Network error. Please check your connection and try again."
         case .invalidAmount:
             return "Invalid wager amount. Must be between $1 and $100,000."
+        case .unsupportedCurrency(let code):
+            return "Unsupported currency \"\(code)\". VS Match escrow is USD-only."
+        case .fundsFrozenDispute:
+            return "Funds are frozen while a dispute is open. Release is blocked until the dispute is resolved."
         }
     }
+}
+
+// MARK: - Release guard (unit-testable idempotency / dispute logic)
+
+enum EscrowReleaseGuard {
+    /// Returns whether `releaseFunds` may proceed for the given pair of escrow statuses.
+    static func canRelease(winnerStatus: EscrowedFunds.EscrowStatus, loserStatus: EscrowedFunds.EscrowStatus) -> EscrowReleaseDecision {
+        if winnerStatus == .disputed || loserStatus == .disputed {
+            return .blockedDispute
+        }
+        guard winnerStatus == .held, loserStatus == .held else {
+            return .skipAlreadyProcessed
+        }
+        return .proceed
+    }
+}
+
+enum EscrowReleaseDecision: Equatable {
+    case proceed
+    case skipAlreadyProcessed
+    case blockedDispute
 }
 

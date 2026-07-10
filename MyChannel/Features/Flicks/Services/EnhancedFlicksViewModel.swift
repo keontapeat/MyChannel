@@ -10,7 +10,7 @@ import SwiftUI
 import Combine
 
 // DEPRECATED: Not wired into FlicksView. Canonical ViewModel is NuclearFlicksViewModel.
-// Kept for reference / future merge — do not instantiate from production UI.
+// ARCHIVE NOTE (batch-5): Kept for reference / future merge — do not instantiate from production UI.
 @available(*, deprecated, message: "Use NuclearFlicksViewModel — this type is unwired")
 @MainActor
 class EnhancedFlicksViewModel: ObservableObject {

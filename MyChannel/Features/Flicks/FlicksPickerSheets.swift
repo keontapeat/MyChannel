@@ -123,10 +123,95 @@ struct FlicksSpeedPickerSheet: View {
     }
 }
 
+/// More-options sheet extracted from FlicksView (report / not interested / playlist).
+struct FlicksMoreOptionsSheet: View {
+    let onReport: () -> Void
+    let onNotInterested: () -> Void
+    let onAddToPlaylist: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("More Options")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.white)
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer()
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                    .accessibilityLabel("Close")
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+
+                Divider()
+                    .background(Color.gray.opacity(0.3))
+
+                VStack(spacing: 0) {
+                    moreOptionRow(icon: "exclamationmark.triangle", title: "Report", color: .red, action: {
+                        onReport()
+                        onDismiss()
+                    })
+                    Divider().background(Color.gray.opacity(0.3))
+                    moreOptionRow(icon: "hand.thumbsdown", title: "Not Interested", color: .orange, action: {
+                        onNotInterested()
+                        onDismiss()
+                    })
+                    Divider().background(Color.gray.opacity(0.3))
+                    moreOptionRow(icon: "plus.rectangle.on.rectangle", title: "Add to Playlist", color: .blue, action: {
+                        onDismiss()
+                        onAddToPlaylist()
+                    })
+                }
+
+                Spacer()
+            }
+            .background(Color.black)
+            .navigationBarHidden(true)
+        }
+        .presentationDetents([.height(280)])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func moreOptionRow(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: {
+            HapticManager.shared.impact(style: .medium)
+            action()
+        }) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                    .foregroundColor(color)
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+        }
+        .accessibilityLabel(title)
+    }
+}
+
 #Preview("Quality") {
     FlicksQualityPickerSheet(preferredQuality: .constant("auto"), isPresented: .constant(true))
 }
 
 #Preview("Speed") {
     FlicksSpeedPickerSheet(playbackSpeed: .constant(1.0), isPresented: .constant(true))
+}
+
+#Preview("More Options") {
+    FlicksMoreOptionsSheet(
+        onReport: {},
+        onNotInterested: {},
+        onAddToPlaylist: {},
+        onDismiss: {}
+    )
 }

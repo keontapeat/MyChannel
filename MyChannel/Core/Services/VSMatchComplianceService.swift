@@ -12,7 +12,7 @@ import FirebaseFirestore
 #endif
 
 @MainActor
-final class VSMatchComplianceService: ObservableObject {
+final class VSMatchComplianceService: ObservableObject, ComplianceChecking {
     static let shared = VSMatchComplianceService()
     private init() {}
     
@@ -49,12 +49,17 @@ final class VSMatchComplianceService: ObservableObject {
         )
     }
     
-    /// Check if user is age-verified for wagering
+    /// Check if user is age-verified for wagering.
+    /// Reads `ageVerified` from Firestore; also treats approved Stripe Identity KYC as
+    /// age-verified because the webhook confirms document DOB server-side.
     func isAgeVerified(userId: String) async -> Bool {
         #if canImport(FirebaseFirestore)
         do {
             let doc = try await db.collection("vs_match_compliance").document(userId).getDocument()
-            return doc.data()?["ageVerified"] as? Bool ?? false
+            let data = doc.data() ?? [:]
+            if data["ageVerified"] as? Bool == true { return true }
+            let kyc = data["kycStatus"] as? String ?? ""
+            return kyc == KYCStatus.approved.rawValue
         } catch {
             return false
         }
@@ -88,37 +93,20 @@ final class VSMatchComplianceService: ObservableObject {
         )
     }
 
-    /// Legacy path that also stores submitted document metadata, then starts Identity.
+    /// Legacy entry that starts Stripe Identity without writing document PII to Firestore.
+    /// Document numbers must never be stored client-side — Identity holds verified data server-side.
+    @available(*, deprecated, message: "Use startKYCVerification — do not collect or persist ID document numbers on device")
     func completeKYC(userId: String, idDocument: IDDocument) async throws -> KYCResult {
         guard idDocument.isValid else {
             throw ComplianceError.invalidDocument
         }
-
-        let session = try await createStripeIdentitySession(userId: userId)
-
-        #if canImport(FirebaseFirestore)
-        try await db.collection("vs_match_compliance").document(userId).setData([
-            "kycStatus": "pending",
-            "kycSubmittedAt": FieldValue.serverTimestamp(),
-            "stripeIdentitySessionId": session.sessionId,
-            "idDocumentType": idDocument.type.rawValue,
-            "idDocumentNumber": idDocument.number,
-            "idDocumentCountry": idDocument.country,
-            "verificationMethod": "stripe_identity"
-        ], merge: true)
-        #endif
-
-        return KYCResult(
-            userId: userId,
-            status: .pending,
-            submittedAt: Date(),
-            stripeIdentitySessionId: session.sessionId,
-            stripeIdentityEphemeralKeySecret: session.ephemeralKeySecret
-        )
+        // Intentionally discard document number/country — Stripe Identity is the source of truth.
+        return try await startKYCVerification(userId: userId)
     }
 
     /// Asks the authenticated backend to create a Stripe Identity VerificationSession
     /// plus an ephemeral key for the iOS SDK. Secret key never leaves the server.
+    /// SECURITY: Never log `ephemeralKeySecret` — treat like a password.
     func createStripeIdentitySession(userId: String) async throws -> StripeIdentitySession {
         let base = "https://us-central1-mychannel-ca26d.cloudfunctions.net"
         guard let url = URL(string: "\(base)/create_stripe_identity_session") else {
@@ -168,8 +156,27 @@ final class VSMatchComplianceService: ObservableObject {
     
     // MARK: - ⚖️ LEGAL COMPLIANCE CHECKS
     
+    /// Non-throwing preflight that returns human-readable block reasons for UI surfaces.
+    func wagerBlockReasons(userId: String, amount: Double) async -> [String] {
+        ComplianceError.aggregatedReasons(from: await collectWagerErrors(userId: userId, amount: amount))
+    }
+
     /// Check if user can create/accept VS match (all compliance checks)
     func canUserWager(userId: String, amount: Double) async throws -> ComplianceCheckResult {
+        let errors = await collectWagerErrors(userId: userId, amount: amount)
+        if !errors.isEmpty {
+            await logWagerComplianceFailure(userId: userId, amount: amount, errors: errors)
+            throw ComplianceError.multipleErrors(errors)
+        }
+
+        return ComplianceCheckResult(
+            userId: userId,
+            isCompliant: true,
+            checkedAt: Date()
+        )
+    }
+
+    private func collectWagerErrors(userId: String, amount: Double) async -> [ComplianceError] {
         var errors: [ComplianceError] = []
         
         // 1. Age verification (18+)
@@ -210,16 +217,8 @@ final class VSMatchComplianceService: ObservableObject {
         if !WagerPolicy.isWithinDailyLimit(alreadyWagered: dailyWagered, newWager: amount, limit: dailyLimit) {
             errors.append(.dailyLimitExceeded)
         }
-        
-        if !errors.isEmpty {
-            throw ComplianceError.multipleErrors(errors)
-        }
-        
-        return ComplianceCheckResult(
-            userId: userId,
-            isCompliant: true,
-            checkedAt: Date()
-        )
+
+        return errors
     }
     
     // MARK: - 📋 TERMS OF SERVICE
@@ -235,12 +234,15 @@ final class VSMatchComplianceService: ObservableObject {
         #endif
     }
     
-    /// Check if user has accepted terms
+    /// Check if user has accepted the *current* terms version (stale versions fail closed).
     func hasAcceptedTerms(userId: String) async -> Bool {
         #if canImport(FirebaseFirestore)
         do {
             let doc = try await db.collection("vs_match_compliance").document(userId).getDocument()
-            return doc.data()?["termsAccepted"] as? Bool ?? false
+            let data = doc.data() ?? [:]
+            let accepted = data["termsAccepted"] as? Bool ?? false
+            let version = data["termsVersion"] as? String ?? ""
+            return WagerPolicy.isTermsAcceptanceValid(accepted: accepted, version: version)
         } catch {
             return false
         }
@@ -256,6 +258,20 @@ final class VSMatchComplianceService: ObservableObject {
         // Get user's region from their Firestore profile
         let userRegion = await getUserRegion(userId: userId)
         return WagerPolicy.isRegionAllowed(userRegion)
+    }
+
+    /// Persist a US state region code (e.g. `US-CA`) on the user profile.
+    func saveUserRegion(userId: String, region: String) async throws {
+        let normalized = region.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard WagerPolicy.isRegionAllowed(normalized) else {
+            throw ComplianceError.regionRestricted
+        }
+        #if canImport(FirebaseFirestore)
+        try await db.collection("users").document(userId).setData([
+            "region": normalized,
+            "regionUpdatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+        #endif
     }
     
     // MARK: - 🚫 ACCOUNT STATUS
@@ -285,6 +301,7 @@ final class VSMatchComplianceService: ObservableObject {
     func getDailyWagerAmount(userId: String) async -> Double {
         #if canImport(FirebaseFirestore)
         do {
+            // Local start-of-day for UX preview; authoritative gate uses UTC in escrow index.js.
             let today = Calendar.current.startOfDay(for: Date())
             let snapshot = try await db.collection("vs_match_transactions")
                 .whereField("userId", isEqualTo: userId)
@@ -305,19 +322,35 @@ final class VSMatchComplianceService: ObservableObject {
     
     // MARK: - Helper Functions
     
+    /// Returns the user's verified region, or empty when unset (fail closed — never invent US-CA).
     private func getUserRegion(userId: String) async -> String {
         #if canImport(FirebaseFirestore)
         do {
             let doc = try await db.collection("users").document(userId).getDocument()
-            return doc.data()?["region"] as? String ?? "US-CA"
+            return (doc.data()?["region"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
-            return "US-CA"
+            return ""
         }
         #else
-        return "US-CA"
+        return ""
         #endif
     }
     
+    /// Writes a denied wager attempt to `compliance_audit_logs` (best-effort, non-blocking).
+    private func logWagerComplianceFailure(userId: String, amount: Double, errors: [ComplianceError]) async {
+        #if canImport(FirebaseFirestore)
+        let reasons = errors.compactMap(\.localizedDescription)
+        try? await db.collection("compliance_audit_logs").addDocument(data: [
+            "userId": userId,
+            "action": "canUserWager_denied",
+            "wagerAmount": amount,
+            "reasons": reasons,
+            "source": "ios",
+            "timestamp": FieldValue.serverTimestamp()
+        ])
+        #endif
+    }
+
     private func getAccountTier(userId: String) async -> AccountTier {
         #if canImport(FirebaseFirestore)
         do {
@@ -415,6 +448,11 @@ enum ComplianceError: LocalizedError {
     case invalidDocument
     case kycSessionFailed(String)
     case multipleErrors([ComplianceError])
+
+    /// Stable, user-facing reason strings for compliance sheets and alerts.
+    static func aggregatedReasons(from errors: [ComplianceError]) -> [String] {
+        errors.compactMap { $0.localizedDescription }
+    }
     
     var errorDescription: String? {
         switch self {

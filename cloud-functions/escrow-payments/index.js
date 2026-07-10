@@ -14,14 +14,100 @@ const functions = require('@google-cloud/functions-framework');
 const Stripe = require('stripe');
 const admin = require('firebase-admin');
 
-// Initialize Firebase Admin
+// Initialize Firebase Admin once per Cloud Functions instance (cold start safe).
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 const db = admin.firestore();
 
-// Initialize Stripe with secret key from environment
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+// Pin Stripe API version — must match server SDK + webhook event schema.
+const STRIPE_API_VERSION = '2024-11-20.acacia';
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: STRIPE_API_VERSION,
+});
+
+// Stable error codes for iOS / web clients (never rely on message text).
+const MONEY_ERROR = {
+  MISSING_FIELDS: 'MONEY_MISSING_FIELDS',
+  INVALID_AMOUNT: 'MONEY_INVALID_AMOUNT',
+  UNAUTHORIZED: 'MONEY_UNAUTHORIZED',
+  FORBIDDEN: 'MONEY_FORBIDDEN',
+  NOT_FOUND: 'MONEY_NOT_FOUND',
+  CONFLICT: 'MONEY_CONFLICT',
+  RATE_LIMITED: 'MONEY_RATE_LIMITED',
+  COMPLIANCE_DENIED: 'MONEY_COMPLIANCE_DENIED',
+  ESCROW_NOT_HELD: 'MONEY_ESCROW_NOT_HELD',
+  INTERNAL: 'MONEY_INTERNAL',
+};
+
+const VALID_KYC_STATUSES = new Set(['none', 'pending', 'approved', 'rejected', 'expired']);
+
+function moneyError(status, code, message) {
+  const err = new Error(message);
+  err.status = status;
+  err.code = code;
+  return err;
+}
+
+function jsonError(res, status, code, message) {
+  return res.status(status).json({ error: message, code });
+}
+
+// Money endpoints that MUST be POST + Firebase-authenticated (webhook uses Stripe sig).
+const MONEY_POST_PATHS = new Set([
+  '/create-escrow-payment',
+  '/capture-payment',
+  '/cancel-payment',
+  '/create-transfer',
+  '/create-merch-order',
+  '/refund-merch-order',
+]);
+
+function assertMoneyPostMethod(req, path) {
+  if (!MONEY_POST_PATHS.has(path)) return;
+  if (req.method !== 'POST') {
+    throw moneyError(405, MONEY_ERROR.FORBIDDEN, `POST required for ${path}`);
+  }
+}
+
+/**
+ * Assert a VS Match has a verified, completed outcome BEFORE any transfer.
+ * Throws 409 when status !== 'completed' or winnerId is missing.
+ * See docs/backend-money-runbook.md
+ */
+function assertMatchOutcomeBeforeTransfer(match, matchId) {
+  if (!match) {
+    throw moneyError(404, MONEY_ERROR.NOT_FOUND, 'Match not found');
+  }
+  if (match.status !== 'completed' || !match.winnerId) {
+    throw moneyError(
+      409,
+      MONEY_ERROR.CONFLICT,
+      `Match ${matchId} is not completed with a verified winner`
+    );
+  }
+  if (match.payoutTransferId) {
+    throw moneyError(
+      409,
+      MONEY_ERROR.CONFLICT,
+      'Winnings already paid out for this match'
+    );
+  }
+  return match.winnerId;
+}
+
+/** Normalize region to US-XX (two-letter state) or pass through if already canonical. */
+function normalizeRegion(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim().toUpperCase();
+  if (WAGER_POLICY.allowedRegions.has(trimmed)) return trimmed;
+  // Accept bare state codes: CA → US-CA
+  if (/^[A-Z]{2}$/.test(trimmed)) {
+    const candidate = `US-${trimmed}`;
+    if (WAGER_POLICY.allowedRegions.has(candidate)) return candidate;
+  }
+  return trimmed;
+}
 
 // Platform fee percentage (10%)
 const PLATFORM_FEE_PERCENT = 0.10;
@@ -32,6 +118,8 @@ const PLATFORM_FEE_PERCENT = 0.10;
 const WAGER_POLICY = {
   minimumAge: 18,
   kycRequiredAboveDollars: 500,
+  // Must match iOS WagerPolicy.currentTermsVersion / web wager-policy.ts
+  currentTermsVersion: '2025.1',
   // Per-account-tier daily wager limit (USD). Must match WagerPolicy.dailyLimitDollars.
   dailyLimitDollars: { new: 100, verified: 1000, premium: 10000, vip: 100000 },
   // US states + DC where skill-based real-money play is offered.
@@ -63,8 +151,34 @@ async function assertWagerCompliance(uid, amountCents) {
     db.collection('vs_match_compliance').doc(uid).get(),
     db.collection('users').doc(uid).get(),
   ]);
-  const compliance = complianceSnap.exists ? complianceSnap.data() : {};
+
+  // Fail closed: missing compliance doc = deny (never treat absent profile as eligible).
+  if (!complianceSnap.exists) {
+    const err = moneyError(
+      403,
+      MONEY_ERROR.COMPLIANCE_DENIED,
+      'Not eligible to wager: Compliance profile required'
+    );
+    throw err;
+  }
+  const compliance = complianceSnap.data();
   const user = userSnap.exists ? userSnap.data() : {};
+
+  // Validate kycStatus enum when present.
+  if (compliance.kycStatus != null && !VALID_KYC_STATUSES.has(compliance.kycStatus)) {
+    reasons.push('Invalid KYC status on file — contact support');
+  }
+
+  // Validate termsVersion string when present (must match current pin).
+  if (compliance.termsVersion != null) {
+    if (typeof compliance.termsVersion !== 'string' || compliance.termsVersion.trim() === '') {
+      reasons.push('Invalid terms version on file');
+    } else if (compliance.termsVersion !== WAGER_POLICY.currentTermsVersion) {
+      reasons.push(
+        `Accept the current VS Match terms (v${WAGER_POLICY.currentTermsVersion})`
+      );
+    }
+  }
 
   // 1. Age (18+). Require the verified flag; also re-check stored age if present.
   const ageOK = compliance.ageVerified === true &&
@@ -76,15 +190,17 @@ async function assertWagerCompliance(uid, amountCents) {
     reasons.push('KYC verification required for wagers over $500');
   }
 
-  // 3. Terms of Service acceptance.
+  // 3. Terms of Service acceptance — require the current version pin.
   if (compliance.termsAccepted !== true) {
     reasons.push('Terms of Service must be accepted');
+  } else if (!compliance.termsVersion) {
+    reasons.push(`Accept the current VS Match terms (v${WAGER_POLICY.currentTermsVersion})`);
   }
 
-  // 4. Region allowlist. Mirror the client default (US-CA) when unset so the two
-  //    layers agree; region should ideally come from a verified geo/KYC signal.
-  const region = user.region || 'US-CA';
-  if (!WAGER_POLICY.allowedRegions.has(region)) {
+  // 4. Region allowlist. Fail closed when unset — never default to an allowed region.
+  const rawRegion = user.region || compliance.region;
+  const region = normalizeRegion(rawRegion);
+  if (!region || !WAGER_POLICY.allowedRegions.has(region)) {
     reasons.push('Real-money wagering is not available in your region');
   }
 
@@ -95,6 +211,7 @@ async function assertWagerCompliance(uid, amountCents) {
   }
 
   // 6. Daily wager limit (sum of today's prior wagers + this one <= tier limit).
+  // Window resets at UTC midnight — must stay aligned with iOS WagerPolicy comment.
   const tier = user.accountTier || 'new';
   const dailyLimit = WAGER_POLICY.dailyLimitDollars[tier] ?? WAGER_POLICY.dailyLimitDollars.new;
   const startOfDay = new Date();
@@ -111,13 +228,50 @@ async function assertWagerCompliance(uid, amountCents) {
   }
 
   if (reasons.length > 0) {
-    const err = new Error(`Not eligible to wager: ${reasons.join('; ')}`);
-    err.status = 403;
-    throw err;
+    throw moneyError(
+      403,
+      MONEY_ERROR.COMPLIANCE_DENIED,
+      `Not eligible to wager: ${reasons.join('; ')}`
+    );
+  }
+}
+
+/** Write an immutable audit row for every real-money wager attempt (success or deny). */
+async function writeWagerAudit({ uid, matchId, amountCents, outcome, code, detail }) {
+  try {
+    await db.collection('money_audit_log').add({
+      userId: uid,
+      matchId: matchId || null,
+      amountCents,
+      type: 'wager',
+      outcome, // 'created' | 'denied' | 'captured' | 'canceled' | 'transferred'
+      code: code || null,
+      detail: detail || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    console.error('⚠️ Audit log write failed (non-fatal):', e.message);
+  }
+}
+
+/** Increment daily money volume counters for FinOps dashboards. */
+async function recordMoneyMetric(kind, amountCents) {
+  if (!Number.isInteger(amountCents) || amountCents <= 0) return;
+  const day = new Date().toISOString().slice(0, 10);
+  const ref = db.collection('money_metrics_daily').doc(day);
+  try {
+    await ref.set({
+      [kind]: admin.firestore.FieldValue.increment(amountCents),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch (e) {
+    console.error('⚠️ Metrics write failed (non-fatal):', e.message);
   }
 }
 
 // 🔒 Strict CORS allowlist — never reflect arbitrary origins on money endpoints.
+// Native iOS/Android clients send no Origin header; web clients must match ALLOWED_ORIGINS.
+// Do NOT use `Access-Control-Allow-Origin: *` on any route in this handler.
 const ALLOWED_ORIGINS = new Set([
   'https://mychannel.live',
   'https://www.mychannel.live',
@@ -142,6 +296,25 @@ const ADMIN_EMAILS = new Set([
   'keontapeat@mychannel.live',
   'keontapeat@gmail.com',
 ]);
+
+// Simple in-memory rate limit for create-escrow-payment (per uid).
+// Resets on cold start — use Redis / Firestore for multi-instance enforcement.
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 10;
+const rateLimitBuckets = new Map();
+
+function checkRateLimit(uid) {
+  const now = Date.now();
+  const bucket = rateLimitBuckets.get(uid) || [];
+  const recent = bucket.filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
+  if (recent.length >= RATE_LIMIT_MAX_REQUESTS) {
+    const err = new Error('Rate limit exceeded — try again in a minute');
+    err.status = 429;
+    throw err;
+  }
+  recent.push(now);
+  rateLimitBuckets.set(uid, recent);
+}
 
 function isAdmin(decoded) {
   return (
@@ -184,6 +357,7 @@ functions.http('escrowPayments', async (req, res) => {
   const path = req.path;
 
   try {
+    assertMoneyPostMethod(req, path);
     switch (path) {
       case '/create-escrow-payment':
         await handleCreateEscrowPayment(req, res);
@@ -209,6 +383,9 @@ functions.http('escrowPayments', async (req, res) => {
       case '/webhook':
         await handleStripeWebhook(req, res);
         break;
+      case '/cleanup-expired-escrows':
+        await handleCleanupExpiredEscrows(req, res);
+        break;
       case '/health':
         res.status(200).json({ status: 'healthy', stripe: 'connected' });
         break;
@@ -217,7 +394,9 @@ functions.http('escrowPayments', async (req, res) => {
     }
   } catch (error) {
     console.error('Payment error:', error);
-    res.status(error.status || 500).json({ error: error.message });
+    const status = error.status || 500;
+    const code = error.code || MONEY_ERROR.INTERNAL;
+    res.status(status).json({ error: error.message, code });
   }
 });
 
@@ -227,15 +406,22 @@ functions.http('escrowPayments', async (req, res) => {
  */
 async function handleCreateEscrowPayment(req, res) {
   const decoded = await requireAuth(req);
+  checkRateLimit(decoded.uid);
   const { amount, matchId, captureMethod } = req.body;
 
   if (!amount || !matchId) {
-    return res.status(400).json({ error: 'Missing required fields' });
+    return jsonError(res, 400, MONEY_ERROR.MISSING_FIELDS, 'Missing required fields');
   }
 
   // Validate amount (min $1, max $100,000) and ensure it is a clean integer of cents.
-  if (!Number.isInteger(amount) || amount < 100 || amount > 10000000) {
-    return res.status(400).json({ error: 'Amount must be a whole number of cents between $1 and $100,000' });
+  // Reject zero, negative, and fractional cent values explicitly.
+  if (!Number.isInteger(amount) || amount <= 0 || amount < 100 || amount > 10000000) {
+    return jsonError(
+      res,
+      400,
+      MONEY_ERROR.INVALID_AMOUNT,
+      'Amount must be a positive whole number of cents between $1 and $100,000'
+    );
   }
 
   const isWalletDeposit = matchId === 'wallet_deposit';
@@ -257,7 +443,19 @@ async function handleCreateEscrowPayment(req, res) {
     // for $500+, terms, region, account status, and daily limit. Enforced here
     // so a modified client can never hold funds for an ineligible wager.
     // Throws 403 with a combined reason on failure.
-    await assertWagerCompliance(decoded.uid, amount);
+    try {
+      await assertWagerCompliance(decoded.uid, amount);
+    } catch (complianceErr) {
+      await writeWagerAudit({
+        uid: decoded.uid,
+        matchId,
+        amountCents: amount,
+        outcome: 'denied',
+        code: complianceErr.code || MONEY_ERROR.COMPLIANCE_DENIED,
+        detail: complianceErr.message,
+      });
+      throw complianceErr;
+    }
   }
 
   // 🔐 Resolve the Stripe customer SERVER-SIDE from the authenticated uid. We
@@ -317,6 +515,15 @@ async function handleCreateEscrowPayment(req, res) {
       paymentIntentId: paymentIntent.id,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    await writeWagerAudit({
+      uid: decoded.uid,
+      matchId,
+      amountCents: amount,
+      outcome: 'created',
+      code: null,
+      detail: paymentIntent.id,
+    });
+    await recordMoneyMetric('wagerVolumeCents', amount);
   }
 
   console.log(`✅ PaymentIntent created: ${paymentIntent.id}`);
@@ -348,6 +555,17 @@ async function handleCapturePayment(req, res) {
   const escrow = escrowSnap.data();
   await assertMatchParticipantOrAdmin(decoded, escrow.matchId);
 
+  // Escrow capture only when funds are held (requires_capture).
+  const existingPI = await stripe.paymentIntents.retrieve(paymentIntentId);
+  if (existingPI.status !== 'requires_capture') {
+    return jsonError(
+      res,
+      409,
+      MONEY_ERROR.ESCROW_NOT_HELD,
+      `Payment is not in a capturable state (status: ${existingPI.status})`
+    );
+  }
+
   console.log(`🔒 Capturing payment: ${paymentIntentId}`);
 
   // Capture the payment
@@ -358,6 +576,16 @@ async function handleCapturePayment(req, res) {
     status: 'captured',
     capturedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+
+  await writeWagerAudit({
+    uid: escrow.userId || decoded.uid,
+    matchId: escrow.matchId,
+    amountCents: escrow.amount,
+    outcome: 'captured',
+    code: null,
+    detail: paymentIntentId,
+  });
+  await recordMoneyMetric('capturedVolumeCents', escrow.amount || 0);
 
   console.log(`✅ Payment captured: ${paymentIntent.id}`);
 
@@ -371,31 +599,55 @@ async function handleCapturePayment(req, res) {
 /**
  * CANCEL PAYMENT
  * Cancels a held payment (refund). Server-authorized only.
+ * For match wagers, cancels ALL held escrow legs for the match so both
+ * participants are refunded — never cancel only one leg.
  */
 async function handleCancelPayment(req, res) {
   const decoded = await requireAuth(req);
-  const { paymentIntentId } = req.body;
+  const { paymentIntentId, matchId: bodyMatchId } = req.body;
+
+  // Bulk cancel by matchId — refunds both participants.
+  if (!paymentIntentId && bodyMatchId) {
+    return cancelAllEscrowForMatch(req, res, decoded, bodyMatchId);
+  }
 
   if (!paymentIntentId) {
-    return res.status(400).json({ error: 'Missing paymentIntentId' });
+    return jsonError(res, 400, MONEY_ERROR.MISSING_FIELDS, 'Missing paymentIntentId or matchId');
   }
 
   const escrowSnap = await db.collection('stripe_escrow').doc(paymentIntentId).get();
   if (!escrowSnap.exists) {
-    return res.status(404).json({ error: 'Escrow record not found' });
+    return jsonError(res, 404, MONEY_ERROR.NOT_FOUND, 'Escrow record not found');
   }
   const escrow = escrowSnap.data();
   await assertMatchParticipantOrAdmin(decoded, escrow.matchId);
 
+  const existingPI = await stripe.paymentIntents.retrieve(paymentIntentId);
+  if (!['requires_capture', 'requires_payment_method', 'requires_confirmation', 'requires_action'].includes(existingPI.status)) {
+    return jsonError(
+      res,
+      409,
+      MONEY_ERROR.ESCROW_NOT_HELD,
+      `Payment is not in a cancellable state (status: ${existingPI.status})`
+    );
+  }
+
   console.log(`❌ Cancelling payment: ${paymentIntentId}`);
 
-  // Cancel the payment intent
   const paymentIntent = await stripe.paymentIntents.cancel(paymentIntentId);
 
-  // Update Firestore record
   await db.collection('stripe_escrow').doc(paymentIntentId).update({
     status: 'canceled',
     canceledAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  await writeWagerAudit({
+    uid: escrow.userId || decoded.uid,
+    matchId: escrow.matchId,
+    amountCents: escrow.amount,
+    outcome: 'canceled',
+    code: null,
+    detail: paymentIntentId,
   });
 
   console.log(`✅ Payment canceled: ${paymentIntent.id}`);
@@ -404,6 +656,49 @@ async function handleCancelPayment(req, res) {
     paymentIntentId: paymentIntent.id,
     status: paymentIntent.status,
   });
+}
+
+/** Cancel every held escrow leg for a match (both participants). */
+async function cancelAllEscrowForMatch(req, res, decoded, matchId) {
+  await assertMatchParticipantOrAdmin(decoded, matchId);
+
+  const heldQuery = await db.collection('stripe_escrow')
+    .where('matchId', '==', matchId)
+    .where('status', '==', 'requires_capture')
+    .get();
+
+  if (heldQuery.empty) {
+    return jsonError(res, 409, MONEY_ERROR.ESCROW_NOT_HELD, 'No held funds to cancel for this match');
+  }
+
+  const canceled = [];
+  for (const doc of heldQuery.docs) {
+    const row = doc.data();
+    const piId = doc.id;
+    try {
+      const existingPI = await stripe.paymentIntents.retrieve(piId);
+      if (existingPI.status === 'requires_capture') {
+        await stripe.paymentIntents.cancel(piId);
+      }
+      await doc.ref.update({
+        status: 'canceled',
+        canceledAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await writeWagerAudit({
+        uid: row.userId,
+        matchId,
+        amountCents: row.amount,
+        outcome: 'canceled',
+        code: null,
+        detail: piId,
+      });
+      canceled.push(piId);
+    } catch (e) {
+      console.error(`⚠️ Failed to cancel ${piId}:`, e.message);
+    }
+  }
+
+  res.status(200).json({ matchId, canceledPaymentIntentIds: canceled, count: canceled.length });
 }
 
 // Caller must be a participant in the match, or an admin.
@@ -441,7 +736,7 @@ async function handleCreateTransfer(req, res) {
     return res.status(400).json({ error: 'Missing matchId' });
   }
 
-  // 1. Load the match and confirm it has a verified, completed outcome.
+  // 1. Load the match and assert verified outcome BEFORE any transfer.
   const matchSnap = await db.collection('versus_matches').doc(matchId).get();
   if (!matchSnap.exists) {
     return res.status(404).json({ error: 'Match not found' });
@@ -451,14 +746,11 @@ async function handleCreateTransfer(req, res) {
   if (!isAdmin(decoded) && !participants.includes(decoded.uid)) {
     return res.status(403).json({ error: 'You are not a participant in this match' });
   }
-  if (match.status !== 'completed' || !match.winnerId) {
-    return res.status(409).json({ error: 'Match is not completed with a verified winner' });
-  }
-  if (match.payoutTransferId) {
-    return res.status(409).json({ error: 'Winnings already paid out for this match' });
-  }
+  const winnerId = assertMatchOutcomeBeforeTransfer(match, matchId);
 
-  const winnerId = match.winnerId;
+  // ASSERT (money invariant): transfer amount, winner, and destination are SERVER-DERIVED.
+  // The client body MUST contain only `matchId` — never `amount`, `destination`, or `winnerId`.
+  // Pot = sum of captured stripe_escrow rows; payout account = users/{winnerId}.stripeConnectAccountId.
 
   // 2. Derive the pot from CAPTURED escrow rows for this match (never the body).
   const escrowQuery = await db
@@ -521,6 +813,16 @@ async function handleCreateTransfer(req, res) {
     payoutTransferId: transfer.id,
     paidOutAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+
+  await writeWagerAudit({
+    uid: winnerId,
+    matchId,
+    amountCents: transferAmount,
+    outcome: 'transferred',
+    code: null,
+    detail: transfer.id,
+  });
+  await recordMoneyMetric('transferVolumeCents', transferAmount);
 
   // Record platform revenue
   await db.collection('platform_revenue').add({
@@ -764,33 +1066,74 @@ async function handleStripeWebhook(req, res) {
 
   console.log(`📩 Webhook received: ${event.type}`);
 
+  // Idempotency: Stripe may retry the same event.id — process at most once.
+  const eventRef = db.collection('stripe_webhook_events').doc(event.id);
+  const prior = await eventRef.get();
+  if (prior.exists) {
+    console.log(`↩️ Duplicate webhook ignored: ${event.id}`);
+    return res.status(200).json({ received: true, duplicate: true });
+  }
+  await eventRef.set({
+    type: event.type,
+    receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  let handlerError = null;
   // Handle specific events
-  switch (event.type) {
-    case 'payment_intent.succeeded':
-      await handlePaymentSucceeded(event.data.object);
-      break;
-    
-    case 'payment_intent.payment_failed':
-      await handlePaymentFailed(event.data.object);
-      break;
-    
-    case 'transfer.created':
-      await handleTransferCreated(event.data.object);
-      break;
-    
-    case 'payout.paid':
-      await handlePayoutPaid(event.data.object);
-      break;
+  try {
+    switch (event.type) {
+      case 'payment_intent.succeeded':
+        await handlePaymentSucceeded(event.data.object);
+        break;
 
-    case 'account.updated':
-      await handleAccountUpdated(event.data.object);
-      break;
+      case 'payment_intent.payment_failed':
+        await handlePaymentFailed(event.data.object);
+        break;
 
-    default:
-      console.log(`Unhandled event type: ${event.type}`);
+      case 'transfer.created':
+        await handleTransferCreated(event.data.object);
+        break;
+
+      case 'payout.paid':
+        await handlePayoutPaid(event.data.object);
+        break;
+
+      case 'account.updated':
+        await handleAccountUpdated(event.data.object);
+        break;
+
+      case 'identity.verification_session.verified':
+        await handleIdentityVerified(event.data.object);
+        break;
+
+      case 'identity.verification_session.requires_input':
+      case 'identity.verification_session.canceled':
+        await handleIdentityPendingOrCanceled(event.data.object);
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+    await eventRef.update({ processedAt: admin.firestore.FieldValue.serverTimestamp(), status: 'ok' });
+  } catch (handlerErr) {
+    handlerError = handlerErr;
+    console.error(`❌ Webhook handler failed for ${event.id}:`, handlerErr.message);
+    await eventRef.update({
+      status: 'failed',
+      error: handlerErr.message,
+      failedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    // Dead-letter queue for manual replay / alerting.
+    await db.collection('stripe_webhook_dead_letter').doc(event.id).set({
+      eventId: event.id,
+      type: event.type,
+      error: handlerErr.message,
+      receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
   }
 
-  res.status(200).json({ received: true });
+  // Always 200 so Stripe does not infinite-retry poison events; dead-letter captures failures.
+  res.status(200).json({ received: true, handlerError: handlerError ? handlerError.message : null });
 }
 
 // 🔐 Credit a VS-match wallet SERVER-SIDE (Admin SDK bypasses security rules).
@@ -990,6 +1333,83 @@ async function handleAccountUpdated(account) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   }
+}
+
+// MARK: - Scheduled stub (not wired to Cloud Scheduler yet)
+// Daily wager limits are windowed in assertWagerCompliance (UTC startOfDay query).
+// Deploy this when/if persistent daily counters are added to vs_match_compliance.
+//
+// async function resetDailyWagerLimits() {
+//   console.log('[reset_daily_wager_limits] noop — limits reset automatically at UTC midnight');
+// }
+
+/** Marks held escrow rows past ESCROW_HOLD_TTL_MS as expired (admin/cron). */
+const ESCROW_HOLD_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+async function handleCleanupExpiredEscrows(req, res) {
+  const decoded = await requireAuth(req);
+  if (!isAdmin(decoded)) {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+  const cutoff = Date.now() - ESCROW_HOLD_TTL_MS;
+  const snap = await db.collection('escrow').where('status', '==', 'held').get();
+  let updated = 0;
+  const batch = db.batch();
+  snap.forEach((doc) => {
+    const heldAt = doc.data().heldAt?.toDate?.()?.getTime?.() ?? 0;
+    if (heldAt > 0 && heldAt < cutoff) {
+      batch.update(doc.ref, {
+        status: 'expired',
+        expiredAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      updated += 1;
+    }
+  });
+  if (updated > 0) await batch.commit();
+  console.log(`🧹 Expired escrow cleanup: ${updated} rows`);
+  res.status(200).json({ expired: updated });
+}
+
+/**
+ * KYC approved webhook — updates Firestore, sets ageVerified, clears session id.
+ * Session id is stored only while kycStatus is pending.
+ */
+async function handleIdentityVerified(session) {
+  const userId = session.metadata?.userId;
+  if (!userId) {
+    console.warn('identity.verified missing metadata.userId');
+    return;
+  }
+  const dob = session.verified_outputs?.dob;
+  let age = null;
+  if (dob?.year) {
+    const now = new Date();
+    age = now.getFullYear() - dob.year;
+  }
+  await db.collection('vs_match_compliance').doc(userId).set({
+    kycStatus: 'approved',
+    kycApprovedAt: admin.firestore.FieldValue.serverTimestamp(),
+    ageVerified: true,
+    age: age,
+    stripeIdentitySessionId: admin.firestore.FieldValue.delete(),
+    verificationMethod: 'stripe_identity',
+  }, { merge: true });
+  console.log(`✅ KYC approved for ${userId}`);
+}
+
+async function handleIdentityPendingOrCanceled(session) {
+  const userId = session.metadata?.userId;
+  if (!userId) return;
+  const status = session.status === 'canceled' ? 'rejected' : 'pending';
+  const patch = {
+    kycStatus: status,
+    stripeIdentitySessionId: session.id,
+    verificationMethod: 'stripe_identity',
+  };
+  if (status === 'rejected') {
+    patch.stripeIdentitySessionId = admin.firestore.FieldValue.delete();
+  }
+  await db.collection('vs_match_compliance').doc(userId).set(patch, { merge: true });
 }
 
 module.exports = { stripe };

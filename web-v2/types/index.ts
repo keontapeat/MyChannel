@@ -145,7 +145,8 @@ export interface VersusMatch {
   challenger: User;
   opponentId: string;
   opponent: User;
-  wagerAmount: number; // in cents
+  wagerAmount: number; // Dollars (legacy). Prefer wagerAmountCents for money math.
+  wagerAmountCents?: number; // Canonical integer cents
   category: VersusMatchCategory;
   division: ChampionshipDivision;
   status: MatchStatus;

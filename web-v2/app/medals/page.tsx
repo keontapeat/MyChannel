@@ -6,7 +6,7 @@
 import { Trophy, TrendingUp, Crown, Star, Medal, Flame, Zap, Target, ChevronRight, ArrowUp, ArrowDown } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import {
   MedalDivision,
   getMedalIcon,
@@ -14,14 +14,19 @@ import {
   getWagerRange,
   RankedCompetitor,
 } from '@/types/vs-matches';
-
-// Stable timestamp for seed data — captured at module load, not per render
-const MODULE_LOAD_TIME = new Date('2026-06-01T00:00:00Z').getTime();
+import {
+  loadChampionshipRankings,
+  loadRecentVersusMatches,
+  type RecentVSMatchRow,
+} from '@/lib/vs-match-medals';
 
 export default function ChampionshipHub() {
   const [selectedDivision, setSelectedDivision] = useState<MedalDivision>(MedalDivision.GOLD);
   const [activeTab, setActiveTab] = useState<'rankings' | 'matches' | 'stats'>('rankings');
   const [animateIn] = useState(true);
+  const [rankedCompetitors, setRankedCompetitors] = useState<RankedCompetitor[]>([]);
+  const [recentMatches, setRecentMatches] = useState<RecentVSMatchRow[]>([]);
+  const [isLoadingRankings, setIsLoadingRankings] = useState(true);
 
   // Medal divisions with enhanced styling
   const divisions = [
@@ -69,56 +74,28 @@ export default function ChampionshipHub() {
     },
   ];
 
-  // Stable seeded sample data — computed once per selectedDivision, not every render
-  const rankedCompetitors: RankedCompetitor[] = useMemo(
-    () =>
-      Array.from({ length: 15 }).map((_, i) => {
-        // Deterministic pseudo-random using index as seed
-        const seed = (n: number) => ((i + 1) * 17 + n * 31) % 100;
-        return {
-          userId: `user-${i + 1}`,
-          displayName: `Champion ${i + 1}`,
-          photoURL: `https://i.pravatar.cc/150?img=${i + 1}`,
-          division: selectedDivision,
-          rank: i + 1,
-          wins: (seed(1) % 50) + 20,
-          losses: (seed(2) % 15) + 2,
-          winRate: 75 + (seed(3) % 25),
-          totalWagered: 10000 + (seed(4) * 1000),
-          totalWinnings: 5000 + (seed(5) * 600),
-          currentStreak: seed(6) % 15,
-          lastMatchDate: new Date(MODULE_LOAD_TIME),
-          isChampion: i === 0,
-          defenseCount: i === 0 ? (seed(7) % 10) + 5 : 0,
-          rankChange: i === 0 ? 0 : (seed(8) % 5) - 2,
-        };
-      }),
-    [selectedDivision]
-  );
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setIsLoadingRankings(true);
+      try {
+        const [rankings, matches] = await Promise.all([
+          loadChampionshipRankings(selectedDivision),
+          loadRecentVersusMatches(5),
+        ]);
+        if (cancelled) return;
+        setRankedCompetitors(rankings);
+        setRecentMatches(matches);
+      } finally {
+        if (!cancelled) setIsLoadingRankings(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDivision]);
 
   const selectedDivisionData = divisions.find((d) => d.division === selectedDivision);
-
-  // Stable seeded recent matches — hoursAgo computed once, not per render
-  const recentMatches = useMemo(
-    () => {
-      return Array.from({ length: 5 }).map((_, i) => {
-        const seed = (n: number) => ((i + 1) * 13 + n * 7) % 100;
-        const categories = ['Gaming', 'Views', 'Likes', 'Comments'] as const;
-        const hoursAgo = (seed(3) % 24) + 1;
-        return {
-          id: `match-${i}`,
-          player1: `Player ${i * 2 + 1}`,
-          player2: `Player ${i * 2 + 2}`,
-          wager: 500 + (seed(1) * 45),
-          winner: seed(2) > 50 ? 1 : 2,
-          hoursAgo,
-          date: new Date(MODULE_LOAD_TIME - hoursAgo * 3600000),
-          category: categories[seed(4) % 4],
-        };
-      });
-    },
-    []
-  );
 
   // Division stats
   const divisionStats = {
@@ -333,6 +310,29 @@ export default function ChampionshipHub() {
           {/* Content Based on Active Tab */}
           {activeTab === 'rankings' && (
             <>
+              {isLoadingRankings && (
+                <p className="mb-4 text-sm text-gray-400" role="status">
+                  Loading rankings…
+                </p>
+              )}
+              {!isLoadingRankings && rankedCompetitors.length === 0 && (
+                <div
+                  className="mb-6 rounded-2xl border border-gray-700/50 bg-gray-800/40 p-8 text-center"
+                  role="status"
+                >
+                  <Trophy className="mx-auto mb-3 text-yellow-500/60" size={40} aria-hidden />
+                  <p className="text-base font-semibold text-white">No rankings yet</p>
+                  <p className="mt-2 text-sm text-gray-400">
+                    Compete in a VS Match to appear on this division leaderboard.
+                  </p>
+                  <Link
+                    href="/medals/create-match"
+                    className="mt-4 inline-block min-h-[44px] rounded-full bg-red-600 px-6 py-3 text-sm font-bold text-white hover:bg-red-700"
+                  >
+                    Create your first match
+                  </Link>
+                </div>
+              )}
               {/* Current Champion - Olympics Podium Style */}
               {rankedCompetitors[0] && (
                 <section className={`mb-6 transition-all duration-700 delay-300 ${animateIn ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
@@ -546,6 +546,11 @@ export default function ChampionshipHub() {
               </div>
 
               <div className="space-y-3">
+                {!isLoadingRankings && recentMatches.length === 0 && (
+                  <p className="text-sm text-gray-400" role="status">
+                    No recent matches yet. Create one to get started.
+                  </p>
+                )}
                 {recentMatches.map((match, index) => (
                   <div
                     key={match.id}

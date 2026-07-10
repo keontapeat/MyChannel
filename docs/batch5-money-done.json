@@ -1,0 +1,23 @@
+{
+  "done_titles": [
+    "Protocol-based MoneyEscrowing",
+    "Protocol-based ComplianceChecking",
+    "Currency USD-only assert in escrow",
+    "Dispute path holds funds frozen",
+    "Partial refund math MoneyMath",
+    "Escrow idempotency double-release test",
+    "Penny pot fee+payout identity property test",
+    "Negative amount rejected at escrow boundary",
+    "Document cents-as-canonical Firestore contract",
+    "hasAcceptedTerms checks currentTermsVersion",
+    "Fail-closed region (no US-CA default) iOS",
+    "Wire age gate to Stripe Identity verified DOB",
+    "VSMatchComplianceServiceTests",
+    "Deploy create_stripe_identity_session",
+    "Deploy stripe_identity_webhook",
+    "Compliance sheet accessibility labels",
+    "Scan AppSecrets for remaining baked keys",
+    "CreatorEconomyService Double cleanup"
+  ],
+  "notes": "Added MoneyEscrowing/ComplianceChecking protocols with DI registration; USD-only escrow assert + disputed release guard; MoneyMath.partialRefundCents; EscrowReleaseGuard + EscrowIdempotencyTests; money-firestore-contract.md; deploy-identity-escrow.sh; AppSecrets pexels/pixabay fail-closed; CreatorEconomyService tip share via Money; isAgeVerified treats approved KYC as age-verified; compliance sheet a11y labels. SuperThanks/AdsService already cents/MoneyMath — skipped. No pbxproj or commits."
+}

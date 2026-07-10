@@ -32,9 +32,10 @@ class RealtimeViewTracker: ObservableObject {
     private var activeCreatorPresence: Set<String> = []
     
     // MARK: - AI Monitoring Integration
+    // MyChannelAI intentionally NOT held here — it cold-started every launch via
+    // GlobalVideoPlayerManager → RealtimeViewTracker. See docs/ai-agi-callsite-map.md.
     private let aiMonitoring = MonitoringAlertingService.shared
     private let analyticsWebSocket = RealtimeAnalyticsWebSocket.shared
-    private let aiService = MyChannelAI.shared
     
     #if canImport(FirebaseFirestore)
     /// Returns the Firestore instance ONLY when FirebaseApp is configured.
@@ -51,6 +52,9 @@ class RealtimeViewTracker: ObservableObject {
         return Firestore.firestore()
     }
     private var viewListeners: [String: ListenerRegistration] = [:]
+    /// Cap concurrent Firestore snapshot listeners — unbounded growth caused launch jank
+    /// when many videos were prefetched. Keep ≤ `maxConcurrentViewListeners`.
+    private let maxConcurrentViewListeners = 12
     #endif
     
     private var updateTimer: Timer?

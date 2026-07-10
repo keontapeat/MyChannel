@@ -1,0 +1,19 @@
+{
+  "batch": "batch5-player-flicks-downloads",
+  "completed_at": "2026-07-09",
+  "done_titles": [
+    "Extract PiP coordinator from GlobalVideoPlayerManager",
+    "Extract KVO observers module",
+    "Extract FlicksPlayerOverlay from ProfessionalVideoPlayer",
+    "WatchConnectivity weak player binding",
+    "Deduplicate preload paths",
+    "Gesture layer extraction",
+    "Prefetch next 3 flicks",
+    "drawingGroup on complex overlays",
+    "Verify HLSDownloadManager wired",
+    "OfflineDownloadService state machine tests",
+    "DownloadMLService URL config not hardcoded",
+    "OfflineDownloadServiceTests expand",
+    "PlayerLifecycleTests"
+  ]
+}

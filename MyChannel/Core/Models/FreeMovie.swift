@@ -2,6 +2,8 @@ import SwiftUI
 import Foundation
 
 // MARK: - Free Movie Model
+// Free catalog: Archive.org + Pluto TV fallbacks via FreeCatalogService when TMDB
+// key is empty. Pluto streams use approved CDN logos (ytimg.com) per image URL rules.
 struct FreeMovie: Identifiable, Codable {
     let id: String
     let title: String
@@ -81,8 +83,9 @@ extension FreeMovie {
             urls.append(u)
         }
 
-        // 2) Explicit poster URL (TMDB or a curated YouTube thumbnail). Kept as a
-        //    strong candidate, but after the archive cover since TMDB hashes here
+        // 2) Explicit poster URL (TMDB image.tmdb.org or YouTube ytimg.com only).
+        //    Never use wikipedia.org / wikimedia.org — blocked by AsyncImage/CORS.
+        //    Kept as a strong candidate, but after the archive cover since TMDB hashes here
         //    are frequently invalid.
         if !posterURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            let u = URL(string: posterURL) {

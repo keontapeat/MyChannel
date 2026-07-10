@@ -104,6 +104,13 @@ struct AppConfig {
         // deployed Cloud Run URL once services/video-content-id is deployed
         // (see services/Dockerfile.video-content-id + cloudbuild-video-content-id.yaml).
         static let videoContentIDBaseURL = "https://video-content-id-fkri6ifojq-uc.a.run.app"
+
+        // MARK: - Download ML Cloud Run endpoints
+        // Deployed via cloud-deployment/vertex-ai/download-recommendations-service.
+        // Centralized here so DownloadMLService does not hardcode production URLs.
+        static let downloadRecommendationsURL = "https://recommendations-fkri6ifojq-uc.a.run.app/recommend-downloads"
+        static let downloadWatchTimePredictorURL = "https://watch-time-predictor-fkri6ifojq-uc.a.run.app/predict-download-value"
+        static let downloadFeedPersonalizationURL = "https://feed-personalization-fkri6ifojq-uc.a.run.app/personalized-downloads"
         // Note: This app uses Firebase exclusively - no Supabase needed
         static let supabaseAnonKey = "" // Deprecated - use Firebase
         
@@ -147,12 +154,45 @@ struct AppConfig {
     
     // Convenience accessor for app version
     static let appVersion = App.version
+
+    // MARK: - AI Kill Switch
+    /// Master switch for all CreatorIntelligenceService calls. Flip to `false` to
+    /// disable AI app-wide without ripping out call sites.
+    static let aiEnabled: Bool = {
+        #if DEBUG
+        return true
+        #else
+        return Features.enableAIRecommendations
+        #endif
+    }()
+
+    // MARK: - AI Budget & Rate Limits
+    /// Caps outbound AI calls and spend for CreatorIntelligenceService.
+    struct AI {
+        /// Hard timeout per AI request (seconds). Retries use the same budget.
+        static let requestTimeoutSeconds: TimeInterval = 8.0
+        /// One automatic retry after timeout/transient failure (total attempts = 1 + maxRetries).
+        static let maxRetries: Int = 1
+        /// Soft per-minute call ceiling per agent category (enforced in CreatorIntelligenceService).
+        static let maxAICallsPerMinute: Int = 20
+        /// Estimated USD ceiling per agent invocation before expensive-agent gate trips.
+        static let apiCostBudgetPerAgentUSD: Double = 0.05
+        /// Fraction of agent log lines persisted (0.0–1.0). Reduces log volume/cost.
+        static let logSampleRate: Double = 0.1
+        /// When true, background AI training loops only run on Wi-Fi (NWPathMonitor).
+        static let backgroundAIWiFiOnly: Bool = true
+        /// UserDefaults key for opt-out of on-device AI training data collection.
+        static let trainingOptOutKey = "ai_training_opt_out"
+    }
     
     // MARK: - Feature Flags
     struct Features {
         static let enableFlicks = true
         static let enableLiveStreaming = true
         static let enableAIRecommendations = true
+        /// Gates expensive ML / multi-agent calls inside CreatorIntelligenceService
+        /// (metadata optimization, engagement scoring, creator success coaching).
+        static let enableExpensiveAIAgents = false
         static let enablePremiumFeatures = true
         static let enableAnalytics = true
         static let enableAnalyticsPredictor = false
@@ -189,6 +229,16 @@ struct AppConfig {
         // Disabled: these require OAuth + per-agent permissions the app cannot supply
         // and previously produced endless 404/401s. Route through `agentProxy` function instead.
         static let enableVertexDirectAgentCalls = false
+
+        // MARK: - Deferred AI agents (batch-7) — default OFF; on-demand or server-side only
+        static let enableAdTargetingAGI = false
+        static let enableAICrystalBall = false
+        static let enableRankingAgents = false
+        /// Thumbnail / caption AI load only when user opens the relevant studio tool.
+        static let enableThumbnailAIOnDemand = true
+        static let enableCaptionAIOnDemand = true
+        /// Prefer server-side moderation (Perspective CF) over client Anthropic calls.
+        static let preferServerSideModeration = true
 
         // MARK: - Phase 51–100 Flags
         // All default OFF; flip per-phase as each wave lands in production.
@@ -766,6 +816,19 @@ struct AppConfig {
             return true // Enable for production only
             #endif
         }()
+    }
+
+    // MARK: - Secrets validation (Release fail-closed)
+    struct Secrets {
+        /// Returns false in Release when a required publishable key is empty/placeholder.
+        static func validateReleaseKeys() -> Bool {
+            #if DEBUG
+            return true
+            #else
+            let stripe = AppSecrets.stripePublishableKey
+            return !stripe.isEmpty && !stripe.contains("$(")
+            #endif
+        }
     }
     
     // MARK: - Storage Configuration

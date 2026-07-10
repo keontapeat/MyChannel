@@ -9,6 +9,8 @@ final class DeepLinkRouter: ObservableObject {
     
     @Published var targetVideoId: String?
     @Published var targetTimestamp: Double?
+    @Published var targetVSMatchId: String?
+    @Published var targetMovieId: String?
     
     private init() {}
     
@@ -34,6 +36,27 @@ final class DeepLinkRouter: ObservableObject {
                 return true
             }
         }
+
+        // Example: https://mychannel.app/medals/vs-match?id=MATCH123
+        //          mychannel://vs-match?id=MATCH123
+        if components.path == "/medals/vs-match" || components.path == "/vs-match" {
+            let queryItems = components.queryItems ?? []
+            if let matchId = queryItems.first(where: { $0.name == "id" })?.value {
+                targetVSMatchId = matchId
+                print("🔗 [DeepLinkRouter] Routing to VS Match \(matchId)")
+                return true
+            }
+        }
+
+        // Example: https://mychannel.app/movie?id=tmdb-12345
+        if components.path == "/movie" {
+            let queryItems = components.queryItems ?? []
+            if let movieId = queryItems.first(where: { $0.name == "id" })?.value {
+                targetMovieId = movieId
+                print("🔗 [DeepLinkRouter] Routing to movie \(movieId)")
+                return true
+            }
+        }
         
         return false
     }
@@ -41,5 +64,7 @@ final class DeepLinkRouter: ObservableObject {
     func clearRoutingState() {
         targetVideoId = nil
         targetTimestamp = nil
+        targetVSMatchId = nil
+        targetMovieId = nil
     }
 }

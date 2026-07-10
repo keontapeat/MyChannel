@@ -73,27 +73,56 @@ struct VideoPlaybackQueue: Equatable {
 }
 
 /// Lightweight asset preloader used by the global player for instant Up Next.
+/// Preloads at most **two** upcoming queue items (batch-7 policy).
 @MainActor
 final class VideoAssetPreloader {
-    private(set) var preloadedAsset: AVURLAsset?
-    private var preloadTask: Task<Void, Never>?
+    private(set) var preloadedAssets: [String: AVURLAsset] = [:]
+    private var preloadTasks: [String: Task<Void, Never>] = {}
+    static let maxPreloadCount = 2
 
     func cancel() {
-        preloadTask?.cancel()
-        preloadTask = nil
-        preloadedAsset = nil
+        preloadTasks.values.forEach { $0.cancel() }
+        preloadTasks.removeAll()
+        preloadedAssets.removeAll()
     }
 
-    func takePreloadedAsset() -> AVURLAsset? {
-        let asset = preloadedAsset
-        preloadedAsset = nil
+    func takePreloadedAsset(for urlString: String) -> AVURLAsset? {
+        let asset = preloadedAssets.removeValue(forKey: urlString)
+        preloadTasks[urlString]?.cancel()
+        preloadTasks[urlString] = nil
         return asset
     }
 
+    /// Legacy single-slot take — returns first matching asset if URL unknown.
+    func takePreloadedAsset() -> AVURLAsset? {
+        guard let (key, asset) = preloadedAssets.first else { return nil }
+        preloadedAssets.removeValue(forKey: key)
+        preloadTasks[key]?.cancel()
+        preloadTasks[key] = nil
+        return asset
+    }
+
+    func preload(urlStrings: [String]) {
+        let capped = Array(urlStrings.prefix(Self.maxPreloadCount))
+        let keep = Set(capped)
+        for key in preloadedAssets.keys where !keep.contains(key) {
+            preloadedAssets.removeValue(forKey: key)
+            preloadTasks[key]?.cancel()
+            preloadTasks.removeValue(forKey: key)
+        }
+        for urlString in capped where preloadedAssets[urlString] == nil {
+            preloadSingle(urlString: urlString)
+        }
+    }
+
     func preload(urlString: String) {
+        preload(urlStrings: [urlString])
+    }
+
+    private func preloadSingle(urlString: String) {
         guard let assetURL = URL(string: urlString) else { return }
-        preloadTask?.cancel()
-        preloadTask = Task { [weak self] in
+        preloadTasks[urlString]?.cancel()
+        preloadTasks[urlString] = Task { [weak self] in
             let options: [String: Any] = [
                 AVURLAssetPreferPreciseDurationAndTimingKey: false,
                 "AVURLAssetHTTPHeaderFieldsKey": ["Range": "bytes=0-524287"]
@@ -104,7 +133,8 @@ final class VideoAssetPreloader {
             async let isPlayable = asset.load(.isPlayable)
             _ = try? await (tracks, isPlayable)
             await MainActor.run { [weak self] in
-                self?.preloadedAsset = asset
+                guard let self, !(Task.isCancelled) else { return }
+                self.preloadedAssets[urlString] = asset
             }
         }
     }

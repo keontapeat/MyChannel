@@ -8,7 +8,7 @@
 import Foundation
 
 @MainActor
-final class StripeConnectService: ObservableObject {
+final class StripeConnectService: ObservableObject, StripeConnecting {
     
     static let shared = StripeConnectService()
     private init() {}
@@ -57,7 +57,9 @@ final class StripeConnectService: ObservableObject {
     /// client cannot set the amount or destination, and the secret key never
     /// touches the device.
     func transferToWinner(amount: Int, winnerId: String, currency: String = "usd", matchId: String) async throws {
-        let url = URL(string: "\(backendBaseURL)/create-transfer")!
+        guard let url = URL(string: "\(backendBaseURL)/create-transfer") else {
+            throw StripeError.networkError
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -74,15 +76,9 @@ final class StripeConnectService: ObservableObject {
     
     // MARK: - Escrow Management
     
-    /// Hold funds in escrow for a VS match
+    /// Hold funds in escrow for a VS match.
+    /// Routes through MoneyEscrowService (authenticated CF) — never creates PaymentIntents client-side.
     func holdInEscrow(matchId: String, amount: Double, player1Id: String, player2Id: String) async throws -> String {
-        // Convert to cents
-        let amountInCents = Int(amount * 100)
-        
-        // Create payment intent
-        let intentId = try await createPaymentIntent(amount: amountInCents * 2) // Total pot from both players
-        
-        // Store escrow info in MoneyEscrowService (holding for both players)
         try await MoneyEscrowService.shared.holdFunds(
             userId: player1Id,
             amount: amount,
@@ -93,30 +89,29 @@ final class StripeConnectService: ObservableObject {
             amount: amount,
             matchId: matchId
         )
-        
-        print("🏦 [Stripe] Held $\(amount * 2) in escrow for match \(matchId)")
-        return intentId
+        print("🏦 [Stripe] Held $\(amount * 2) in escrow for match \(matchId) (server-side)")
+        return matchId
     }
     
-    /// Release escrow funds to winner
+    /// Release escrow funds to winner.
+    /// `escrowAmount` is the gross pot (both wagers). Fee/payout use `MoneyMath`.
     func releaseEscrow(matchId: String, winnerId: String, loserId: String, escrowAmount: Double) async throws {
-        // escrowAmount is passed in from the match data
-        
-        // Calculate platform fee (10%)
-        let platformFee = escrowAmount * 0.1
-        let winnerAmount = escrowAmount - platformFee
+        let grossCents = MoneyMath.cents(fromDollars: escrowAmount)
+        let platformFeeCents = MoneyMath.platformFeeCents(grossCents: grossCents)
+        let winnerPayoutCents = MoneyMath.winnerPayoutCents(grossCents: grossCents)
+        let winnerAmount = MoneyMath.dollars(fromCents: winnerPayoutCents)
+        let platformFee = MoneyMath.dollars(fromCents: platformFeeCents)
         
         // Transfer to winner — backend derives amount/destination from the
         // verified match outcome; we pass the matchId so it can settle securely.
-        let amountInCents = Int(winnerAmount * 100)
-        try await transferToWinner(amount: amountInCents, winnerId: winnerId, matchId: matchId)
+        try await transferToWinner(amount: winnerPayoutCents, winnerId: winnerId, matchId: matchId)
         
-        // Release escrow
+        // Release escrow (gross pot; escrow service recomputes fee from held legs)
         try await MoneyEscrowService.shared.releaseFunds(
             matchId: matchId,
             winnerId: winnerId,
             loserId: loserId,
-            totalPot: winnerAmount
+            totalPot: MoneyMath.dollars(fromCents: grossCents)
         )
         
         print("🏆 [Stripe] Released $\(winnerAmount) to winner \(winnerId)")
@@ -127,11 +122,10 @@ final class StripeConnectService: ObservableObject {
     
     /// Refund a match if it's cancelled or disputed
     func refundMatch(matchId: String, player1Id: String, player2Id: String, amount: Double) async throws {
-        // Refund to both players
-        let amountInCents = Int(amount * 100)
+        let amountCents = MoneyMath.cents(fromDollars: amount)
         
         // Stripe refund is handled server-side by the Cloud Function `processRefund`
-        print("💳 [Stripe] Refunding $\(amount) to both players")
+        print("💳 [Stripe] Refunding $\(MoneyMath.dollars(fromCents: amountCents)) to both players")
         
         // Refund escrow to both players
         try await MoneyEscrowService.shared.refundFunds(matchId: matchId, userId: player1Id)
@@ -217,6 +211,7 @@ enum StripeError: Error {
     case invalidAmount
     case verificationRequired
     case mustUseBackend
+    case networkError
 }
 
 extension StripeError: LocalizedError {
@@ -236,6 +231,8 @@ extension StripeError: LocalizedError {
             return "Account verification required to receive payments"
         case .mustUseBackend:
             return "This operation runs on the secure backend. Use the authenticated Cloud Function endpoint."
+        case .networkError:
+            return "Network error. Please check your connection and try again."
         }
     }
 }

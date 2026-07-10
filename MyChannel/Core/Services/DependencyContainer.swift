@@ -23,6 +23,10 @@ final class DependencyContainer: @unchecked Sendable {
     private init() {
         registerDefaultServices()
     }
+
+    /// SwiftUI previews use the same registry. Override registrations in `#Preview`
+    /// setup before the view body resolves `@Injected` properties.
+    static var preview: DependencyContainer { shared }
     
     /// Register a service factory
     func register<Service>(_ type: Service.Type, isSingleton: Bool = true, factory: @escaping () -> Service) {
@@ -47,10 +51,14 @@ final class DependencyContainer: @unchecked Sendable {
             
             // Otherwise generate via factory
             guard let factory = factories[key] as? () -> Service else {
-                // A required dependency was requested but never registered. This is a
-                // programmer error (misconfigured DI), not user-driven — surface it loudly.
-                print("🛑 [DI] No registered dependency for \(key). Register it in registerDefaultServices() or via register(_:factory:).")
-                preconditionFailure("No registered dependency found for \(key)")
+                let message = """
+                🛑 [DI] No registered dependency for '\(key)'.
+                Register it in DependencyContainer.registerDefaultServices() \
+                or call container.register(\(key).self) { … } before resolve().
+                See docs/injected-property-wrapper.md
+                """
+                print(message)
+                preconditionFailure(message)
             }
             
             let instance = factory()
@@ -77,6 +85,23 @@ final class DependencyContainer: @unchecked Sendable {
             return instance
         }
     }
+
+    /// Drop user-scoped cached singletons on logout so the next session cannot
+    /// read stale wallet/compliance state from the prior account.
+    func unregisterUserScopedServices() {
+        let userScopedKeys = [
+            String(describing: VSMatchWalletService.self),
+            String(describing: VSMatchComplianceService.self),
+            String(describing: VersusMatchService.self),
+            String(describing: MoneyEscrowService.self),
+            String(describing: StripeConnectService.self),
+        ]
+        queue.async(flags: .barrier) {
+            for key in userScopedKeys {
+                self.cachedInstances.removeValue(forKey: key)
+            }
+        }
+    }
     
     // MARK: - App Defaults
     private func registerDefaultServices() {
@@ -97,7 +122,22 @@ final class DependencyContainer: @unchecked Sendable {
 
         // Monetization / compliance / offline
         register(MoneyEscrowService.self) { MoneyEscrowService.shared }
+        register(MoneyEscrowing.self) { MoneyEscrowService.shared }
         register(VSMatchComplianceService.self) { VSMatchComplianceService.shared }
+        register(ComplianceChecking.self) { VSMatchComplianceService.shared }
+        register(VSMatchWalletService.self) { VSMatchWalletService.shared }
+        register(VSMatchWalleting.self) { VSMatchWalletService.shared }
+        register(VersusMatchService.self) { VersusMatchService.shared }
+        register(VersusMatching.self) { VersusMatchService.shared }
+        register(StripeConnectService.self) { StripeConnectService.shared }
+        register(StripeConnecting.self) { StripeConnectService.shared }
         register(OfflineDownloadService.self) { OfflineDownloadService.shared }
+
+        // AI facade (prefer over UnifiedAGIBrain / SuperAGI)
+        register(CreatorIntelligenceService.self) { CreatorIntelligenceService.shared }
+
+        // Gaming / playlists
+        register(ChampionshipBeltSystem.self) { ChampionshipBeltSystem.shared }
+        register(PlaylistFirestoreService.self) { PlaylistFirestoreService.shared }
     }
 }

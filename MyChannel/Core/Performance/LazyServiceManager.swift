@@ -142,9 +142,32 @@ class LazyServiceManager: ObservableObject {
             await LiveTVService.shared.preloadFireChannels(count: 12)
         }
 
-        // AI agents deferred — do not touch cold-start path
+        // AI agents deferred — do not touch cold-start path.
+        // AUDIT (phase-1223): OpenAI, Perspective, AutoCaption, Doctor, AgentLog stay at
+        // `.deferred` so first-frame stays under 400ms; never promote these to `.medium`.
         register("OpenAIAgent", priority: .deferred) {
             _ = OpenAIAgentService.shared
+        }
+
+        register("MyChannelAI", priority: .deferred) {
+            guard AppConfig.aiEnabled else { return }
+            _ = MyChannelAI.shared
+        }
+
+        register("CreatorIntelligence", priority: .deferred) {
+            guard AppConfig.aiEnabled else { return }
+            _ = CreatorIntelligenceService.shared
+        }
+
+        // Vertex / agent proxies — NEVER promote above `.deferred` (cold-start budget).
+        register("AgentAPI", priority: .deferred) {
+            guard AppConfig.aiEnabled else { return }
+            _ = AgentAPIService.shared
+        }
+
+        register("VertexAI", priority: .deferred) {
+            guard AppConfig.aiEnabled, AppConfig.Features.enableVertexAI else { return }
+            _ = VertexAIManager.shared
         }
 
         register("AgentLog", priority: .deferred) {

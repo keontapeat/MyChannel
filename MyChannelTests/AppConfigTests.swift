@@ -171,6 +171,15 @@ final class AppConfigTests: XCTestCase {
         XCTAssertFalse(AppConfig.App.build.isEmpty)
     }
     
+    func testAIKillSwitch() {
+        #if DEBUG
+        XCTAssertTrue(AppConfig.aiEnabled)
+        #else
+        XCTAssertEqual(AppConfig.aiEnabled, AppConfig.Features.enableAIRecommendations)
+        #endif
+        XCTAssertFalse(AppConfig.Features.enableExpensiveAIAgents)
+    }
+
     // MARK: - Environment Detection Tests
     
     func testEnvironmentDetection() {

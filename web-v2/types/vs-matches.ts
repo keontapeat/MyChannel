@@ -2,13 +2,18 @@
 
 // VS Matches & Championship Medals System Types
 
+import { getMedalDivision as getMedalDivisionFromPolicy } from '../lib/wager-policy';
+
 export interface VersusMatch {
   id: string;
   challengerId: string;
   opponentId: string;
   category: VSMatchCategory;
-  wagerAmount: number; // In dollars
-  platformFee: number; // 10% of wager
+  wagerAmount: number; // Dollars (display / legacy). Prefer wagerAmountCents for settlement.
+  /** Canonical integer cents — mirrors iOS MoneyMath / Firestore amountCents. */
+  wagerAmountCents?: number;
+  platformFee: number; // Dollars (10% of single-side wager display); prefer platformFeeCents
+  platformFeeCents?: number;
   status: VSMatchStatus;
   createdAt: Date;
   expiresAt: Date;
@@ -163,15 +168,9 @@ export enum AccountStatus {
   UNDER_REVIEW = 'under_review',
 }
 
-// Helper function: Get medal division by wager amount
-export const getMedalDivision = (wagerAmount: number): MedalDivision => {
-  if (wagerAmount >= 10001) return MedalDivision.LEGEND;
-  if (wagerAmount >= 5001) return MedalDivision.DIAMOND;
-  if (wagerAmount >= 1001) return MedalDivision.PLATINUM;
-  if (wagerAmount >= 501) return MedalDivision.GOLD;
-  if (wagerAmount >= 101) return MedalDivision.SILVER;
-  return MedalDivision.BRONZE;
-};
+// Helper function: Get medal division by wager amount (delegates to wager-policy)
+export const getMedalDivision = (wagerAmount: number): MedalDivision =>
+  getMedalDivisionFromPolicy(wagerAmount) as MedalDivision;
 
 // Helper function: Get medal icon
 export const getMedalIcon = (division: MedalDivision): string => {

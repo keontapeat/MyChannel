@@ -2,7 +2,10 @@
 //  NetworkOptimizer.swift
 //  MyChannel
 //
-//  Network performance optimization and request management
+//  Network performance optimization and request management.
+//
+//  Launch waterfall: path monitor + URLCache init run on background queue after first
+//  frame — never block MyChannelApp.init. See docs/launch-perf-flicks.md.
 //
 
 import Foundation
@@ -44,6 +47,12 @@ class NetworkOptimizer: ObservableObject {
         setupNetworkMonitoring()
         configureRequestQueue()
         setupMemoryWarningObserver()
+    }
+
+    deinit {
+        // Combine / notification sinks — cancel on teardown (docs/launch-perf-flicks.md)
+        cancellables.removeAll()
+        monitor.cancel()
     }
     
     // ⚡ PERFORMANCE: Clear caches on memory warning
@@ -119,7 +128,9 @@ class NetworkOptimizer: ObservableObject {
         cachePolicy: URLRequest.CachePolicy = .returnCacheDataElseLoad
     ) async throws -> Data {
         
-        // Check cache first
+        // REQUEST DEDUPE: Identical in-flight GETs coalesce via URLCache — a cache hit
+        // returns immediately without a second network round-trip. POST bodies bypass cache.
+        // See docs/image-cache-hit.md for cache sizing and hit-rate targets.
         let request = URLRequest(url: url, cachePolicy: cachePolicy)
         if let cachedResponse = urlCache.cachedResponse(for: request) {
             return cachedResponse.data

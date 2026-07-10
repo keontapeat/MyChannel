@@ -24,6 +24,8 @@ import Combine
 import FirebaseFirestore
 #endif
 
+//  DEAD-CODE AUDIT (batch-7): all public APIs below are referenced by MoviesView,
+//  MovieDetailView, and MovieCards. Do not remove without migrating hub playback first.
 @MainActor
 final class MovieLibraryService: ObservableObject {
     static let shared = MovieLibraryService()

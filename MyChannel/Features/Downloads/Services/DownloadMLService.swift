@@ -8,9 +8,10 @@ class DownloadMLService: ObservableObject {
     @Published var recommendedDownloads: [RecommendedDownload] = []
     @Published var isLoadingRecommendations = false
     
-    private let recommendationsURL = "https://recommendations-fkri6ifojq-uc.a.run.app/recommend-downloads"
-    private let watchTimePredictorURL = "https://watch-time-predictor-fkri6ifojq-uc.a.run.app/predict-download-value"
-    private let feedPersonalizationURL = "https://feed-personalization-fkri6ifojq-uc.a.run.app/personalized-downloads"
+    // Cloud Run ML endpoints — see AppConfig.API.download*URL constants.
+    private let recommendationsURL = AppConfig.API.downloadRecommendationsURL
+    private let watchTimePredictorURL = AppConfig.API.downloadWatchTimePredictorURL
+    private let feedPersonalizationURL = AppConfig.API.downloadFeedPersonalizationURL
     
     private init() {}
     

@@ -52,6 +52,9 @@ final class MyChannelAI: ObservableObject {
     
     private init() {
         loadModel()
+        // Fake on-device "neural net" timers are gated — no background training loops
+        // during cold start when AI is disabled (launch perf + UITest stability).
+        guard AppConfig.aiEnabled else { return }
         startContinuousTraining()
         startAIConversations()
     }

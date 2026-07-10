@@ -6,7 +6,7 @@
 //  Better than TikTok, YouTube Shorts, Instagram Reels - ALL OF THEM!
 //
 //  Features:
-//  ⚡ Aggressive preloading (+5 videos ahead)
+//  ⚡ Prefetch visible+1 only (current + next) — see docs/launch-perf-flicks.md
 //  🎨 Double-tap center screen to like (with heart burst)
 //  📊 Real-time analytics tracking
 //  ♾️ Infinite scroll with pagination
@@ -32,10 +32,17 @@ extension NSNotification.Name {
 }
 
 // MARK: - Flicks View (THE BEST IN THE WORLD)
+//
+// Global player unification: Flicks keeps inline AVPlayers for vertical swipe UX, but coordinates
+// with GlobalVideoPlayerManager.shared so long-form playback pauses while Flicks is visible
+// (pausedByFlicks). See pauseForFlicksEngagement / resumeAfterLeavingFlicks hooks below.
 struct FlicksView: View {
     
     // MARK: - State Management
+    // @StateObject: FlicksView owns these lifetimes (survives tab re-select).
+    // Child views that receive viewModel use @ObservedObject — see docs/launch-perf-flicks.md.
     @StateObject private var viewModel = NuclearFlicksViewModel()
+    @StateObject private var networkMonitor = FlicksNetworkMonitor()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
@@ -74,7 +81,14 @@ struct FlicksView: View {
     @State private var userPlaylists: [Playlist] = []
     @State private var isLoadingPlaylists = false
     @State private var newPlaylistName: String = ""
+    @State private var playlistSuccessMessage: String?
     
+    private var creatorVideosForCurrentFlick: [NuclearFlick] {
+        viewModel.flicks[safe: currentIndex].map { current in
+            viewModel.flicks.filter { $0.creator.id == current.creator.id }
+        } ?? []
+    }
+
     // Filtered flicks based on search
     private var filteredFlicks: [NuclearFlick] {
         if searchText.isEmpty {
@@ -87,27 +101,44 @@ struct FlicksView: View {
         }
     }
     
-    // Haptics
-    private let impactLight = UIImpactFeedbackGenerator(style: .light)
-    private let impactMedium = UIImpactFeedbackGenerator(style: .medium)
-    private let impactHeavy = UIImpactFeedbackGenerator(style: .heavy)
-    private let notificationFeedback = UINotificationFeedbackGenerator()
-    
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             
             if viewModel.isLoading && viewModel.flicks.isEmpty {
-                loadingView
+                FlicksLoadingView()
             } else if let error = viewModel.error {
                 errorView(error: error)
+            } else if viewModel.flicks.isEmpty {
+                emptyFeedView
             } else {
                 flicksFeed
+            }
+
+            if !networkMonitor.isConnected {
+                offlineBanner
+            }
+
+            if let message = playlistSuccessMessage {
+                VStack {
+                    Spacer()
+                    Text(message)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(Color.green.opacity(0.85))
+                        .cornerRadius(24)
+                        .padding(.bottom, 120)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                .allowsHitTesting(false)
             }
         }
         .ignoresSafeArea()
         .statusBarHidden()
         .sheet(item: $viewModel.commentsFlick) { flick in
+            // Item-bound sheet releases CommentsModalView when dismissed (no strong ref leak).
             CommentsModalView(video: flick.toVideo())
                 .presentationDetents([.fraction(0.6), .large])
                 .safePresentationBackgroundInteraction()
@@ -123,22 +154,52 @@ struct FlicksView: View {
             FlicksQualityPickerSheet(preferredQuality: $preferredQuality, isPresented: $showQualityPicker)
         }
         .sheet(item: $selectedMoreOptionsFlick) { flick in
-            moreOptionsSheet(flick: flick)
+            FlicksMoreOptionsSheet(
+                onReport: { reportFlick(flick: flick) },
+                onNotInterested: { notInterested(flick: flick) },
+                onAddToPlaylist: {
+                    playlistTargetFlick = flick
+                    showPlaylistPicker = true
+                },
+                onDismiss: { selectedMoreOptionsFlick = nil }
+            )
         }
         .sheet(item: $selectedSound) { sound in
-            soundPage(sound: sound)
+            FlicksSoundPageSheet(
+                sound: sound,
+                relatedFlicks: viewModel.flicks.filter { $0.musicTrack?.title == sound.title },
+                onDismiss: { selectedSound = nil },
+                onCreatorTap: { user in
+                    selectedSound = nil
+                    viewModel.selectedCreatorProfile = user
+                }
+            )
         }
         .sheet(isPresented: $showCreatorVideos) {
-            creatorVideosSheet
+            FlicksCreatorVideosSheet(
+                creatorVideos: creatorVideosForCurrentFlick,
+                onDismiss: { showCreatorVideos = false }
+            )
         }
         .sheet(isPresented: $showPlaylistPicker) {
-            playlistPickerSheet
+            FlicksPlaylistPickerSheet(
+                newPlaylistName: $newPlaylistName,
+                playlists: userPlaylists,
+                isLoading: isLoadingPlaylists,
+                onDismiss: { showPlaylistPicker = false },
+                onSelectPlaylist: { addCurrentFlickToPlaylist($0) },
+                onCreateAndAdd: { createPlaylistAndAdd() },
+                onLoad: { await loadUserPlaylists() }
+            )
         }
         .sheet(item: $selectedRemixFlick) { flick in
             RemixSheet(video: flick.toVideo())
         }
         .sheet(item: $selectedReportFlick) { flick in
-            reportSheet(flick: flick)
+            FlicksReportSheet(
+                onDismiss: { selectedReportFlick = nil },
+                onSelectReason: { reason in submitReport(flick: flick, reason: reason) }
+            )
         }
         .fullScreenCover(item: $viewModel.selectedCreatorProfile) { user in
             NavigationStack {
@@ -159,6 +220,10 @@ struct FlicksView: View {
         .task {
             await viewModel.loadInitialFlicks()
         }
+        .onAppear {
+            // Pause global long-form player — Flicks inline players own audio while this tab is visible.
+            GlobalVideoPlayerManager.shared.pauseForFlicksEngagement()
+        }
         .onChange(of: scenePhase) { phase in
             handleScenePhaseChange(phase)
         }
@@ -167,10 +232,10 @@ struct FlicksView: View {
             GlobalVideoPlayerManager.shared.resumeAfterLeavingFlicks()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HideFlicksUI"))) { _ in
-            withAnimation(.easeOut(duration: 0.3)) { showUI = false }
+            flicksUIAnimation(show: false)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowFlicksUI"))) { _ in
-            withAnimation(.easeOut(duration: 0.3)) { showUI = true }
+            flicksUIAnimation(show: true)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshFlicksFeed"))) { _ in
             Task {
@@ -192,87 +257,31 @@ struct FlicksView: View {
     
     // MARK: - Flicks Feed
     private var flicksFeed: some View {
-        GeometryReader { geometry in
-            let screenWidth = geometry.size.width
-            let screenHeight = geometry.size.height
-            ZStack {
-                // Vertical paging via TabView with .page style - direct vertical scroll, no rotation trick
-                TabView(selection: $currentIndex) {
-                    ForEach(Array(filteredFlicks.enumerated()), id: \.element.id) { index, flick in
-                        flickCard(flick: flick, index: index, geometry: geometry)
-                            .frame(width: screenWidth, height: screenHeight)
-                            .ignoresSafeArea()
-                            .tag(index)
-                            .onAppear {
-                                handleFlickAppear(index: index)
-                            }
-                            .onDisappear {
-                                handleFlickDisappear(index: index)
-                            }
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(width: screenWidth, height: screenHeight)
-                .ignoresSafeArea()
-                .scaleEffect(viewModel.commentsFlick != nil ? 0.93 : 1.0, anchor: .top)
-                .offset(y: viewModel.commentsFlick != nil ? geometry.safeAreaInsets.top : 0)
-                .cornerRadius(viewModel.commentsFlick != nil ? 16 : 0)
-                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.commentsFlick != nil)
-                .onChange(of: currentIndex) { newIndex in
-                    handleIndexChange(newIndex)
-                }
-                .ignoresSafeArea()
-                
-                // 🔥 DOUBLE-TAP CENTER HEART BURST (TikTok style)
-                if doubleTapHeartVisible {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 120, weight: .bold))
-                        .foregroundColor(.red)
-                        .shadow(color: .black.opacity(0.5), radius: 20)
-                        .scaleEffect(doubleTapHeartVisible ? 1.2 : 0.5)
-                        .opacity(doubleTapHeartVisible ? 1 : 0)
-                        .transition(.scale.combined(with: .opacity))
-                        .id(doubleTapHeartID)
-                        .allowsHitTesting(false)
-                }
-                
-                // Top mute button (glassmorphism)
-                topControls
-                
-                UIKitFlicksProgressRail(
-                    count: viewModel.flicks.count,
-                    currentIndex: $currentIndex,
-                    reduceMotion: reduceMotion,
-                    onSelect: { index in
-                        currentIndex = index
-                        impactLight.impactOccurred()
-                    }
-                )
-                .frame(width: 24)
-                .padding(.trailing, 4)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                .allowsHitTesting(showUI)
-                .opacity(showUI ? 1 : 0)
-                
-                // Loading more indicator
-                if viewModel.isLoadingMore {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            ProgressView()
-                                .tint(.white)
-                            Text("Loading more...")
-                                .foregroundColor(.white)
-                                .font(.system(size: 14, weight: .medium))
-                        }
-                        .padding()
-                        .background(Color.black.opacity(0.65))
-                        .cornerRadius(20)
-                        .padding(.bottom, 100)
-                    }
-                }
+        FlicksFeedPager(
+            filteredFlicks: filteredFlicks,
+            currentIndex: $currentIndex,
+            showSearchBar: $showSearchBar,
+            searchText: $searchText,
+            flicksMuted: $flicksMuted,
+            captionsEnabled: $captionsEnabled,
+            showUI: showUI,
+            reduceMotion: reduceMotion,
+            flicksCount: viewModel.flicks.count,
+            commentsFlick: viewModel.commentsFlick,
+            isLoadingMore: viewModel.isLoadingMore,
+            doubleTapHeartVisible: doubleTapHeartVisible,
+            doubleTapHeartID: doubleTapHeartID,
+            onIndexChange: handleIndexChange,
+            onFlickAppear: handleFlickAppear,
+            onFlickDisappear: handleFlickDisappear,
+            onProgressRailSelect: { index in
+                currentIndex = index
+                HapticManager.shared.impact(style: .light)
+            },
+            flickCard: { flick, index, geometry in
+                flickCard(flick: flick, index: index, geometry: geometry)
             }
-        }
+        )
     }
     
     // MARK: - Flick Card
@@ -314,7 +323,7 @@ struct FlicksView: View {
                         handleDoubleTap(flick: flick)
                     },
                     onLongPressBegan: {
-                        impactMedium.impactOccurred()
+                        HapticManager.shared.impact(style: .medium)
                         NotificationCenter.default.post(name: NSNotification.Name("SetFlickRate_\(flick.id)"), object: NSNumber(value: 2.0))
                         withAnimation(.easeOut(duration: 0.15)) { showSpeedBoost = true }
                     },
@@ -410,489 +419,48 @@ struct FlicksView: View {
                 Spacer()
             }
             
-            // Bottom overlay: left info + right action buttons
+            // Bottom overlay: engagement bar (creator info + action rail)
             VStack(spacing: 0) {
                 Spacer()
-                
-                HStack(alignment: .bottom, spacing: 0) {
-                    // Left side - Video info (title, creator, tags)
-                    VStack(alignment: .leading, spacing: 10) {
-                        // Creator row
-                        HStack(spacing: 10) {
-                            Button {
-                                viewModel.navigateToCreator(flick.creator)
-                            } label: {
-                                AppAsyncImage(
-                                    url: URL(string: flick.creator.profileImageURL),
-                                    content: { image in
-                                        image.resizable().aspectRatio(contentMode: .fill)
-                                    },
-                                    placeholder: {
-                                        Circle().fill(Color.white.opacity(0.3))
-                                    }
-                                )
-                                .frame(width: 40, height: 40)
-                                .clipShape(Circle())
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.white, lineWidth: 1.5)
-                                )
-                            }
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack(spacing: 4) {
-                                    Text(flick.creator.displayName)
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundColor(.white)
-                                        .lineLimit(1)
-                                    
-                                    if flick.creator.isVerified {
-                                        Image(systemName: "checkmark.seal.fill")
-                                            .font(.system(size: 13))
-                                            .foregroundColor(.blue)
-                                            .fixedSize()
-                                    }
-                                }
-                                
-                                Text("@\(flick.creator.username)")
-                                    .font(.system(size: 13, weight: .regular))
-                                    .foregroundColor(.white.opacity(0.75))
-                                    .lineLimit(1)
-                            }
-                            
-                            // Follow button
-                            Button {
-                                viewModel.toggleFollow(creator: flick.creator)
-                                impactMedium.impactOccurred()
-                            } label: {
-                                Text(viewModel.isFollowing(creatorId: flick.creator.id) ? "Following" : "Follow")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 7)
-                                    .background(.ultraThinMaterial)
-                                    .cornerRadius(20)
-                            }
-                            .fixedSize(horizontal: true, vertical: false)
-                            .layoutPriority(1)
-                            
-                            // Creator's other videos button
-                            Button {
-                                showCreatorVideos = true
-                                impactLight.impactOccurred()
-                            } label: {
-                                Image(systemName: "rectangle.stack.fill")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.white)
-                                    .padding(8)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                            .fixedSize()
-                            .layoutPriority(1)
-                        }
-                        
-                        // Video title
-                        Text(flick.title)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white)
-                            .lineLimit(2)
-                        
-                        // Tags
-                        if !flick.tags.isEmpty {
-                            HStack(spacing: 8) {
-                                ForEach(flick.tags.prefix(4), id: \.self) { tag in
-                                    Text("#\(tag)")
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundColor(.white)
-                                }
-                            }
-                        }
-                        
-                        // Music track
-                        if let musicTrack = flick.musicTrack {
-                            HStack(spacing: 6) {
-                                Image(systemName: "music.note")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.white)
-                                
-                                Text("\(musicTrack.title) • \(musicTrack.artist)")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.trailing, infoRightPadding)
-                    
-                    // Right side action buttons column
-                    actionButtons(
-                        flick: flick,
-                        bottomSafeArea: 0,
-                        trailingPadding: 0,
-                        tabBarReserved: 0
-                    )
-                    .frame(width: 72, alignment: .center)
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, bottomInset)
+                FlicksEngagementBar(
+                    flick: flick,
+                    isLiked: viewModel.isLiked(flickId: flick.id),
+                    isSaved: viewModel.isSaved(flickId: flick.id),
+                    isFollowing: viewModel.isFollowing(creatorId: flick.creator.id),
+                    likeCountLabel: formatCount(flick.likeCount + (viewModel.isLiked(flickId: flick.id) ? 1 : 0)),
+                    commentCountLabel: formatCount(flick.commentCount),
+                    shareCountLabel: flick.shareCount > 0 ? formatCount(flick.shareCount) : "Share",
+                    playbackSpeedLabel: "\(playbackSpeed)x",
+                    qualityLabel: effectiveQualityLabel,
+                    albumArtRotation: viewModel.albumArtRotation,
+                    bottomInset: bottomInset,
+                    infoRightPadding: infoRightPadding,
+                    reduceMotion: reduceMotion,
+                    onCreatorTap: { viewModel.navigateToCreator(flick.creator) },
+                    onFollow: {
+                        viewModel.toggleFollow(creator: flick.creator)
+                        HapticManager.shared.impact(style: .medium)
+                    },
+                    onLike: { viewModel.toggleLike(flick: flick) },
+                    onComment: { viewModel.openComments(flick: flick) },
+                    onShare: { viewModel.openShare(flick: flick) },
+                    onRemix: { selectedRemixFlick = flick },
+                    onSpeed: { showSpeedPicker.toggle() },
+                    onQuality: { showQualityPicker.toggle() },
+                    onSave: { viewModel.toggleSave(flick: flick) },
+                    onMore: { selectedMoreOptionsFlick = flick },
+                    onSound: { selectedSound = $0 }
+                )
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-    }
-    
-    // MARK: - Action Buttons (Glassmorphism)
-    private func actionButtons(
-        flick: NuclearFlick,
-        bottomSafeArea: CGFloat,
-        trailingPadding: CGFloat,
-        tabBarReserved: CGFloat = 0
-    ) -> some View {
-        VStack(spacing: 20) {
-            // Like button
-            actionButton(
-                icon: viewModel.isLiked(flickId: flick.id) ? "heart.fill" : "heart",
-                count: formatCount(flick.likeCount + (viewModel.isLiked(flickId: flick.id) ? 1 : 0)),
-                color: viewModel.isLiked(flickId: flick.id) ? .red : .white,
-                scale: viewModel.isLiked(flickId: flick.id) ? 1.1 : 1.0
-            ) {
-                viewModel.toggleLike(flick: flick)
-                impactMedium.impactOccurred()
-            }
-            
-            // Comment button
-            actionButton(
-                icon: "bubble.right.fill",
-                count: formatCount(flick.commentCount),
-                color: .white
-            ) {
-                viewModel.openComments(flick: flick)
-                impactLight.impactOccurred()
-            }
-            
-            // Share button
-            actionButton(
-                icon: "arrowshape.turn.up.right.fill",
-                count: flick.shareCount > 0 ? formatCount(flick.shareCount) : "Share",
-                color: .white
-            ) {
-                viewModel.openShare(flick: flick)
-                impactLight.impactOccurred()
-            }
-            
-            // Remix button
-            actionButton(
-                icon: "arrow.triangle.2.circlepath",
-                count: "Remix",
-                color: .white
-            ) {
-                selectedRemixFlick = flick
-                impactLight.impactOccurred()
-            }
-            
-            // Speed button
-            actionButton(
-                icon: "gauge.with.dots.needle.67percent",
-                count: "\(playbackSpeed)x",
-                color: .white
-            ) {
-                showSpeedPicker.toggle()
-                impactLight.impactOccurred()
-            }
-            
-            // Quality button
-            actionButton(
-                icon: "gearshape.fill",
-                count: preferredQuality.uppercased(),
-                color: .white
-            ) {
-                showQualityPicker.toggle()
-                impactLight.impactOccurred()
-            }
-            
-            // Save button
-            actionButton(
-                icon: viewModel.isSaved(flickId: flick.id) ? "bookmark.fill" : "bookmark",
-                count: "Save",
-                color: viewModel.isSaved(flickId: flick.id) ? .yellow : .white
-            ) {
-                viewModel.toggleSave(flick: flick)
-                impactMedium.impactOccurred()
-            }
-            
-            // More button
-            actionButton(
-                icon: "ellipsis",
-                count: "",
-                color: .white
-            ) {
-                selectedMoreOptionsFlick = flick
-                impactLight.impactOccurred()
-            }
-            
-            // Music album art (spinning) - 🔥 PERF: Use cached image
-            if let musicTrack = flick.musicTrack {
-                Button {
-                    selectedSound = musicTrack
-                    impactLight.impactOccurred()
-                } label: {
-                    AppAsyncImage(
-                        url: URL(string: musicTrack.albumArt),
-                        content: { image in
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        },
-                        placeholder: {
-                            Circle().fill(Color.white.opacity(0.3))
-                        }
-                    )
-                    .frame(width: 48, height: 48)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white, lineWidth: 2)
-                    )
-                    .rotationEffect(.degrees(viewModel.albumArtRotation))
-                }
-                .buttonStyle(ScaleButtonStyle())
-            }
-        }
-        .padding(.trailing, trailingPadding)
-        .padding(.bottom, tabBarReserved)
-    }
-    
-    private func actionButton(icon: String, count: String, color: Color, scale: CGFloat = 1.0, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                ZStack {
-                    Circle()
-                        .fill(Color.black.opacity(0.55))
-                        .frame(width: 52, height: 52)
-                    
-                    Image(systemName: icon)
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(color)
-                        .scaleEffect(scale)
-                }
-                
-                if !count.isEmpty {
-                    Text(count)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-            }
-        }
-        .buttonStyle(ScaleButtonStyle())
-    }
-    
-    // MARK: - Top Controls
-    private var topControls: some View {
-        VStack {
-            HStack {
-                // Search button
-                Button {
-                    showSearchBar.toggle()
-                    impactLight.impactOccurred()
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(Color.black.opacity(0.55))
-                            .frame(width: 44, height: 44)
-                        
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                }
-                .buttonStyle(ScaleButtonStyle())
-                
-                // Mute button (glassmorphism)
-                Button {
-                    flicksMuted.toggle()
-                    impactLight.impactOccurred()
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(Color.black.opacity(0.55))
-                            .frame(width: 44, height: 44)
-                        
-                        Image(systemName: flicksMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                }
-                .buttonStyle(ScaleButtonStyle())
-
-                // Captions (CC) toggle button
-                Button {
-                    captionsEnabled.toggle()
-                    impactLight.impactOccurred()
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(captionsEnabled ? Color.white.opacity(0.9) : Color.black.opacity(0.55))
-                            .frame(width: 44, height: 44)
-                        
-                        Image(systemName: "captions.bubble.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(captionsEnabled ? .black : .white)
-                    }
-                }
-                .buttonStyle(ScaleButtonStyle())
-
-                Spacer()
-            }
-            .padding(.top, 56)
-            .padding(.trailing, 24)
-            .padding(.leading, 20)
-            
-            // Search bar
-            if showSearchBar {
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 16))
-                        .foregroundColor(.white.opacity(0.6))
-                    
-                    TextField("Search Flicks...", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
-                    
-                    if !searchText.isEmpty {
-                        Button {
-                            searchText = ""
-                            impactLight.impactOccurred()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 20))
-                                .foregroundColor(.white.opacity(0.6))
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color.black.opacity(0.55))
-                .cornerRadius(12)
-                .padding(.horizontal, 20)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
-            
-            Spacer()
-        }
-        .opacity(showUI ? 1 : 0)
-        .allowsHitTesting(showUI)
-    }
-    
-    // MARK: - Loading View
-    private var loadingView: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .tint(.white)
-                .scaleEffect(1.5)
-            
-            Text("Loading Flicks...")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white)
-        }
-    }
-    
-    
-    private func moreOptionsSheet(flick: NuclearFlick) -> some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Text("More Options")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
-                    Spacer()
-                    Button {
-                        selectedMoreOptionsFlick = nil
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                
-                Divider()
-                    .background(Color.gray.opacity(0.3))
-                
-                // Options
-                VStack(spacing: 0) {
-                    Button {
-                        reportFlick(flick: flick)
-                        selectedMoreOptionsFlick = nil
-                    } label: {
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle")
-                                .font(.system(size: 20))
-                                .foregroundColor(.red)
-                            Text("Report")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 16)
-                    }
-                    
-                    Divider()
-                        .background(Color.gray.opacity(0.3))
-                    
-                    Button {
-                        notInterested(flick: flick)
-                        selectedMoreOptionsFlick = nil
-                    } label: {
-                        HStack {
-                            Image(systemName: "hand.thumbsdown")
-                                .font(.system(size: 20))
-                                .foregroundColor(.orange)
-                            Text("Not Interested")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 16)
-                    }
-                    
-                    Divider()
-                        .background(Color.gray.opacity(0.3))
-                    
-                    Button {
-                        selectedMoreOptionsFlick = nil
-                        playlistTargetFlick = flick
-                        showPlaylistPicker = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "plus.rectangle.on.rectangle")
-                                .font(.system(size: 20))
-                                .foregroundColor(.blue)
-                            Text("Add to Playlist")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 16)
-                    }
-                }
-                
-                Spacer()
-            }
-            .background(Color.black)
-            .navigationBarHidden(true)
-        }
-        .presentationDetents([.height(280)])
-        .presentationDragIndicator(.visible)
+        // drawingGroup: selective — static engagement chrome only, not AVPlayer/video layer.
+        // See docs/launch-perf-flicks.md § drawingGroup.
+        .drawingGroup()
     }
     
     private func reportFlick(flick: NuclearFlick) {
-        notificationFeedback.notificationOccurred(.warning)
+        HapticManager.shared.notification(type: .warning)
         selectedReportFlick = flick
     }
     
@@ -906,287 +474,7 @@ struct FlicksView: View {
             )
         }
         viewModel.removeUnavailableFlick(id: flick.id)
-        notificationFeedback.notificationOccurred(.warning)
-    }
-    
-    private func soundPage(sound: FlickMusicTrack) -> some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button {
-                        selectedSound = nil
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                    
-                    Spacer()
-                    
-                    Text("Sound")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Spacer()
-                    
-                    Button {
-                        // Share sound
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                
-                Divider()
-                    .background(Color.gray.opacity(0.3))
-                
-                // Sound info
-                VStack(spacing: 16) {
-                    AppAsyncImage(
-                        url: URL(string: sound.albumArt),
-                        content: { image in
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        },
-                        placeholder: {
-                            Circle().fill(Color.gray.opacity(0.3))
-                        }
-                    )
-                    .frame(width: 120, height: 120)
-                    .clipShape(Circle())
-                    
-                    VStack(spacing: 8) {
-                        Text(sound.title)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.center)
-                        
-                        Text(sound.artist)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                }
-                .padding(.vertical, 32)
-                
-                Divider()
-                    .background(Color.gray.opacity(0.3))
-                
-                // Videos using this sound
-                ScrollView {
-                    let videosWithSound = viewModel.flicks.filter { $0.musicTrack?.title == sound.title }
-                    LazyVStack(spacing: 12) {
-                        ForEach(videosWithSound) { flick in
-                            HStack(spacing: 12) {
-                                AppAsyncImage(
-                                    url: URL(string: flick.thumbnailURL),
-                                    content: { image in
-                                        image.resizable().aspectRatio(contentMode: .fill)
-                                    },
-                                    placeholder: {
-                                        Rectangle().fill(Color.gray.opacity(0.3))
-                                    }
-                                )
-                                .frame(width: 80, height: 142)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(flick.title)
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(.white)
-                                        .lineLimit(2)
-                                    
-                                    Text("@\(flick.creator.username)")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.white.opacity(0.6))
-                                }
-                                
-                                Spacer()
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 8)
-                        }
-                    }
-                    .padding(.vertical, 16)
-                }
-            }
-            .background(Color.black)
-            .navigationBarHidden(true)
-        }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-    }
-    
-    private var playlistPickerSheet: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button {
-                        showPlaylistPicker = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                    
-                    Spacer()
-                    
-                    Text("Save to Playlist")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Spacer()
-                    
-                    Color.clear.frame(width: 24)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                
-                Divider()
-                    .background(Color.gray.opacity(0.3))
-                
-                if isLoadingPlaylists {
-                    Spacer()
-                    ProgressView().tint(.white)
-                    Spacer()
-                } else {
-                    // Playlists
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            if userPlaylists.isEmpty {
-                                Text("No playlists yet. Create one below.")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.white.opacity(0.6))
-                                    .padding(.vertical, 24)
-                            }
-                            ForEach(userPlaylists) { playlist in
-                                Button {
-                                    addCurrentFlickToPlaylist(playlist)
-                                } label: {
-                                    HStack(spacing: 16) {
-                                        Image(systemName: "music.note.list")
-                                            .font(.system(size: 20))
-                                            .foregroundColor(.white.opacity(0.8))
-                                            .frame(width: 40)
-                                        
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(playlist.title)
-                                                .font(.system(size: 16, weight: .medium))
-                                                .foregroundColor(.white)
-                                            Text("\(playlist.videoCount) videos")
-                                                .font(.system(size: 12))
-                                                .foregroundColor(.white.opacity(0.5))
-                                        }
-                                        
-                                        Spacer()
-                                        
-                                        Image(systemName: "plus.circle")
-                                            .font(.system(size: 20, weight: .semibold))
-                                            .foregroundColor(AppTheme.Colors.primary)
-                                    }
-                                    .padding(.horizontal, 20)
-                                    .padding(.vertical, 16)
-                                }
-                                .buttonStyle(.plain)
-                                
-                                Divider()
-                                    .background(Color.gray.opacity(0.2))
-                            }
-                        }
-                    }
-                }
-                
-                // Create new playlist input
-                VStack(spacing: 12) {
-                    TextField("New playlist name", text: $newPlaylistName)
-                        .textFieldStyle(.roundedBorder)
-                        .padding(.horizontal, 20)
-                    
-                    Button("Create & Add") {
-                        createPlaylistAndAdd()
-                    }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(newPlaylistName.trimmingCharacters(in: .whitespaces).isEmpty ? Color.gray : AppTheme.Colors.primary)
-                    .cornerRadius(12)
-                    .padding(.horizontal, 20)
-                    .disabled(newPlaylistName.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-                .padding(.vertical, 20)
-            }
-            .background(Color.black)
-            .navigationBarHidden(true)
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-        .task {
-            await loadUserPlaylists()
-        }
-    }
-
-    // MARK: - Report Sheet
-    private func reportSheet(flick: NuclearFlick) -> some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                HStack {
-                    Text("Report")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
-                    Spacer()
-                    Button {
-                        selectedReportFlick = nil
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-
-                Text("Why are you reporting this?")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.6))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
-
-                Divider().background(Color.gray.opacity(0.3))
-
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(FlicksFeedbackService.ReportReason.allCases) { reason in
-                            Button {
-                                submitReport(flick: flick, reason: reason)
-                            } label: {
-                                HStack {
-                                    Text(reason.rawValue)
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(.white)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.4))
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 16)
-                            }
-                            .buttonStyle(.plain)
-                            Divider().background(Color.gray.opacity(0.2))
-                        }
-                    }
-                }
-            }
-            .background(Color.black)
-            .navigationBarHidden(true)
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        HapticManager.shared.notification(type: .warning)
     }
 
     private func submitReport(flick: NuclearFlick, reason: FlicksFeedbackService.ReportReason) {
@@ -1194,7 +482,7 @@ struct FlicksView: View {
             await FlicksFeedbackService.shared.report(flickId: flick.id, reason: reason)
         }
         selectedReportFlick = nil
-        notificationFeedback.notificationOccurred(.success)
+        HapticManager.shared.notification(type: .success)
         // Down-rank similar content too.
         viewModel.removeUnavailableFlick(id: flick.id)
     }
@@ -1222,12 +510,17 @@ struct FlicksView: View {
             do {
                 try await PlaylistFirestoreService.shared.addVideoToPlaylist(videoId: flick.id, playlistId: playlist.id)
                 await MainActor.run {
-                    notificationFeedback.notificationOccurred(.success)
+                    HapticManager.shared.notification(type: .success)
                     showPlaylistPicker = false
+                    playlistSuccessMessage = "Added to \(playlist.title)"
+                    Task {
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        await MainActor.run { playlistSuccessMessage = nil }
+                    }
                 }
             } catch {
                 print("⚠️ [Flicks] Failed to add to playlist: \(error)")
-                await MainActor.run { notificationFeedback.notificationOccurred(.error) }
+                await MainActor.run { HapticManager.shared.notification(type: .error) }
             }
         }
     }
@@ -1242,92 +535,15 @@ struct FlicksView: View {
                 try await PlaylistFirestoreService.shared.addVideoToPlaylist(videoId: flick.id, playlistId: playlistId)
                 await MainActor.run {
                     newPlaylistName = ""
-                    notificationFeedback.notificationOccurred(.success)
+                    HapticManager.shared.notification(type: .success)
                     showPlaylistPicker = false
                 }
             } catch {
                 print("⚠️ [Flicks] Failed to create playlist: \(error)")
-                await MainActor.run { notificationFeedback.notificationOccurred(.error) }
+                await MainActor.run { HapticManager.shared.notification(type: .error) }
             }
         }
     }
-    
-    private var creatorVideosSheet: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button {
-                        showCreatorVideos = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                    
-                    Spacer()
-                    
-                    Text("Creator's Videos")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Spacer()
-                    
-                    Color.clear.frame(width: 36)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                
-                Divider()
-                    .background(Color.gray.opacity(0.3))
-                
-                // Creator videos
-                ScrollView {
-                    let creatorVideos = viewModel.flicks[safe: currentIndex].map { current in
-                        viewModel.flicks.filter { $0.creator.id == current.creator.id }
-                    } ?? []
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        ForEach(creatorVideos) { flick in
-                            VStack(spacing: 8) {
-                                AppAsyncImage(
-                                    url: URL(string: flick.thumbnailURL),
-                                    content: { image in
-                                        image.resizable().aspectRatio(contentMode: .fill)
-                                    },
-                                    placeholder: {
-                                        Rectangle().fill(Color.gray.opacity(0.3))
-                                    }
-                                )
-                                .frame(height: 200)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(flick.title)
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.white)
-                                        .lineLimit(2)
-                                    
-                                    Text("\(formatCount(flick.viewCount)) views")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.white.opacity(0.6))
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                        }
-                    }
-                    .padding(.vertical, 16)
-                }
-            }
-            .background(Color.black)
-            .navigationBarHidden(true)
-        }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-    }
-    
-
     
     // MARK: - Error View
     private func errorView(error: String) -> some View {
@@ -1361,6 +577,59 @@ struct FlicksView: View {
             }
         }
     }
+
+    private var emptyFeedView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "play.rectangle.on.rectangle")
+                .font(.system(size: 56))
+                .foregroundColor(.white.opacity(0.7))
+            Text("No Flicks yet")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.white)
+            Text("Check back soon or pull to refresh.")
+                .font(.system(size: 15))
+                .foregroundColor(.white.opacity(0.75))
+            Button {
+                Task { await viewModel.loadInitialFlicks() }
+            } label: {
+                Text("Refresh")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 12)
+                    .background(Color.white.opacity(0.15))
+                    .cornerRadius(24)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var offlineBanner: some View {
+        VStack {
+            HStack(spacing: 8) {
+                Image(systemName: "wifi.slash")
+                Text("You're offline — showing cached Flicks")
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color.orange.opacity(0.9))
+            .cornerRadius(20)
+            .padding(.top, 56)
+            Spacer()
+        }
+        .allowsHitTesting(false)
+        .accessibilityLabel("Offline mode")
+    }
+
+    /// Cellular data saver: cap quality label on cellular unless user picked a fixed tier.
+    private var effectiveQualityLabel: String {
+        if networkMonitor.connectionType == .cellular && preferredQuality == "auto" {
+            return "480P"
+        }
+        return preferredQuality.uppercased()
+    }
     
     // MARK: - Event Handlers
     
@@ -1380,7 +649,7 @@ struct FlicksView: View {
         }
         
         // Haptic feedback
-        impactHeavy.impactOccurred()
+        HapticManager.shared.impact(style: .heavy)
     }
     
     private func toggleUI() {
@@ -1415,10 +684,13 @@ struct FlicksView: View {
         AppState.shared.addToHistory(video: flick.toVideo(), progress: 1.0, position: flick.duration)
         
         // Haptic feedback
-        impactLight.impactOccurred()
+        HapticManager.shared.impact(style: .light)
         
-        // 🔥 STRONGER: Aggressive preloading (+7 ahead)
-        viewModel.preloadVideos(around: newIndex, count: 7)
+        // Prefetch visible+1 only (current index + next item) — docs/launch-perf-flicks.md
+        viewModel.preloadVideos(
+            around: FeedMath.clampIndex(newIndex, total: viewModel.flicks.count),
+            count: 1
+        )
         
         // Load more if near end (infinite scroll)
         if newIndex >= viewModel.flicks.count - 3 {
@@ -1447,6 +719,17 @@ struct FlicksView: View {
         }
     }
     
+    private func flicksUIAnimation(show: Bool) {
+        let animation: Animation? = reduceMotion
+            ? nil
+            : .spring(response: 0.35, dampingFraction: 0.85)
+        if let animation {
+            withAnimation(animation) { showUI = show }
+        } else {
+            showUI = show
+        }
+    }
+
     private func handleScenePhaseChange(_ phase: ScenePhase) {
         switch phase {
         case .inactive, .background:

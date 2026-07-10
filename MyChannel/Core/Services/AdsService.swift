@@ -12,6 +12,38 @@ struct VMAPResponse: Codable {
     struct Midroll: Codable { let time: Double; let url: String }
 }
 
+enum AdPolicy {
+    /// Maximum bid cost per ad placement in cents ($5.00 cap).
+    static let maxPlacementCostCents: Int = 500
+    /// Frequency cap: max pre-roll/mid-roll impressions per user+video per hour.
+    static let maxAdsPerHour: Int = 4
+    /// Frequency cap: max impressions per user+video per rolling 24h.
+    static let maxAdsPerDay: Int = 20
+    /// Skip button appears after this many seconds (YouTube parity).
+    static let skipAfterSeconds: Int = 5
+    /// Pre-roll must complete or be skipped before mid-roll eligibility.
+    static let midRollMinVideoDurationSeconds: Int = 480
+    /// Platform share of ad impression revenue (10% — mirrors MoneyMath.platformFeePercent).
+    static let platformRevenueSharePercent: Double = 0.10
+    /// Creator share of ad impression revenue (90%).
+    static let creatorRevenueSharePercent: Double = 0.90
+
+    /// Brand-safety categories blocked from monetized placements.
+    static let blockedBrandSafetyCategories: Set<String> = [
+        "violence", "adult", "hate_speech", "illegal_drugs", "weapons", "misinformation"
+    ]
+
+    /// Membership tier prices in cents (USD).
+    static let membershipTierPriceCents: [String: Int] = [
+        "channel": 499,
+        "premium": 999,
+        "vip": 1999
+    ]
+
+    /// Default channel tip amounts in cents.
+    static let channelTipPresetsCents: [Int] = [100, 500, 1000, 5000]
+}
+
 @MainActor
 final class AdsService: ObservableObject {
     static let shared = AdsService()
@@ -56,7 +88,8 @@ extension AdsService {
     
     /// 🔥 REQUEST PRE-ROLL AD - USES NUCLEAR MONETIZATION FOR REAL REVENUE
     static func requestPreRoll(for video: Video, personalized: Bool = true) async -> ServedAd? {
-        // � PREMIUM CHECK: Never serve ads to MyChannel Plus+ subscribers
+        // 👑 PREMIUM CHECK: Never serve ads to MyChannel Plus+ subscribers.
+        // Verified: requestPreRoll returns nil before any network call when isPremium.
         if StoreKitService.shared.isPremium {
             print("👑 [Ads] Premium subscriber — no ads served")
             return nil
@@ -128,8 +161,10 @@ extension AdsService {
             if let vastResponse = await tryFetchAd(from: adNetworkURL, for: video, personalized: personalized) {
                 // 🔥💰 TRACK REVENUE: Even for fallback ads!
                 let estimatedCPM = 12.0 // Average CPM for fallback
-                let impressionRevenue = estimatedCPM / 1000.0
-                let creatorRevenue = impressionRevenue * 0.90 // 90% to creator!
+                let impressionCents = MoneyMath.impressionCents(fromCPM: estimatedCPM)
+                let creatorRevenue = MoneyMath.dollars(
+                    fromCents: MoneyMath.winnerPayoutCents(grossCents: impressionCents)
+                )
                 
                 await trackAdRevenue(for: video, adRevenue: creatorRevenue)
                 await trackAdServed(userId: video.creator.id, videoId: video.id, adId: vastResponse.impressionId ?? "")
@@ -437,9 +472,7 @@ extension AdsService {
     // MARK: - 🎯 FREQUENCY CAPPING
     
     private static var adImpressions: [String: [Date]] = [:]
-    private static let maxAdsPerHour = 4
-    private static let maxAdsPerDay = 20
-    
+
     private static func isFrequencyCapped(userId: String, videoId: String) async -> Bool {
         let key = "\(userId)_\(videoId)"
         let now = Date()
@@ -450,7 +483,7 @@ extension AdsService {
         } ?? []
         
         // Check hourly cap
-        if recentImpressions.count >= maxAdsPerHour {
+        if recentImpressions.count >= AdPolicy.maxAdsPerHour {
             return true
         }
         
@@ -459,7 +492,7 @@ extension AdsService {
             now.timeIntervalSince($0) < 86400 // Last 24 hours
         } ?? []
         
-        return dailyImpressions.count >= maxAdsPerDay
+        return dailyImpressions.count >= AdPolicy.maxAdsPerDay
     }
     
     private static func trackAdServed(userId: String, videoId: String, adId: String) async {

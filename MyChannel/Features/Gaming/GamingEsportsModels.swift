@@ -102,8 +102,10 @@ struct VSMatch: Identifiable {
     var verificationStatus: MatchVerificationStatus = .none
     var needsProofSubmission: Bool = false
     
+    var wagerAmountCents: Int { MoneyMath.cents(fromDollars: wagerAmount) }
+    
     var formattedWager: String {
-        "$\(Int(wagerAmount).formatted())"
+        "$\(MoneyMath.dollars(fromCents: wagerAmountCents).formatted(.number.precision(.fractionLength(0...2))))"
     }
 }
 
@@ -121,8 +123,10 @@ struct LeaderboardUser: Identifiable {
     let wins: Int
     let matches: Int
     
+    var totalEarningsCents: Int { MoneyMath.cents(fromDollars: totalEarnings) }
+    
     var formattedEarnings: String {
-        "$\(Int(totalEarnings).formatted())"
+        "$\(MoneyMath.dollars(fromCents: totalEarningsCents).formatted(.number.precision(.fractionLength(0...2))))"
     }
 }
 

@@ -23,10 +23,13 @@ Carthage/Build/
 # Secrets
 **/Secrets.local.xcconfig
 **/GoogleService-Info.plist
+**/google-services.json
+android/app/google-services.json
 .env
 *.env
 **/.env
 **/.env.*
+functions/.env
 functions/.env*
 web-v2/.env.local
 .ai_api_key
@@ -69,3 +72,5 @@ gcloud-sdk.tar.gz
 # Local build/verify artifacts (SwiftPM checkouts, derived data)
 build-verify/
 __pycache__/
+firepit-log.txt
+firebase-debug.log

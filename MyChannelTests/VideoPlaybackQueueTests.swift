@@ -62,4 +62,23 @@ final class VideoPlaybackQueueTests: XCTestCase {
         XCTAssertTrue(q.videos.isEmpty)
         XCTAssertEqual(q.index, 0)
     }
+
+    func testEmptyQueueHasNoUpNextOrNeighbors() {
+        var q = VideoPlaybackQueue()
+        XCTAssertNil(q.current)
+        XCTAssertNil(q.upNext)
+        XCTAssertFalse(q.hasPrevious)
+        XCTAssertFalse(q.hasNext)
+    }
+
+    func testStartingAtMissingVideoInsertsAtFront() {
+        let a = video("a")
+        let b = video("b")
+        let missing = video("missing")
+        var q = VideoPlaybackQueue()
+        q.set(queue: [a, b], startingAt: missing)
+        XCTAssertEqual(q.index, 0)
+        XCTAssertEqual(q.current?.id, missing.id)
+        XCTAssertEqual(q.videos.count, 3)
+    }
 }

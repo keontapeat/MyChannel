@@ -24,6 +24,7 @@
 import Foundation
 import Combine
 
+@available(*, deprecated, message: "Use CreatorIntelligenceService")
 @MainActor
 final class EnterpriseAITeam: ObservableObject {
     static let shared = EnterpriseAITeam()

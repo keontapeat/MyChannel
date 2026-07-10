@@ -2,6 +2,8 @@
  * Shared wager / money policy — mirrors iOS `WagerPolicy` + `MoneyMath`.
  * Single source of truth for web VS Matches compliance gates.
  * Server must still enforce these; client checks are never authoritative.
+ *
+ * SSR-safe: no `window`, `document`, or browser-only globals.
  */
 
 export const WAGER_POLICY = {
@@ -25,6 +27,25 @@ export const WAGER_POLICY = {
 } as const;
 
 export type AccountTier = "new" | "verified" | "premium" | "vip";
+
+/** Medal division tiers — mirrors iOS ChampionshipBeltSystem / types/vs-matches. */
+export type MedalDivision =
+  | "bronze"
+  | "silver"
+  | "gold"
+  | "platinum"
+  | "diamond"
+  | "legend";
+
+/** Resolve medal division from wager amount (USD). Single source for web money UI. */
+export function getMedalDivision(wagerAmount: number): MedalDivision {
+  if (wagerAmount >= 10_001) return "legend";
+  if (wagerAmount >= 5_001) return "diamond";
+  if (wagerAmount >= 1_001) return "platinum";
+  if (wagerAmount >= 501) return "gold";
+  if (wagerAmount >= 101) return "silver";
+  return "bronze";
+}
 
 export function isOfAge(age: number): boolean {
   return age >= WAGER_POLICY.minimumAge;

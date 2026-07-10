@@ -22,10 +22,17 @@ struct VSMatchComplianceSheet: View {
     var onCleared: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var isLoading = true
-    @State private var isWorking = false
+    @State private var isVerifyingAge = false
+    @State private var isAcceptingTerms = false
+    @State private var isStartingKYC = false
+    @State private var isSavingRegion = false
     @State private var errorMessage: String?
+    @State private var kycPollTask: Task<Void, Never>?
+    @State private var lastKYCAttempt: Date?
+    @State private var regionInput: String = ""
 
     // Requirement state
     @State private var ageVerified = false
@@ -34,15 +41,21 @@ struct VSMatchComplianceSheet: View {
     @State private var regionAllowed = true
     @State private var accountActive = true
     @State private var withinDailyLimit = true
+    @State private var wagerBlockReasons: [String] = []
 
     // Age-entry input
     @State private var dateOfBirth = Calendar.current.date(
         byAdding: .year, value: -18, to: Date()
     ) ?? Date()
 
-    private let compliance = VSMatchComplianceService.shared
+    @Injected private var compliance: VSMatchComplianceService
 
     private var requiresKYC: Bool { WagerPolicy.requiresKYC(amountDollars: wagerAmount) }
+
+    /// Any in-flight self-service action disables duplicate taps.
+    private var isBusy: Bool {
+        isVerifyingAge || isAcceptingTerms || isStartingKYC || isSavingRegion
+    }
 
     /// Every applicable requirement satisfied → the user may proceed.
     private var isFullyCleared: Bool {
@@ -67,7 +80,17 @@ struct VSMatchComplianceSheet: View {
                         ageSection
                         termsSection
                         if requiresKYC { kycSection }
+                        regionSection
                         blockersSection
+                        if !wagerBlockReasons.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(wagerBlockReasons, id: \.self) { reason in
+                                    blockerRow(reason)
+                                }
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("Eligibility issues: \(wagerBlockReasons.joined(separator: ", "))")
+                        }
                         if let errorMessage {
                             feedback(errorMessage, color: .red, icon: "exclamationmark.triangle.fill")
                         }
@@ -81,6 +104,7 @@ struct VSMatchComplianceSheet: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") { dismiss() }
+                        .accessibilityLabel("Cancel eligibility check")
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Continue") {
@@ -89,10 +113,18 @@ struct VSMatchComplianceSheet: View {
                         dismiss()
                     }
                     .fontWeight(.bold)
-                    .disabled(!isFullyCleared)
+                    .disabled(!isFullyCleared || isBusy || isLoading)
+                    .opacity(isFullyCleared && !isBusy ? 1 : 0.5)
+                    .accessibilityLabel("Continue to VS Match")
+                    .accessibilityHint(isFullyCleared ? "All eligibility requirements met" : "Complete all requirements first")
                 }
             }
             .task { await refresh() }
+            .onAppear { startKYCPollingIfNeeded() }
+            .onDisappear {
+                kycPollTask?.cancel()
+                kycPollTask = nil
+            }
         }
     }
 
@@ -140,9 +172,12 @@ struct VSMatchComplianceSheet: View {
                     Button {
                         Task { await verifyAge() }
                     } label: {
-                        actionLabel("Verify Age")
+                        actionLabel("Verify Age", isLoading: isVerifyingAge)
                     }
-                    .disabled(isWorking)
+                    .disabled(isBusy)
+                    .opacity(isBusy && !isVerifyingAge ? 0.5 : 1)
+                    .accessibilityLabel("Verify age for real-money wagering")
+                    .accessibilityLabel("Verify age for real-money wagering eligibility")
                 }
             }
         }
@@ -169,9 +204,11 @@ struct VSMatchComplianceSheet: View {
                     Button {
                         Task { await acceptTerms() }
                     } label: {
-                        actionLabel("Accept & Continue")
+                        actionLabel("Accept & Continue", isLoading: isAcceptingTerms)
                     }
-                    .disabled(isWorking)
+                    .disabled(isBusy)
+                    .opacity(isBusy && !isAcceptingTerms ? 0.5 : 1)
+                    .accessibilityLabel("Accept VS Match terms of service")
                 }
             }
         }
@@ -191,13 +228,29 @@ struct VSMatchComplianceSheet: View {
                     .foregroundColor(AppTheme.Colors.textSecondary)
 
                 if kycStatus == .notStarted || kycStatus == .rejected || kycStatus == .expired {
+                    if kycStatus == .rejected {
+                        feedback(
+                            "We couldn't verify your ID. Check that your document is valid and well lit, then try again. Contact support if this keeps happening.",
+                            color: .red,
+                            icon: "xmark.circle.fill"
+                        )
+                    }
+
                     Button {
                         Task { await startKYC() }
                     } label: {
-                        actionLabel(kycStatus == .notStarted ? "Verify Identity" : "Re-verify Identity")
+                        actionLabel(
+                            kycStatus == .notStarted ? "Verify Identity" : "Re-verify Identity",
+                            isLoading: isStartingKYC
+                        )
                     }
-                    .disabled(isWorking)
-                    .accessibilityLabel("Start identity verification")
+                    .disabled(isBusy || isKYCDebounced)
+                    .opacity(isBusy && !isStartingKYC || isKYCDebounced ? 0.5 : 1)
+                    .accessibilityLabel(
+                        kycStatus == .notStarted
+                            ? "Verify identity with government ID for wagers over five hundred dollars"
+                            : "Re-verify identity with government ID"
+                    )
                 }
             }
         }
@@ -210,7 +263,7 @@ struct VSMatchComplianceSheet: View {
         case .pending:
             return "Your identity verification is under review. You'll be able to place wagers over $500 once it's approved."
         case .rejected:
-            return "Identity verification was declined. You can try again, or contact support."
+            return "Identity verification was declined. Tap Re-verify Identity to try again with a valid government ID and clear selfie."
         case .expired:
             return "Your identity verification expired. Please re-verify to wager over $500."
         case .notStarted:
@@ -218,11 +271,54 @@ struct VSMatchComplianceSheet: View {
         }
     }
 
+    // MARK: - Region (self-service when unset)
+
+    @ViewBuilder
+    private var regionSection: some View {
+        if !regionAllowed {
+            requirementCard(
+                title: "Region",
+                done: regionAllowed,
+                icon: "globe.americas.fill"
+            ) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Enter your US state code (e.g. US-CA for California). Real-money play is only offered in approved states.")
+                        .font(.system(size: 13))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+
+                    TextField("US-CA", text: $regionInput)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                        .padding(12)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.Colors.background))
+                        .accessibilityLabel("US state region code")
+
+                    Button {
+                        Task { await saveRegion() }
+                    } label: {
+                        actionLabel("Save Region", isLoading: isSavingRegion)
+                    }
+                    .disabled(isBusy || regionInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .opacity(isBusy && !isSavingRegion ? 0.5 : 1)
+                    .accessibilityLabel("Save region for real-money wagering")
+                }
+            }
+        }
+    }
+
+    /// Client debounce: prevent rapid re-taps on Verify Identity (60s).
+    private var isKYCDebounced: Bool {
+        guard let last = lastKYCAttempt else { return false }
+        return Date().timeIntervalSince(last) < 60
+    }
+
     // MARK: - Non-self-serviceable blockers (region / account / daily limit)
 
     @ViewBuilder
     private var blockersSection: some View {
-        if !regionAllowed {
+        if !regionAllowed && regionInput.isEmpty {
+            EmptyView()
+        } else if !regionAllowed {
             blockerRow("Real-money play isn't available in your region.")
         }
         if !accountActive {
@@ -261,9 +357,9 @@ struct VSMatchComplianceSheet: View {
         .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.Colors.surface))
     }
 
-    private func actionLabel(_ text: String) -> some View {
+    private func actionLabel(_ text: String, isLoading: Bool = false) -> some View {
         HStack {
-            if isWorking {
+            if isLoading {
                 ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white))
             } else {
                 Text(text).font(.system(size: 15, weight: .bold))
@@ -274,6 +370,7 @@ struct VSMatchComplianceSheet: View {
         .frame(height: 46)
         .background(AppTheme.Colors.primary)
         .cornerRadius(12)
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: isLoading)
     }
 
     private func feedback(_ text: String, color: Color, icon: String) -> some View {
@@ -307,18 +404,25 @@ struct VSMatchComplianceSheet: View {
         termsAccepted = await terms
         kycStatus = await kyc
         regionAllowed = await region
+        if !regionAllowed {
+            regionInput = ""
+        }
         accountActive = (await status) == .active
         withinDailyLimit = WagerPolicy.isWithinDailyLimit(
             alreadyWagered: await wageredToday,
             newWager: wagerAmount,
             limit: await limit
         )
+        wagerBlockReasons = await compliance.wagerBlockReasons(userId: userId, amount: wagerAmount)
+        if kycStatus == .pending {
+            startKYCPollingIfNeeded()
+        }
     }
 
     private func verifyAge() async {
-        isWorking = true
+        isVerifyingAge = true
         errorMessage = nil
-        defer { isWorking = false }
+        defer { isVerifyingAge = false }
         do {
             _ = try await compliance.verifyAgeForWagering(userId: userId, dateOfBirth: dateOfBirth)
             ageVerified = true
@@ -330,9 +434,9 @@ struct VSMatchComplianceSheet: View {
     }
 
     private func acceptTerms() async {
-        isWorking = true
+        isAcceptingTerms = true
         errorMessage = nil
-        defer { isWorking = false }
+        defer { isAcceptingTerms = false }
         do {
             try await compliance.acceptTermsOfService(
                 userId: userId,
@@ -347,9 +451,14 @@ struct VSMatchComplianceSheet: View {
     }
 
     private func startKYC() async {
-        isWorking = true
+        guard !isKYCDebounced else {
+            errorMessage = "Please wait a minute before starting identity verification again."
+            return
+        }
+        lastKYCAttempt = Date()
+        isStartingKYC = true
         errorMessage = nil
-        defer { isWorking = false }
+        defer { isStartingKYC = false }
         do {
             let result = try await compliance.startKYCVerification(userId: userId)
             guard
@@ -370,7 +479,7 @@ struct VSMatchComplianceSheet: View {
                 // Webhook is authoritative; optimistically mark pending until approved.
                 kycStatus = .pending
                 HapticManager.shared.notification(type: .success)
-                // Refresh in case webhook already flipped to approved (fast path / test mode).
+                startKYCPollingIfNeeded()
                 kycStatus = await compliance.getKYCStatus(userId: userId)
             case .canceled:
                 errorMessage = "Identity verification was canceled."
@@ -381,12 +490,47 @@ struct VSMatchComplianceSheet: View {
             case .unavailable:
                 // Session created server-side; user can finish later once SDK is linked.
                 kycStatus = .pending
+                startKYCPollingIfNeeded()
                 errorMessage = "Identity session started. Finish verification when prompted, or try again after updating the app."
                 HapticManager.shared.notification(type: .warning)
             }
         } catch {
             errorMessage = error.localizedDescription
             HapticManager.shared.notification(type: .error)
+        }
+    }
+
+    private func saveRegion() async {
+        isSavingRegion = true
+        errorMessage = nil
+        defer { isSavingRegion = false }
+        do {
+            try await compliance.saveUserRegion(userId: userId, region: regionInput)
+            regionAllowed = await compliance.isRegionAllowed(userId: userId)
+            HapticManager.shared.notification(type: .success)
+        } catch {
+            errorMessage = error.localizedDescription
+            HapticManager.shared.notification(type: .error)
+        }
+    }
+
+    /// Poll Firestore KYC status while pending (webhook may take a few seconds).
+    private func startKYCPollingIfNeeded() {
+        kycPollTask?.cancel()
+        guard kycStatus == .pending || requiresKYC else { return }
+        kycPollTask = Task { [userId] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard !Task.isCancelled else { break }
+                let status = await compliance.getKYCStatus(userId: userId)
+                await MainActor.run {
+                    kycStatus = status
+                    if status == .approved {
+                        kycPollTask?.cancel()
+                    }
+                }
+                if status != .pending { break }
+            }
         }
     }
 }

@@ -28,13 +28,18 @@ struct SuperThanksSheet: View {
         var id: Self { self }
         
         var amount: Double {
+            MoneyMath.dollars(fromCents: amountCents)
+        }
+
+        /// Canonical integer cents for Super Thanks presets.
+        var amountCents: Int {
             switch self {
-            case .two: return 2.00
-            case .five: return 5.00
-            case .ten: return 10.00
-            case .twenty: return 20.00
-            case .fifty: return 50.00
-            case .custom: return 0.00
+            case .two: return 200
+            case .five: return 500
+            case .ten: return 1_000
+            case .twenty: return 2_000
+            case .fifty: return 5_000
+            case .custom: return 0
             }
         }
         
@@ -85,6 +90,8 @@ struct SuperThanksSheet: View {
             }
             .navigationTitle("Super Thanks")
             .navigationBarTitleDisplayMode(.inline)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Super Thanks payment sheet")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
@@ -233,6 +240,8 @@ struct SuperThanksSheet: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(amount.displayText) Super Thanks amount")
+        .accessibilityAddTraits(selectedAmount == amount ? .isSelected : [])
     }
     
     // MARK: - Message Section
@@ -339,6 +348,8 @@ struct SuperThanksSheet: View {
             .shadow(color: selectedAmount.color.opacity(0.4), radius: 8, y: 4)
         }
         .disabled(isSending)
+        .accessibilityLabel(isSending ? "Sending Super Thanks" : "Send \(selectedAmount.displayText) Super Thanks")
+        .accessibilityHint("Purchases a highlighted comment for the creator")
     }
     
     // MARK: - Terms Section
@@ -436,19 +447,24 @@ struct SuperThanksSheet: View {
     private func saveSuperThanks() async {
         #if canImport(FirebaseFirestore)
         let db = Firestore.firestore()
+        let amountCents = selectedAmount.amountCents
+        let creatorShareCents = MoneyMath.superThanksCreatorShareCents(grossCents: amountCents)
         let thanksData: [String: Any] = [
             "id": UUID().uuidString,
             "videoId": video.id,
             "creatorId": video.creatorId,
             "senderId": AppState.shared.currentUser?.id ?? "",
             "senderName": AppState.shared.currentUser?.displayName ?? "Anonymous",
-            "amount": selectedAmount.amount,
+            "amount": MoneyMath.dollars(fromCents: amountCents),
+            "amountCents": amountCents,
+            "creatorShareCents": creatorShareCents,
+            "platformFeeCents": amountCents - creatorShareCents,
             "message": customMessage.isEmpty ? "Thank you!" : customMessage,
             "createdAt": FieldValue.serverTimestamp()
         ]
         
         try? await db.collection("super-thanks").addDocument(data: thanksData)
-        print("✅ [SuperThanks] Sent $\(selectedAmount.amount) to \(video.creator.displayName)")
+        print("✅ [SuperThanks] Sent $\(MoneyMath.dollars(fromCents: amountCents)) to \(video.creator.displayName)")
         #endif
     }
 }

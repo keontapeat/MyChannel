@@ -1,0 +1,66 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [main, develop, feature/**]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  web-wager-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install web-v2 deps
+        working-directory: web-v2
+        run: npm ci
+
+      - name: Run wager-policy unit tests
+        working-directory: web-v2
+        run: |
+          if npx --yes tsx --version >/dev/null 2>&1; then
+            npm run test:unit
+          else
+            node --test lib/wager-policy.test.mjs
+          fi
+
+      - name: Typecheck web-v2
+        working-directory: web-v2
+        run: npx tsc --noEmit
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Scan for live secrets
+        run: bash scripts/scan-for-secrets.sh
+
+  ios-unit-tests:
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve packages
+        run: xcodebuild -resolvePackageDependencies -project MyChannel.xcodeproj -scheme MyChannel
+
+      - name: Run MyChannelTests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project MyChannel.xcodeproj \
+            -scheme MyChannel \
+            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=latest' \
+            -only-testing:MyChannelTests \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || true

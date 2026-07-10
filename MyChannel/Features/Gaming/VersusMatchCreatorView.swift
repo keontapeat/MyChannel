@@ -432,7 +432,7 @@ struct VersusMatchCreatorView: View {
     private var canCreate: Bool {
         selectedOpponent != nil &&
         !wagerAmount.isEmpty &&
-        Double(wagerAmount) ?? 0 >= 1
+        WagerPolicy.isValidWagerAmount(Double(wagerAmount) ?? 0)
     }
     
     // MARK: - Actions

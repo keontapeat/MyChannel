@@ -7,17 +7,17 @@ struct MovieDetailView: View {
     let movie: FreeMovie
 
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var appState: AppState
-    @StateObject private var library = MovieLibraryService.shared
-    @State private var showPlayer = false
-    @State private var showTrailerPlayer = false
-    @State private var video: Video?
-    @State private var isWatchlisted = false
-    @State private var showUnavailableAlert = false
+    @EnvironmentObject var appState: AppState
+    @StateObject var library = MovieLibraryService.shared
+    @State var showPlayer = false
+    @State var showTrailerPlayer = false
+    @State var video: Video?
+    @State var isWatchlisted = false
+    @State var showUnavailableAlert = false
     @State private var scrollOffset: CGFloat = 0
     @State private var headerOpacity: Double = 0
     @State private var showFullOverview = false
-    @State private var resumeProgress: Double = 0
+    @State var resumeProgress: Double = 0
     
     private let headerHeight: CGFloat = 400
     private let posterWidth: CGFloat = 110
@@ -164,21 +164,21 @@ struct MovieDetailView: View {
     private var contentSection: some View {
         VStack(alignment: .leading, spacing: 24) {
             mainActionButtons
-            
+
             if !movie.overview.isEmpty {
-                movieOverviewSection
+                MovieDetailOverviewSection(overview: movie.overview, showFullOverview: $showFullOverview)
             }
-            
-            movieDetailsGrid
-            
+
+            MovieDetailMetadataGrid(movie: movie)
+
             if !movie.cast.isEmpty {
-                movieCastSection
+                MovieDetailCastSection(cast: movie.cast)
             }
-            
+
             if !movie.genre.isEmpty {
-                movieGenresSection
+                MovieDetailGenresSection(genres: movie.genre.map { $0.displayName })
             }
-            
+
             Color.clear.frame(height: 40)
         }
         .padding(.horizontal, 20)
@@ -190,266 +190,6 @@ struct MovieDetailView: View {
             )
         )
     }
-    
-    // MARK: - Main Action Buttons
-    private var mainActionButtons: some View {
-        HStack(spacing: 16) {
-            primaryPlayButton
-            
-            if movie.trailerURL != nil {
-                trailerButton()
-            }
-            
-            shareButton
-        }
-    }
-    
-    // MARK: - Primary Play Button
-    private var primaryPlayButton: some View {
-        Button(action: playAction) {
-            let isDirect = MoviePlaybackResolver.directPlayableURL(for: movie) != nil
-            let title: String = {
-                if isDirect { return resumeProgress > 0.05 ? "Resume" : "Play Now" }
-                if movie.trailerURL != nil { return "Play Trailer" }
-                if MoviePlaybackResolver.externalWatchURL(for: movie) != nil {
-                    return "Watch on \(movie.streamingSource.displayName)"
-                }
-                return "Play Trailer"
-            }()
-            let icon = "play.fill"
-            VStack(spacing: 0) {
-                Label(title, systemImage: icon)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                if resumeProgress > 0.05 && isDirect {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Color.black.opacity(0.15))
-                            Capsule().fill(Color.black.opacity(0.55))
-                                .frame(width: geo.size.width * CGFloat(min(1, resumeProgress)))
-                        }
-                    }
-                    .frame(height: 3)
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 5)
-                }
-            }
-            .background(
-                LinearGradient(
-                    colors: [.white, .white.opacity(0.9)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-            )
-            .shadow(color: .white.opacity(0.3), radius: 12, x: 0, y: 4)
-        }
-        .buttonStyle(PressableScaleStyle(scale: 0.96))
-    }
-    
-    // MARK: - Trailer Button
-    private func trailerButton() -> some View {
-        Button {
-            withAnimation(AppTheme.AnimationPresets.easeInOut) {
-                showTrailerPlayer = true
-            }
-        } label: {
-            Image(systemName: "play.rectangle")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 56, height: 56)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(.white.opacity(0.2), lineWidth: 1)
-                )
-        }
-        .buttonStyle(PressableScaleStyle())
-    }
-    
-    // MARK: - Share Button
-    private var shareButton: some View {
-        Button(action: shareAction) {
-            Image(systemName: "square.and.arrow.up")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 56, height: 56)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(.white.opacity(0.2), lineWidth: 1)
-                )
-        }
-        .buttonStyle(PressableScaleStyle())
-    }
-    
-    // MARK: - Movie Overview Section
-    private var movieOverviewSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Synopsis")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-            
-            Text(movie.overview)
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(.white.opacity(0.85))
-                .lineLimit(showFullOverview ? nil : 4)
-                .animation(AppTheme.AnimationPresets.easeInOut, value: showFullOverview)
-            
-            if movie.overview.count > 200 {
-                overviewToggleButton
-            }
-        }
-        .padding(.vertical, 8)
-    }
-    
-    // MARK: - Overview Toggle Button
-    private var overviewToggleButton: some View {
-        Button(showFullOverview ? "Show Less" : "Show More") {
-            withAnimation(AppTheme.AnimationPresets.spring) {
-                showFullOverview.toggle()
-            }
-        }
-        .font(.system(size: 14, weight: .semibold))
-        .foregroundColor(AppTheme.Colors.primary)
-    }
-    
-    // MARK: - Movie Details Grid
-    private var movieDetailsGrid: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Details")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-            
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 16) {
-                movieDetailCard("Director", movie.director.isEmpty ? "Unknown" : movie.director, "person.fill")
-                movieDetailCard("Language", movie.language, "globe")
-                movieDetailCard("Country", movie.country, "flag.fill")
-                movieDetailCard("Source", movie.streamingSource.displayName, "tv.fill")
-            }
-        }
-    }
-    
-    // MARK: - Movie Cast Section
-    private var movieCastSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Cast")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(movie.cast.prefix(10), id: \.self) { actor in
-                        castMemberCard(actor: actor)
-                    }
-                }
-                .padding(.horizontal, 4)
-            }
-        }
-    }
-    
-    // MARK: - Cast Member Card
-    private func castMemberCard(actor: String) -> some View {
-        VStack(spacing: 8) {
-            Circle()
-                .fill(.ultraThinMaterial)
-                .frame(width: 60, height: 60)
-                .overlay(
-                    Image(systemName: "person.fill")
-                        .foregroundColor(.white.opacity(0.6))
-                        .font(.system(size: 24))
-                )
-            
-            Text(actor)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .frame(width: 80)
-        }
-    }
-    
-    // MARK: - Movie Genres Section
-    private var movieGenresSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Genres")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-            
-            MovieFlowLayout(movie.genre.map { $0.displayName }, spacing: 8) { genre in
-                genreChip(genre: genre)
-            }
-        }
-    }
-    
-    // MARK: - Genre Chip
-    private func genreChip(genre: String) -> some View {
-        Text(genre)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(
-                LinearGradient(
-                    colors: [AppTheme.Colors.primary.opacity(0.3), AppTheme.Colors.secondary.opacity(0.3)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                in: Capsule()
-            )
-            .overlay(Capsule().stroke(.white.opacity(0.2), lineWidth: 1))
-    }
-    
-    // MARK: - Movie Detail Card Helper
-    private func movieDetailCard(_ title: String, _ value: String, _ icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .foregroundColor(AppTheme.Colors.primary)
-                    .font(.system(size: 14))
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
-            }
-            
-            Text(value)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white)
-                .lineLimit(2)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(.white.opacity(0.1), lineWidth: 1)
-        )
-    }
-    
-    // MARK: - Setup Methods
-    private func setupVideo() {
-        if video == nil {
-            video = MoviePlaybackResolver.videoIfDirect(from: movie, creator: User.defaultUser)
-        }
-    }
-
-    private func loadResumeAndList() async {
-        isWatchlisted = library.isInMyList(movie.id)
-        guard let userId = appState.currentUser?.id else { return }
-        let videoID = MoviePlaybackResolver.stableVideoID(for: movie)
-        if let wp = try? await WatchProgressService.shared.fetchProgress(userId: userId, videoId: videoID) {
-            await MainActor.run {
-                if wp.completionPct > 0.05 && wp.completionPct < 0.95 {
-                    resumeProgress = wp.completionPct
-                }
-            }
-        }
-    }
 
     private func toggleWatchlist() {
         let nowSaved = library.toggleMyList(movie, userId: appState.currentUser?.id)
@@ -457,138 +197,6 @@ struct MovieDetailView: View {
             isWatchlisted = nowSaved
         }
         HapticManager.shared.impact(style: .light)
-    }
-    
-    // MARK: - Action Methods
-    private func playAction() {
-        if let directVideo = MoviePlaybackResolver.videoIfDirect(from: movie, creator: User.defaultUser) {
-            // Hand off the player used in detail to the global one for fullscreen playback
-            video = directVideo
-            let vm = VideoPlayerManager()
-            vm.setupPlayer(with: directVideo)
-            vm.play() // autoplay before adopting so global state reflects Playing
-            Task {
-                await GlobalVideoPlayerManager.shared.adoptExternalPlayerManager(vm, video: directVideo, showFullscreen: true)
-            }
-            // Firebase: log that the user started this movie (history + analytics).
-            appState.addToHistory(video: directVideo, progress: resumeProgress, position: 0)
-            showPlayer = true
-        } else if movie.trailerURL != nil {
-            // No direct/legal full stream — play the trailer in-app.
-            showTrailerPlayer = true
-        } else if let watchURL = MoviePlaybackResolver.externalWatchURL(for: movie) {
-            // Remote catalog "where to watch" provider link — open externally.
-            UIApplication.shared.open(watchURL)
-        } else {
-            showUnavailableAlert = true
-        }
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-    }
-
-    /// Persist the current playback position to Firebase so Continue Watching
-    /// and resume work across devices. Called when the fullscreen player closes.
-    private func recordProgressFromPlayer() {
-        let gpm = GlobalVideoPlayerManager.shared
-        guard let video, gpm.currentVideo?.id == video.id else { return }
-        let position = gpm.currentTime
-        let duration = gpm.duration > 0 ? gpm.duration : video.duration
-        guard duration > 0, position > 1 else { return }
-
-        let progress = min(1.0, position / duration)
-        resumeProgress = (progress > 0.05 && progress < 0.95) ? progress : 0
-        appState.updateHistoryProgress(contentId: video.id, progress: progress, position: position)
-
-        guard let userId = appState.currentUser?.id else { return }
-        Task {
-            try? await WatchProgressService.shared.saveProgress(
-                userId: userId,
-                videoId: video.id,
-                position: position,
-                duration: duration
-            )
-        }
-    }
-    
-    private func shareAction() {
-        // Implement sharing functionality
-        let activityViewController = UIActivityViewController(
-            activityItems: [
-                movie.title,
-                "Check out this movie: \(movie.title)",
-                URL(string: movie.trailerURL ?? "https://archive.org")
-            ].compactMap { $0 },
-            applicationActivities: nil
-        )
-        
-        UIApplication.shared.presentShareSheet(activityViewController)
-        
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-    }
-}
-
-// MARK: - Movie Flow Layout Component
-struct MovieFlowLayout<Data: RandomAccessCollection, Content: View>: View where Data.Element: Hashable {
-    let data: Data
-    let spacing: CGFloat
-    let content: (Data.Element) -> Content
-    
-    init(_ data: Data, spacing: CGFloat = 8, @ViewBuilder content: @escaping (Data.Element) -> Content) {
-        self.data = data
-        self.spacing = spacing
-        self.content = content
-    }
-    
-    // MARK: - Flow Layout Body
-    var body: some View {
-        GeometryReader { geometry in
-            VStack(alignment: .leading, spacing: spacing) {
-                ForEach(computeRows(geometry.size.width), id: \.self) { row in
-                    HStack(spacing: spacing) {
-                        ForEach(row, id: \.self) { item in
-                            content(item)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                }
-            }
-        }
-        .frame(height: computeHeight())
-    }
-    
-    // MARK: - Flow Layout Computation Methods
-    private func computeRows(_ availableWidth: CGFloat) -> [[Data.Element]] {
-        var rows: [[Data.Element]] = []
-        var currentRow: [Data.Element] = []
-        var currentWidth: CGFloat = 0
-        
-        for item in data {
-            let itemWidth = itemSize(item).width + spacing
-            
-            if currentWidth + itemWidth > availableWidth && !currentRow.isEmpty {
-                rows.append(currentRow)
-                currentRow = [item]
-                currentWidth = itemWidth
-            } else {
-                currentRow.append(item)
-                currentWidth += itemWidth
-            }
-        }
-        
-        if !currentRow.isEmpty {
-            rows.append(currentRow)
-        }
-        
-        return rows
-    }
-    
-    private func computeHeight() -> CGFloat {
-        let rows = computeRows(1000) // Use large width for row calculation
-        return CGFloat(rows.count) * 40 + CGFloat(max(0, rows.count - 1)) * spacing
-    }
-    
-    private func itemSize(_ item: Data.Element) -> CGSize {
-        // Estimate size - you might want to make this more sophisticated
-        return CGSize(width: 100, height: 40)
     }
 }
 

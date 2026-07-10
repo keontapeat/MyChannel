@@ -11,14 +11,19 @@ struct MoviesView: View {
 
     @State private var selectedFilter: MovieFilter = .all
     @State private var searchText: String = ""
+    @State private var debouncedSearchText: String = ""
+    @State private var searchDebounceTask: Task<Void, Never>?
     @State private var selectedMovie: FreeMovie? = nil
     @State private var remoteMovies: [FreeMovie] = []
     @State private var isFetching: Bool = false
     @State private var showSearch: Bool = false
     @State private var heroIndex: Int = 0
     @State private var viewAll: ViewAllContext? = nil
+    @State private var tmdbCatalogUnavailable = false
 
-    // MARK: - Catalog
+    private var isTMDBConfigured: Bool {
+        !AppSecrets.tmdbAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     /// Memoized merged catalog (remote + sample). Rebuilt only when `remoteMovies`
     /// changes — never recomputed inline during `body`, since `sampleMovies`
@@ -64,12 +69,12 @@ struct MoviesView: View {
     }
 
     private var searchResults: [FreeMovie] {
-        guard !searchText.isEmpty else { return [] }
+        guard !debouncedSearchText.isEmpty else { return [] }
         return allMovies.filter {
-            $0.title.localizedCaseInsensitiveContains(searchText) ||
-            $0.director.localizedCaseInsensitiveContains(searchText) ||
-            $0.cast.joined(separator: " ").localizedCaseInsensitiveContains(searchText) ||
-            $0.genreString.localizedCaseInsensitiveContains(searchText)
+            $0.title.localizedCaseInsensitiveContains(debouncedSearchText) ||
+            $0.director.localizedCaseInsensitiveContains(debouncedSearchText) ||
+            $0.cast.joined(separator: " ").localizedCaseInsensitiveContains(debouncedSearchText) ||
+            $0.genreString.localizedCaseInsensitiveContains(debouncedSearchText)
         }
     }
 
@@ -109,13 +114,21 @@ struct MoviesView: View {
             bindLibrary()
         }
         .onChange(of: appState.currentUser?.id) { _ in bindLibrary() }
+        .onChange(of: searchText) { newValue in
+            searchDebounceTask?.cancel()
+            searchDebounceTask = Task {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                guard !Task.isCancelled else { return }
+                debouncedSearchText = newValue
+            }
+        }
     }
 
     // MARK: - Main Content
 
     private var mainContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
                 header
                 categoryBar
 
@@ -131,7 +144,15 @@ struct MoviesView: View {
     }
 
     private var allTabContent: some View {
-        VStack(spacing: 30) {
+        LazyVStack(spacing: 30) {
+            if tmdbCatalogUnavailable {
+                tmdbUnavailableBanner
+            }
+
+            if featuredMovies.isEmpty && continueWatching.isEmpty && myList.isEmpty && topRatedMovies.isEmpty {
+                emptyState(text: "No movies yet — check back soon")
+            }
+
             if !featuredMovies.isEmpty {
                 heroCarousel
             }
@@ -209,7 +230,7 @@ struct MoviesView: View {
                     let isSelected = filter == selectedFilter
                     Button {
                         withAnimation(.spring(response: 0.3)) { selectedFilter = filter }
-                        HapticManager.shared.impact(style: .light)
+                        HapticManager.shared.impact(style: isSelected ? .light : .medium)
                     } label: {
                         Text(filter.title)
                             .font(.system(size: 14, weight: .bold))
@@ -225,6 +246,28 @@ struct MoviesView: View {
             .padding(.horizontal, 16)
         }
         .padding(.bottom, 8)
+    }
+
+    /// Fail-closed banner when TMDB_API_KEY is missing — catalog stays on bundled samples.
+    private var tmdbUnavailableBanner: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "film.slash")
+                .foregroundColor(.orange)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Live movie catalog unavailable")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+                Text("Add TMDB_API_KEY to Info.plist or environment to load trending titles. Showing bundled classics.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(Color.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Live movie catalog unavailable. Add TMDB API key to load trending titles.")
     }
 
     // MARK: - Hero Carousel
@@ -379,6 +422,7 @@ struct MoviesView: View {
                         .font(.system(size: 16))
                         .foregroundColor(.white)
                         .autocorrectionDisabled()
+                        .accessibilityLabel("Search movies")
 
                     if !searchText.isEmpty {
                         Button { searchText = "" } label: {
@@ -396,7 +440,7 @@ struct MoviesView: View {
             if searchText.isEmpty {
                 searchSuggestions
             } else if searchResults.isEmpty {
-                emptyState(text: "No results for \u{201C}\(searchText)\u{201D}")
+                emptyState(text: "No results for \u{201C}\(debouncedSearchText.isEmpty ? searchText : debouncedSearchText)\u{201D}")
                 Spacer()
             } else {
                 ScrollView {
@@ -479,11 +523,17 @@ struct MoviesView: View {
     // MARK: - Data Fetching
 
     private func initialFetch() async {
+        guard isTMDBConfigured else {
+            await MainActor.run { tmdbCatalogUnavailable = true }
+            return
+        }
         isFetching = true
         defer { isFetching = false }
         // Use the purpose-built trending browse endpoint (empty-string search was
         // fragile and not what the catalog service is designed for).
         let svc = FreeCatalogService.shared
+        // Pluto TV / Archive.org titles in FreeCatalogService provide fallback rows when
+        // TMDB is unavailable — sampleMovies always ships as last-resort offline catalog.
         try? await svc.fetchTrending()
         let mapped = svc.trending.map { $0.toFreeMovie }
         await MainActor.run {

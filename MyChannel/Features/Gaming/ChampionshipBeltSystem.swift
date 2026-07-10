@@ -64,15 +64,21 @@ class ChampionshipBeltSystem: ObservableObject {
             }
         }
         
+        /// Division bands stay within `WagerPolicy` min/max ($1–$100,000).
         var wagerRange: ClosedRange<Double> {
             switch self {
-            case .bronze: return 1...100
+            case .bronze: return WagerPolicy.minWagerDollars...100
             case .silver: return 101...500
             case .gold: return 501...1000
             case .platinum: return 1001...5000
             case .diamond: return 5001...10000
-            case .legend: return 10001...100000
+            case .legend: return 10001...WagerPolicy.maxWagerDollars
             }
+        }
+
+        /// True when a wager amount belongs in this division and is policy-valid.
+        func containsWager(_ amountDollars: Double) -> Bool {
+            WagerPolicy.isValidWagerAmount(amountDollars) && wagerRange.contains(amountDollars)
         }
         
         var icon: String {

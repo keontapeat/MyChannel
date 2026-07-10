@@ -23,6 +23,7 @@ enum StripeIdentityPresenter {
     }
 
     /// Present Identity flow from the key window's top view controller.
+    /// SECURITY: Never log `ephemeralKeySecret` — treat like a password.
     static func present(sessionId: String, ephemeralKeySecret: String) async -> Result {
         #if canImport(StripeIdentity)
         guard let host = topViewController() else {

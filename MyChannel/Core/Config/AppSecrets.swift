@@ -5,6 +5,22 @@ import Foundation
 struct AppSecrets {
     
     // MARK: - 🔥 SECURE KEYCHAIN ACCESS (New Standard)
+
+    /// Debug/Simulator may read env vars; Release ignores env for secrets (Keychain → plist only).
+    private static func envOverride(_ key: String) -> String {
+        #if DEBUG
+        return (ProcessInfo.processInfo.environment[key] ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        #else
+        return ""
+        #endif
+    }
+
+    /// Never log secret values — redact for observability.
+    static func redactSecret(_ value: String) -> String {
+        guard value.count > 8 else { return value.isEmpty ? "(empty)" : "****" }
+        return String(value.prefix(4)) + "…" + String(value.suffix(4))
+    }
     
     static var anthropicAPIKey: String {
         // Priority 1: Keychain (secure, can't be extracted)
@@ -13,8 +29,8 @@ struct AppSecrets {
             return keychainValue
         }
         
-        // Priority 2: Environment variable (build time only)
-        let env = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? ""
+        // Priority 2: Environment variable (DEBUG builds only)
+        let env = envOverride("ANTHROPIC_API_KEY")
         if !env.isEmpty { return env }
         
         // Priority 3: Info.plist fallback (DEPRECATED - will be removed)
@@ -31,7 +47,7 @@ struct AppSecrets {
             return keychainValue
         }
         
-        let env = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
+        let env = envOverride("OPENAI_API_KEY")
         if !env.isEmpty { return env }
         
         let plist = (Bundle.main.object(forInfoDictionaryKey: "OPENAI_API_KEY") as? String ?? "")
@@ -60,31 +76,34 @@ struct AppSecrets {
     // MARK: - 🚀 NEW SUPER AGI PARTNERS
     
     static var runwayAPIKey: String {
+        // Keychain-first (see docs/secrets-rotation-checklist.md)
         if let keychainValue = KeychainManager.shared.get("RUNWAY_API_KEY"),
            !keychainValue.isEmpty {
             return keychainValue
         }
-        let env = ProcessInfo.processInfo.environment["RUNWAY_API_KEY"] ?? ""
+        let env = envOverride("RUNWAY_API_KEY")
         if !env.isEmpty { return env }
         return ""
     }
     
     static var elevenLabsAPIKey: String {
+        // Keychain-first — never ship in Info.plist
         if let keychainValue = KeychainManager.shared.get("ELEVENLABS_API_KEY"),
            !keychainValue.isEmpty {
             return keychainValue
         }
-        let env = ProcessInfo.processInfo.environment["ELEVENLABS_API_KEY"] ?? ""
+        let env = envOverride("ELEVENLABS_API_KEY")
         if !env.isEmpty { return env }
         return ""
     }
     
     static var stabilityAPIKey: String {
+        // Keychain-first — never ship in Info.plist
         if let keychainValue = KeychainManager.shared.get("STABILITY_API_KEY"),
            !keychainValue.isEmpty {
             return keychainValue
         }
-        let env = ProcessInfo.processInfo.environment["STABILITY_API_KEY"] ?? ""
+        let env = envOverride("STABILITY_API_KEY")
         if !env.isEmpty { return env }
         return ""
     }
@@ -95,7 +114,7 @@ struct AppSecrets {
             return keychainValue
         }
         
-        let env = ProcessInfo.processInfo.environment["GOOGLE_CLOUD_API_KEY"] ?? ""
+        let env = envOverride("GOOGLE_CLOUD_API_KEY")
         if !env.isEmpty { return env }
         
         let plist = (Bundle.main.object(forInfoDictionaryKey: "GOOGLE_CLOUD_API_KEY") as? String ?? "")
@@ -111,7 +130,7 @@ struct AppSecrets {
             return keychainValue
         }
         
-        let env = ProcessInfo.processInfo.environment["GOOGLE_CLOUD_PROJECT_ID"] ?? ""
+        let env = envOverride("GOOGLE_CLOUD_PROJECT_ID")
         if !env.isEmpty { return env }
         
         let plist = (Bundle.main.object(forInfoDictionaryKey: "GOOGLE_CLOUD_PROJECT_ID") as? String ?? "")
@@ -128,7 +147,7 @@ struct AppSecrets {
            !keychainValue.isEmpty {
             return keychainValue
         }
-        let env = ProcessInfo.processInfo.environment["STRIPE_PUBLISHABLE_KEY"] ?? ""
+        let env = envOverride("STRIPE_PUBLISHABLE_KEY")
         if !env.isEmpty { return env }
         let plist = (Bundle.main.object(forInfoDictionaryKey: "STRIPE_PUBLISHABLE_KEY") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -144,14 +163,21 @@ struct AppSecrets {
     // MARK: - Non-Sensitive Keys (Can stay in plist)
     
     static var aiAPIKey: String {
+        // Keychain → env → plist (same priority as anthropic/openAI)
+        if let keychainValue = KeychainManager.shared.get(KeychainManager.APIKey.openai.rawValue),
+           !keychainValue.isEmpty {
+            return keychainValue
+        }
+        let env = envOverride("AI_API_KEY")
+        if !env.isEmpty { return env }
         let plist = (Bundle.main.object(forInfoDictionaryKey: "AI_API_KEY") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
-        return (ProcessInfo.processInfo.environment["AI_API_KEY"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return ""
     }
     
     static var tmdbAPIKey: String {
-        // TMDB key is public, can stay in plist
+        // TMDB key is public but must not be hardcoded in source — Keychain → plist → env.
         if let keychainValue = KeychainManager.shared.get(KeychainManager.APIKey.tmdb.rawValue),
            !keychainValue.isEmpty {
             return keychainValue
@@ -161,39 +187,52 @@ struct AppSecrets {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
 
-        let env = (ProcessInfo.processInfo.environment["TMDB_API_KEY"] ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let env = envOverride("TMDB_API_KEY")
         if !env.isEmpty { return env }
 
-        // Fallback to default TMDB API key for movies (public API)
-        return "cc1d44a1b1c8a4f2a5890cad1660d0be"
+        // Fail closed — no baked-in fallback key in the binary.
+        return ""
     }
 
     static var pexelsAPIKey: String {
+        if let keychainValue = KeychainManager.shared.get("PEXELS_API_KEY"),
+           !keychainValue.isEmpty {
+            return keychainValue
+        }
+        let env = envOverride("PEXELS_API_KEY")
+        if !env.isEmpty { return env }
         let plist = (Bundle.main.object(forInfoDictionaryKey: "PEXELS_API_KEY") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
-        return ProcessInfo.processInfo.environment["PEXELS_API_KEY"] ?? ""
+        // Fail closed — no baked-in fallback key in the binary.
+        return ""
     }
 
     static var pixabayAPIKey: String {
+        if let keychainValue = KeychainManager.shared.get("PIXABAY_API_KEY"),
+           !keychainValue.isEmpty {
+            return keychainValue
+        }
+        let env = envOverride("PIXABAY_API_KEY")
+        if !env.isEmpty { return env }
         let plist = (Bundle.main.object(forInfoDictionaryKey: "PIXABAY_API_KEY") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
-        return ProcessInfo.processInfo.environment["PIXABAY_API_KEY"] ?? ""
+        // Fail closed — no baked-in fallback key in the binary.
+        return ""
     }
 
     static var youtubeAPIKey: String {
         let plist = (Bundle.main.object(forInfoDictionaryKey: "YOUTUBE_API_KEY") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
-        return (ProcessInfo.processInfo.environment["YOUTUBE_API_KEY"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return envOverride("YOUTUBE_API_KEY")
     }
     
     // MARK: - Observability & Monetization Keys
 
     static var sentryDSN: String {
-        let env = ProcessInfo.processInfo.environment["SENTRY_DSN"] ?? ""
+        let env = envOverride("SENTRY_DSN")
         if !env.isEmpty { return env }
         let plist = (Bundle.main.object(forInfoDictionaryKey: "SENTRY_DSN") as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
@@ -201,7 +240,7 @@ struct AppSecrets {
     }
 
     static var postHogAPIKey: String {
-        let env = ProcessInfo.processInfo.environment["POSTHOG_API_KEY"] ?? ""
+        let env = envOverride("POSTHOG_API_KEY")
         if !env.isEmpty { return env }
         let plist = (Bundle.main.object(forInfoDictionaryKey: "POSTHOG_API_KEY") as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
@@ -209,7 +248,7 @@ struct AppSecrets {
     }
 
     static var revenueCatAPIKey: String {
-        let env = ProcessInfo.processInfo.environment["REVENUECAT_API_KEY"] ?? ""
+        let env = envOverride("REVENUECAT_API_KEY")
         if !env.isEmpty { return env }
         let plist = (Bundle.main.object(forInfoDictionaryKey: "REVENUECAT_API_KEY") as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
@@ -221,8 +260,7 @@ struct AppSecrets {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
         
-        let env = (ProcessInfo.processInfo.environment["PINECONE_API_KEY"] ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let env = envOverride("PINECONE_API_KEY")
         if !env.isEmpty { return env }
         
         return nil
@@ -232,25 +270,28 @@ struct AppSecrets {
         let plist = (Bundle.main.object(forInfoDictionaryKey: "ALGOLIA_APP_ID") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
-        let env = (ProcessInfo.processInfo.environment["ALGOLIA_APP_ID"] ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let env = envOverride("ALGOLIA_APP_ID")
         return env
     }
     
     static var algoliaAPIKey: String {
         let plist = (Bundle.main.object(forInfoDictionaryKey: "ALGOLIA_API_KEY") as? String ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !plist.isEmpty, !plist.isPlistPlaceholder { return plist }
-        let env = (ProcessInfo.processInfo.environment["ALGOLIA_API_KEY"] ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plist.isEmpty, !isInfoPlistPlaceholder(plist) { return plist }
+        let env = envOverride("ALGOLIA_API_KEY")
         return env
+    }
+
+    /// Detect unresolved Xcode build-setting placeholders in Info.plist values.
+    /// Returns true for `$(VAR)` or `${VAR}` strings left unsubstituted at build time.
+    static func isInfoPlistPlaceholder(_ value: String) -> Bool {
+        value.contains("$(") || value.contains("${")
     }
 }
 
 private extension String {
     var isPlistPlaceholder: Bool {
-        // Xcode leaves $(VAR) or ${VAR} unresolved if no value is provided at build time
-        contains("$(") || contains("${")
+        AppSecrets.isInfoPlistPlaceholder(self)
     }
 }
 

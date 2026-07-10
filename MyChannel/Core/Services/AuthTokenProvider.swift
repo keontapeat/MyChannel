@@ -13,7 +13,7 @@ import Foundation
 import FirebaseAuth
 #endif
 
-enum AuthTokenError: Error, LocalizedError {
+enum AuthTokenError: Error, LocalizedError, Equatable {
     case notSignedIn
 
     var errorDescription: String? {

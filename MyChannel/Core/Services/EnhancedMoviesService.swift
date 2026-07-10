@@ -14,6 +14,13 @@ import FirebaseFirestore
 
 // 🎬 Enterprise Movies Service
 // Netflix-level movies platform with ML-powered recommendations
+//
+// WIRING AUDIT (batch-6):
+// - MoviesView hub → FreeCatalogService + MovieLibraryService (primary catalog path)
+// - MovieDetailView → MoviePlaybackResolver + GlobalVideoPlayerManager (playback)
+// - This service (EnhancedMoviesService) → TMDB + ML Cloud Run agents (premium rows)
+// - Fail closed: AppSecrets.tmdbAPIKey empty → hub uses sampleMovies + FreeCatalog only
+// - Do not duplicate catalog fetch here until MoviesView migrates to EnhancedMovie model
 @MainActor
 class EnhancedMoviesService: ObservableObject {
     static let shared = EnhancedMoviesService()
@@ -42,8 +49,8 @@ class EnhancedMoviesService: ObservableObject {
     private let watchTimePredictonURL = "https://watch-time-predictor-fkri6ifojq-uc.a.run.app"
     private let movieTrendingURL = "https://movie-trending-fkri6ifojq-uc.a.run.app"
     
-    // TMDB Integration
-    private let tmdbAPIKey = "your_tmdb_api_key" // Configure in production
+    // TMDB Integration — fail closed via AppSecrets (no hardcoded keys in source).
+    private var tmdbAPIKey: String { AppSecrets.tmdbAPIKey }
     private let tmdbBaseURL = "https://api.themoviedb.org/3"
     
     private init() {
@@ -55,7 +62,7 @@ class EnhancedMoviesService: ObservableObject {
     
     private func setupCache() {
         cache.countLimit = 2000 // Cache up to 2000 movies
-        cache.totalCostLimit = 500 * 1024 * 1024 // 500MB cache limit
+        cache.totalCostLimit = 500 * 1024 * 1024 // 500MB cache limit — poster URLs keyed by tmdb id
     }
     
     private func startPerformanceTracking() {
@@ -386,6 +393,10 @@ class EnhancedMoviesService: ObservableObject {
     // MARK: - TMDB Integration
     
     private func loadTMDBMovies(endpoint: String, parameters: [String: String] = [:], limit: Int = 20) async throws -> [TMDBMovie] {
+        guard !tmdbAPIKey.isEmpty else {
+            throw MoviesServiceError.tmdbError
+        }
+
         var urlComponents = URLComponents(string: tmdbBaseURL + endpoint)!
         
         var queryItems = [
@@ -405,7 +416,19 @@ class EnhancedMoviesService: ObservableObject {
         }
         
         let (data, response) = try await URLSession.configured.data(from: url)
-        
+
+        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 429 {
+            // TMDB rate limit — exponential backoff (batch-7)
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+            let (retryData, retryResponse) = try await URLSession.configured.data(from: url)
+            guard let retryHTTP = retryResponse as? HTTPURLResponse,
+                  200...299 ~= retryHTTP.statusCode else {
+                throw MoviesServiceError.tmdbError
+            }
+            let tmdbResponse = try JSONDecoder().decode(TMDBResponse.self, from: retryData)
+            return Array(tmdbResponse.results.prefix(limit))
+        }
+
         guard let httpResponse = response as? HTTPURLResponse,
               200...299 ~= httpResponse.statusCode else {
             throw MoviesServiceError.tmdbError

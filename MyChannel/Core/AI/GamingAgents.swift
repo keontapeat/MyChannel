@@ -20,8 +20,10 @@ import FirebaseFirestore
 final class MatchOrchestrator: ObservableObject {
     
     static let shared = MatchOrchestrator()
+    @Injected private var escrowService: MoneyEscrowing
+
     private init() {
-        // Agent initialization
+        // No background loop — orchestration runs only from VersusMatchService.createMatch.
     }
     
     @Published var isActive: Bool = false
@@ -46,13 +48,18 @@ final class MatchOrchestrator: ObservableObject {
         isEnabled: false,
         priority: 20,
         estimatedBuildTime: "4 weeks",
-        runInterval: 60 // 1 minute - need fast response
+        runInterval: 60 // Reserved — loop disabled; createMatch-only orchestration
     )
     
     private var runTask: Task<Void, Never>?
     
+    /// Background monitoring loop is DISABLED. Match orchestration runs only when
+    /// `VersusMatchService.createMatch` calls `VertexAIAgentService.orchestrateMatch`.
     func start() async {
-        guard !isActive else { return }
+        guard config.isEnabled else {
+            print("ℹ️ [Match Orchestrator] Background loop disabled — createMatch-only mode")
+            return
+        }
         isActive = true
         status = .running
         print("✅ [Match Orchestrator] Agent started")
@@ -176,8 +183,8 @@ final class MatchOrchestrator: ObservableObject {
             "completedAt": FieldValue.serverTimestamp()
         ])
         
-        // Release escrow to winner via MoneyEscrowService
-        try await MoneyEscrowService.shared.releaseFunds(
+        // Release escrow to winner via DI-resolved MoneyEscrowing (never .shared in agent code).
+        try await escrowService.releaseFunds(
             matchId: matchId,
             winnerId: winnerId,
             loserId: loserId,
