@@ -22,12 +22,19 @@ REGION_ESCROW="us-central1"
 REGION_IDENTITY="us-east1"
 FN_ESCROW="escrow-payments"
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
 if command -v gcloud >/dev/null 2>&1; then
   GCLOUD="gcloud"
-elif [ -x "./google-cloud-sdk/bin/gcloud" ]; then
-  GCLOUD="./google-cloud-sdk/bin/gcloud"
+elif [ -x "$ROOT/google-cloud-sdk/bin/gcloud" ]; then
+  GCLOUD="$ROOT/google-cloud-sdk/bin/gcloud"
+elif [ -x "$HOME/google-cloud-sdk/bin/gcloud" ]; then
+  GCLOUD="$HOME/google-cloud-sdk/bin/gcloud"
 else
   echo "❌ gcloud not found."
+  echo "   Install Cloud SDK or run from the repo after:"
+  echo "   export PATH=\"\$PWD/google-cloud-sdk/bin:\$PATH\""
   exit 1
 fi
 
@@ -75,10 +82,10 @@ fi
 
 # --- Firebase Python functions (identity) ---
 echo "🆔 Deploying create_stripe_identity_session + stripe_identity_webhook (Firebase)…"
-(
-  cd functions
-  firebase deploy --only functions:create_stripe_identity_session,functions:stripe_identity_webhook --project "$PROJECT"
-)
+# Multi-codebase firebase.json → must qualify with codebase name.
+firebase deploy \
+  --only functions:python-functions:create_stripe_identity_session,functions:python-functions:stripe_identity_webhook \
+  --project "$PROJECT"
 
 # --- Escrow Cloud Function (Node gen2) ---
 echo "💰 Deploying escrow-payments (gen2)…"

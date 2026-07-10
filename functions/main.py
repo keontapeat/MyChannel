@@ -3725,7 +3725,7 @@ def on_subscription_deleted(
 # Mirrors WagerPolicy: KYC required for wagers > $500. Client never sees sk_*.
 # =============================================================================
 
-@https_fn.on_request(region="us-east1")
+@https_fn.on_request(region="us-east1", invoker="public")
 def create_stripe_identity_session(req: https_fn.Request) -> https_fn.Response:
     """
     Create a Stripe Identity VerificationSession for VS Match KYC.
@@ -3803,7 +3803,7 @@ def create_stripe_identity_session(req: https_fn.Request) -> https_fn.Response:
         return https_fn.Response({"error": "internal"}, status=500, headers=cors)
 
 
-@https_fn.on_request(region="us-east1")
+@https_fn.on_request(region="us-east1", invoker="public")
 def stripe_identity_webhook(req: https_fn.Request) -> https_fn.Response:
     """
     Stripe Identity webhook — advances KYC to approved/rejected.
