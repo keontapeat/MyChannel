@@ -76,7 +76,7 @@ class NuclearFlicksViewModel: ObservableObject {
         
         if await loadRecommendedFeedIfAvailable(limit: 20) {
             print("✅ [NuclearFlicks] Loaded Vertex AI recommendations")
-            preloadVideos(around: 0, count: 5)  // 🔥 STRONGER: 5 instead of 3
+            preloadVideos(around: 0, count: 1)  // visible+1 — docs/launch-perf-flicks.md
             return
         }
         
@@ -116,16 +116,16 @@ class NuclearFlicksViewModel: ObservableObject {
                 }
                 flicks = parsed
                 print("✅ [NuclearFlicks] Loaded \(flicks.count) playable Flicks")
-                preloadVideos(around: 0, count: 5)  // 🔥 STRONGER: 5 instead of 3
+                preloadVideos(around: 0, count: 1)  // visible+1 — docs/launch-perf-flicks.md
             } else if !mainVideoBackfill.isEmpty {
                 flicks = mergePlayableFlicks(primary: mainVideoBackfill, fallback: makeDemoFlicks(), minimumCount: 20)
                 print("✅ [NuclearFlicks] Loaded \(flicks.count) playable videos from public videos")
-                preloadVideos(around: 0, count: 5)  // 🔥 STRONGER: 5 instead of 3
+                preloadVideos(around: 0, count: 1)  // visible+1 — docs/launch-perf-flicks.md
             } else {
                 // Silently fallback to demo data (no error - this is expected when starting)
                 flicks = makeDemoFlicks()
                 print("📺 [NuclearFlicks] No Flicks in Firestore yet. Showing \(flicks.count) demo Flicks.")
-                preloadVideos(around: 0, count: 5)  // 🔥 STRONGER: 5 instead of 3
+                preloadVideos(around: 0, count: 1)  // visible+1 — docs/launch-perf-flicks.md
             }
         } catch {
             // Only show error for actual failures (network issues, permissions, etc.)
@@ -187,7 +187,12 @@ class NuclearFlicksViewModel: ObservableObject {
             let snapshot = try await query.getDocuments()
             
             if !snapshot.documents.isEmpty {
-                lastDocument = snapshot.documents.last
+                let newCursor = snapshot.documents.last
+                if newCursor?.documentID == lastDocument?.documentID {
+                    print("⚠️ [NuclearFlicks] Pagination cursor unchanged — skipping duplicate page")
+                    return
+                }
+                lastDocument = newCursor
                 var newFlicks = snapshot.documents.compactMap { doc in
                     parseFlickFromDocument(doc)
                 }
@@ -207,17 +212,25 @@ class NuclearFlicksViewModel: ObservableObject {
     
     func toggleLike(flick: NuclearFlick) {
         let baseId = flick.id.components(separatedBy: "_loop_").first ?? flick.id
-        if likedFlickIds.contains(baseId) {
+        let wasLiked = likedFlickIds.contains(baseId)
+        if wasLiked {
             likedFlickIds.remove(baseId)
-            // Mirror into AppState's persisted liked set (auto-saves to
-            // users/{uid} + syncs cross-device) and record an "unlike" event so
-            // the server-side counter decrements too (fixes the like drift).
             AppState.shared.likedVideos.remove(baseId)
-            Task { await recordFlickEvent(flickId: baseId, type: "unlike") }
         } else {
             likedFlickIds.insert(baseId)
             AppState.shared.likedVideos.insert(baseId)
-            Task { await recordFlickEvent(flickId: baseId, type: "like") }
+        }
+        Task { [weak self] in
+            let ok = await self?.recordFlickEvent(flickId: baseId, type: wasLiked ? "unlike" : "like") ?? false
+            guard let self, !ok else { return }
+            // Roll back optimistic UI on network failure
+            if wasLiked {
+                self.likedFlickIds.insert(baseId)
+                AppState.shared.likedVideos.insert(baseId)
+            } else {
+                self.likedFlickIds.remove(baseId)
+                AppState.shared.likedVideos.remove(baseId)
+            }
         }
     }
     
@@ -239,9 +252,16 @@ class NuclearFlicksViewModel: ObservableObject {
 
     func toggleSave(flick: NuclearFlick) {
         let baseId = flick.id.components(separatedBy: "_loop_").first ?? flick.id
-        // "Save" maps to Watch Later, the app's existing persisted collection.
+        let wasSaved = savedFlickIds.contains(baseId)
         AppState.shared.toggleWatchLater(for: baseId)
         savedFlickIds = AppState.shared.watchLaterVideos
+        Task { [weak self] in
+            let ok = await self?.recordFlickEvent(flickId: baseId, type: wasSaved ? "unsave" : "save") ?? false
+            guard let self, !ok else { return }
+            // Roll back optimistic save on failure
+            AppState.shared.toggleWatchLater(for: baseId)
+            self.savedFlickIds = AppState.shared.watchLaterVideos
+        }
     }
 
     func isSaved(flickId: String) -> Bool {
@@ -283,8 +303,15 @@ class NuclearFlicksViewModel: ObservableObject {
     
     // MARK: - Preloading
     
-    func preloadVideos(around index: Int, count: Int) {
-        guard let range = FeedMath.preloadRange(around: index, before: 1, after: count, total: flicks.count) else { return }
+    /// Preload video assets for the focused item and up to `count` items ahead.
+    /// Default `count: 1` = visible+1 (current + next only). See docs/launch-perf-flicks.md.
+    func preloadVideos(around index: Int, count: Int = 1) {
+        guard let range = FeedMath.preloadRange(
+            around: index,
+            before: 0,
+            after: max(0, count),
+            total: flicks.count
+        ) else { return }
         
         for i in range {
             if !preloadedIndices.contains(i) {
@@ -347,9 +374,10 @@ class NuclearFlicksViewModel: ObservableObject {
     /// 🔒 Records a userId-stamped engagement event in the flick's /events
     /// subcollection. The onFlickEngagementEvent Cloud Function aggregates these
     /// into server-authoritative counters, so clients never write counts directly.
-    private func recordFlickEvent(flickId: String, type: String, extra: [String: Any] = [:]) async {
+    @discardableResult
+    private func recordFlickEvent(flickId: String, type: String, extra: [String: Any] = [:]) async -> Bool {
         #if canImport(FirebaseFirestore)
-        guard let userId = AppState.shared.currentUser?.id else { return }
+        guard let userId = AppState.shared.currentUser?.id else { return true }
         // Duplicate/looped feed entries share one backing doc — strip the suffix.
         let baseId = flickId.components(separatedBy: "_loop_").first ?? flickId
         var payload: [String: Any] = [
@@ -362,9 +390,13 @@ class NuclearFlicksViewModel: ObservableObject {
             _ = try await Firestore.firestore()
                 .collection("flicks").document(baseId)
                 .collection("events").addDocument(data: payload)
+            return true
         } catch {
             print("🚨 [NuclearFlicks] Failed to record \(type) event: \(error.localizedDescription)")
+            return false
         }
+        #else
+        return true
         #endif
     }
     

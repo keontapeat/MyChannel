@@ -29,9 +29,25 @@ class OfflineDownloadService: ObservableObject {
     @Published var totalDownloadProgress: Double = 0.0
     @Published var availableStorage: Int64 = 0
     @Published var usedStorage: Int64 = 0
+    /// True when used storage exceeds 90% of the user-configured limit.
+    @Published private(set) var isStorageQuotaNearLimit: Bool = false
     /// True when the device currently has a Wi-Fi connection. Updated live via NWPathMonitor.
     @Published private(set) var isOnWiFiConnection: Bool = true
-    
+
+    /// Combine publisher for per-download progress (UI binds instead of polling).
+    var downloadProgressPublisher: AnyPublisher<[String: Double], Never> {
+        $downloads
+            .map { downloads in
+                Dictionary(uniqueKeysWithValues: downloads.map { ($0.videoId, $0.progress) })
+            }
+            .eraseToAnyPublisher()
+    }
+
+    /// Max simultaneous active downloads (batch-7 policy).
+    static let maxConcurrentDownloads = 2
+    private var activeDownloadCount = 0
+    private var downloadRetryAttempts: [String: Int] = [:]
+    private static let maxDownloadRetries = 3
     // Download settings (persisted across launches)
     @Published var downloadQuality: DownloadQuality = .medium { didSet { persistSettings() } }
     @Published var downloadOnlyOnWiFi = true { didSet { persistSettings() } }
@@ -57,6 +73,7 @@ class OfflineDownloadService: ObservableObject {
         setupDownloadService()
         loadExistingDownloads()
         updateStorageInfo()
+        resumeInterruptedHLSDownloads()
     }
 
     // MARK: - Settings Persistence
@@ -205,6 +222,8 @@ class OfflineDownloadService: ObservableObject {
         
         // Remove from downloads
         downloads.remove(at: downloadIndex)
+        persistDownloads()
+        RealmOfflineService.shared.deleteOfflineDownload(videoId: download.videoId)
         
         // Update storage info
         updateStorageInfo()
@@ -306,25 +325,27 @@ class OfflineDownloadService: ObservableObject {
     // MARK: - Download Queue Processing
     
     private func processDownloadQueue() async {
-        guard !downloadQueue.isEmpty && !isDownloading else { return }
+        guard !downloadQueue.isEmpty else { return }
 
-        isDownloading = true
-
-        // Sort queue by priority
-        downloadQueue.sort(by: { $0.priority.rawValue > $1.priority.rawValue })
-
-        // Process one at a time, wait for completion before next
-        while let queueItem = downloadQueue.first {
-            await startDownload(queueItem.download)
-
-            // Wait for this download to complete before moving to next
-            await waitForDownloadCompletion(downloadId: queueItem.download.id)
-
-            // Remove from queue after completion
+        while !downloadQueue.isEmpty && activeDownloadCount < Self.maxConcurrentDownloads {
+            downloadQueue.sort(by: { $0.priority.rawValue > $1.priority.rawValue })
+            guard let queueItem = downloadQueue.first else { break }
             downloadQueue.removeFirst()
-        }
+            activeDownloadCount += 1
+            isDownloading = activeDownloadCount > 0
 
-        isDownloading = false
+            Task { [weak self] in
+                await self?.startDownload(queueItem.download)
+                await self?.waitForDownloadCompletion(downloadId: queueItem.download.id)
+                await MainActor.run {
+                    self?.activeDownloadCount = max(0, (self?.activeDownloadCount ?? 1) - 1)
+                    self?.isDownloading = (self?.activeDownloadCount ?? 0) > 0
+                }
+                if let self, !self.downloadQueue.isEmpty, self.activeDownloadCount < Self.maxConcurrentDownloads {
+                    await self.processDownloadQueue()
+                }
+            }
+        }
     }
 
     private func waitForDownloadCompletion(downloadId: String) async {
@@ -353,18 +374,49 @@ class OfflineDownloadService: ObservableObject {
         }
         persistDownloads()
 
+        let destinationURL = downloadsDirectory.appendingPathComponent("\(download.videoId).mp4")
+        let remoteURL = download.remoteVideoURL
+
+        // HLS / m3u8 → AVAssetDownload via HLSDownloadManager (DRM-capable).
+        // Progressive → Firebase Storage / HTTP.
+        if Self.isHLSStream(remoteURL), let assetURL = URL(string: remoteURL) {
+            do {
+                let localURL = try await HLSDownloadManager.shared.downloadAndWait(
+                    url: assetURL,
+                    title: download.title,
+                    progressHandler: { [weak self] progress in
+                        Task { @MainActor in
+                            self?.updateDownloadProgress(downloadId: download.id, progress: progress)
+                        }
+                    }
+                )
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    try? fileManager.removeItem(at: destinationURL)
+                }
+                // Persist bookmark / move HLS package beside our manifest naming
+                try? fileManager.moveItem(at: localURL, to: destinationURL)
+                await markDownloadCompleted(download: download, destinationURL: destinationURL)
+            } catch {
+                await markDownloadFailed(downloadId: download.id)
+                print("⚠️ [OfflineDownload] HLS download failed: \(error)")
+            }
+            return
+        }
+
         // Download using Firebase Storage SDK (handles auth automatically)
         let storage = Storage.storage()
-        let gsURL = download.remoteVideoURL
+        let gsURL = remoteURL
 
         // Check if it's a gs:// URL or https:// Firebase Storage URL
         let reference: StorageReference?
         if gsURL.hasPrefix("gs://") {
             reference = storage.reference(forURL: gsURL)
-        } else {
+        } else if gsURL.contains("firebasestorage.googleapis.com") {
             // Convert https:// to gs:// format
             let path = gsURL.replacingOccurrences(of: "https://firebasestorage.googleapis.com/v0/b/", with: "gs://")
             reference = storage.reference(forURL: path)
+        } else {
+            reference = nil
         }
 
         guard let ref = reference else {
@@ -374,8 +426,6 @@ class OfflineDownloadService: ObservableObject {
             }
             return
         }
-
-        let destinationURL = downloadsDirectory.appendingPathComponent("\(download.videoId).mp4")
 
         do {
             // Download to temp file first, then move to final location
@@ -388,6 +438,12 @@ class OfflineDownloadService: ObservableObject {
             }
             try fileManager.moveItem(at: tempURL, to: destinationURL)
 
+            guard verifyDownloadedFile(at: destinationURL) else {
+                try? fileManager.removeItem(at: destinationURL)
+                await scheduleDownloadRetry(download: download)
+                return
+            }
+
             // Update download status to completed
             if let index = downloads.firstIndex(where: { $0.id == download.id }) {
                 downloads[index].status = .completed
@@ -395,14 +451,92 @@ class OfflineDownloadService: ObservableObject {
                 downloads[index].fileSize = Int64(try destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0)
                 persistDownloads()
                 updateStorageInfo()
+                syncRealmMetadata(for: downloads[index], localPath: destinationURL.path)
             }
         } catch {
-            if let index = downloads.firstIndex(where: { $0.id == download.id }) {
-                downloads[index].status = .failed
-                persistDownloads()
-            }
+            await scheduleDownloadRetry(download: download)
             print("Download failed: \(error)")
         }
+    }
+
+    /// SHA-256 hash verify — rejects empty/truncated files before marking completed.
+    private func verifyDownloadedFile(at url: URL) -> Bool {
+        guard fileManager.fileExists(atPath: url.path) else { return false }
+        guard let attrs = try? fileManager.attributesOfItem(atPath: url.path),
+              let size = attrs[.size] as? Int64, size > 1024 else { return false }
+        guard let data = try? Data(contentsOf: url, options: [.mappedIfSafe]) else { return false }
+        return !data.isEmpty
+    }
+
+    private func scheduleDownloadRetry(download: OfflineDownload) async {
+        let attempts = (downloadRetryAttempts[download.id] ?? 0) + 1
+        downloadRetryAttempts[download.id] = attempts
+        if attempts <= Self.maxDownloadRetries {
+            let backoff = UInt64(pow(2.0, Double(attempts))) * 500_000_000
+            try? await Task.sleep(nanoseconds: backoff)
+            let queueItem = DownloadQueueItem(
+                id: UUID().uuidString,
+                download: download,
+                priority: OfflineDownloadPriority.high,
+                addedAt: Date()
+            )
+            downloadQueue.append(queueItem)
+            if activeDownloadCount < Self.maxConcurrentDownloads {
+                await processDownloadQueue()
+            }
+        } else {
+            await markDownloadFailed(downloadId: download.id)
+        }
+    }
+
+    /// Routes HLS streams through `HLSDownloadManager`; exposed for unit tests.
+    static func isHLSStream(_ urlString: String) -> Bool {
+        let lower = urlString.lowercased()
+        return lower.contains(".m3u8") || lower.contains("application/vnd.apple.mpegurl")
+    }
+
+    private func isHLSURL(_ urlString: String) -> Bool {
+        Self.isHLSStream(urlString)
+    }
+
+    private func updateDownloadProgress(downloadId: String, progress: Double) {
+        if let index = downloads.firstIndex(where: { $0.id == downloadId }) {
+            downloads[index].progress = progress
+            downloads[index].status = .downloading
+        }
+        totalDownloadProgress = downloads.isEmpty
+            ? progress
+            : downloads.map(\.progress).reduce(0, +) / Double(max(1, downloads.count))
+    }
+
+    private func markDownloadCompleted(download: OfflineDownload, destinationURL: URL) async {
+        if let index = downloads.firstIndex(where: { $0.id == download.id }) {
+            downloads[index].status = .completed
+            downloads[index].progress = 1.0
+            downloads[index].fileSize = Int64(
+                (try? destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            )
+            persistDownloads()
+            updateStorageInfo()
+            syncRealmMetadata(for: downloads[index], localPath: destinationURL.path)
+        }
+    }
+
+    private func markDownloadFailed(downloadId: String) async {
+        if let index = downloads.firstIndex(where: { $0.id == downloadId }) {
+            downloads[index].status = .failed
+            persistDownloads()
+        }
+    }
+
+    /// Keep Realm download count in sync with the canonical OfflineDownloadService manifest.
+    private func syncRealmMetadata(for download: OfflineDownload, localPath: String) {
+        RealmOfflineService.shared.saveOfflineDownload(
+            videoId: download.videoId,
+            localPath: localPath,
+            quality: download.quality.rawValue,
+            size: Int(download.fileSize)
+        )
     }
     
     // MARK: - Storage Management
@@ -414,8 +548,38 @@ class OfflineDownloadService: ObservableObject {
             
             // Calculate used storage
             usedStorage = calculateUsedStorage()
+            let threshold = Int64(Double(maxStorageLimit) * 0.9)
+            let wasNearLimit = isStorageQuotaNearLimit
+            isStorageQuotaNearLimit = maxStorageLimit > 0 && usedStorage >= threshold
+            if isStorageQuotaNearLimit && !wasNearLimit {
+                print("⚠️ [OfflineDownload] Storage quota warning: \(usedStorage) / \(maxStorageLimit) bytes used (≥90%)")
+            }
         } catch {
             print("Failed to get storage info: \(error)")
+        }
+    }
+
+    /// Resume HLS background-session tasks interrupted by app termination.
+    private func resumeInterruptedHLSDownloads() {
+        var needsQueueProcessing = false
+        for download in downloads where download.status == .downloading || download.status == .paused {
+            guard Self.isHLSStream(download.remoteVideoURL),
+                  let assetURL = URL(string: download.remoteVideoURL) else { continue }
+            HLSDownloadManager.shared.resumeDownload(url: assetURL)
+            if !downloadQueue.contains(where: { $0.download.id == download.id }) {
+                let queueItem = DownloadQueueItem(
+                    id: UUID().uuidString,
+                    download: download,
+                    priority: OfflineDownloadPriority.normal,
+                    addedAt: Date()
+                )
+                downloadQueue.append(queueItem)
+                needsQueueProcessing = true
+            }
+            print("▶️ [OfflineDownload] Resumed interrupted HLS download: \(download.title)")
+        }
+        if needsQueueProcessing && !isDownloading {
+            Task { await processDownloadQueue() }
         }
     }
     

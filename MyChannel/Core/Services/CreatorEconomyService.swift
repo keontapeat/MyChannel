@@ -222,22 +222,23 @@ class CreatorEconomyService: ObservableObject {
         )
         
         // Process payment
+        let amountMoney = Money(dollars: amount)
         let paymentResult = try await processPayment(
-            amount: amount,
-            currency: "USD",
+            amount: amountMoney.dollars,
+            currency: EscrowCurrency.usd,
             fromUser: userId,
             toCreator: creatorId,
             type: .tip
         )
         
-        // Calculate creator's share (90%)
-        let creatorShare = amount * Self.REVENUE_SHARE
+        // Calculate creator's share (90%) in exact cents
+        let creatorShareMoney = amountMoney.fraction(Self.REVENUE_SHARE)
         
         // Update creator's balance
-        try await updateCreatorBalance(creatorId: creatorId, amount: creatorShare)
+        try await updateCreatorBalance(creatorId: creatorId, amount: creatorShareMoney.dollars)
         
         // Send real-time notification to creator
-        await sendTipNotification(tip: tip, creatorShare: creatorShare)
+        await sendTipNotification(tip: tip, creatorShare: creatorShareMoney.dollars)
         
         // Track analytics - comment out for now since method doesn't exist
         // await analyticsService.trackTipEvent(tip)
@@ -352,6 +353,7 @@ class CreatorEconomyService: ObservableObject {
         toCreator: String,
         type: PaymentType
     ) async throws -> PaymentResult {
+        try EscrowCurrency.assertUSDOnly(currency)
         
         // Integration with payment processors (Stripe, PayPal, etc.)
         // For now, simulate successful payment
@@ -359,7 +361,7 @@ class CreatorEconomyService: ObservableObject {
         return PaymentResult(
             transactionId: UUID().uuidString,
             amount: amount,
-            currency: currency,
+            currency: EscrowCurrency.usd,
             status: .completed,
             timestamp: Date()
         )

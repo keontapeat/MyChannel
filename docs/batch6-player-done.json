@@ -1,0 +1,30 @@
+{
+  "batch": "batch6-player-flicks-downloads",
+  "completed_at": "2026-07-09",
+  "loc_after": {
+    "GlobalVideoPlayerManager.swift": 794,
+    "GlobalPlayerAudioLifecycle.swift": 85,
+    "ProfessionalVideoPlayer.swift": 476,
+    "FlicksView.swift": 779,
+    "FlicksFeedPager.swift": 108
+  },
+  "done_titles": [
+    "Reduce GlobalVideoPlayerManager under 800 LOC",
+    "Reduce ProfessionalVideoPlayer under 800 LOC",
+    "Unify Flicks onto GlobalVideoPlayerManager",
+    "Cancel stale preloads on tab switch",
+    "Memory: [weak self] audit in player closures",
+    "Audio session conflict with Flicks",
+    "Pause global player when Flicks opens",
+    "Resume global player when Flicks closes",
+    "Single playback session ID across surfaces",
+    "Archive EnhancedFlicksViewModel",
+    "Feed pager extraction",
+    "Haptic consistency pass",
+    "Web offline explicitly iOS-only doc",
+    "Plus gating consistency",
+    "Storage quota warnings",
+    "Resume interrupted HLS",
+    "deinit removes lifecycle observers"
+  ]
+}

@@ -12,6 +12,7 @@
 import Foundation
 import Combine
 
+@available(*, deprecated, message: "Use CreatorIntelligenceService")
 @MainActor
 final class AIConversationOrchestrator: ObservableObject {
     static let shared = AIConversationOrchestrator()

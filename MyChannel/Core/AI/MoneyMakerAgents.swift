@@ -10,6 +10,11 @@
 import Foundation
 
 // MARK: - 💵 1. DYNAMIC PRICING AGENT
+//
+// iOS parity with web-v2/services/agi-agents/money-maker/DynamicPricingAgent.ts:
+// platform fee 10% (WagerPolicy/MoneyMath), demand/time/segment multipliers,
+// never below 70% of base. Web agent runs on 5-min interval via Vertex AI;
+// iOS agent is on-demand for VS Match / subscription pricing UI.
 
 @MainActor
 class DynamicPricingAgent: ObservableObject {
@@ -180,8 +185,10 @@ class FraudDetectionAgent: ObservableObject {
         var score: Double = 0
         var reasons: [String] = []
         
-        // Check 1: Unusual amount
-        if amount > userHistory.averageTransaction * 10 {
+        // Check 1: Unusual amount (compare in integer cents to avoid float drift)
+        let amountCents = MoneyMath.cents(fromDollars: amount)
+        let avgCents = MoneyMath.cents(fromDollars: userHistory.averageTransaction)
+        if amountCents > avgCents * 10 {
             score += 30
             reasons.append("Amount 10x higher than usual")
         }

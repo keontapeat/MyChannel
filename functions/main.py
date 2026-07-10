@@ -3718,3 +3718,145 @@ def on_subscription_deleted(
         )
     except Exception:
         logging.exception('on_subscription_deleted')
+
+
+# =============================================================================
+# 🆔 STRIPE IDENTITY — KYC VerificationSession (secret key stays server-side)
+# Mirrors WagerPolicy: KYC required for wagers > $500. Client never sees sk_*.
+# =============================================================================
+
+@https_fn.on_request(region="us-east1", invoker="public")
+def create_stripe_identity_session(req: https_fn.Request) -> https_fn.Response:
+    """
+    Create a Stripe Identity VerificationSession for VS Match KYC.
+    Body: { userId, returnUrl? }
+    Authorization: Bearer <Firebase ID token>
+    Returns: { sessionId, ephemeralKeySecret }
+    iOS IdentityVerificationSheet requires session id + ephemeral key (not client_secret).
+    """
+    cors = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    }
+    try:
+        if req.method == "OPTIONS":
+            return https_fn.Response("", status=204, headers=cors)
+
+        auth_header = req.headers.get("Authorization") or req.headers.get("authorization") or ""
+        if not auth_header.lower().startswith("bearer "):
+            return https_fn.Response({"error": "unauthorized"}, status=401, headers=cors)
+        id_token = auth_header.split(" ", 1)[1].strip()
+        try:
+            decoded = admin_auth.verify_id_token(id_token)
+            caller_uid = decoded["uid"]
+        except Exception:
+            return https_fn.Response({"error": "unauthorized"}, status=401, headers=cors)
+
+        body = req.get_json(silent=True) or {}
+        user_id = str(body.get("userId") or caller_uid).strip()
+        if user_id != caller_uid:
+            return https_fn.Response({"error": "forbidden"}, status=403, headers=cors)
+
+        stripe_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
+        if not stripe_key:
+            return https_fn.Response({"error": "stripe_not_configured"}, status=503, headers=cors)
+
+        import stripe
+        stripe.api_key = stripe_key
+
+        session = stripe.identity.VerificationSession.create(
+            type="document",
+            metadata={"userId": user_id, "purpose": "vs_match_kyc"},
+            options={"document": {"require_matching_selfie": True}},
+        )
+
+        # Ephemeral key scoped to this VerificationSession for the iOS SDK.
+        # stripe_version must be passed for EphemeralKey.create (Stripe API requirement).
+        ephemeral_key = stripe.EphemeralKey.create(
+            verification_session=session.id,
+            stripe_version="2024-06-20",
+        )
+
+        client = firestore.client()
+        client.collection("vs_match_compliance").document(user_id).set(
+            {
+                "kycStatus": "pending",
+                "stripeIdentitySessionId": session.id,
+                "kycSubmittedAt": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
+
+        return https_fn.Response(
+            {
+                "sessionId": session.id,
+                "ephemeralKeySecret": ephemeral_key.secret,
+                # Kept for web/modal clients; iOS uses ephemeralKeySecret.
+                "clientSecret": session.client_secret,
+            },
+            status=200,
+            headers={**cors, "Content-Type": "application/json"},
+        )
+    except Exception:
+        logging.exception("create_stripe_identity_session")
+        return https_fn.Response({"error": "internal"}, status=500, headers=cors)
+
+
+@https_fn.on_request(region="us-east1", invoker="public")
+def stripe_identity_webhook(req: https_fn.Request) -> https_fn.Response:
+    """
+    Stripe Identity webhook — advances KYC to approved/rejected.
+    Configure endpoint secret as STRIPE_IDENTITY_WEBHOOK_SECRET.
+    """
+    try:
+        payload = req.get_data()
+        sig = req.headers.get("Stripe-Signature", "")
+        webhook_secret = os.environ.get("STRIPE_IDENTITY_WEBHOOK_SECRET", "").strip()
+        stripe_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
+        if not stripe_key:
+            return https_fn.Response({"error": "stripe_not_configured"}, status=503)
+
+        import stripe
+        stripe.api_key = stripe_key
+
+        if webhook_secret:
+            event = stripe.Webhook.construct_event(payload, sig, webhook_secret)
+        else:
+            # Fail closed if webhook secret missing in production-like envs
+            logging.error("[identity_webhook] STRIPE_IDENTITY_WEBHOOK_SECRET not set")
+            return https_fn.Response({"error": "webhook_not_configured"}, status=503)
+
+        event_type = event.get("type", "")
+        session_obj = event.get("data", {}).get("object", {}) or {}
+        user_id = (session_obj.get("metadata") or {}).get("userId")
+        session_id = session_obj.get("id")
+        if not user_id:
+            return https_fn.Response({"ok": True, "skipped": "no_user"}, status=200)
+
+        status = "pending"
+        if event_type == "identity.verification_session.verified":
+            status = "approved"
+        elif event_type in (
+            "identity.verification_session.requires_input",
+            "identity.verification_session.canceled",
+        ):
+            # Keep pending on requires_input; mark rejected on cancel
+            if event_type.endswith("canceled"):
+                status = "rejected"
+            else:
+                status = "pending"
+
+        update = {
+            "kycStatus": status,
+            "stripeIdentitySessionId": session_id,
+            "kycUpdatedAt": firestore.SERVER_TIMESTAMP,
+        }
+        if status == "approved":
+            update["kycVerifiedAt"] = firestore.SERVER_TIMESTAMP
+
+        firestore.client().collection("vs_match_compliance").document(user_id).set(update, merge=True)
+        return https_fn.Response({"ok": True, "status": status}, status=200)
+    except Exception:
+        logging.exception("stripe_identity_webhook")
+        return https_fn.Response({"error": "internal"}, status=500)

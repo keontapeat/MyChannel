@@ -70,10 +70,15 @@ Provide actionable recommendations in JSON format.
         where('status', 'in', ['open', 'active']),
         limit(200)
       ));
+      const { dollarsFromCents, platformFeeCents, centsFromDollars } = await import('@/lib/wager-policy');
       const activeMatches = matchSnap.size;
-      const wagers = matchSnap.docs.map((d) => (d.data().wagerAmount ?? 0) / 100);
+      // wagerAmount stored as dollars; fee is 10% of each side's stake (mirrors MoneyEscrow holdFunds).
+      const wagers = matchSnap.docs.map((d) => Number(d.data().wagerAmount ?? 0));
       const avgWager = wagers.length > 0 ? wagers.reduce((a, b) => a + b, 0) / wagers.length : 0;
-      const feeRevenue = wagers.reduce((a, b) => a + b * 0.1, 0);
+      const feeRevenue = wagers.reduce(
+        (a, b) => a + dollarsFromCents(platformFeeCents(centsFromDollars(b))),
+        0
+      );
 
       // Subscription rate (approximation from user docs)
       const premiumSnap = await getDocs(query(

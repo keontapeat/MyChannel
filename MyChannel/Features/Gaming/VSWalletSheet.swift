@@ -16,6 +16,7 @@ struct VSWalletSheet: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    @Injected private var walletService: VSMatchWalletService
 
     let availableBalance: Double
     var initialMode: Mode = .deposit
@@ -238,7 +239,7 @@ struct VSWalletSheet: View {
         do {
             switch mode {
             case .deposit:
-                let result = try await VSMatchWalletService.shared.depositFunds(
+                let result = try await walletService.depositFunds(
                     userId: userId,
                     amount: requestedAmount,
                     paymentMethodId: "wallet_topup"
@@ -250,7 +251,7 @@ struct VSWalletSheet: View {
                     id: userId,
                     last4: nil
                 )
-                let withdrawal = try await VSMatchWalletService.shared.requestWithdrawal(
+                let withdrawal = try await walletService.requestWithdrawal(
                     userId: userId,
                     amount: requestedAmount,
                     destination: destination

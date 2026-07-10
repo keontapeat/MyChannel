@@ -1,0 +1,26 @@
+{
+  "batch": "batch5-web-ai",
+  "completed_at": "2026-07-09",
+  "done_titles": [
+    "WEB: @types/vs-matches.ts re-exports types/vs-matches.ts (single source)",
+    "WEB: money-contract.ts OpenAPI-ish shared constants + cents helpers",
+    "WEB: ComplianceStatusBanner on create-match preflight (KYC/region/daily/terms)",
+    "WEB: Playwright smoke tests/e2e/vs-match-create.spec.ts",
+    "WEB: /wallet/deposit stub page wired to create-escrow-payment",
+    "WEB: wager-policy.ts verified SSR-safe (no window access)",
+    "AI: CreatorIntelligenceService.swift facade (generate/optimize/score/moderate/search/recommend)",
+    "AI: CreatorIntelligenceService registered in DependencyContainer",
+    "AI: @available deprecated on UnifiedAGIBrain and SuperAGI",
+    "AI: AppConfig.aiEnabled kill switch gates CreatorIntelligenceService",
+    "AI: AppConfig.Features.enableExpensiveAIAgents flags costly agents",
+    "DI: DependencyContainer expanded (CreatorIntelligence, ChampionshipBelt, PlaylistFirestore)",
+    "DI: MoneyEscrowing / ComplianceChecking protocols already present + registered",
+    "DI: scripts/count-shared-singletons.sh",
+    "DI: LazyServiceManager defers MyChannelAI + CreatorIntelligence when aiEnabled",
+    "BACKEND: docs/backend-money-runbook.md",
+    "BACKEND: in-memory rate limit on create-escrow-payment",
+    "BACKEND: create-transfer server-side amount (verified — no client trust)",
+    "BACKEND: webhook idempotency on event.id (stripe_webhook_events)",
+    "BACKEND: scripts/deploy-identity-escrow.sh (already present)"
+  ]
+}

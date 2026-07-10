@@ -11,7 +11,7 @@ import Foundation
 import FirebaseFirestore
 
 @MainActor
-class VersusMatchService: ObservableObject {
+class VersusMatchService: ObservableObject, VersusMatching {
     static let shared = VersusMatchService()
     
     @Published var activeMatches: [VersusMatch] = []
@@ -20,7 +20,7 @@ class VersusMatchService: ObservableObject {
     @Published var featuredMatches: [VersusMatch] = []
     
     private let db = Firestore.firestore()
-    private let escrowService = MoneyEscrowService.shared
+    @Injected private var escrowService: MoneyEscrowService
     
     /// Active match listeners, keyed by matchId, so we can avoid duplicate
     /// listeners and detach them (previously they leaked — attached, never removed).
@@ -48,8 +48,8 @@ class VersusMatchService: ObservableObject {
         
         print("🎮 Creating VS Match...")
         
-        // Validate wager amount
-        guard wagerAmount >= 1.0 && wagerAmount <= 100000 else {
+        // Validate wager amount via shared policy (single source of truth)
+        guard WagerPolicy.isValidWagerAmount(wagerAmount) else {
             throw MatchError.invalidWagerAmount
         }
         
@@ -461,17 +461,41 @@ enum MatchError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidWagerAmount:
-            return "Wager amount must be between $1 and $100,000"
+            return NSLocalizedString(
+                "match.error.invalidWagerAmount",
+                value: "Wager amount must be between $1 and $100,000",
+                comment: "VS Match invalid wager amount"
+            )
         case .userNotLoggedIn:
-            return "You must be logged in to create a match"
+            return NSLocalizedString(
+                "match.error.userNotLoggedIn",
+                value: "You must be logged in to create a match",
+                comment: "VS Match auth required"
+            )
         case .matchNotFound:
-            return "Match not found"
+            return NSLocalizedString(
+                "match.error.matchNotFound",
+                value: "Match not found",
+                comment: "VS Match missing"
+            )
         case .insufficientFunds:
-            return "Insufficient funds for wager"
+            return NSLocalizedString(
+                "match.error.insufficientFunds",
+                value: "Insufficient funds for wager",
+                comment: "VS Match wallet balance"
+            )
         case .invalidData:
-            return "Invalid match data"
+            return NSLocalizedString(
+                "match.error.invalidData",
+                value: "Invalid match data",
+                comment: "VS Match corrupt payload"
+            )
         case .escrowFailed:
-            return "Failed to hold funds in escrow"
+            return NSLocalizedString(
+                "match.error.escrowFailed",
+                value: "Failed to hold funds in escrow",
+                comment: "VS Match escrow hold failed"
+            )
         }
     }
 }

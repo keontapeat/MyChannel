@@ -565,6 +565,13 @@ class VideoPlayerManager: ObservableObject {
     }
     
     // 🔥 Phase 14: SSAI Helper
+    /// Skip active mid-roll when user navigates queue previous/next.
+    func cancelCurrentAdBreak() {
+        interstitialController?.cancelCurrentEvent(withResumptionOffset: .zero)
+        isPlayingAd = false
+        adRemainingTime = 0
+    }
+
     private func scheduleMidRollAdEvent(for player: AVPlayer) {
         guard let item = player.currentItem else { return }
         
@@ -909,6 +916,8 @@ class VideoPlayerManager: ObservableObject {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay, .allowBluetooth, .allowBluetoothA2DP])
             // 🔥 Phase 21: Spatial Audio / Dolby Atmos configuration
+            // HDR / Dolby path: no-op safe — only set policy when OS supports it;
+            // never force extended dynamic range on SDR assets (see docs/player-hdr-carplay-stub.md).
             if #available(iOS 15.0, *) {
                 // Tells the system this is a media app supporting spatial audio
                 player?.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible

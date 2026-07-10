@@ -25,6 +25,7 @@ final class WatchConnectivityService: NSObject, ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var debounceTask: Task<Void, Never>?
+    private weak var globalPlayer: GlobalVideoPlayerManager?
 
     // MARK: - Activation
 
@@ -36,7 +37,8 @@ final class WatchConnectivityService: NSObject, ObservableObject {
 
         // Observe GlobalVideoPlayerManager and push updates to watch
         Task { @MainActor in
-            let gp = GlobalVideoPlayerManager.shared
+            globalPlayer = GlobalVideoPlayerManager.shared
+            guard let gp = globalPlayer else { return }
             gp.$currentVideo
                 .combineLatest(gp.$isPlaying, gp.$currentTime, gp.$duration)
                 .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
@@ -111,7 +113,7 @@ extension WatchConnectivityService: WCSessionDelegate {
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         guard let cmd = message["cmd"] as? String else { return }
         Task { @MainActor in
-            let gp = GlobalVideoPlayerManager.shared
+            guard let gp = globalPlayer ?? Optional(GlobalVideoPlayerManager.shared) else { return }
             switch cmd {
             case "play":
                 gp.player?.play()

@@ -81,6 +81,8 @@ struct MyChannelApp: App {
         }
         
         let initTime = Date().timeIntervalSince(initStartTime)
+        // SPLASH METRIC: Target <400ms from process start to first SplashContainer frame.
+        // Logged here for Instruments correlation; see docs/launch-perf-checklist.md.
         print("✅ MyChannelApp init completed in \(Int(initTime * 1000))ms")
     }
     
@@ -103,7 +105,8 @@ struct MyChannelApp: App {
                         LazyServiceManager.shared.printStatistics()
                     }
                     
-                    // Performance monitoring automatically starts in debug builds
+                    // Performance monitoring — MainThreadHangDetector stub available in
+                    // Core/Performance/MainThreadHangDetector.swift (add to Xcode target first).
                     #if DEBUG
                     print("⚡ [Performance] Monitoring active - shared instance initialized")
                     #endif

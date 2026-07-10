@@ -26,6 +26,9 @@ enum WagerPolicy {
     /// terms change so previously-accepted users are re-prompted.
     static let currentTermsVersion: String = "2025.1"
 
+    /// Platform fee on VS Match pots — mirrors `MoneyMath.platformFeePercent`.
+    static var platformFeePercent: Double { MoneyMath.platformFeePercent }
+
     static func isOfAge(_ age: Int) -> Bool { age >= minimumAge }
 
     static func requiresKYC(amountDollars: Double) -> Bool { amountDollars > kycRequiredAboveDollars }
@@ -45,6 +48,10 @@ enum WagerPolicy {
     }
 
     /// True if a new wager keeps the user within their daily limit.
+    /// NOTE: Server escrow (`assertWagerCompliance` in index.js) resets the daily
+    /// window at **UTC midnight**. iOS `getDailyWagerAmount` currently uses local
+    /// `Calendar.current.startOfDay` — keep these aligned before launch or users
+    /// near timezone boundaries may see a client/server mismatch for ~hours.
     static func isWithinDailyLimit(alreadyWagered: Double, newWager: Double, limit: Double) -> Bool {
         alreadyWagered + newWager <= limit
     }
@@ -63,5 +70,10 @@ enum WagerPolicy {
 
     static func isRegionAllowed(_ region: String) -> Bool {
         allowedRegions.contains(region)
+    }
+
+    /// Fail closed: user must have accepted the *current* terms version.
+    static func isTermsAcceptanceValid(accepted: Bool, version: String) -> Bool {
+        accepted && version == currentTermsVersion
     }
 }

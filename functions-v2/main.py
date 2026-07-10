@@ -3771,3 +3771,44 @@ def _tokenize_simple(text: str) -> set:
     """Simple tokenizer without prefix generation (for flicks, faster)."""
     words = _re.findall(r"[a-z0-9]+", text.lower())
     return {w for w in words if 2 <= len(w) <= 30}
+
+
+# =============================================================================
+# 🌍 GEO REGION HINT (stub) — pre-fill region picker, NOT authoritative for KYC
+# Wire MaxMind/IPinfo before using for compliance. See docs/geo-region-hint.md.
+# =============================================================================
+
+_GEO_CORS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+}
+
+
+@https_fn.on_request(region="us-east1")
+def geo_region_hint(req: https_fn.Request) -> https_fn.Response:
+    """
+    Best-effort US state hint from client IP. Returns null hint until geolocation
+    provider is wired. Compliance gate still requires explicit user region + allowlist.
+    """
+    try:
+        if req.method == "OPTIONS":
+            return https_fn.Response("", status=204, headers=_GEO_CORS)
+
+        forwarded = req.headers.get("X-Forwarded-For") or req.headers.get("x-forwarded-for") or ""
+        client_ip = forwarded.split(",")[0].strip() if forwarded else "unknown"
+
+        # Stub: no provider yet — never invent a region from IP without verification.
+        return https_fn.Response(
+            {
+                "ip": client_ip,
+                "geo_region_hint": None,
+                "authoritative": False,
+                "note": "stub — wire IP geolocation before pre-filling compliance region",
+            },
+            status=200,
+            headers={**_GEO_CORS, "Content-Type": "application/json"},
+        )
+    except Exception:
+        logging.exception("geo_region_hint")
+        return https_fn.Response({"error": "internal"}, status=500, headers=_GEO_CORS)

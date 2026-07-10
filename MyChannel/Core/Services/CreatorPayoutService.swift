@@ -25,7 +25,10 @@ final class CreatorPayoutService: ObservableObject {
     private var db: Firestore { Firestore.firestore() }
     #endif
     
-    private let minimumPayout: Double = 0 // No minimum! (vs YouTube's $100)
+    /// Minimum payout threshold in cents. MyChannel has no minimum (YouTube is $100).
+    static let minimumPayoutThresholdCents: Int = 0
+
+    private let minimumPayout: Double = MoneyMath.dollars(fromCents: minimumPayoutThresholdCents)
     
     private init() {}
     
@@ -94,7 +97,8 @@ final class CreatorPayoutService: ObservableObject {
         try await savePayout(payout)
         
         print("✅ [CreatorPayout] Payout completed: $\(payout.amount)")
-        
+        HapticManager.shared.notification(type: .success)
+
         return payout
     }
     
@@ -208,7 +212,7 @@ final class CreatorPayoutService: ObservableObject {
         
         let body: [String: Any] = [
             "creatorId": creatorId,
-            "amount": Int(amount * 100), // Cents
+            "amount": MoneyMath.cents(fromDollars: amount), // rounded cents — never Int(dollars * 100)
             "currency": "usd"
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)

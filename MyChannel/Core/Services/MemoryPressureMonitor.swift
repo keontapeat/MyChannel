@@ -17,6 +17,11 @@ final class MemoryPressureMonitor: ObservableObject {
             }
             .store(in: &cancellables)
     }
+
+    deinit {
+        // Combine sink cancel on deinit — docs/launch-perf-flicks.md
+        cancellables.removeAll()
+    }
     
     private func handleMemoryWarning() {
         print("🚨 [MemoryPressure] Received memory warning! Purging caches...")

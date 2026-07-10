@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// In-app YouTube trailer player for movie detail.
+/// SwiftUI `View` struct — value type; no `[weak self]` needed (unlike class-based coordinators).
 struct TrailerPlayerView: View {
     let trailerURLString: String
     let onClose: () -> Void

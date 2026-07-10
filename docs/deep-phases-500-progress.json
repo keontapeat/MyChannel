@@ -1,0 +1,158 @@
+{
+ "done": 43,
+ "total": 500,
+ "domains": [
+  {
+   "domain": "Money & Escrow",
+   "done": 14,
+   "total": 40,
+   "pct": 35
+  },
+  {
+   "domain": "Compliance & KYC",
+   "done": 6,
+   "total": 35,
+   "pct": 17
+  },
+  {
+   "domain": "Tests & CI",
+   "done": 4,
+   "total": 40,
+   "pct": 10
+  },
+  {
+   "domain": "Web VS Parity",
+   "done": 4,
+   "total": 40,
+   "pct": 10
+  },
+  {
+   "domain": "DI & Singletons",
+   "done": 3,
+   "total": 35,
+   "pct": 9
+  },
+  {
+   "domain": "Launch & Perf",
+   "done": 3,
+   "total": 30,
+   "pct": 10
+  },
+  {
+   "domain": "Secrets & Security",
+   "done": 3,
+   "total": 30,
+   "pct": 10
+  },
+  {
+   "domain": "Ads & Monetization",
+   "done": 2,
+   "total": 25,
+   "pct": 8
+  },
+  {
+   "domain": "Flicks Vertical",
+   "done": 2,
+   "total": 40,
+   "pct": 5
+  },
+  {
+   "domain": "Backend Cloud Functions",
+   "done": 1,
+   "total": 30,
+   "pct": 3
+  },
+  {
+   "domain": "Movies",
+   "done": 1,
+   "total": 20,
+   "pct": 5
+  },
+  {
+   "domain": "AI/AGI Sprawl",
+   "done": 0,
+   "total": 45,
+   "pct": 0
+  },
+  {
+   "domain": "Android Parity",
+   "done": 0,
+   "total": 15,
+   "pct": 0
+  },
+  {
+   "domain": "Downloads & Offline",
+   "done": 0,
+   "total": 25,
+   "pct": 0
+  },
+  {
+   "domain": "Player Stack",
+   "done": 0,
+   "total": 50,
+   "pct": 0
+  }
+ ],
+ "shipped_titles": [
+  "Migrate StripeConnect hold/release to MoneyMath",
+  "Wallet deposit cents via MoneyMath",
+  "Remove MoneyEscrow dead platformFeePercent",
+  "EscrowStatistics.platformRevenueTotal via MoneyMath",
+  "VersusMatchService validate via WagerPolicy",
+  "Add wagerAmountCents to VersusMatchModels",
+  "Migrate GamingEsportsModels earnings to cents",
+  "Persist escrow amountCents in Firestore",
+  "Remove misleading releaseFunds totalPot param",
+  "Guard URL force-unwraps in MoneyEscrowService",
+  "Server escrow fee uses PLATFORM_FEE_PERCENT only",
+  "MatchVerificationService totalPot rename",
+  "LiveVersusMatchView use VersusMatch.winnerPayoutCents",
+  "Firestore escrow write amountCents+platformFeeCents",
+  "Server termsVersion pin in assertWagerCompliance",
+  "Fail-closed region (no US-CA default) iOS",
+  "Fail-closed region server",
+  "Stop writing idDocumentNumber to Firestore",
+  "Deprecate completeKYC PII path",
+  "hasAcceptedTerms checks currentTermsVersion",
+  "Remove hardcoded TMDB fallback key",
+  "aiAPIKey Keychain\u2192env\u2192plist priority",
+  "Remove client Stripe secret regressions",
+  "create-match page uses wager-policy.ts",
+  "Disable create when wager invalid",
+  "DynamicPricingAgent fee via wager-policy",
+  "web wager-policy unit tests",
+  "Extract FlicksMoreOptionsSheet",
+  "Quality/speed already extracted verify",
+  "Register VSMatchWalletService in DI",
+  "Register VersusMatchService in DI",
+  "Register StripeConnectService in DI",
+  "MovieDetailHero already extracted verify",
+  "MoneyEscrowMath truncation regression test",
+  "EscrowStatistics revenue test",
+  "WagerPolicy bounds test",
+  "web wager-policy unit tests",
+  "Defer Perspective off cold start verify",
+  "Defer CommandCenter off cold start",
+  "Defer AutoCaption off cold start",
+  "AdsService creatorRevenue MoneyMath",
+  "VAST fallback revenue MoneyMath",
+  "functions/main.py Identity sessionId+ek"
+ ],
+ "next": [
+  "CreatorPayoutService ads fee via MoneyMath",
+  "Unify Money type across escrow models",
+  "Add MoneyEscrowService integration test harness",
+  "Document cents-as-canonical Firestore contract",
+  "Escrow holdFunds accept amountCents overload",
+  "Escrow refund path MoneyMath logging",
+  "VSMatchTransaction amounts via MoneyMath",
+  "Championship belt wager bounds via WagerPolicy",
+  "VersusMatchCreatorView fee display MoneyMath",
+  "MoneyEscrow createPaymentIntent cents only",
+  "Client never credits wallet on deposit",
+  "Escrow idempotency double-release test",
+  "Penny pot fee+payout identity property test",
+  "Negative amount rejected at escrow boundary",
+  "Currency USD-only assert in escrow"
+ ]
+}

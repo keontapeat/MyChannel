@@ -9,7 +9,7 @@
 import SwiftUI
 
 struct ChampionshipHubView: View {
-    @StateObject private var medalSystem = ChampionshipBeltSystem.shared
+    @Injected private var medalSystem: ChampionshipBeltSystem
     @StateObject private var tournamentService = TournamentService.shared
     @ObservedObject private var aiOrchestrator = GamingAIOrchestrator.shared
     @State private var selectedDivision: ChampionshipBeltSystem.ChampionshipDivision = .gold

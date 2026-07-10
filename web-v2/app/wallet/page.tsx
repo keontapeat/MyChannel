@@ -4,62 +4,49 @@
 
 import { DollarSign, TrendingUp, TrendingDown, Plus, ArrowUpRight, ArrowDownRight, Clock, CheckCircle, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   VSMatchWallet,
   VSMatchTransaction,
   VSMatchTransactionType,
   VSMatchTransactionStatus,
 } from '@/types/vs-matches';
+import { loadVSMatchWallet } from '@/lib/vs-match-wallet';
 
 export default function WalletPage() {
-  // Sample wallet data
   const [wallet, setWallet] = useState<VSMatchWallet>({
-    userId: 'current-user',
-    availableBalance: 1250.50,
-    pendingBalance: 500.00,
-    totalDeposited: 5000.00,
-    totalWithdrawn: 2000.00,
-    totalWon: 3500.00,
-    totalLost: 1500.00,
+    userId: '',
+    availableBalance: 0,
+    pendingBalance: 0,
+    totalDeposited: 0,
+    totalWithdrawn: 0,
+    totalWon: 0,
+    totalLost: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
   });
+  const [transactions, setTransactions] = useState<VSMatchTransaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [signedIn, setSignedIn] = useState(false);
 
-  // Sample transactions
-  const [transactions] = useState<VSMatchTransaction[]>([
-    {
-      id: '1',
-      userId: 'current-user',
-      type: VSMatchTransactionType.WIN,
-      amount: 450.00,
-      status: VSMatchTransactionStatus.COMPLETED,
-      matchId: 'match-123',
-      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      completedAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
-      description: 'Won VS Match against Competitor',
-    },
-    {
-      id: '2',
-      userId: 'current-user',
-      type: VSMatchTransactionType.DEPOSIT,
-      amount: 1000.00,
-      status: VSMatchTransactionStatus.COMPLETED,
-      createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      completedAt: new Date(Date.now() - 23 * 60 * 60 * 1000),
-      description: 'Deposit via Stripe',
-    },
-    {
-      id: '3',
-      userId: 'current-user',
-      type: VSMatchTransactionType.WAGER,
-      amount: 500.00,
-      status: VSMatchTransactionStatus.PENDING,
-      matchId: 'match-456',
-      createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
-      description: 'Wager for VS Match (Gold Medal)',
-    },
-  ]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setIsLoading(true);
+      try {
+        const result = await loadVSMatchWallet();
+        if (cancelled) return;
+        setWallet(result.wallet);
+        setTransactions(result.transactions);
+        setSignedIn(result.signedIn);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const getTransactionIcon = (type: VSMatchTransactionType) => {
     switch (type) {
@@ -115,7 +102,26 @@ export default function WalletPage() {
 
         {/* Main Content */}
         <main className="px-4 py-6 pb-24">
+          {!signedIn && !isLoading && (
+            <p className="mb-4 text-sm text-yellow-300" role="status">
+              Sign in to view your live VS Match wallet. Balances are never credited from the client.
+            </p>
+          )}
+          {isLoading && (
+            <section className="mb-8 animate-pulse" role="status" aria-label="Loading wallet">
+              <div className="rounded-2xl bg-gray-800 p-6">
+                <div className="mb-4 h-4 w-32 rounded bg-gray-700" />
+                <div className="mb-6 h-12 w-48 rounded bg-gray-700" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="h-12 rounded-xl bg-gray-700" />
+                  <div className="h-12 rounded-xl bg-gray-700" />
+                </div>
+              </div>
+              <p className="mt-3 text-sm text-gray-400">Loading wallet…</p>
+            </section>
+          )}
           {/* Balance Card */}
+          {!isLoading && (
           <section className="mb-8">
             <div className="bg-gradient-to-br from-green-600 via-green-700 to-emerald-800 p-6 rounded-2xl shadow-2xl">
               <div className="mb-4">
@@ -154,6 +160,7 @@ export default function WalletPage() {
               </div>
             </div>
           </section>
+          )}
 
           {/* Stats Overview */}
           <section className="mb-8">

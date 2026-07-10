@@ -180,18 +180,28 @@ class VideoStreamingService: ObservableObject {
     }
     
     private func generateVideoThumbnail(from url: URL) async throws -> UIImage {
-        let asset = AVAsset(url: url)
-        let imageGenerator = AVAssetImageGenerator(asset: asset)
-        imageGenerator.appliesPreferredTrackTransform = true
-        imageGenerator.maximumSize = AppConfig.Video.thumbnailSize
-        
-        // Generate thumbnail at 3 seconds or 10% of duration, whichever is smaller
-        let duration = try await asset.load(.duration)
-        let durationSeconds = CMTimeGetSeconds(duration)
-        let thumbnailTime = CMTime(seconds: min(3.0, durationSeconds * 0.1), preferredTimescale: 600)
-        
-        let cgImage = try await imageGenerator.image(at: thumbnailTime).image
-        return UIImage(cgImage: cgImage)
+        // Decode off main — AVAssetImageGenerator is synchronous and blocks UIKit.
+        // See docs/launch-perf-flicks.md § Video thumbnail decode off main.
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<UIImage, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let asset = AVAsset(url: url)
+                    let imageGenerator = AVAssetImageGenerator(asset: asset)
+                    imageGenerator.appliesPreferredTrackTransform = true
+                    imageGenerator.maximumSize = AppConfig.Video.thumbnailSize
+
+                    let duration = CMTimeGetSeconds(asset.duration)
+                    let thumbnailTime = CMTime(
+                        seconds: min(3.0, duration * 0.1),
+                        preferredTimescale: 600
+                    )
+                    let cgImage = try imageGenerator.copyCGImage(at: thumbnailTime, actualTime: nil)
+                    continuation.resume(returning: UIImage(cgImage: cgImage))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
     
     private func uploadThumbnail(_ image: UIImage) async throws -> String {

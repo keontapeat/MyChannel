@@ -185,17 +185,24 @@ final class NuclearAdMonetizationService: ObservableObject {
             ) {
                 let auctionTime = Date().timeIntervalSince(startTime)
                 
-                // 🔥 CALCULATE REVENUE
+                // 🔥 CALCULATE REVENUE (MoneyMath — never raw Double * 0.1 for platform fee)
                 let cpm = network.expectedCPM // Use network's expected CPM
-                let impressionRevenue = cpm / 1000.0 // CPM = per 1000 impressions
-                let creatorRevenue = impressionRevenue * 0.90 // 90% to creator!
-                
+                let impressionCents = MoneyMath.impressionCents(fromCPM: cpm)
+                let platformCents = MoneyMath.platformFeeCents(
+                    grossCents: impressionCents,
+                    feePercent: AdPolicy.platformRevenueSharePercent
+                )
+                let creatorCents = max(0, impressionCents - platformCents)
+                let impressionRevenue = MoneyMath.dollars(fromCents: impressionCents)
+                let creatorRevenue = MoneyMath.dollars(fromCents: creatorCents)
+                let platformRevenue = MoneyMath.dollars(fromCents: platformCents)
+
                 // 🔥 TRACK REVENUE IN FIREBASE
                 await trackAdRevenue(
                     video: video,
                     ad: ad,
                     creatorRevenue: creatorRevenue,
-                    platformRevenue: impressionRevenue * 0.10,
+                    platformRevenue: platformRevenue,
                     network: network.name
                 )
                 

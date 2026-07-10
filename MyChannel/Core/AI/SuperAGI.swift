@@ -19,6 +19,7 @@ import SwiftUI
 import Combine
 
 /// Super AGI - Your custom AI model at superhuman intelligence
+@available(*, deprecated, message: "Use CreatorIntelligenceService")
 @MainActor
 class SuperAGI: ObservableObject {
     static let shared = SuperAGI()

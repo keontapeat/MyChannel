@@ -1,6 +1,6 @@
 # Phase 87 — Android TV & Google TV
 
-**Status:** ⬜ pending · **Depends on:** Phase 86 (Android parity)
+**Status:** 🟡 in progress (batch-6) · **Depends on:** Phase 86 (Android parity)
 
 ## Goal
 Ship a 10-foot UI optimized for living-room Android TV and Google TV. Leverages the Phase 86 Android codebase as a shared module.
@@ -19,6 +19,8 @@ Ship a 10-foot UI optimized for living-room Android TV and Google TV. Leverages 
 - [ ] SignIn via QR pairing (device code flow)
 - [ ] Live row with red dot
 - [ ] Continue-watching sync with phone + tablet
+
+**Batch-6 update:** Android money stubs (`MoneyMath`, `EscrowPaymentsClient`, `StripeIdentityStub`) landed; TV track blocked until phase-86 phone parity completes.
 
 ## Store listing
 - Google Play TV track

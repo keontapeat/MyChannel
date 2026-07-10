@@ -16,6 +16,7 @@ import SwiftUI
 import Combine
 
 /// The unified AGI brain that orchestrates all AI systems
+@available(*, deprecated, message: "Use CreatorIntelligenceService")
 @MainActor
 class UnifiedAGIBrain: ObservableObject {
     static let shared = UnifiedAGIBrain()

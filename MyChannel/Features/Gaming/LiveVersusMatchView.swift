@@ -10,7 +10,7 @@ import SwiftUI
 
 struct LiveVersusMatchView: View {
     let match: VersusMatch
-    @StateObject private var matchService = VersusMatchService.shared
+    @Injected private var matchService: VersusMatchService
     @State private var liveStats = VersusMatch.MatchStats(
         challengerViews: 0, opponentViews: 0,
         challengerLikes: 0, opponentLikes: 0,
@@ -24,6 +24,11 @@ struct LiveVersusMatchView: View {
         guard value.isFinite else { return fallback }
         return Int(value.rounded())
     }
+
+    /// Prize pool and winner take-home via VersusMatch cents helpers (MoneyMath).
+    private var prizePoolGrossCents: Int { match.potCents }
+
+    private var winnerPayoutCents: Int { match.winnerPayoutCents }
     
     var body: some View {
         ScrollView {
@@ -258,7 +263,7 @@ struct LiveVersusMatchView: View {
                 .font(.system(size: 16))
                 .foregroundColor(.secondary)
             
-            Text("$\(safeInt(match.wagerAmount * 2))")
+            Text("$\(MoneyMath.dollars(fromCents: prizePoolGrossCents).formatted(.number.precision(.fractionLength(0...2))))")
                 .font(.system(size: 48, weight: .black))
                 .foregroundStyle(
                     LinearGradient(
@@ -268,7 +273,7 @@ struct LiveVersusMatchView: View {
                     )
                 )
             
-            Text("Winner takes home $\(safeInt(match.wagerAmount * 2 * 0.9))")
+            Text("Winner takes home $\(MoneyMath.dollars(fromCents: winnerPayoutCents).formatted(.number.precision(.fractionLength(0...2))))")
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
         }

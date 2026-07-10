@@ -13,6 +13,7 @@ struct VersusMatch: Identifiable, Codable {
     let challengerId: String
     let opponentId: String
     let matchType: MatchType
+    /// Wager per side in dollars (legacy Firestore field). Prefer `wagerAmountCents`.
     let wagerAmount: Double
     let category: Category
     let rules: MatchRules
@@ -23,6 +24,15 @@ struct VersusMatch: Identifiable, Codable {
     var startedAt: Date?
     var completedAt: Date?
     var finalStats: MatchStats?
+    
+    /// Canonical integer-cents representation of `wagerAmount` (MoneyMath rounding).
+    var wagerAmountCents: Int { MoneyMath.cents(fromDollars: wagerAmount) }
+    
+    /// Gross pot (both sides) in cents.
+    var potCents: Int { wagerAmountCents * 2 }
+    
+    /// Winner payout in cents after platform fee.
+    var winnerPayoutCents: Int { MoneyMath.winnerPayoutCents(grossCents: potCents) }
     
     // MARK: - Match Type
     

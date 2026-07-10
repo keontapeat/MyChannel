@@ -1,0 +1,2506 @@
+{
+ "generated": "2026-07-09",
+ "total": 500,
+ "phases": [
+  {
+   "id": 1,
+   "domain": "Money & Escrow",
+   "title": "Migrate StripeConnect hold/release to MoneyMath"
+  },
+  {
+   "id": 2,
+   "domain": "Money & Escrow",
+   "title": "Wallet deposit cents via MoneyMath"
+  },
+  {
+   "id": 3,
+   "domain": "Money & Escrow",
+   "title": "Remove MoneyEscrow dead platformFeePercent"
+  },
+  {
+   "id": 4,
+   "domain": "Money & Escrow",
+   "title": "EscrowStatistics.platformRevenueTotal via MoneyMath"
+  },
+  {
+   "id": 5,
+   "domain": "Money & Escrow",
+   "title": "VersusMatchService validate via WagerPolicy"
+  },
+  {
+   "id": 6,
+   "domain": "Money & Escrow",
+   "title": "Add wagerAmountCents to VersusMatchModels"
+  },
+  {
+   "id": 7,
+   "domain": "Money & Escrow",
+   "title": "Migrate GamingEsportsModels earnings to cents"
+  },
+  {
+   "id": 8,
+   "domain": "Money & Escrow",
+   "title": "Persist escrow amountCents in Firestore"
+  },
+  {
+   "id": 9,
+   "domain": "Money & Escrow",
+   "title": "Remove misleading releaseFunds totalPot param"
+  },
+  {
+   "id": 10,
+   "domain": "Money & Escrow",
+   "title": "Guard URL force-unwraps in MoneyEscrowService"
+  },
+  {
+   "id": 11,
+   "domain": "Money & Escrow",
+   "title": "CreatorPayoutService ads fee via MoneyMath"
+  },
+  {
+   "id": 12,
+   "domain": "Money & Escrow",
+   "title": "Unify Money type across escrow models"
+  },
+  {
+   "id": 13,
+   "domain": "Money & Escrow",
+   "title": "Server escrow fee uses PLATFORM_FEE_PERCENT only"
+  },
+  {
+   "id": 14,
+   "domain": "Money & Escrow",
+   "title": "Add MoneyEscrowService integration test harness"
+  },
+  {
+   "id": 15,
+   "domain": "Money & Escrow",
+   "title": "Document cents-as-canonical Firestore contract"
+  },
+  {
+   "id": 16,
+   "domain": "Money & Escrow",
+   "title": "Escrow holdFunds accept amountCents overload"
+  },
+  {
+   "id": 17,
+   "domain": "Money & Escrow",
+   "title": "Escrow refund path MoneyMath logging"
+  },
+  {
+   "id": 18,
+   "domain": "Money & Escrow",
+   "title": "MatchVerificationService totalPot rename"
+  },
+  {
+   "id": 19,
+   "domain": "Money & Escrow",
+   "title": "VSMatchTransaction amounts via MoneyMath"
+  },
+  {
+   "id": 20,
+   "domain": "Money & Escrow",
+   "title": "Championship belt wager bounds via WagerPolicy"
+  },
+  {
+   "id": 21,
+   "domain": "Money & Escrow",
+   "title": "LiveVersusMatchView use VersusMatch.winnerPayoutCents"
+  },
+  {
+   "id": 22,
+   "domain": "Money & Escrow",
+   "title": "VersusMatchCreatorView fee display MoneyMath"
+  },
+  {
+   "id": 23,
+   "domain": "Money & Escrow",
+   "title": "MoneyEscrow createPaymentIntent cents only"
+  },
+  {
+   "id": 24,
+   "domain": "Money & Escrow",
+   "title": "Firestore escrow write amountCents+platformFeeCents"
+  },
+  {
+   "id": 25,
+   "domain": "Money & Escrow",
+   "title": "Client never credits wallet on deposit"
+  },
+  {
+   "id": 26,
+   "domain": "Money & Escrow",
+   "title": "Escrow idempotency double-release test"
+  },
+  {
+   "id": 27,
+   "domain": "Money & Escrow",
+   "title": "Penny pot fee+payout identity property test"
+  },
+  {
+   "id": 28,
+   "domain": "Money & Escrow",
+   "title": "Negative amount rejected at escrow boundary"
+  },
+  {
+   "id": 29,
+   "domain": "Money & Escrow",
+   "title": "Currency USD-only assert in escrow"
+  },
+  {
+   "id": 30,
+   "domain": "Money & Escrow",
+   "title": "Escrow expired status cleanup job"
+  },
+  {
+   "id": 31,
+   "domain": "Money & Escrow",
+   "title": "Dispute path holds funds frozen"
+  },
+  {
+   "id": 32,
+   "domain": "Money & Escrow",
+   "title": "Partial refund math MoneyMath"
+  },
+  {
+   "id": 33,
+   "domain": "Money & Escrow",
+   "title": "Connect transfer amount server-authoritative"
+  },
+  {
+   "id": 34,
+   "domain": "Money & Escrow",
+   "title": "Escrow statistics activeEscrows accuracy"
+  },
+  {
+   "id": 35,
+   "domain": "Money & Escrow",
+   "title": "Wallet withdraw cents MoneyMath"
+  },
+  {
+   "id": 36,
+   "domain": "Money & Escrow",
+   "title": "Fraud agent amount uses cents"
+  },
+  {
+   "id": 37,
+   "domain": "Money & Escrow",
+   "title": "GamingAgents pot already MoneyMath verify"
+  },
+  {
+   "id": 38,
+   "domain": "Money & Escrow",
+   "title": "Remove Double platformFee from EscrowedFunds gradually"
+  },
+  {
+   "id": 39,
+   "domain": "Money & Escrow",
+   "title": "Encode Money Codable for escrow DTOs"
+  },
+  {
+   "id": 40,
+   "domain": "Money & Escrow",
+   "title": "Audit print logs for raw *0.1 fee"
+  },
+  {
+   "id": 41,
+   "domain": "Compliance & KYC",
+   "title": "Server termsVersion pin in assertWagerCompliance"
+  },
+  {
+   "id": 42,
+   "domain": "Compliance & KYC",
+   "title": "Fail-closed region (no US-CA default) iOS"
+  },
+  {
+   "id": 43,
+   "domain": "Compliance & KYC",
+   "title": "Fail-closed region server"
+  },
+  {
+   "id": 44,
+   "domain": "Compliance & KYC",
+   "title": "Stop writing idDocumentNumber to Firestore"
+  },
+  {
+   "id": 45,
+   "domain": "Compliance & KYC",
+   "title": "Deprecate completeKYC PII path"
+  },
+  {
+   "id": 46,
+   "domain": "Compliance & KYC",
+   "title": "hasAcceptedTerms checks currentTermsVersion"
+  },
+  {
+   "id": 47,
+   "domain": "Compliance & KYC",
+   "title": "Wire age gate to Stripe Identity verified DOB"
+  },
+  {
+   "id": 48,
+   "domain": "Compliance & KYC",
+   "title": "VSMatchComplianceServiceTests"
+  },
+  {
+   "id": 49,
+   "domain": "Compliance & KYC",
+   "title": "Deploy create_stripe_identity_session"
+  },
+  {
+   "id": 50,
+   "domain": "Compliance & KYC",
+   "title": "Deploy stripe_identity_webhook"
+  },
+  {
+   "id": 51,
+   "domain": "Compliance & KYC",
+   "title": "Xcode resolve StripeIdentity SPM"
+  },
+  {
+   "id": 52,
+   "domain": "Compliance & KYC",
+   "title": "Audit compliance sheet Verify Identity UX"
+  },
+  {
+   "id": 53,
+   "domain": "Compliance & KYC",
+   "title": "Server mirror of every WagerPolicy check"
+  },
+  {
+   "id": 54,
+   "domain": "Compliance & KYC",
+   "title": "Compliance audit log collection"
+  },
+  {
+   "id": 55,
+   "domain": "Compliance & KYC",
+   "title": "Geo-IP region verification Cloud Function"
+  },
+  {
+   "id": 56,
+   "domain": "Compliance & KYC",
+   "title": "Store termsVersion on acceptTermsOfService"
+  },
+  {
+   "id": 57,
+   "domain": "Compliance & KYC",
+   "title": "KYC pending UI polling status"
+  },
+  {
+   "id": 58,
+   "domain": "Compliance & KYC",
+   "title": "KYC approved webhook updates Firestore"
+  },
+  {
+   "id": 59,
+   "domain": "Compliance & KYC",
+   "title": "KYC rejected user messaging"
+  },
+  {
+   "id": 60,
+   "domain": "Compliance & KYC",
+   "title": "AgeVerified flag required server-side"
+  },
+  {
+   "id": 61,
+   "domain": "Compliance & KYC",
+   "title": "AccountStatus suspended blocks wager"
+  },
+  {
+   "id": 62,
+   "domain": "Compliance & KYC",
+   "title": "Daily limit reset timezone UTC"
+  },
+  {
+   "id": 63,
+   "domain": "Compliance & KYC",
+   "title": "Compliance sheet reduce motion"
+  },
+  {
+   "id": 64,
+   "domain": "Compliance & KYC",
+   "title": "Compliance sheet accessibility labels"
+  },
+  {
+   "id": 65,
+   "domain": "Compliance & KYC",
+   "title": "Region picker when profile region empty"
+  },
+  {
+   "id": 66,
+   "domain": "Compliance & KYC",
+   "title": "Block wager UI until compliance preflight"
+  },
+  {
+   "id": 67,
+   "domain": "Compliance & KYC",
+   "title": "iOS canUserWager reasons surface to UI"
+  },
+  {
+   "id": 68,
+   "domain": "Compliance & KYC",
+   "title": "Webhook signature verify Identity"
+  },
+  {
+   "id": 69,
+   "domain": "Compliance & KYC",
+   "title": "Ephemeral key secret never logged"
+  },
+  {
+   "id": 70,
+   "domain": "Compliance & KYC",
+   "title": "SessionId only in pending KYC doc"
+  },
+  {
+   "id": 71,
+   "domain": "Compliance & KYC",
+   "title": "Compliance rate-limit startKYC"
+  },
+  {
+   "id": 72,
+   "domain": "Compliance & KYC",
+   "title": "Re-KYC after terms bump"
+  },
+  {
+   "id": 73,
+   "domain": "Compliance & KYC",
+   "title": "VIP tier daily limit server match"
+  },
+  {
+   "id": 74,
+   "domain": "Compliance & KYC",
+   "title": "Premium tier daily limit server match"
+  },
+  {
+   "id": 75,
+   "domain": "Compliance & KYC",
+   "title": "New tier $100 limit server match"
+  },
+  {
+   "id": 76,
+   "domain": "Secrets & Security",
+   "title": "Remove hardcoded TMDB fallback key"
+  },
+  {
+   "id": 77,
+   "domain": "Secrets & Security",
+   "title": "aiAPIKey Keychain\u2192env\u2192plist priority"
+  },
+  {
+   "id": 78,
+   "domain": "Secrets & Security",
+   "title": "Scan AppSecrets for remaining baked keys"
+  },
+  {
+   "id": 79,
+   "domain": "Secrets & Security",
+   "title": "Rotate any previously committed API keys"
+  },
+  {
+   "id": 80,
+   "domain": "Secrets & Security",
+   "title": "Ensure functions/.env stays untracked"
+  },
+  {
+   "id": 81,
+   "domain": "Secrets & Security",
+   "title": "Certificate pinning for escrow endpoints"
+  },
+  {
+   "id": 82,
+   "domain": "Secrets & Security",
+   "title": "AuthTokenProvider on all money CF calls"
+  },
+  {
+   "id": 83,
+   "domain": "Secrets & Security",
+   "title": "Review App Transport Security exceptions"
+  },
+  {
+   "id": 84,
+   "domain": "Secrets & Security",
+   "title": "Secret scanner CI gate"
+  },
+  {
+   "id": 85,
+   "domain": "Secrets & Security",
+   "title": "Remove client Stripe secret regressions"
+  },
+  {
+   "id": 86,
+   "domain": "Secrets & Security",
+   "title": "Pexels key no hardcoded fallback"
+  },
+  {
+   "id": 87,
+   "domain": "Secrets & Security",
+   "title": "Pixabay key no hardcoded fallback"
+  },
+  {
+   "id": 88,
+   "domain": "Secrets & Security",
+   "title": "Runway key Keychain first"
+  },
+  {
+   "id": 89,
+   "domain": "Secrets & Security",
+   "title": "ElevenLabs key Keychain first"
+  },
+  {
+   "id": 90,
+   "domain": "Secrets & Security",
+   "title": "Stability key Keychain first"
+  },
+  {
+   "id": 91,
+   "domain": "Secrets & Security",
+   "title": "Google Cloud key never in logs"
+  },
+  {
+   "id": 92,
+   "domain": "Secrets & Security",
+   "title": "Stripe publishable key only client-side"
+  },
+  {
+   "id": 93,
+   "domain": "Secrets & Security",
+   "title": "Info.plist placeholder detection"
+  },
+  {
+   "id": 94,
+   "domain": "Secrets & Security",
+   "title": "Keychain accessibility after first unlock"
+  },
+  {
+   "id": 95,
+   "domain": "Secrets & Security",
+   "title": "Debug builds allow env overrides only"
+  },
+  {
+   "id": 96,
+   "domain": "Secrets & Security",
+   "title": "Release builds fail closed empty keys"
+  },
+  {
+   "id": 97,
+   "domain": "Secrets & Security",
+   "title": "Scan android google-services not committed"
+  },
+  {
+   "id": 98,
+   "domain": "Secrets & Security",
+   "title": "Pre-commit blocks secret patterns"
+  },
+  {
+   "id": 99,
+   "domain": "Secrets & Security",
+   "title": "Git history scrub checklist doc"
+  },
+  {
+   "id": 100,
+   "domain": "Secrets & Security",
+   "title": "Cloud Function IAM least privilege"
+  },
+  {
+   "id": 101,
+   "domain": "Secrets & Security",
+   "title": "Firestore rules money collections audit"
+  },
+  {
+   "id": 102,
+   "domain": "Secrets & Security",
+   "title": "App Check on escrow endpoints"
+  },
+  {
+   "id": 103,
+   "domain": "Secrets & Security",
+   "title": "DeviceCheck / App Attest for wager"
+  },
+  {
+   "id": 104,
+   "domain": "Secrets & Security",
+   "title": "Rate limit Identity session create"
+  },
+  {
+   "id": 105,
+   "domain": "Secrets & Security",
+   "title": "No PII in client analytics events"
+  },
+  {
+   "id": 106,
+   "domain": "Web VS Parity",
+   "title": "create-match page uses wager-policy.ts"
+  },
+  {
+   "id": 107,
+   "domain": "Web VS Parity",
+   "title": "Disable create when wager invalid"
+  },
+  {
+   "id": 108,
+   "domain": "Web VS Parity",
+   "title": "DynamicPricingAgent fee via wager-policy"
+  },
+  {
+   "id": 109,
+   "domain": "Web VS Parity",
+   "title": "Unify wagerAmount cents vs dollars types"
+  },
+  {
+   "id": 110,
+   "domain": "Web VS Parity",
+   "title": "Consolidate web-v2/types vs @types vs-matches"
+  },
+  {
+   "id": 111,
+   "domain": "Web VS Parity",
+   "title": "Wire canWagerClientPreflight on create-match"
+  },
+  {
+   "id": 112,
+   "domain": "Web VS Parity",
+   "title": "Wallet page leave mock data"
+  },
+  {
+   "id": 113,
+   "domain": "Web VS Parity",
+   "title": "medals page real Firestore matches"
+  },
+  {
+   "id": 114,
+   "domain": "Web VS Parity",
+   "title": "vs-matches redirect cleanup"
+  },
+  {
+   "id": 115,
+   "domain": "Web VS Parity",
+   "title": "web wager-policy unit tests"
+  },
+  {
+   "id": 116,
+   "domain": "Web VS Parity",
+   "title": "Shared OpenAPI money contract"
+  },
+  {
+   "id": 117,
+   "domain": "Web VS Parity",
+   "title": "Web KYC status display"
+  },
+  {
+   "id": 118,
+   "domain": "Web VS Parity",
+   "title": "Web daily limit UI"
+  },
+  {
+   "id": 119,
+   "domain": "Web VS Parity",
+   "title": "Web region gate UI"
+  },
+  {
+   "id": 120,
+   "domain": "Web VS Parity",
+   "title": "Playwright VS match create e2e"
+  },
+  {
+   "id": 121,
+   "domain": "Web VS Parity",
+   "title": "create-match submit to Cloud Function"
+  },
+  {
+   "id": 122,
+   "domain": "Web VS Parity",
+   "title": "medals leaderboard live data"
+  },
+  {
+   "id": 123,
+   "domain": "Web VS Parity",
+   "title": "wallet deposit intent web"
+  },
+  {
+   "id": 124,
+   "domain": "Web VS Parity",
+   "title": "wallet withdraw web"
+  },
+  {
+   "id": 125,
+   "domain": "Web VS Parity",
+   "title": "terms accept version pin web"
+  },
+  {
+   "id": 126,
+   "domain": "Web VS Parity",
+   "title": "age gate modal web"
+  },
+  {
+   "id": 127,
+   "domain": "Web VS Parity",
+   "title": "KYC deep link to Stripe Identity web"
+  },
+  {
+   "id": 128,
+   "domain": "Web VS Parity",
+   "title": "Fee breakdown uses winnerPayoutCents"
+  },
+  {
+   "id": 129,
+   "domain": "Web VS Parity",
+   "title": "Medal division from wager-policy bounds"
+  },
+  {
+   "id": 130,
+   "domain": "Web VS Parity",
+   "title": "Error toast on compliance reject"
+  },
+  {
+   "id": 131,
+   "domain": "Web VS Parity",
+   "title": "SSR-safe wager-policy imports"
+  },
+  {
+   "id": 132,
+   "domain": "Web VS Parity",
+   "title": "Remove emoji-only category icons gradually"
+  },
+  {
+   "id": 133,
+   "domain": "Web VS Parity",
+   "title": "Dark theme AppTheme-aligned colors"
+  },
+  {
+   "id": 134,
+   "domain": "Web VS Parity",
+   "title": "Mobile create-match touch targets 44px"
+  },
+  {
+   "id": 135,
+   "domain": "Web VS Parity",
+   "title": "a11y labels on wager input"
+  },
+  {
+   "id": 136,
+   "domain": "Web VS Parity",
+   "title": "Loading state create match"
+  },
+  {
+   "id": 137,
+   "domain": "Web VS Parity",
+   "title": "Optimistic UI disabled until server ack"
+  },
+  {
+   "id": 138,
+   "domain": "Web VS Parity",
+   "title": "Web escrow status listener"
+  },
+  {
+   "id": 139,
+   "domain": "Web VS Parity",
+   "title": "Match detail page real data"
+  },
+  {
+   "id": 140,
+   "domain": "Web VS Parity",
+   "title": "Spectator view web stub"
+  },
+  {
+   "id": 141,
+   "domain": "Web VS Parity",
+   "title": "Share match link web"
+  },
+  {
+   "id": 142,
+   "domain": "Web VS Parity",
+   "title": "SEO noindex for money pages"
+  },
+  {
+   "id": 143,
+   "domain": "Web VS Parity",
+   "title": "CSP headers money pages"
+  },
+  {
+   "id": 144,
+   "domain": "Web VS Parity",
+   "title": "Type cents branded type WagerCents"
+  },
+  {
+   "id": 145,
+   "domain": "Web VS Parity",
+   "title": "Export WAGER_POLICY from single module only"
+  },
+  {
+   "id": 146,
+   "domain": "Player Stack",
+   "title": "Extract GlobalPlayerViewTracking"
+  },
+  {
+   "id": 147,
+   "domain": "Player Stack",
+   "title": "Extract PiP coordinator from GlobalVideoPlayerManager"
+  },
+  {
+   "id": 148,
+   "domain": "Player Stack",
+   "title": "Extract KVO observers module"
+  },
+  {
+   "id": 149,
+   "domain": "Player Stack",
+   "title": "Unify Flicks onto GlobalVideoPlayerManager"
+  },
+  {
+   "id": 150,
+   "domain": "Player Stack",
+   "title": "Extract FlicksPlayerOverlay from ProfessionalVideoPlayer"
+  },
+  {
+   "id": 151,
+   "domain": "Player Stack",
+   "title": "Extract MiniPlayerGestures"
+  },
+  {
+   "id": 152,
+   "domain": "Player Stack",
+   "title": "Extract MiniPlayerControls"
+  },
+  {
+   "id": 153,
+   "domain": "Player Stack",
+   "title": "Extract VideoPlayerViewModel from ModernVideoPlayerView"
+  },
+  {
+   "id": 154,
+   "domain": "Player Stack",
+   "title": "Deduplicate preload paths"
+  },
+  {
+   "id": 155,
+   "domain": "Player Stack",
+   "title": "WatchConnectivity weak player binding"
+  },
+  {
+   "id": 156,
+   "domain": "Player Stack",
+   "title": "Player lifecycle unit tests"
+  },
+  {
+   "id": 157,
+   "domain": "Player Stack",
+   "title": "AVPlayerView crash regression test"
+  },
+  {
+   "id": 158,
+   "domain": "Player Stack",
+   "title": "Reduce GlobalVideoPlayerManager under 800 LOC"
+  },
+  {
+   "id": 159,
+   "domain": "Player Stack",
+   "title": "Reduce FloatingMiniPlayer under 800 LOC"
+  },
+  {
+   "id": 160,
+   "domain": "Player Stack",
+   "title": "Reduce ProfessionalVideoPlayer under 800 LOC"
+  },
+  {
+   "id": 161,
+   "domain": "Player Stack",
+   "title": "Reduce ModernVideoPlayerView under 800 LOC"
+  },
+  {
+   "id": 162,
+   "domain": "Player Stack",
+   "title": "Single playback session ID across surfaces"
+  },
+  {
+   "id": 163,
+   "domain": "Player Stack",
+   "title": "Cancel stale preloads on tab switch"
+  },
+  {
+   "id": 164,
+   "domain": "Player Stack",
+   "title": "Memory: [weak self] audit in player closures"
+  },
+  {
+   "id": 165,
+   "domain": "Player Stack",
+   "title": "Audio session conflict with Flicks"
+  },
+  {
+   "id": 166,
+   "domain": "Player Stack",
+   "title": "Pause global player when Flicks opens"
+  },
+  {
+   "id": 167,
+   "domain": "Player Stack",
+   "title": "Resume global player when Flicks closes"
+  },
+  {
+   "id": 168,
+   "domain": "Player Stack",
+   "title": "PiP start only when allowSystemPictureInPicture"
+  },
+  {
+   "id": 169,
+   "domain": "Player Stack",
+   "title": "Foreground restores custom mini-player"
+  },
+  {
+   "id": 170,
+   "domain": "Player Stack",
+   "title": "Background hands off to system PiP"
+  },
+  {
+   "id": 171,
+   "domain": "Player Stack",
+   "title": "Queue upNext autoplay setting"
+  },
+  {
+   "id": 172,
+   "domain": "Player Stack",
+   "title": "Queue previous/next skip ads policy"
+  },
+  {
+   "id": 173,
+   "domain": "Player Stack",
+   "title": "Seek scrubber accuracy"
+  },
+  {
+   "id": 174,
+   "domain": "Player Stack",
+   "title": "Buffering indicator state"
+  },
+  {
+   "id": 175,
+   "domain": "Player Stack",
+   "title": "Error UI when player not ready"
+  },
+  {
+   "id": 176,
+   "domain": "Player Stack",
+   "title": "Nuclear reset clears all observers"
+  },
+  {
+   "id": 177,
+   "domain": "Player Stack",
+   "title": "deinit removes lifecycle observers"
+  },
+  {
+   "id": 178,
+   "domain": "Player Stack",
+   "title": "Time observer leak check"
+  },
+  {
+   "id": 179,
+   "domain": "Player Stack",
+   "title": "Item status observer leak check"
+  },
+  {
+   "id": 180,
+   "domain": "Player Stack",
+   "title": "Preload next 2 queue items only"
+  },
+  {
+   "id": 181,
+   "domain": "Player Stack",
+   "title": "HDR / Dolby path no-op safe"
+  },
+  {
+   "id": 182,
+   "domain": "Player Stack",
+   "title": "AirPlay route change handling"
+  },
+  {
+   "id": 183,
+   "domain": "Player Stack",
+   "title": "Silent mode respects user setting"
+  },
+  {
+   "id": 184,
+   "domain": "Player Stack",
+   "title": "Now Playing info center update"
+  },
+  {
+   "id": 185,
+   "domain": "Player Stack",
+   "title": "Remote command center play/pause"
+  },
+  {
+   "id": 186,
+   "domain": "Player Stack",
+   "title": "Lock screen scrub"
+  },
+  {
+   "id": 187,
+   "domain": "Player Stack",
+   "title": "CarPlay basic play if enabled"
+  },
+  {
+   "id": 188,
+   "domain": "Player Stack",
+   "title": "Watch companion play/pause sync"
+  },
+  {
+   "id": 189,
+   "domain": "Player Stack",
+   "title": "University token race on fast skip"
+  },
+  {
+   "id": 190,
+   "domain": "Player Stack",
+   "title": "View heartbeat 10s interval verify"
+  },
+  {
+   "id": 191,
+   "domain": "Player Stack",
+   "title": "endViewTracking on closePlayer"
+  },
+  {
+   "id": 192,
+   "domain": "Player Stack",
+   "title": "flushUniversityWatch before switch"
+  },
+  {
+   "id": 193,
+   "domain": "Player Stack",
+   "title": "isPlayerReady gates error chrome"
+  },
+  {
+   "id": 194,
+   "domain": "Player Stack",
+   "title": "hasActivePlaybackSession false on init"
+  },
+  {
+   "id": 195,
+   "domain": "Player Stack",
+   "title": "Fullscreen token UUID refresh"
+  },
+  {
+   "id": 196,
+   "domain": "Flicks Vertical",
+   "title": "Extract FlicksMoreOptionsSheet"
+  },
+  {
+   "id": 197,
+   "domain": "Flicks Vertical",
+   "title": "Extract FlicksActionRail"
+  },
+  {
+   "id": 198,
+   "domain": "Flicks Vertical",
+   "title": "Extract FlicksSoundPageSheet"
+  },
+  {
+   "id": 199,
+   "domain": "Flicks Vertical",
+   "title": "Extract FlicksPlaylistPickerSheet"
+  },
+  {
+   "id": 200,
+   "domain": "Flicks Vertical",
+   "title": "Extract FlicksReportSheet"
+  },
+  {
+   "id": 201,
+   "domain": "Flicks Vertical",
+   "title": "Reduce FlicksView under 1000 LOC"
+  },
+  {
+   "id": 202,
+   "domain": "Flicks Vertical",
+   "title": "NuclearFlicksViewModel pagination tests"
+  },
+  {
+   "id": 203,
+   "domain": "Flicks Vertical",
+   "title": "Dead URL blacklist unit tests"
+  },
+  {
+   "id": 204,
+   "domain": "Flicks Vertical",
+   "title": "Gesture layer extraction"
+  },
+  {
+   "id": 205,
+   "domain": "Flicks Vertical",
+   "title": "Feed pager extraction"
+  },
+  {
+   "id": 206,
+   "domain": "Flicks Vertical",
+   "title": "Engagement bar extraction"
+  },
+  {
+   "id": 207,
+   "domain": "Flicks Vertical",
+   "title": "Prefetch next 3 flicks"
+  },
+  {
+   "id": 208,
+   "domain": "Flicks Vertical",
+   "title": "drawingGroup on complex overlays"
+  },
+  {
+   "id": 209,
+   "domain": "Flicks Vertical",
+   "title": "Reduce motion support"
+  },
+  {
+   "id": 210,
+   "domain": "Flicks Vertical",
+   "title": "Haptic consistency pass"
+  },
+  {
+   "id": 211,
+   "domain": "Flicks Vertical",
+   "title": "Archive EnhancedFlicksViewModel"
+  },
+  {
+   "id": 212,
+   "domain": "Flicks Vertical",
+   "title": "Flicks crash index regression (FeedMath)"
+  },
+  {
+   "id": 213,
+   "domain": "Flicks Vertical",
+   "title": "Comment sheet memory leak check"
+  },
+  {
+   "id": 214,
+   "domain": "Flicks Vertical",
+   "title": "Share sheet extract"
+  },
+  {
+   "id": 215,
+   "domain": "Flicks Vertical",
+   "title": "Quality/speed already extracted verify"
+  },
+  {
+   "id": 216,
+   "domain": "Flicks Vertical",
+   "title": "Remix sheet extract"
+  },
+  {
+   "id": 217,
+   "domain": "Flicks Vertical",
+   "title": "Search bar extract"
+  },
+  {
+   "id": 218,
+   "domain": "Flicks Vertical",
+   "title": "Top controls extract"
+  },
+  {
+   "id": 219,
+   "domain": "Flicks Vertical",
+   "title": "Album art spin reduce-motion"
+  },
+  {
+   "id": 220,
+   "domain": "Flicks Vertical",
+   "title": "Like optimistic UI rollback"
+  },
+  {
+   "id": 221,
+   "domain": "Flicks Vertical",
+   "title": "Save optimistic UI rollback"
+  },
+  {
+   "id": 222,
+   "domain": "Flicks Vertical",
+   "title": "Blacklist persists across sessions"
+  },
+  {
+   "id": 223,
+   "domain": "Flicks Vertical",
+   "title": "Pagination cursor stable"
+  },
+  {
+   "id": 224,
+   "domain": "Flicks Vertical",
+   "title": "Empty feed state"
+  },
+  {
+   "id": 225,
+   "domain": "Flicks Vertical",
+   "title": "Error feed retry"
+  },
+  {
+   "id": 226,
+   "domain": "Flicks Vertical",
+   "title": "Network offline banner"
+  },
+  {
+   "id": 227,
+   "domain": "Flicks Vertical",
+   "title": "Cellular data saver quality"
+  },
+  {
+   "id": 228,
+   "domain": "Flicks Vertical",
+   "title": "Auto quality ABR"
+  },
+  {
+   "id": 229,
+   "domain": "Flicks Vertical",
+   "title": "Caption toggle"
+  },
+  {
+   "id": 230,
+   "domain": "Flicks Vertical",
+   "title": "Sound page creator link"
+  },
+  {
+   "id": 231,
+   "domain": "Flicks Vertical",
+   "title": "Report reasons enum"
+  },
+  {
+   "id": 232,
+   "domain": "Flicks Vertical",
+   "title": "Playlist add success toast"
+  },
+  {
+   "id": 233,
+   "domain": "Flicks Vertical",
+   "title": "Not interested removes from feed"
+  },
+  {
+   "id": 234,
+   "domain": "Flicks Vertical",
+   "title": "Swipe up next flick"
+  },
+  {
+   "id": 235,
+   "domain": "Flicks Vertical",
+   "title": "Swipe down previous flick"
+  },
+  {
+   "id": 236,
+   "domain": "DI & Singletons",
+   "title": "Register VSMatchWalletService in DI"
+  },
+  {
+   "id": 237,
+   "domain": "DI & Singletons",
+   "title": "Register VersusMatchService in DI"
+  },
+  {
+   "id": 238,
+   "domain": "DI & Singletons",
+   "title": "Register StripeConnectService in DI"
+  },
+  {
+   "id": 239,
+   "domain": "DI & Singletons",
+   "title": "Migrate VSMatchComplianceSheet to @Injected"
+  },
+  {
+   "id": 240,
+   "domain": "DI & Singletons",
+   "title": "Migrate VersusMatchService callers to @Injected"
+  },
+  {
+   "id": 241,
+   "domain": "DI & Singletons",
+   "title": "Migrate MatchVerificationService to @Injected"
+  },
+  {
+   "id": 242,
+   "domain": "DI & Singletons",
+   "title": "Ban new .shared outside allowlist (lint)"
+  },
+  {
+   "id": 243,
+   "domain": "DI & Singletons",
+   "title": "Expand DependencyContainer core domains"
+  },
+  {
+   "id": 244,
+   "domain": "DI & Singletons",
+   "title": "LazyServiceManager audit deferred AI"
+  },
+  {
+   "id": 245,
+   "domain": "DI & Singletons",
+   "title": "AppState slim-down plan"
+  },
+  {
+   "id": 246,
+   "domain": "DI & Singletons",
+   "title": "Protocol-based MoneyEscrowing"
+  },
+  {
+   "id": 247,
+   "domain": "DI & Singletons",
+   "title": "Protocol-based ComplianceChecking"
+  },
+  {
+   "id": 248,
+   "domain": "DI & Singletons",
+   "title": "Mock DI for unit tests"
+  },
+  {
+   "id": 249,
+   "domain": "DI & Singletons",
+   "title": "Count .shared usages baseline"
+  },
+  {
+   "id": 250,
+   "domain": "DI & Singletons",
+   "title": "Reduce singleton count by 10%"
+  },
+  {
+   "id": 251,
+   "domain": "DI & Singletons",
+   "title": "Register AuthenticationManager verify"
+  },
+  {
+   "id": 252,
+   "domain": "DI & Singletons",
+   "title": "Register GlobalVideoPlayerManager verify"
+  },
+  {
+   "id": 253,
+   "domain": "DI & Singletons",
+   "title": "Register OfflineDownloadService verify"
+  },
+  {
+   "id": 254,
+   "domain": "DI & Singletons",
+   "title": "@Injected property wrapper docs"
+  },
+  {
+   "id": 255,
+   "domain": "DI & Singletons",
+   "title": "Preview DI container"
+  },
+  {
+   "id": 256,
+   "domain": "DI & Singletons",
+   "title": "Test DI container"
+  },
+  {
+   "id": 257,
+   "domain": "DI & Singletons",
+   "title": "Resolve missing factory fatal message"
+  },
+  {
+   "id": 258,
+   "domain": "DI & Singletons",
+   "title": "Thread-safe factory barrier verify"
+  },
+  {
+   "id": 259,
+   "domain": "DI & Singletons",
+   "title": "Unregister on logout for user-scoped"
+  },
+  {
+   "id": 260,
+   "domain": "DI & Singletons",
+   "title": "Wallet service protocol"
+  },
+  {
+   "id": 261,
+   "domain": "DI & Singletons",
+   "title": "Versus service protocol"
+  },
+  {
+   "id": 262,
+   "domain": "DI & Singletons",
+   "title": "Stripe connect protocol"
+  },
+  {
+   "id": 263,
+   "domain": "DI & Singletons",
+   "title": "GamingAgents resolve escrow via DI"
+  },
+  {
+   "id": 264,
+   "domain": "DI & Singletons",
+   "title": "VSWalletSheet @Injected"
+  },
+  {
+   "id": 265,
+   "domain": "DI & Singletons",
+   "title": "LiveVersusMatchView @Injected"
+  },
+  {
+   "id": 266,
+   "domain": "DI & Singletons",
+   "title": "ChampionshipHubView @Injected"
+  },
+  {
+   "id": 267,
+   "domain": "DI & Singletons",
+   "title": "DownloadsView @Injected OfflineDownload"
+  },
+  {
+   "id": 268,
+   "domain": "DI & Singletons",
+   "title": "FlicksViewModel already @Injected verify"
+  },
+  {
+   "id": 269,
+   "domain": "DI & Singletons",
+   "title": "No new ObservableObject.shared in Features"
+  },
+  {
+   "id": 270,
+   "domain": "DI & Singletons",
+   "title": "Service allowlist in DependencyContainer"
+  },
+  {
+   "id": 271,
+   "domain": "AI/AGI Sprawl",
+   "title": "Map call sites for AGIMasterOrchestrator"
+  },
+  {
+   "id": 272,
+   "domain": "AI/AGI Sprawl",
+   "title": "Map call sites for UnifiedAGIBrain"
+  },
+  {
+   "id": 273,
+   "domain": "AI/AGI Sprawl",
+   "title": "Map call sites for SuperAGI"
+  },
+  {
+   "id": 274,
+   "domain": "AI/AGI Sprawl",
+   "title": "Map call sites for EnterpriseAITeam"
+  },
+  {
+   "id": 275,
+   "domain": "AI/AGI Sprawl",
+   "title": "Map call sites for MyChannelAI"
+  },
+  {
+   "id": 276,
+   "domain": "AI/AGI Sprawl",
+   "title": "Define CreatorIntelligenceService facade"
+  },
+  {
+   "id": 277,
+   "domain": "AI/AGI Sprawl",
+   "title": "Deprecate unused orchestrators after map"
+  },
+  {
+   "id": 278,
+   "domain": "AI/AGI Sprawl",
+   "title": "Defer MyChannelAI off cold start"
+  },
+  {
+   "id": 279,
+   "domain": "AI/AGI Sprawl",
+   "title": "Consolidate OpenAIService vs OpenAIAgentService"
+  },
+  {
+   "id": 280,
+   "domain": "AI/AGI Sprawl",
+   "title": "Consolidate VertexAIService vs VertexAIAgentService"
+  },
+  {
+   "id": 281,
+   "domain": "AI/AGI Sprawl",
+   "title": "Feature-flag expensive agents"
+  },
+  {
+   "id": 282,
+   "domain": "AI/AGI Sprawl",
+   "title": "API cost budget per agent"
+  },
+  {
+   "id": 283,
+   "domain": "AI/AGI Sprawl",
+   "title": "Remove fake in-app neural net init"
+  },
+  {
+   "id": 284,
+   "domain": "AI/AGI Sprawl",
+   "title": "AI file cull list (no delete without approval)"
+  },
+  {
+   "id": 285,
+   "domain": "AI/AGI Sprawl",
+   "title": "Document allowed AI entry points"
+  },
+  {
+   "id": 286,
+   "domain": "AI/AGI Sprawl",
+   "title": "Map AIConversationOrchestrator"
+  },
+  {
+   "id": 287,
+   "domain": "AI/AGI Sprawl",
+   "title": "Map AnthropicService call sites"
+  },
+  {
+   "id": 288,
+   "domain": "AI/AGI Sprawl",
+   "title": "Lazy init Vertex agents"
+  },
+  {
+   "id": 289,
+   "domain": "AI/AGI Sprawl",
+   "title": "Gaming MatchOrchestrator only on createMatch"
+  },
+  {
+   "id": 290,
+   "domain": "AI/AGI Sprawl",
+   "title": "AdTargetingAGI deferred"
+  },
+  {
+   "id": 291,
+   "domain": "AI/AGI Sprawl",
+   "title": "AICrystalBall deferred"
+  },
+  {
+   "id": 292,
+   "domain": "AI/AGI Sprawl",
+   "title": "Ranking agents deferred"
+  },
+  {
+   "id": 293,
+   "domain": "AI/AGI Sprawl",
+   "title": "Thumbnail AI on-demand only"
+  },
+  {
+   "id": 294,
+   "domain": "AI/AGI Sprawl",
+   "title": "Caption AI on-demand only"
+  },
+  {
+   "id": 295,
+   "domain": "AI/AGI Sprawl",
+   "title": "Moderation AI server-side preferred"
+  },
+  {
+   "id": 296,
+   "domain": "AI/AGI Sprawl",
+   "title": "Client AI keys never for money paths"
+  },
+  {
+   "id": 297,
+   "domain": "AI/AGI Sprawl",
+   "title": "Agent log sampling"
+  },
+  {
+   "id": 298,
+   "domain": "AI/AGI Sprawl",
+   "title": "Timeout all AI calls 8s"
+  },
+  {
+   "id": 299,
+   "domain": "AI/AGI Sprawl",
+   "title": "Retry policy AI 1x"
+  },
+  {
+   "id": 300,
+   "domain": "AI/AGI Sprawl",
+   "title": "Circuit breaker AI provider"
+  },
+  {
+   "id": 301,
+   "domain": "AI/AGI Sprawl",
+   "title": "Fallback stub when AI down"
+  },
+  {
+   "id": 302,
+   "domain": "AI/AGI Sprawl",
+   "title": "Telemetry AI latency"
+  },
+  {
+   "id": 303,
+   "domain": "AI/AGI Sprawl",
+   "title": "Telemetry AI cost"
+  },
+  {
+   "id": 304,
+   "domain": "AI/AGI Sprawl",
+   "title": "Disable AI in UI tests"
+  },
+  {
+   "id": 305,
+   "domain": "AI/AGI Sprawl",
+   "title": "Preview mocks for AI"
+  },
+  {
+   "id": 306,
+   "domain": "AI/AGI Sprawl",
+   "title": "Single chat entry MyChannelAI"
+  },
+  {
+   "id": 307,
+   "domain": "AI/AGI Sprawl",
+   "title": "Remove duplicate SuperAGI if unused"
+  },
+  {
+   "id": 308,
+   "domain": "AI/AGI Sprawl",
+   "title": "Remove EnterpriseAITeam if unused"
+  },
+  {
+   "id": 309,
+   "domain": "AI/AGI Sprawl",
+   "title": "Orchestrator \u2192 facade adapter"
+  },
+  {
+   "id": 310,
+   "domain": "AI/AGI Sprawl",
+   "title": "AGI naming cleanup to Intelligence"
+  },
+  {
+   "id": 311,
+   "domain": "AI/AGI Sprawl",
+   "title": "Docs: AI architecture one-pager"
+  },
+  {
+   "id": 312,
+   "domain": "AI/AGI Sprawl",
+   "title": "Kill switch AppConfig.aiEnabled"
+  },
+  {
+   "id": 313,
+   "domain": "AI/AGI Sprawl",
+   "title": "Cold start AI zero allocations"
+  },
+  {
+   "id": 314,
+   "domain": "AI/AGI Sprawl",
+   "title": "Background AI only on Wi-Fi option"
+  },
+  {
+   "id": 315,
+   "domain": "AI/AGI Sprawl",
+   "title": "User privacy AI training opt-out"
+  },
+  {
+   "id": 316,
+   "domain": "Downloads & Offline",
+   "title": "Verify HLSDownloadManager wired"
+  },
+  {
+   "id": 317,
+   "domain": "Downloads & Offline",
+   "title": "Realm vs file metadata single source"
+  },
+  {
+   "id": 318,
+   "domain": "Downloads & Offline",
+   "title": "OfflineDownloadService state machine tests"
+  },
+  {
+   "id": 319,
+   "domain": "Downloads & Offline",
+   "title": "DownloadMLService URL config not hardcoded"
+  },
+  {
+   "id": 320,
+   "domain": "Downloads & Offline",
+   "title": "Plus gating consistency"
+  },
+  {
+   "id": 321,
+   "domain": "Downloads & Offline",
+   "title": "DownloadsView LOC split if >900"
+  },
+  {
+   "id": 322,
+   "domain": "Downloads & Offline",
+   "title": "Resume interrupted HLS"
+  },
+  {
+   "id": 323,
+   "domain": "Downloads & Offline",
+   "title": "Storage quota warnings"
+  },
+  {
+   "id": 324,
+   "domain": "Downloads & Offline",
+   "title": "Offline DRM path audit"
+  },
+  {
+   "id": 325,
+   "domain": "Downloads & Offline",
+   "title": "Web offline explicitly iOS-only doc"
+  },
+  {
+   "id": 326,
+   "domain": "Downloads & Offline",
+   "title": "Download quality picker"
+  },
+  {
+   "id": 327,
+   "domain": "Downloads & Offline",
+   "title": "Delete download frees disk"
+  },
+  {
+   "id": 328,
+   "domain": "Downloads & Offline",
+   "title": "Download progress Combine publisher"
+  },
+  {
+   "id": 329,
+   "domain": "Downloads & Offline",
+   "title": "Background URLSession config"
+  },
+  {
+   "id": 330,
+   "domain": "Downloads & Offline",
+   "title": "Cellular downloads setting"
+  },
+  {
+   "id": 331,
+   "domain": "Downloads & Offline",
+   "title": "Expire stale downloads policy"
+  },
+  {
+   "id": 332,
+   "domain": "Downloads & Offline",
+   "title": "Offline playback error UI"
+  },
+  {
+   "id": 333,
+   "domain": "Downloads & Offline",
+   "title": "Download button state machine"
+  },
+  {
+   "id": 334,
+   "domain": "Downloads & Offline",
+   "title": "Profile downloads tab sync"
+  },
+  {
+   "id": 335,
+   "domain": "Downloads & Offline",
+   "title": "Migration from deleted NuclearDownloadManager"
+  },
+  {
+   "id": 336,
+   "domain": "Downloads & Offline",
+   "title": "No dual write file+Realm without sync"
+  },
+  {
+   "id": 337,
+   "domain": "Downloads & Offline",
+   "title": "Hash verify downloaded file"
+  },
+  {
+   "id": 338,
+   "domain": "Downloads & Offline",
+   "title": "Cancel download cleans partial"
+  },
+  {
+   "id": 339,
+   "domain": "Downloads & Offline",
+   "title": "Max concurrent downloads 2"
+  },
+  {
+   "id": 340,
+   "domain": "Downloads & Offline",
+   "title": "Retry backoff downloads"
+  },
+  {
+   "id": 341,
+   "domain": "Movies",
+   "title": "MovieDetailView further split (metadata)"
+  },
+  {
+   "id": 342,
+   "domain": "Movies",
+   "title": "MovieDetailView playback subview"
+  },
+  {
+   "id": 343,
+   "domain": "Movies",
+   "title": "EnhancedMoviesService wiring audit"
+  },
+  {
+   "id": 344,
+   "domain": "Movies",
+   "title": "MovieLibraryService dead code check"
+  },
+  {
+   "id": 345,
+   "domain": "Movies",
+   "title": "TrailerPlayerView memory"
+  },
+  {
+   "id": 346,
+   "domain": "Movies",
+   "title": "TMDB key fail-closed handling UI"
+  },
+  {
+   "id": 347,
+   "domain": "Movies",
+   "title": "Movies hub perf LazyVStack"
+  },
+  {
+   "id": 348,
+   "domain": "Movies",
+   "title": "Poster URL standards check"
+  },
+  {
+   "id": 349,
+   "domain": "Movies",
+   "title": "MovieDetailHero already extracted verify"
+  },
+  {
+   "id": 350,
+   "domain": "Movies",
+   "title": "Free catalog Pluto fallback"
+  },
+  {
+   "id": 351,
+   "domain": "Movies",
+   "title": "Trailer autoplay muted"
+  },
+  {
+   "id": 352,
+   "domain": "Movies",
+   "title": "Movie continue watching"
+  },
+  {
+   "id": 353,
+   "domain": "Movies",
+   "title": "Movie watchlist"
+  },
+  {
+   "id": 354,
+   "domain": "Movies",
+   "title": "Movie search debounce"
+  },
+  {
+   "id": 355,
+   "domain": "Movies",
+   "title": "Genre filter chips haptic"
+  },
+  {
+   "id": 356,
+   "domain": "Movies",
+   "title": "Empty movies state"
+  },
+  {
+   "id": 357,
+   "domain": "Movies",
+   "title": "TMDB rate limit backoff"
+  },
+  {
+   "id": 358,
+   "domain": "Movies",
+   "title": "Cache movie posters"
+  },
+  {
+   "id": 359,
+   "domain": "Movies",
+   "title": "Accessibility movie titles"
+  },
+  {
+   "id": 360,
+   "domain": "Movies",
+   "title": "Deep link movie detail"
+  },
+  {
+   "id": 361,
+   "domain": "Tests & CI",
+   "title": "MoneyEscrowMath truncation regression test"
+  },
+  {
+   "id": 362,
+   "domain": "Tests & CI",
+   "title": "EscrowStatistics revenue test"
+  },
+  {
+   "id": 363,
+   "domain": "Tests & CI",
+   "title": "WagerPolicy bounds test"
+  },
+  {
+   "id": 364,
+   "domain": "Tests & CI",
+   "title": "VSMatchComplianceServiceTests"
+  },
+  {
+   "id": 365,
+   "domain": "Tests & CI",
+   "title": "VersusMatchService validation tests"
+  },
+  {
+   "id": 366,
+   "domain": "Tests & CI",
+   "title": "VideoPlaybackQueueTests expand"
+  },
+  {
+   "id": 367,
+   "domain": "Tests & CI",
+   "title": "OfflineDownloadServiceTests expand"
+  },
+  {
+   "id": 368,
+   "domain": "Tests & CI",
+   "title": "web wager-policy unit tests"
+  },
+  {
+   "id": 369,
+   "domain": "Tests & CI",
+   "title": "UI test smoke Flicks swipe"
+  },
+  {
+   "id": 370,
+   "domain": "Tests & CI",
+   "title": "UI test smoke VS create gate"
+  },
+  {
+   "id": 371,
+   "domain": "Tests & CI",
+   "title": "CI run unit tests on PR"
+  },
+  {
+   "id": 372,
+   "domain": "Tests & CI",
+   "title": "Coverage report money paths"
+  },
+  {
+   "id": 373,
+   "domain": "Tests & CI",
+   "title": "Snapshot tests compliance sheet"
+  },
+  {
+   "id": 374,
+   "domain": "Tests & CI",
+   "title": "Property test MoneyMath fee+payout=gross"
+  },
+  {
+   "id": 375,
+   "domain": "Tests & CI",
+   "title": "Fuzz wager amounts"
+  },
+  {
+   "id": 376,
+   "domain": "Tests & CI",
+   "title": "WagerPolicy region allowlist count"
+  },
+  {
+   "id": 377,
+   "domain": "Tests & CI",
+   "title": "Terms version constant sync iOS/web/server"
+  },
+  {
+   "id": 378,
+   "domain": "Tests & CI",
+   "title": "StripeConnect MoneyMath regression"
+  },
+  {
+   "id": 379,
+   "domain": "Tests & CI",
+   "title": "FeedMath Flicks index tests"
+  },
+  {
+   "id": 380,
+   "domain": "Tests & CI",
+   "title": "AppConfig tests expand"
+  },
+  {
+   "id": 381,
+   "domain": "Tests & CI",
+   "title": "Auth token provider mock tests"
+  },
+  {
+   "id": 382,
+   "domain": "Tests & CI",
+   "title": "DI resolve registered services test"
+  },
+  {
+   "id": 383,
+   "domain": "Tests & CI",
+   "title": "Player queue empty upNext nil"
+  },
+  {
+   "id": 384,
+   "domain": "Tests & CI",
+   "title": "Download state transitions test"
+  },
+  {
+   "id": 385,
+   "domain": "Tests & CI",
+   "title": "Compliance reasons aggregation test"
+  },
+  {
+   "id": 386,
+   "domain": "Tests & CI",
+   "title": "Daily limit boundary test"
+  },
+  {
+   "id": 387,
+   "domain": "Tests & CI",
+   "title": "KYC threshold boundary $500"
+  },
+  {
+   "id": 388,
+   "domain": "Tests & CI",
+   "title": "Age 17/18 boundary"
+  },
+  {
+   "id": 389,
+   "domain": "Tests & CI",
+   "title": "Web preflight KYC over 500"
+  },
+  {
+   "id": 390,
+   "domain": "Tests & CI",
+   "title": "Web preflight region deny"
+  },
+  {
+   "id": 391,
+   "domain": "Tests & CI",
+   "title": "Playwright medals page loads"
+  },
+  {
+   "id": 392,
+   "domain": "Tests & CI",
+   "title": "SwiftLint money files clean"
+  },
+  {
+   "id": 393,
+   "domain": "Tests & CI",
+   "title": "No force unwrap money paths CI"
+  },
+  {
+   "id": 394,
+   "domain": "Tests & CI",
+   "title": "Secret scan on PR"
+  },
+  {
+   "id": 395,
+   "domain": "Tests & CI",
+   "title": "Typecheck web-v2 on PR"
+  },
+  {
+   "id": 396,
+   "domain": "Tests & CI",
+   "title": "iOS unit test scheme documented"
+  },
+  {
+   "id": 397,
+   "domain": "Tests & CI",
+   "title": "Flaky test quarantine list"
+  },
+  {
+   "id": 398,
+   "domain": "Tests & CI",
+   "title": "Golden file MoneyMath tables"
+  },
+  {
+   "id": 399,
+   "domain": "Tests & CI",
+   "title": "Mutation test MoneyMath"
+  },
+  {
+   "id": 400,
+   "domain": "Tests & CI",
+   "title": "Contract test escrow CF schema"
+  },
+  {
+   "id": 401,
+   "domain": "Launch & Perf",
+   "title": "Defer Perspective off cold start verify"
+  },
+  {
+   "id": 402,
+   "domain": "Launch & Perf",
+   "title": "Defer CommandCenter off cold start"
+  },
+  {
+   "id": 403,
+   "domain": "Launch & Perf",
+   "title": "Defer AutoCaption off cold start"
+  },
+  {
+   "id": 404,
+   "domain": "Launch & Perf",
+   "title": "Profile first-frame <400ms"
+  },
+  {
+   "id": 405,
+   "domain": "Launch & Perf",
+   "title": "Image cache hit <50ms"
+  },
+  {
+   "id": 406,
+   "domain": "Launch & Perf",
+   "title": "List pagination 24 items audit"
+  },
+  {
+   "id": 407,
+   "domain": "Launch & Perf",
+   "title": "Request dedupe network layer"
+  },
+  {
+   "id": 408,
+   "domain": "Launch & Perf",
+   "title": "Main thread hang detector"
+  },
+  {
+   "id": 409,
+   "domain": "Launch & Perf",
+   "title": "Instruments time profiler baseline"
+  },
+  {
+   "id": 410,
+   "domain": "Launch & Perf",
+   "title": "Reduce LazyServiceManager critical tier"
+  },
+  {
+   "id": 411,
+   "domain": "Launch & Perf",
+   "title": "Defer MyChannelAI verify"
+  },
+  {
+   "id": 412,
+   "domain": "Launch & Perf",
+   "title": "Defer OpenAI agents verify"
+  },
+  {
+   "id": 413,
+   "domain": "Launch & Perf",
+   "title": "Defer AgentLog verify"
+  },
+  {
+   "id": 414,
+   "domain": "Launch & Perf",
+   "title": "Splash to first frame metric"
+  },
+  {
+   "id": 415,
+   "domain": "Launch & Perf",
+   "title": "Scroll 60fps Flicks"
+  },
+  {
+   "id": 416,
+   "domain": "Launch & Perf",
+   "title": "Scroll 60fps Home"
+  },
+  {
+   "id": 417,
+   "domain": "Launch & Perf",
+   "title": "Memory watermark player"
+  },
+  {
+   "id": 418,
+   "domain": "Launch & Perf",
+   "title": "Memory watermark Flicks"
+  },
+  {
+   "id": 419,
+   "domain": "Launch & Perf",
+   "title": "Network waterfalls launch"
+  },
+  {
+   "id": 420,
+   "domain": "Launch & Perf",
+   "title": "Prefetch only visible+1"
+  },
+  {
+   "id": 421,
+   "domain": "Launch & Perf",
+   "title": "Cancel tasks on disappear"
+  },
+  {
+   "id": 422,
+   "domain": "Launch & Perf",
+   "title": "SwiftUI body complexity Flicks"
+  },
+  {
+   "id": 423,
+   "domain": "Launch & Perf",
+   "title": "drawingGroup selective use"
+  },
+  {
+   "id": 424,
+   "domain": "Launch & Perf",
+   "title": "Avoid AnyView in hot paths"
+  },
+  {
+   "id": 425,
+   "domain": "Launch & Perf",
+   "title": "Equatable view models"
+  },
+  {
+   "id": 426,
+   "domain": "Launch & Perf",
+   "title": "@StateObject vs @ObservedObject audit"
+  },
+  {
+   "id": 427,
+   "domain": "Launch & Perf",
+   "title": "Image downsample"
+  },
+  {
+   "id": 428,
+   "domain": "Launch & Perf",
+   "title": "Video thumbnail decode off main"
+  },
+  {
+   "id": 429,
+   "domain": "Launch & Perf",
+   "title": "Firestore listener count cap"
+  },
+  {
+   "id": 430,
+   "domain": "Launch & Perf",
+   "title": "Combine sink cancel on deinit"
+  },
+  {
+   "id": 431,
+   "domain": "Ads & Monetization",
+   "title": "AdsService creatorRevenue MoneyMath"
+  },
+  {
+   "id": 432,
+   "domain": "Ads & Monetization",
+   "title": "SuperThanks amounts cents"
+  },
+  {
+   "id": 433,
+   "domain": "Ads & Monetization",
+   "title": "CreatorEconomyService Double cleanup"
+  },
+  {
+   "id": 434,
+   "domain": "Ads & Monetization",
+   "title": "Subscription StoreKit receipt verify"
+  },
+  {
+   "id": 435,
+   "domain": "Ads & Monetization",
+   "title": "Ad placement agent cost cap"
+  },
+  {
+   "id": 436,
+   "domain": "Ads & Monetization",
+   "title": "FraudDetectionAgent money path"
+  },
+  {
+   "id": 437,
+   "domain": "Ads & Monetization",
+   "title": "UpsellAgent timing tests"
+  },
+  {
+   "id": 438,
+   "domain": "Ads & Monetization",
+   "title": "DynamicPricingAgent iOS parity"
+  },
+  {
+   "id": 439,
+   "domain": "Ads & Monetization",
+   "title": "Payout schedule docs"
+  },
+  {
+   "id": 440,
+   "domain": "Ads & Monetization",
+   "title": "Tax form KYC link"
+  },
+  {
+   "id": 441,
+   "domain": "Ads & Monetization",
+   "title": "VAST fallback revenue MoneyMath"
+  },
+  {
+   "id": 442,
+   "domain": "Ads & Monetization",
+   "title": "CPM to impression cents"
+  },
+  {
+   "id": 443,
+   "domain": "Ads & Monetization",
+   "title": "Ad frequency cap"
+  },
+  {
+   "id": 444,
+   "domain": "Ads & Monetization",
+   "title": "Skip ad after 5s policy"
+  },
+  {
+   "id": 445,
+   "domain": "Ads & Monetization",
+   "title": "Brand safety categories"
+  },
+  {
+   "id": 446,
+   "domain": "Ads & Monetization",
+   "title": "Creator ads dashboard"
+  },
+  {
+   "id": 447,
+   "domain": "Ads & Monetization",
+   "title": "Advertiser billing"
+  },
+  {
+   "id": 448,
+   "domain": "Ads & Monetization",
+   "title": "Refund ad spend path"
+  },
+  {
+   "id": 449,
+   "domain": "Ads & Monetization",
+   "title": "Plus ad-free verify"
+  },
+  {
+   "id": 450,
+   "domain": "Ads & Monetization",
+   "title": "Mid-roll vs pre-roll policy"
+  },
+  {
+   "id": 451,
+   "domain": "Ads & Monetization",
+   "title": "SuperThanks fee MoneyMath"
+  },
+  {
+   "id": 452,
+   "domain": "Ads & Monetization",
+   "title": "Membership price tiers"
+  },
+  {
+   "id": 453,
+   "domain": "Ads & Monetization",
+   "title": "Gift membership"
+  },
+  {
+   "id": 454,
+   "domain": "Ads & Monetization",
+   "title": "Channel tip cents"
+  },
+  {
+   "id": 455,
+   "domain": "Ads & Monetization",
+   "title": "Payout minimum threshold"
+  },
+  {
+   "id": 456,
+   "domain": "Backend Cloud Functions",
+   "title": "Redeploy escrow-payments with terms pin"
+  },
+  {
+   "id": 457,
+   "domain": "Backend Cloud Functions",
+   "title": "create-transfer amount server-derived only"
+  },
+  {
+   "id": 458,
+   "domain": "Backend Cloud Functions",
+   "title": "Webhook idempotency keys"
+  },
+  {
+   "id": 459,
+   "domain": "Backend Cloud Functions",
+   "title": "reset_daily_wager_limits schedule"
+  },
+  {
+   "id": 460,
+   "domain": "Backend Cloud Functions",
+   "title": "Identity webhook \u2192 kycStatus approved"
+  },
+  {
+   "id": 461,
+   "domain": "Backend Cloud Functions",
+   "title": "Rate limit create-escrow-payment"
+  },
+  {
+   "id": 462,
+   "domain": "Backend Cloud Functions",
+   "title": "Structured logging money ops"
+  },
+  {
+   "id": 463,
+   "domain": "Backend Cloud Functions",
+   "title": "Alert on compliance reject spike"
+  },
+  {
+   "id": 464,
+   "domain": "Backend Cloud Functions",
+   "title": "functions/main.py Identity sessionId+ek"
+  },
+  {
+   "id": 465,
+   "domain": "Backend Cloud Functions",
+   "title": "Remove unused payment intent client paths"
+  },
+  {
+   "id": 466,
+   "domain": "Backend Cloud Functions",
+   "title": "Assert amountCents integer"
+  },
+  {
+   "id": 467,
+   "domain": "Backend Cloud Functions",
+   "title": "Reject negative amountCents"
+  },
+  {
+   "id": 468,
+   "domain": "Backend Cloud Functions",
+   "title": "Match outcome before transfer"
+  },
+  {
+   "id": 469,
+   "domain": "Backend Cloud Functions",
+   "title": "Escrow capture only when held"
+  },
+  {
+   "id": 470,
+   "domain": "Backend Cloud Functions",
+   "title": "Cancel payment refunds both"
+  },
+  {
+   "id": 471,
+   "domain": "Backend Cloud Functions",
+   "title": "Stripe API version pin"
+  },
+  {
+   "id": 472,
+   "domain": "Backend Cloud Functions",
+   "title": "Firebase Admin init once"
+  },
+  {
+   "id": 473,
+   "domain": "Backend Cloud Functions",
+   "title": "CORS money endpoints locked"
+  },
+  {
+   "id": 474,
+   "domain": "Backend Cloud Functions",
+   "title": "Auth required all money POSTs"
+  },
+  {
+   "id": 475,
+   "domain": "Backend Cloud Functions",
+   "title": "Audit log write on wager"
+  },
+  {
+   "id": 476,
+   "domain": "Backend Cloud Functions",
+   "title": "Daily limits aggregation query index"
+  },
+  {
+   "id": 477,
+   "domain": "Backend Cloud Functions",
+   "title": "Compliance doc missing = deny"
+  },
+  {
+   "id": 478,
+   "domain": "Backend Cloud Functions",
+   "title": "kycStatus enum validate"
+  },
+  {
+   "id": 479,
+   "domain": "Backend Cloud Functions",
+   "title": "termsVersion string validate"
+  },
+  {
+   "id": 480,
+   "domain": "Backend Cloud Functions",
+   "title": "Region normalize US-XX"
+  },
+  {
+   "id": 481,
+   "domain": "Backend Cloud Functions",
+   "title": "Error codes stable for clients"
+  },
+  {
+   "id": 482,
+   "domain": "Backend Cloud Functions",
+   "title": "Retry-safe webhook handler"
+  },
+  {
+   "id": 483,
+   "domain": "Backend Cloud Functions",
+   "title": "Dead letter failed webhooks"
+  },
+  {
+   "id": 484,
+   "domain": "Backend Cloud Functions",
+   "title": "Metrics export money volume"
+  },
+  {
+   "id": 485,
+   "domain": "Backend Cloud Functions",
+   "title": "Staging Stripe keys separate"
+  },
+  {
+   "id": 486,
+   "domain": "Android Parity",
+   "title": "Android wager policy mirror"
+  },
+  {
+   "id": 487,
+   "domain": "Android Parity",
+   "title": "Android MoneyMath cents"
+  },
+  {
+   "id": 488,
+   "domain": "Android Parity",
+   "title": "google-services.json not committed"
+  },
+  {
+   "id": 489,
+   "domain": "Android Parity",
+   "title": "Android VS match compliance sheet"
+  },
+  {
+   "id": 490,
+   "domain": "Android Parity",
+   "title": "Phase-86 plan progress check"
+  },
+  {
+   "id": 491,
+   "domain": "Android Parity",
+   "title": "Android Stripe Identity"
+  },
+  {
+   "id": 492,
+   "domain": "Android Parity",
+   "title": "Android escrow CF client"
+  },
+  {
+   "id": 493,
+   "domain": "Android Parity",
+   "title": "Android Flicks player unify"
+  },
+  {
+   "id": 494,
+   "domain": "Android Parity",
+   "title": "Android downloads offline"
+  },
+  {
+   "id": 495,
+   "domain": "Android Parity",
+   "title": "Android DI pattern"
+  },
+  {
+   "id": 496,
+   "domain": "Android Parity",
+   "title": "Android secrets fail closed"
+  },
+  {
+   "id": 497,
+   "domain": "Android Parity",
+   "title": "Android unit tests money"
+  },
+  {
+   "id": 498,
+   "domain": "Android Parity",
+   "title": "Android TV plan phase-87"
+  },
+  {
+   "id": 499,
+   "domain": "Android Parity",
+   "title": "Keep google-services in gitignore"
+  },
+  {
+   "id": 500,
+   "domain": "Android Parity",
+   "title": "Document Android money gaps"
+  }
+ ]
+}

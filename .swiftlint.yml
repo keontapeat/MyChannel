@@ -34,11 +34,28 @@ excluded:
 
 # Custom rules
 custom_rules:
+  # DI migration: prefer DependencyContainer + @Injected over new `.shared` singletons.
+  # Enforced in CI via scripts/lint-no-new-shared.sh (baseline 3311 refs / 637 files).
+  # Do not add new `static let shared` without registering in DependencyContainer.
+  ban_new_shared_singleton:
+    name: "Ban New Shared Singletons"
+    regex: 'static\s+let\s+shared\s*='
+    message: "Prefer DependencyContainer.register + @Injected; see docs/injected-property-wrapper.md"
+    severity: warning
+
   # Catch potential duplicate declarations
   duplicate_type_name:
     name: "Duplicate Type Name"
     regex: '(struct|class|enum|protocol)\s+(\w+)'
     message: "Check for duplicate type names across files"
+    severity: warning
+
+  # Money paths — batch-7: discourage raw Double * 0.1 fee math in escrow utilities.
+  no_raw_platform_fee_in_money:
+    included: "MyChannel/Core/(Utils/MoneyMath|Services/MoneyEscrow|Services/MoneyEscrowing).*\\.swift"
+    name: "No raw * 0.1 fee in money paths"
+    regex: '\\*\\s*0\\.1'
+    message: "Use MoneyMath.platformFeeCents — never raw * 0.1 on settlement amounts"
     severity: warning
 
 # Reporter type

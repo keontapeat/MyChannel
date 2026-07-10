@@ -60,4 +60,43 @@ final class FeedMathTests: XCTestCase {
         XCTAssertFalse(FeedMath.isValidIndex(-1, total: 10))
         XCTAssertFalse(FeedMath.isValidIndex(0, total: 0))
     }
+
+    func testFeedPageSizeIs24() {
+        XCTAssertEqual(FeedMath.feedPageSize, 24)
+    }
+
+    func testClampIndexAfterFeedShrink() {
+        XCTAssertEqual(FeedMath.clampIndex(50, total: 10), 9)
+        XCTAssertEqual(FeedMath.clampIndex(-3, total: 10), 0)
+        XCTAssertEqual(FeedMath.clampIndex(0, total: 0), 0)
+    }
+
+    func testSafeElementReturnsNilForStaleIndex() {
+        let items = ["a", "b", "c"]
+        XCTAssertEqual(FeedMath.safeElement(items, index: 1), "b")
+        XCTAssertNil(FeedMath.safeElement(items, index: 99))
+        XCTAssertNil(FeedMath.safeElement([], index: 0))
+    }
+
+    func testFlicksCrashIndexRegression() {
+        // Reproduce the `0...(-1)` trap class without executing invalid ranges.
+        for total in [0, 1, 5, 10] {
+            for index in [-1, 0, 3, 50] {
+                let range = FeedMath.preloadRange(around: index, before: 1, after: 5, total: total)
+                if total == 0 {
+                    XCTAssertNil(range)
+                } else if let range {
+                    XCTAssertGreaterThanOrEqual(range.lowerBound, 0)
+                    XCTAssertLessThan(range.upperBound, total)
+                }
+                let clamped = FeedMath.clampIndex(index, total: total)
+                XCTAssertTrue(FeedMath.isValidIndex(clamped, total: total) || total == 0)
+            }
+        }
+    }
+
+    func testFlicksPrefetchWindowIsVisiblePlusOne() {
+        XCTAssertEqual(FeedMath.flicksPrefetchWindow(focusedIndex: 3, total: 10), 3...4)
+        XCTAssertNil(FeedMath.flicksPrefetchWindow(focusedIndex: 0, total: 0))
+    }
 }

@@ -18,11 +18,11 @@ final class MatchVerificationService: ObservableObject {
     @Published var pendingVerifications: [MatchVerification] = []
     @Published var isVerifying = false
     
-    // Services
+    // Services (escrow/wallet via DI — still backed by .shared factories today)
     private let db = Firestore.firestore()
     private let analysisService = GameplayVideoAnalysisService.shared
-    private let escrowService = MoneyEscrowService.shared
-    private let walletService = VSMatchWalletService.shared
+    @Injected private var escrowService: MoneyEscrowService
+    @Injected private var walletService: VSMatchWalletService
     
     // Constants
     private let autoApproveConfidenceThreshold = 0.9 // 90%
@@ -259,13 +259,14 @@ final class MatchVerificationService: ObservableObject {
         
         print("💰 [MatchVerification] Payout: $\(winnerPayout) (fee: $\(platformFee))")
         
-        // Step 1: Release escrow to winner (real Stripe Connect payout, settled
-        // server-side via the authenticated /create-transfer Cloud Function).
+        // Step 1: Release escrow to winner. Pass the GROSS pot (both wagers);
+        // MoneyEscrowService recomputes fee from held legs — do not pass net payout.
+        let grossPotDollars = MoneyMath.dollars(fromCents: grossCents)
         try await escrowService.releaseFunds(
             matchId: matchId,
             winnerId: winnerId,
             loserId: loserId,
-            totalPot: winnerPayout
+            totalPot: grossPotDollars
         )
         
         // Step 2: Winner crediting is handled SERVER-SIDE by the escrow settlement
@@ -394,13 +395,14 @@ final class MatchVerificationService: ObservableObject {
         // server settlement; this client value is a preview only.
         let grossCents = MoneyMath.cents(fromDollars: match.wagerAmount) * 2
         let winnerPayout = MoneyMath.dollars(fromCents: MoneyMath.winnerPayoutCents(grossCents: grossCents))
+        print("💰 [MatchVerification] Dispute payout preview: $\(winnerPayout)")
         
-        // Release escrow (real Stripe Connect payout, settled server-side).
+        // Release escrow with GROSS pot; escrow recomputes fee from held legs.
         try await escrowService.releaseFunds(
             matchId: matchId,
             winnerId: winnerId,
             loserId: loserId,
-            totalPot: winnerPayout
+            totalPot: MoneyMath.dollars(fromCents: grossCents)
         )
         
         // Winner crediting handled server-side by the escrow settlement above.

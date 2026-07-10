@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "playwright test",
+    "test:unit": "node --import tsx --test lib/wager-policy.test.ts 2>/dev/null || node --test lib/wager-policy.test.mjs",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "storybook": "storybook dev -p 6006",

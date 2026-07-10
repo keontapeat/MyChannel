@@ -66,4 +66,25 @@ final class MoneyMathTests: XCTestCase {
             XCTAssertEqual(fee + payout, pot, "fee + payout must equal the gross pot, no cents lost")
         }
     }
+
+    /// Property-style sweep: fee + payout identity across many pots.
+    func testFeePlusPayoutIdentityPropertySweep() {
+        for pot in stride(from: 0, through: 50_000, by: 137) {
+            let fee = MoneyMath.platformFeeCents(grossCents: pot)
+            let payout = MoneyMath.winnerPayoutCents(grossCents: pot)
+            XCTAssertEqual(fee + payout, pot)
+            XCTAssertGreaterThanOrEqual(payout, 0)
+        }
+    }
+
+    func testPartialRefundCentsIdentity() {
+        for gross in [100, 5000, 19_999, 100_000] {
+            for refund in [0, gross / 4, gross / 2, gross, gross + 500] {
+                let split = MoneyMath.partialRefundCents(grossCents: gross, requestedRefundCents: refund)
+                XCTAssertEqual(split.refund + split.retained, gross)
+                XCTAssertLessThanOrEqual(split.refund, gross)
+                XCTAssertGreaterThanOrEqual(split.retained, 0)
+            }
+        }
+    }
 }
