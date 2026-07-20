@@ -1183,9 +1183,21 @@ service cloud.firestore {
     }
     
     // 🔥 OPTIMIZED: Gaming collections
+    // 🔒 Match proof submissions feed the SERVER-SIDE winner determination in the
+    // /settle-match Cloud Function. A player may ONLY write their OWN submission
+    // (playerId must equal their uid). Previously any signed-in user could write
+    // ANY submission, so a single actor could fabricate BOTH players' self-
+    // consistent, auto-approvable submissions and drain escrow — this closes that.
+    // Read is limited to signed-in users (was world-readable, leaking scores +
+    // video URLs).
+    // NOTE (flagged): the AI scoreboard analysis (confidence / extractedScore) is
+    // still produced ON-DEVICE and trusted by /settle-match; true anti-cheat for
+    // high-value matches requires server-side video analysis.
     match /match_submissions/{document=**} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() &&
+                               request.resource.data.playerId == request.auth.uid;
+      allow delete: if isAdmin();
     }
     
     match /match_verifications/{document=**} {
