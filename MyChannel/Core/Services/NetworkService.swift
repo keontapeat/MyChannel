@@ -361,6 +361,15 @@ class NetworkService: ObservableObject {
     
     // MARK: - Authentication Token
     private func getAuthToken() async -> String? {
+        // Prefer a FRESH Firebase ID token — this is what the backend services
+        // (escrow, pay-api, content, moderation, …) verify server-side via the
+        // Admin SDK `verifyIdToken`. Firebase caches and auto-refreshes it, so it
+        // is cheap and never stale (a cached keychain token can be expired and
+        // would be rejected as 401 by those services).
+        if let token = try? await AuthTokenProvider.idToken() {
+            return token
+        }
+        // Fallback for legacy/unauthenticated paths where no Firebase user exists.
         return KeychainHelper.shared.getString(for: "userToken")
     }
     

@@ -33,6 +33,9 @@ final class StripeCreatorPayoutService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Money endpoint — always send the caller's Firebase ID token so the
+        // backend can authorize the payout as this creator.
+        try await AuthTokenProvider.authorize(&request)
         let body: [String: Any] = [
             "creator_uid": creatorUID,
             "amount_cents": Int(amount * 100),
