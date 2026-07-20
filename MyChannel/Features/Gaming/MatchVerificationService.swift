@@ -290,12 +290,13 @@ final class MatchVerificationService: ObservableObject {
         )
         // Step 3: match status is already recorded by /settle-match above.
         
-        // Step 4: Save verification record
+        // Step 4: Save verification record. Use the SERVER-verified winner/loser
+        // so the record can never diverge from who was actually paid.
         let verification = MatchVerification(
             id: matchId,
             matchId: matchId,
             status: .completed,
-            winnerId: winnerId,
+            winnerId: verifiedWinnerId,
             submissions: [submission1.id, submission2.id],
             autoApproved: autoApproved,
             confidence: min(submission1.aiAnalysis.confidence, submission2.aiAnalysis.confidence),
@@ -309,14 +310,14 @@ final class MatchVerificationService: ObservableObject {
         
         // Step 5: Send notifications
         await sendVerificationNotification(
-            winnerId: winnerId,
-            loserId: loserId,
+            winnerId: verifiedWinnerId,
+            loserId: verifiedLoserId,
             payout: winnerPayout
         )
         
         return MatchVerificationResult(
             status: .completed,
-            winnerId: winnerId,
+            winnerId: verifiedWinnerId,
             confidence: verification.confidence,
             requiresReview: false
         )

@@ -267,7 +267,7 @@ class VersusMatchService: ObservableObject, VersusMatching {
         // Match is over — detach its real-time listener so it doesn't leak.
         stopMonitoring(matchId: matchId)
         
-        print("✅ Match completed! Winner: \(winnerId), Payout: $\(winnerPayout)")
+        print("✅ Match completed! Winner: \(verifiedWinnerId), Payout: $\(winnerPayout)")
     }
     
     // MARK: - 📊 FETCH MATCHES
