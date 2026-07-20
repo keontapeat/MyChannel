@@ -1574,9 +1574,15 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
     
+    // 🔒 Top-level `subscriptions` = PAID MyChannel+ entitlements (checked via
+    // userId + status=='active' in the Plus benefit/stats services). Channel
+    // follows live in the users/{uid}/subscriptions SUBCOLLECTION, NOT here.
+    // Writing a doc here grants a paid entitlement, so it must be server-only
+    // (IAP/Stripe validation via Admin SDK, which bypasses rules). Previously
+    // write:isSignedIn() let any user grant themselves MyChannel+ for free.
     match /subscriptions/{document=**} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
     
     // Legacy snake_case community rules are defined narrowly below. Keep this
