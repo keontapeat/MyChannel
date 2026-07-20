@@ -3,11 +3,77 @@ import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import rate from '@fastify/rate-limit'
 import Stripe from 'stripe'
+import admin from 'firebase-admin'
 import pkg from 'pg'
 const { Pool } = pkg
 
 const stripe = new Stripe(process.env.STRIPE_SECRET || 'sk_test_123')
 const app = Fastify({ logger: true })
+
+// ─── Firebase Auth ────────────────────────────────────────────────────────────
+// verifyIdToken only needs the projectId (public certs are fetched from Google);
+// no service-account private key is required. In Cloud Run this uses ADC.
+if (!admin.apps.length) {
+  admin.initializeApp({
+    projectId:
+      process.env.GCLOUD_PROJECT ||
+      process.env.FIREBASE_PROJECT_ID ||
+      'mychannel-ca26d',
+  })
+}
+
+const ADMIN_UIDS = new Set(['7EAoUc1aKsNRqR4cYBIOYVGB3Mf2'])
+const ADMIN_EMAILS = new Set(['keontapeat@mychannel.live', 'keontapeat@gmail.com'])
+
+function isAdmin(decoded) {
+  return (
+    !!decoded &&
+    (decoded.admin === true ||
+      ADMIN_UIDS.has(decoded.uid) ||
+      (decoded.email_verified && ADMIN_EMAILS.has(decoded.email)))
+  )
+}
+
+// Verify the Firebase ID token on `Authorization: Bearer <token>`.
+// Returns the decoded token, or sends a 401 and returns null.
+async function requireAuth(req, reply) {
+  const header = req.headers.authorization || req.headers.Authorization || ''
+  const m = /^Bearer\s+(.+)$/i.exec(header)
+  if (!m) {
+    reply.code(401).send({ error: 'Missing or malformed Authorization header' })
+    return null
+  }
+  try {
+    return await admin.auth().verifyIdToken(m[1])
+  } catch (err) {
+    reply.code(401).send({ error: 'Invalid or expired authentication token' })
+    return null
+  }
+}
+
+// Require the authenticated caller to be `targetUserId` (or an admin).
+// Returns the decoded token, or sends 401/403 and returns null.
+async function requireSelfOrAdmin(req, reply, targetUserId) {
+  const decoded = await requireAuth(req, reply)
+  if (!decoded) return null
+  if (decoded.uid !== targetUserId && !isAdmin(decoded)) {
+    reply.code(403).send({ error: 'You are not authorized to act for this account' })
+    return null
+  }
+  return decoded
+}
+
+// Server-to-server guard for internal callers (e.g. the ads service crediting
+// creator ledgers). Uses a shared secret; never a client-reachable identity.
+function requireInternalSecret(req, reply) {
+  const provided = req.headers['x-internal-secret']
+  const expected = process.env.INTERNAL_SERVICE_SECRET
+  if (!expected || provided !== expected) {
+    reply.code(403).send({ error: 'Forbidden' })
+    return false
+  }
+  return true
+}
 
 // Raw body for Stripe webhook signature verification
 app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
@@ -84,7 +150,10 @@ async function getOrCreateStripeAccount(userId) {
 
 app.get('/health', async () => ({ status: 'ok' }))
 
-app.post('/migrate', async () => {
+app.post('/migrate', async (req, reply) => {
+  const decoded = await requireAuth(req, reply)
+  if (!decoded) return
+  if (!isAdmin(decoded)) { reply.code(403); return { error: 'Admin only' } }
   const { default: mod } = await import('./migrate.js')
   return { ok: true }
 })
@@ -93,6 +162,7 @@ app.post('/migrate', async () => {
 app.post('/pay/connect/link', async (req, reply) => {
   const { userId } = req.body || {}
   if (!userId) { reply.code(400); return { error: 'userId required' } }
+  if (!(await requireSelfOrAdmin(req, reply, userId))) return
 
   try {
     const { accountId } = await getOrCreateStripeAccount(userId)
@@ -117,6 +187,8 @@ app.post('/pay/connect/link', async (req, reply) => {
 app.post('/pay/withdraw', async (req, reply) => {
   const { creatorId, amount } = req.body || {}
   if (!creatorId || !amount) { reply.code(400); return { error: 'creatorId and amount required' } }
+  // 🔐 Only the creator (or an admin) may withdraw that creator's balance.
+  if (!(await requireSelfOrAdmin(req, reply, creatorId))) return
 
   // amount arrives as dollars (Double) from the iOS client — convert to cents
   const amountCents = Math.round(Number(amount) * 100)
@@ -208,6 +280,7 @@ app.post('/pay/withdraw', async (req, reply) => {
 // ─── Payout history ───────────────────────────────────────────────────────────
 app.get('/pay/creator/:userId/payouts', async (req, reply) => {
   const { userId } = req.params
+  if (!(await requireSelfOrAdmin(req, reply, userId))) return
   const balance = await getCreatorBalanceSummary(userId)
   const { rows } = await pool.query(
     `select id, amount, currency, direction, reference_type, reference_id, metadata, created_at
@@ -222,6 +295,7 @@ app.get('/pay/creator/:userId/payouts', async (req, reply) => {
 // ─── Stripe Connect account status ───────────────────────────────────────────
 app.get('/pay/connect/status/:userId', async (req, reply) => {
   const { userId } = req.params
+  if (!(await requireSelfOrAdmin(req, reply, userId))) return
   const { rows } = await pool.query(
     'select stripe_account_id, status from pay_accounts where user_id=$1 limit 1',
     [userId]
@@ -246,8 +320,9 @@ app.get('/pay/connect/status/:userId', async (req, reply) => {
 })
 
 // ─── Pay settings (monetization toggles) ─────────────────────────────────────
-app.get('/pay/settings/:userId', async (req) => {
+app.get('/pay/settings/:userId', async (req, reply) => {
   const { userId } = req.params
+  if (!(await requireSelfOrAdmin(req, reply, userId))) return
   const { rows } = await pool.query(
     'select stripe_account_id, status from pay_accounts where user_id=$1 limit 1',
     [userId]
@@ -259,15 +334,22 @@ app.get('/pay/settings/:userId', async (req) => {
   }
 })
 
-app.post('/pay/settings', async (req) => {
+app.post('/pay/settings', async (req, reply) => {
+  if (!(await requireAuth(req, reply))) return
   // Placeholder — settings are managed via Stripe Connect onboarding
   return { ok: true }
 })
 
 // ─── Tip intent (Stripe PaymentIntent for viewer tips) ───────────────────────
 app.post('/pay/tip/intent', async (req, reply) => {
+  const decoded = await requireAuth(req, reply)
+  if (!decoded) return
   const { toUserId, amount, currency = 'usd' } = req.body || {}
-  
+  const amountCents = Math.round(Number(amount))
+  if (!toUserId || !Number.isInteger(amountCents) || amountCents < 50) {
+    reply.code(400); return { error: 'Valid toUserId and amount (>= 50 cents) required' }
+  }
+
   if (!process.env.STRIPE_SECRET || process.env.STRIPE_SECRET === 'sk_test_123') {
     return {
       clientSecret: `pi_mock_${Date.now()}_secret_mock`,
@@ -280,17 +362,17 @@ app.post('/pay/tip/intent', async (req, reply) => {
   
   try {
     const paymentIntent = await stripe.paymentIntents.create({
-      amount,
+      amount: amountCents,
       currency,
       automatic_payment_methods: { enabled: true },
-      metadata: { type: 'tip', toUserId }
+      metadata: { type: 'tip', toUserId, fromUserId: decoded.uid }
     })
     return {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
       mode: 'stripe',
       currency,
-      amount
+      amount: amountCents
     }
   } catch (error) {
     reply.code(500)
@@ -300,32 +382,56 @@ app.post('/pay/tip/intent', async (req, reply) => {
 
 // ─── Tip confirmation ─────────────────────────────────────────────────────────
 app.post('/pay/tip', async (req, reply) => {
+  const decoded = await requireAuth(req, reply)
+  if (!decoded) return
   const { toUserId, amount, currency = 'usd', message, paymentIntentId } = req.body || {}
-  
+  if (!toUserId || !paymentIntentId) {
+    reply.code(400); return { error: 'toUserId and paymentIntentId required' }
+  }
+
   if (!process.env.STRIPE_SECRET || process.env.STRIPE_SECRET === 'sk_test_123') {
+    // Dev/mock mode only (no live Stripe key).
     const accountId = await ensureLedgerAccount(toUserId, 'creator')
     await pool.query(
       'insert into ledger_entries(account_id, amount, currency, direction, reference_type, metadata) values($1,$2,$3,$4,$5,$6)',
-      [accountId, amount, currency, 'credit', 'tip', JSON.stringify({ message: message || null, paymentIntentId: paymentIntentId || null })]
+      [accountId, Math.round(Number(amount) || 0), currency, 'credit', 'tip', JSON.stringify({ message: message || null, paymentIntentId: paymentIntentId || null })]
     )
     const balance = await getCreatorBalanceSummary(toUserId)
     return { ok: true, tipId: `tip_${Date.now()}`, transactionId: paymentIntentId || 'mock', balance }
   }
-  
+
   try {
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
     if (paymentIntent.status !== 'succeeded') {
       reply.code(400)
       return { error: 'Payment not completed' }
     }
+    // 🔐 The credited amount and recipient come from the VERIFIED Stripe charge,
+    // never from the client body — otherwise a caller could mint balance by
+    // reporting a large `amount` against a small real payment.
+    if (paymentIntent.metadata?.type !== 'tip' || paymentIntent.metadata?.toUserId !== toUserId) {
+      reply.code(400); return { error: 'Payment does not match this tip' }
+    }
+    const creditCents = paymentIntent.amount_received || paymentIntent.amount
+    const creditCurrency = paymentIntent.currency || currency
+
+    // Idempotency: never credit the same PaymentIntent twice (guards against a
+    // client replaying a succeeded PI to mint repeated credits).
+    const dup = await pool.query(
+      `select 1 from ledger_entries where reference_type='tip' and reference_id=$1 limit 1`,
+      [paymentIntentId]
+    )
     const accountId = await ensureLedgerAccount(toUserId, 'creator')
-    const tipId = `tip_${Date.now()}`
+    if (dup.rowCount > 0) {
+      const balance = await getCreatorBalanceSummary(toUserId)
+      return { ok: true, tipId: paymentIntentId, transactionId: paymentIntentId, balance, duplicate: true }
+    }
     await pool.query(
-      'insert into ledger_entries(account_id, amount, currency, direction, reference_type, metadata) values($1,$2,$3,$4,$5,$6)',
-      [accountId, amount, currency, 'credit', 'tip', JSON.stringify({ message: message || null, paymentIntentId, stripeChargeId: paymentIntent.latest_charge || null })]
+      'insert into ledger_entries(account_id, amount, currency, direction, reference_type, reference_id, metadata) values($1,$2,$3,$4,$5,$6,$7)',
+      [accountId, creditCents, creditCurrency, 'credit', 'tip', paymentIntentId, JSON.stringify({ message: message || null, paymentIntentId, fromUserId: paymentIntent.metadata?.fromUserId || decoded.uid, stripeChargeId: paymentIntent.latest_charge || null })]
     )
     const balance = await getCreatorBalanceSummary(toUserId)
-    return { ok: true, tipId, transactionId: paymentIntentId, balance }
+    return { ok: true, tipId: paymentIntentId, transactionId: paymentIntentId, balance }
   } catch (error) {
     reply.code(500)
     return { error: error.message }
@@ -337,25 +443,48 @@ app.post('/pay/tip', async (req, reply) => {
 // Apple takes 30%, MyChannel takes 10% of remaining = 7% total.
 // Creator gets 63% of the original purchase price.
 app.post('/pay/tip/iap', async (req, reply) => {
+  const decoded = await requireAuth(req, reply)
+  if (!decoded) return
   const { fromUserId, toUserId, amount, currency = 'usd', message, transactionId, productId, credits } = req.body || {}
-  
+
   if (!fromUserId || !toUserId || !amount || !transactionId) {
     reply.code(400)
     return { error: 'Missing required fields' }
   }
+  // The purchaser must be the authenticated caller.
+  if (decoded.uid !== fromUserId && !isAdmin(decoded)) {
+    reply.code(403); return { error: 'You can only send tips from your own account' }
+  }
+  const amountCents = Math.round(Number(amount))
+  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+    reply.code(400); return { error: 'Invalid amount' }
+  }
 
-  // Verify the Apple transaction (in production, validate with Apple's servers)
-  // For now, trust the client — add server-side receipt validation in production
-  
+  // ⚠️ TODO (flagged): validate `transactionId` against Apple's App Store Server
+  // API (verifyReceipt / transaction lookup) BEFORE crediting. Until that is
+  // wired, a caller could claim IAP credits they never purchased. Auth + the
+  // idempotency guard below limit blast radius, but receipt verification is
+  // required before this is trusted for real money.
+
+  // Idempotency: an Apple transactionId may only ever credit once.
+  const dupIap = await pool.query(
+    `select 1 from ledger_entries where reference_type='tip' and metadata->>'transactionId'=$1 limit 1`,
+    [transactionId]
+  )
+  if (dupIap.rowCount > 0) {
+    const balance = await getCreatorBalanceSummary(toUserId)
+    return { ok: true, tipId: transactionId, balance, duplicate: true }
+  }
+
   const accountId = await ensureLedgerAccount(toUserId, 'creator')
   const tipId = `iap_tip_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  
+
   await pool.query(
     `insert into ledger_entries(account_id, amount, currency, direction, reference_type, reference_id, metadata)
      values($1,$2,$3,$4,$5,$6,$7)`,
     [
       accountId,
-      amount,
+      amountCents,
       currency,
       'credit',
       'tip',
@@ -380,16 +509,24 @@ app.post('/pay/tip/iap', async (req, reply) => {
 })
 
 // ─── Tip credit balance (for IAP system) ──────────────────────────────────────
-app.get('/pay/tip/balance/:userId', async (req) => {
+app.get('/pay/tip/balance/:userId', async (req, reply) => {
   const { userId } = req.params
+  if (!(await requireSelfOrAdmin(req, reply, userId))) return
   // In a credit-based system, track purchased credits separately
   // For now, return 0 — implement credit ledger if needed
   return { credits: 0 }
 })
 
 // ─── Ad settlement (from ads service) ────────────────────────────────────────
-app.post('/pay/settlement', async (req) => {
+// 🔐 Server-to-server only: credits a creator's ledger, so it must never be
+// client-reachable. Guarded by a shared internal secret (the ads service sends
+// x-internal-secret). Without this, anyone could mint arbitrary creator balance.
+app.post('/pay/settlement', async (req, reply) => {
+  if (!requireInternalSecret(req, reply)) return
   const { creatorId, amountCents = 0, currency = 'usd', campaignId = null, lineItemId = null, settlementDate = null } = req.body || {}
+  if (!creatorId || !Number.isInteger(amountCents) || amountCents <= 0) {
+    reply.code(400); return { error: 'creatorId and positive integer amountCents required' }
+  }
   const accountId = await ensureLedgerAccount(creatorId, 'creator')
   await pool.query(
     'insert into ledger_entries(account_id, amount, currency, direction, reference_type, metadata) values($1,$2,$3,$4,$5,$6)',
@@ -400,8 +537,9 @@ app.post('/pay/settlement', async (req) => {
 })
 
 // ─── Creator balance summary ──────────────────────────────────────────────────
-app.get('/pay/creator/:userId/summary', async (req) => {
+app.get('/pay/creator/:userId/summary', async (req, reply) => {
   const { userId } = req.params
+  if (!(await requireSelfOrAdmin(req, reply, userId))) return
   const balance = await getCreatorBalanceSummary(userId)
   const { rows: recentEntries } = await pool.query(
     'select amount, currency, direction, reference_type, metadata, created_at from ledger_entries where account_id=$1 order by created_at desc limit 20',
@@ -483,9 +621,9 @@ app.post('/pay/webhooks/stripe', async (req, reply) => {
 // ─── Scheduled Payouts (auto-withdraw when balance hits threshold) ────────────
 app.post('/pay/scheduled-payouts/run', async (req, reply) => {
   const authHeader = req.headers.authorization
-  const cronSecret = process.env.CRON_SECRET || 'dev-secret-123'
-  
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  // Fail closed: no weak default secret. If CRON_SECRET is unset, reject.
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     reply.code(401)
     return { error: 'Unauthorized' }
   }
@@ -536,6 +674,7 @@ app.post('/pay/scheduled-payouts/run', async (req, reply) => {
 // ─── Tax Reporting (1099 generation for US creators) ──────────────────────────
 app.get('/pay/tax/1099/:userId/:year', async (req, reply) => {
   const { userId, year } = req.params
+  if (!(await requireSelfOrAdmin(req, reply, userId))) return
   const yearInt = parseInt(year, 10)
   if (!yearInt || yearInt < 2020 || yearInt > new Date().getFullYear()) {
     reply.code(400)
@@ -592,6 +731,7 @@ app.get('/pay/tax/1099/:userId/:year', async (req, reply) => {
 
 // ─── Multi-Currency Support ───────────────────────────────────────────────────
 app.post('/pay/currency/convert', async (req, reply) => {
+  if (!(await requireAuth(req, reply))) return
   const { amount, fromCurrency = 'usd', toCurrency = 'usd' } = req.body || {}
   
   if (!amount || amount <= 0) {
@@ -629,6 +769,7 @@ app.post('/pay/settings/auto-payout', async (req, reply) => {
     reply.code(400)
     return { error: 'userId required' }
   }
+  if (!(await requireSelfOrAdmin(req, reply, userId))) return
 
   await pool.query(
     `update pay_accounts set auto_payout_enabled=$1, auto_payout_threshold=$2 where user_id=$3`,
