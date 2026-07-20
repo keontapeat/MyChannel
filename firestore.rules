@@ -60,6 +60,51 @@ service cloud.firestore {
     function isValidSize(data, maxFields) {
       return data.size() <= maxFields;
     }
+
+    function isValidWebPollOption(option) {
+      return option is map &&
+             option.keys().hasOnly(['text', 'votes']) &&
+             option.text is string &&
+             option.text.size() > 0 && option.text.size() <= 100 &&
+             option.votes == 0;
+    }
+
+    function hasValidInitialWebPoll(data) {
+      return data.type != 'poll'
+        ? !('poll' in data)
+        : ('poll' in data &&
+           data.poll is list &&
+           data.poll.size() >= 2 && data.poll.size() <= 4 &&
+           isValidWebPollOption(data.poll[0]) &&
+           isValidWebPollOption(data.poll[1]) &&
+           (data.poll.size() < 3 || isValidWebPollOption(data.poll[2])) &&
+           (data.poll.size() < 4 || isValidWebPollOption(data.poll[3])));
+    }
+
+    function isValidIOSPollOption(option) {
+      return option is map &&
+             option.keys().hasOnly(['text', 'voteCount']) &&
+             option.text is string &&
+             option.text.size() > 0 && option.text.size() <= 100 &&
+             option.voteCount == 0;
+    }
+
+    function hasValidInitialIOSPoll(data) {
+      return data.type != 'poll'
+        ? !('poll' in data)
+        : ('poll' in data &&
+           data.poll is map &&
+           data.poll.keys().hasOnly(['question', 'options', 'totalVotes']) &&
+           data.poll.question is string &&
+           data.poll.question.size() > 0 && data.poll.question.size() <= 200 &&
+           data.poll.totalVotes == 0 &&
+           data.poll.options is list &&
+           data.poll.options.size() >= 2 && data.poll.options.size() <= 4 &&
+           isValidIOSPollOption(data.poll.options[0]) &&
+           isValidIOSPollOption(data.poll.options[1]) &&
+           (data.poll.options.size() < 3 || isValidIOSPollOption(data.poll.options[2])) &&
+           (data.poll.options.size() < 4 || isValidIOSPollOption(data.poll.options[3])));
+    }
     
     // ========================================
     // 🖼️ IMAGE URL VALIDATION HELPERS
@@ -116,50 +161,164 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
-    // Videos - 🔥 OPTIMIZED: Split read/write rules for better cache
-    // 🖼️ Validates thumbnailURL to prevent blocked image sources
+    // Videos - public metadata reads remain compatible with existing clients;
+    // owner-bound raw ingest and all pipeline outputs are server-authoritative.
     match /videos/{videoId} {
-      // Public read (cached by Firebase)
       allow read: if true;
-      
-      // Create (auth check + ownership + image URL validation)
-      allow create: if isSignedIn() && 
+
+      allow create: if isSignedIn() &&
                        request.resource.data.creatorId == request.auth.uid &&
                        isValidSize(request.resource.data, 50) &&
-                       (!('thumbnailURL' in request.resource.data) || 
-                        isValidImageURL(request.resource.data.thumbnailURL));
-      
-      // Update: owner/admin for full edits, OR any signed-in user for
-      // engagement-only counter increments (viewCount, likeCount, dislikeCount,
-      // shareCount, commentCount) to support view tracking.
-      allow update: if isSignedIn() && (
-                       (request.auth.uid == resource.data.creatorId || isAdmin()) &&
                        (!('thumbnailURL' in request.resource.data) ||
-                        isValidImageURL(request.resource.data.thumbnailURL))
-                    ) || (
-                       isSignedIn() &&
-                       // 'status' intentionally removed from this allowlist: it is
-                       // the client-owned VISIBILITY field (public/unlisted/private/
-                       // scheduled) and must only change via the owner/admin branch
-                       // above. The transcode/moderation pipeline's lifecycle field
-                       // is 'processingStatus' (distinct field, allowed here) — see
-                       // functions/main.py notes on the on_upload_created_trigger /
-                       // transcode_webhook / moderate_video_on_upload writers.
-                       request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['viewCount','likeCount','dislikeCount','shareCount','commentCount','lastViewedAt','updatedAt','totalWatchTime','trendingScore','trendingUpdatedAt','searchKeywords','searchIndexedAt','processingStatus','hlsURL','dashURL','videoURL','qualityVariants','transcodeJobId','transcodeCompletedAt','transcodeError','thumbnailCandidates'])
+                        isValidImageURL(request.resource.data.thumbnailURL)) &&
+                       (!('sourcePath' in request.resource.data) ||
+                        (request.resource.data.userId == request.auth.uid &&
+                         request.resource.data.channelId == request.auth.uid &&
+                         request.resource.data.sourcePath ==
+                           'gs://mychannel-ca26d.firebasestorage.app/temp_uploads/' +
+                           request.auth.uid + '/' + videoId + '/source.mp4' &&
+                         request.resource.data.processingStatus == 'uploaded' &&
+                         request.resource.data.visibility in [
+                           'public', 'unlisted', 'private', 'scheduled'
+                         ] &&
+                         request.resource.data.status == request.resource.data.visibility &&
+                         request.resource.data.privacyStatus in [
+                           'public', 'unlisted', 'private'
+                         ]));
+
+      // Only the creator may edit metadata. Identity, source, engagement,
+      // ranking, moderation, search and processing fields are trusted-only.
+      allow update: if isSignedIn() && (
+                       isAdmin() ||
+                       (request.auth.uid == resource.data.creatorId &&
+                        !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny([
+                            'creatorId', 'userId', 'channelId', 'sourcePath',
+                            'createdAt', 'uploadedAt', 'viewCount', 'likeCount',
+                            'dislikeCount', 'shareCount', 'commentCount',
+                            'totalWatchTime', 'lastViewedAt', 'lastEngagementAt',
+                            'trendingScore', 'trendingUpdatedAt', 'searchKeywords',
+                            'searchIndexedAt', 'processingStatus', 'hlsURL',
+                            'dashURL', 'videoURL', 'qualityVariants', 'fileSize',
+                            'transcodeJobId', 'transcodeCompletedAt', 'transcodeError',
+                            'thumbnailCandidates', 'moderationStatus',
+                            'moderationScore', 'moderationPriority',
+                            'moderationUpdatedAt', 'reportCount'
+                          ]) &&
+                        (!request.resource.data.diff(resource.data).affectedKeys()
+                           .hasAny(['thumbnailURL']) ||
+                         isValidImageURL(request.resource.data.thumbnailURL)))
                     );
-      
-      allow delete: if isSignedIn() && 
+
+      allow delete: if isSignedIn() &&
                        (request.auth.uid == resource.data.creatorId || isAdmin());
+    }
+
+    // Deterministic handoff from a completed private source upload to the
+    // trusted transcode pipeline. Clients can create once, but cannot mutate
+    // lifecycle state or redirect a reservation to another object/owner.
+    match /uploads/{uploadId} {
+      // Missing deterministic IDs may be probed by authenticated retry logic;
+      // existing marker data remains owner/admin-only and collection scans deny.
+      allow get: if isSignedIn() &&
+                   (!exists(/databases/$(database)/documents/uploads/$(uploadId)) ||
+                    isAdmin() || resource.data.ownerUid == request.auth.uid);
+      allow list: if false;
+      allow create: if isSignedIn() &&
+                       uploadId == request.resource.data.videoId &&
+                       request.resource.data.ownerUid == request.auth.uid &&
+                       request.resource.data.status == 'uploaded' &&
+                       request.resource.data.createdAt == request.time &&
+                       request.resource.data.updatedAt == request.time &&
+                       request.resource.data.keys().hasOnly([
+                         'videoId', 'ownerUid', 'sourcePath', 'status',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       request.resource.data.sourcePath ==
+                         'gs://mychannel-ca26d.firebasestorage.app/temp_uploads/' +
+                         request.auth.uid + '/' + uploadId + '/source.mp4' &&
+                       existsAfter(/databases/$(database)/documents/videos/$(uploadId)) &&
+                       getAfter(/databases/$(database)/documents/videos/$(uploadId)).data.creatorId ==
+                         request.auth.uid &&
+                       getAfter(/databases/$(database)/documents/videos/$(uploadId)).data.sourcePath ==
+                         request.resource.data.sourcePath;
+      allow update, delete: if false;
+    }
+
+    // Immutable client engagement facts. Aggregates are folded by Cloud Functions.
+    // Event payloads are type-specific, bound to an existing video, and use safe
+    // session identifiers so server-side semantic ledgers can reject replays.
+    match /videos/{videoId}/events/{eventId} {
+      allow read: if false;
+      allow create: if isSignedIn() &&
+                       exists(/databases/$(database)/documents/videos/$(videoId)) &&
+                       request.resource.data.userId == request.auth.uid &&
+                       eventId.size() > 0 && eventId.size() <= 256 &&
+                       request.resource.data.keys().hasOnly([
+                         'userId', 'type', 'sessionId', 'createdAt',
+                         'watchTime', 'completionRate'
+                       ]) &&
+                       request.resource.data.type in [
+                         'view', 'like', 'unlike', 'dislike', 'undislike',
+                         'comment', 'comment_like', 'comment_unlike',
+                         'comment_heart', 'comment_unheart', 'share', 'watch_time'
+                       ] &&
+                       request.resource.data.sessionId is string &&
+                       request.resource.data.sessionId.matches('^[A-Za-z0-9_-]{1,128}$') &&
+                       request.resource.data.createdAt == request.time &&
+                       (
+                         (request.resource.data.type == 'watch_time' &&
+                          request.resource.data.watchTime is number &&
+                          request.resource.data.watchTime > 0 &&
+                          request.resource.data.watchTime <= 86400 &&
+                          (!('completionRate' in request.resource.data) ||
+                           (request.resource.data.completionRate is number &&
+                            request.resource.data.completionRate >= 0 &&
+                            request.resource.data.completionRate <= 1))) ||
+                         (request.resource.data.type != 'watch_time' &&
+                          !('watchTime' in request.resource.data) &&
+                          !('completionRate' in request.resource.data))
+                       );
+      allow update, delete: if false;
     }
 
     match /videos/{videoId}/comments/{commentId} {
       allow read: if true;
       allow create: if isSignedIn() &&
                        request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasOnly([
+                         'userId', 'displayName', 'avatarURL', 'text', 'createdAt',
+                         'likeCount', 'replyCount', 'isPinned', 'creatorHearted',
+                         'parentCommentId'
+                       ]) &&
+                       request.resource.data.text is string &&
+                       request.resource.data.text.size() > 0 &&
+                       request.resource.data.text.size() <= 10000 &&
+                       request.resource.data.createdAt == request.time &&
+                       request.resource.data.likeCount == 0 &&
+                       request.resource.data.replyCount == 0 &&
+                       request.resource.data.isPinned == false &&
+                       request.resource.data.creatorHearted == false &&
+                       (request.resource.data.parentCommentId == null ||
+                        request.resource.data.parentCommentId is string) &&
                        isValidSize(request.resource.data, 20);
-      allow update, delete: if isSignedIn() &&
-                              (request.auth.uid == resource.data.userId || isAdmin());
+      allow update: if isSignedIn() && (
+                      isAdmin() ||
+                      (request.auth.uid == resource.data.userId &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['text', 'updatedAt']) &&
+                       request.resource.data.text is string &&
+                       request.resource.data.text.size() > 0 &&
+                       request.resource.data.text.size() <= 10000) ||
+                      ((request.auth.uid ==
+                        get(/databases/$(database)/documents/videos/$(videoId)).data.creatorId ||
+                        request.auth.uid ==
+                        get(/databases/$(database)/documents/videos/$(videoId)).data.userId) &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['isPinned']))
+                    );
+      allow delete: if isSignedIn() &&
+                      (request.auth.uid == resource.data.userId || isAdmin());
     }
 
     match /videos/{videoId}/comments/{commentId}/likes/{userId} {
@@ -219,32 +378,55 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
     
-    // Flicks - 🔥 OPTIMIZED: Inline creator check + image validation
-    // (formerly the "shorts" collection — renamed to "flicks")
+    // Flicks (formerly the "shorts" collection)
     match /flicks/{flickId} {
       allow read: if true;
-      allow create: if isSignedIn() && 
+      allow create: if isSignedIn() &&
                        request.resource.data.creatorId == request.auth.uid &&
+                       request.resource.data.get('viewCount', 0) == 0 &&
+                       request.resource.data.get('likeCount', 0) == 0 &&
+                       request.resource.data.get('commentCount', 0) == 0 &&
+                       request.resource.data.get('shareCount', 0) == 0 &&
+                       request.resource.data.get('totalWatchTime', 0) == 0 &&
                        isValidSize(request.resource.data, 30) &&
-                       (!('thumbnailURL' in request.resource.data) || 
+                       (!('thumbnailURL' in request.resource.data) ||
                         isValidImageURL(request.resource.data.thumbnailURL));
-      // 🔒 SECURITY: engagement counters are NO LONGER client-writable.
-      // Clients record engagement by creating userId-stamped docs in the
-      // /events subcollection below; the onFlickEngagementEvent Cloud Function
-      // aggregates those into these counters via the Admin SDK. This makes
-      // view/like/share/comment counts server-authoritative and non-spoofable.
-      // Only the owner or an admin may edit the flick document itself.
-      allow update: if (isCreator(resource.data.creatorId) || isAdmin()) &&
-                       (!('thumbnailURL' in request.resource.data) || 
-                        isValidImageURL(request.resource.data.thumbnailURL));
+      // Engagement, moderation, identity, and ranking fields are trusted-only.
+      allow update: if isAdmin() ||
+                       (isCreator(resource.data.creatorId) &&
+                        !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny([
+                            'creatorId', 'userId', 'viewCount', 'likeCount',
+                            'commentCount', 'shareCount', 'totalWatchTime',
+                            'lastEngagementAt', 'reportCount', 'moderationStatus',
+                            'moderationScore', 'trendingScore'
+                          ]) &&
+                        (!request.resource.data.diff(resource.data).affectedKeys()
+                           .hasAny(['thumbnailURL']) ||
+                         isValidImageURL(request.resource.data.thumbnailURL)));
       allow delete: if isCreator(resource.data.creatorId) || isAdmin();
     }
 
     match /flicks/{flickId}/events/{eventId} {
       allow read: if false;
       allow create: if isSignedIn() &&
+                       exists(/databases/$(database)/documents/flicks/$(flickId)) &&
                        request.resource.data.userId == request.auth.uid &&
-                       request.resource.data.type in ['view', 'like', 'unlike', 'comment', 'share', 'watch_time'];
+                       request.resource.data.keys().hasOnly([
+                         'userId', 'type', 'sessionId', 'createdAt', 'watchTime'
+                       ]) &&
+                       request.resource.data.type in [
+                         'view', 'like', 'unlike', 'share', 'watch_time'
+                       ] &&
+                       request.resource.data.sessionId is string &&
+                       request.resource.data.sessionId.size() > 0 &&
+                       request.resource.data.sessionId.size() <= 128 &&
+                       request.resource.data.createdAt == request.time &&
+                       (request.resource.data.type == 'watch_time'
+                         ? (request.resource.data.watchTime is number &&
+                            request.resource.data.watchTime > 0 &&
+                            request.resource.data.watchTime <= 86400)
+                         : !('watchTime' in request.resource.data));
       allow update, delete: if false;
     }
 
@@ -363,14 +545,37 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
-    // Story replies (DMs from viewers to creator) - 🔥 SECURE
+    // Story replies are immutable sender-authored facts. Trusted Functions
+    // validate the target again, aggregate counters, and create notifications.
     match /story_replies/{replyId} {
-      // Sender or creator can read their thread
       allow read: if isSignedIn() &&
                      (request.auth.uid == resource.data.senderId ||
                       request.auth.uid == resource.data.creatorId);
       allow create: if isSignedIn() &&
-                       request.resource.data.senderId == request.auth.uid;
+                       request.resource.data.keys().hasOnly([
+                         'storyId', 'creatorId', 'senderId', 'text',
+                         'createdAt', 'status'
+                       ]) &&
+                       request.resource.data.senderId == request.auth.uid &&
+                       request.resource.data.storyId is string &&
+                       request.resource.data.storyId.size() > 0 &&
+                       request.resource.data.storyId.size() <= 256 &&
+                       request.resource.data.creatorId is string &&
+                       request.resource.data.creatorId.size() > 0 &&
+                       request.resource.data.creatorId.size() <= 128 &&
+                       request.resource.data.text is string &&
+                       request.resource.data.text.size() > 0 &&
+                       request.resource.data.text.size() <= 2000 &&
+                       request.resource.data.createdAt == request.time &&
+                       request.resource.data.status == 'sent' &&
+                       exists(/databases/$(database)/documents/stories/$(request.resource.data.storyId)) &&
+                       request.resource.data.creatorId ==
+                         get(/databases/$(database)/documents/stories/$(request.resource.data.storyId))
+                           .data.get(
+                             'creatorId',
+                             get(/databases/$(database)/documents/stories/$(request.resource.data.storyId))
+                               .data.get('userId', '')
+                           );
       allow update, delete: if false;
     }
 
@@ -396,17 +601,30 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
 
-    // 🔔 Notifications inbox (flat collection, queried by userId field)
-    // Used by NotificationsInboxService + StoryActionService story replies.
+    // 🔔 Notifications inbox (flat collection, queried by userId field).
+    // Story replies are trusted-only; remaining legacy client-created types stay
+    // temporarily enabled until their server-authoritative migrations complete.
     match /notifications/{notificationId} {
       allow read: if isSignedIn() &&
                      (resource == null || request.auth.uid == resource.data.userId);
-      // Any signed-in user may create a notification addressed to another user
-      // (e.g. story reply, mention). Must stamp the recipient userId.
       allow create: if isSignedIn() &&
-                       request.resource.data.userId is string;
-      // Only the recipient can mark read / delete.
-      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+                       request.resource.data.userId is string &&
+                       request.resource.data.type is string &&
+                       request.resource.data.type != 'storyReply' &&
+                       (!(request.resource.data.type in [
+                         'system', 'incident_escalation'
+                       ]) || isAdmin());
+      // Recipients may only change read-state fields; notification content and
+      // routing remain immutable after creation.
+      allow update: if isSignedIn() &&
+                       request.auth.uid == resource.data.userId &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['isRead', 'read']) &&
+                       (!('isRead' in request.resource.data) ||
+                        request.resource.data.isRead is bool) &&
+                       (!('read' in request.resource.data) ||
+                        request.resource.data.read is bool);
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
     }
     // Nested notifications written by Cloud Functions (notifications/{uid}/items/*)
     match /notifications/{userId}/items/{itemId} {
@@ -465,13 +683,29 @@ service cloud.firestore {
     match /users/{userId}/feedSignals/{document=**} {
       allow read, write: if isOwner(userId);
     }
-    match /users/{userId}/subscriptions/{document=**} {
-      allow read, write: if isOwner(userId);
+    match /users/{userId}/subscriptions/{creatorId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) &&
+                              userId != creatorId &&
+                              (exists(/databases/$(database)/documents/users/$(creatorId)) ||
+                               exists(/databases/$(database)/documents/channels/$(creatorId))) &&
+                              isValidSize(request.resource.data, 16) &&
+                              request.resource.data.keys().hasOnly([
+                                'channelId', 'subscribedAt', 'notificationLevel',
+                                'engagementScore', 'watchTimeTotal', 'videosWatched',
+                                'isActive', 'source', 'updatedAt',
+                                'predictedEngagement', 'predictedAt'
+                              ]) &&
+                              (!('channelId' in request.resource.data) ||
+                               request.resource.data.channelId == creatorId) &&
+                              request.resource.data.subscribedAt is timestamp &&
+                              (!('notificationLevel' in request.resource.data) ||
+                               request.resource.data.notificationLevel in ['all', 'personalized', 'none']);
+      allow delete: if isOwner(userId);
     }
     match /users/{userId}/subscribers/{subscriberId} {
       allow read: if isOwner(userId) || isOwner(subscriberId) || isAdmin();
-      allow create, delete: if isOwner(subscriberId);
-      allow update: if false;
+      allow write: if false;
     }
     match /users/{userId}/watch_history/{document=**} {
       allow read, write: if isOwner(userId);
@@ -522,24 +756,20 @@ service cloud.firestore {
                         isValidImageURL(request.resource.data.bannerURL)) &&
                        (!('bannerImageURL' in request.resource.data) || 
                         isValidImageURL(request.resource.data.bannerImageURL)) &&
-                       // ⚖️ 3-Strike moderation fields are admin-only. A regular
-                       // owner-of-doc update may never touch these — otherwise a
-                       // user could un-ban/un-suspend/un-shadowban themselves or
-                       // erase their own strike count.
+                       // Moderation and subscriber aggregates are server-owned.
+                       // Regular profile owners may never mutate these fields.
                        (isAdmin() ||
                         !request.resource.data.diff(resource.data).affectedKeys()
                           .hasAny(['banned','bannedAt','suspended','suspendedUntil',
                                    'suspendDays','shadowbanned','shadowbannedAt',
-                                   'strikeCount','strikesCleared','lastStrikeAt']))
+                                   'strikeCount','strikesCleared','lastStrikeAt',
+                                   'subscriberCount','subscribersCount']))
                     ) || (
-                       // 🏆 RANKING: any signed-in user may increment ONLY the
-                       // engagement counters on another creator's profile (so views,
-                       // likes, and subscriber counts can roll up to feed the Top
-                       // shelves). This is scoped to these exact fields — it can't be
-                       // used to edit profile data, verification, or anything else.
+                       // Legacy view/like rollups remain temporarily available
+                       // while their callers migrate to trusted event aggregation.
                        isSignedIn() &&
                        request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['totalViews','subscriberCount','likeCount','updatedAt','lastActiveAt'])
+                         .hasOnly(['totalViews','likeCount','updatedAt','lastActiveAt'])
                     );
       allow delete: if isOwner(userId) || isAdmin();
     }
@@ -587,9 +817,28 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
 
-    // Per-user Flick like state (count increments go through flick events → trigger)
-    match /users/{userId}/flickLikes/{flickId} {
+    // Private per-user comment reaction marker. Public counts are folded from
+    // immutable video events by Cloud Functions, never written by clients.
+    match /users/{userId}/commentLikes/{commentId} {
       allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/liveStreamLikes/{streamId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Per-user Flick like state. The deterministic marker is canonical; trusted
+    // Functions fold create/delete transitions into the public aggregate.
+    match /users/{userId}/flickLikes/{flickId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) &&
+                       exists(/databases/$(database)/documents/flicks/$(flickId)) &&
+                       request.resource.data.keys().hasOnly(['flickId', 'createdAt']) &&
+                       request.resource.data.flickId == flickId &&
+                       request.resource.data.createdAt == request.time;
+      allow update: if false;
+      allow delete: if isOwner(userId);
     }
 
     // ✅ STUDIO PARITY: watch history written by WatchPageClient on every play
@@ -611,9 +860,25 @@ service cloud.firestore {
       allow write: if isOwner(userId) || isAdmin();
     }
 
-    // ✅ FCM tokens — private to the owning user; server cleanup can delete stale ones
+    // FCM tokens are private and schema-bound. Trusted delivery can deactivate
+    // or delete stale tokens through the Admin SDK; clients can only register
+    // tokens for their own account and cannot smuggle arbitrary profile fields.
     match /users/{userId}/fcmTokens/{tokenId} {
-      allow read, write: if isOwner(userId);
+      allow get, list: if isOwner(userId);
+      allow create, update: if isOwner(userId) &&
+                              tokenId.size() > 0 && tokenId.size() <= 1500 &&
+                              request.resource.data.keys().hasOnly([
+                                'token', 'platform', 'active',
+                                'registeredAt', 'updatedAt'
+                              ]) &&
+                              request.resource.data.token == tokenId &&
+                              request.resource.data.platform in [
+                                'ios', 'android', 'web', 'unknown'
+                              ] &&
+                              request.resource.data.active is bool &&
+                              request.resource.data.registeredAt is timestamp &&
+                              request.resource.data.updatedAt == request.time;
+      allow delete: if isOwner(userId);
     }
 
     // ✅ Per-user recommendation results written by precompute_recommendations
@@ -727,23 +992,61 @@ service cloud.firestore {
     match /versus_matches/{matchId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidSize(request.resource.data, 40);
-      allow update: if isSignedIn() && 
-                       (request.auth.uid == resource.data.challengerId || 
-                        request.auth.uid == resource.data.opponentId ||
-                        isAdmin());
+      // Participants may advance the match through its non-terminal lifecycle
+      // (accept / decline / start) and write their own play data, but the
+      // OUTCOME + MONEY fields are server-authoritative. Only an admin / Cloud
+      // Function (the /settle-match endpoint via Admin SDK) may set the winner,
+      // payout, verified scores, or move status into a settlement state
+      // ('completed' / 'disputed'). This stops a participant from declaring
+      // itself the winner and draining escrow through /create-transfer, while
+      // preserving client-driven match acceptance.
+      allow update: if isAdmin() ||
+                       (isSignedIn() &&
+                        (request.auth.uid == resource.data.challengerId ||
+                         request.auth.uid == resource.data.opponentId) &&
+                        !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['winnerId', 'loserId',
+                                   'payoutTransferId', 'paidOutAt', 'completedAt',
+                                   'winnerPayout', 'platformFee', 'verifiedScores',
+                                   'verificationMethod',
+                                   'wagerAmount', 'wagerAmountCents',
+                                   'challengerId', 'opponentId']) &&
+                        (request.resource.data.status == resource.data.status ||
+                         request.resource.data.status in
+                           ['pending', 'open', 'accepted', 'declined', 'live', 'cancelled']));
       allow delete: if isAdmin();
     }
     
+    // ⚠️ Legacy/duplicate of versus_matches (underscore). All live code (iOS
+    // VersusMatchService, web money-contract) uses versus_matches; this
+    // hyphenated collection appears unused. Locked down from its previous
+    // world-readable + any-signed-in-write state, which was a data-leak/abuse
+    // surface (real-money records world-readable, any user could edit any doc).
+    // If a live path still needs it, migrate that path to versus_matches.
     match /vs-matches/{matchId} {
-      allow read: if true;
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isAdmin();
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
     
     // 🔥 PERFORMANCE: Group VS Match private data
     match /vs_match_compliance/{userId} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      // Admin / Cloud Functions (the Stripe Identity webhook uses the Admin SDK,
+      // which bypasses these rules) may write anything, including KYC approval.
+      allow write: if isAdmin();
+      // The owner may self-service age attestation, terms acceptance, and KYC
+      // *submission* — but may NEVER grant themselves KYC approval. Only the
+      // server can move kycStatus to 'approved' or set kycApprovedAt. This is what
+      // makes the $500 KYC gate and the escrow compliance check un-forgeable from
+      // a modified client, which previously had full write access to this doc.
+      allow create: if isOwner(userId)
+                    && request.resource.data.get('kycStatus', 'none') != 'approved'
+                    && !('kycApprovedAt' in request.resource.data);
+      allow update: if isOwner(userId)
+                    && !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['kycApprovedAt'])
+                    && (request.resource.data.get('kycStatus', 'none') != 'approved'
+                        || resource.data.get('kycStatus', 'none') == 'approved');
     }
     
     // 🔐 VS-match wallet balances are real money — server-written only (Admin SDK).
@@ -768,11 +1071,21 @@ service cloud.firestore {
                       isAdmin());
       // Create allowed for signed-in users; the doc must stamp them as a party
       // to the transaction (prevents writing transactions for other users).
-      allow create: if isSignedIn() &&
-                       (request.resource.data.userId == request.auth.uid ||
-                        request.resource.data.winnerId == request.auth.uid ||
-                        request.resource.data.loserId == request.auth.uid ||
-                        isAdmin());
+      // Two abuse vectors are closed here:
+      //   1. type == 'wager' rows gate the per-user daily wager limit and are
+      //      written by the escrow Cloud Function (Admin SDK) ONLY. A client must
+      //      never mint them — a negative-amount 'wager' row would push the daily
+      //      sum down and defeat the cap in assertWagerCompliance().
+      //   2. amount must be a non-negative number when present.
+      allow create: if isAdmin() ||
+                       (isSignedIn() &&
+                        (request.resource.data.userId == request.auth.uid ||
+                         request.resource.data.winnerId == request.auth.uid ||
+                         request.resource.data.loserId == request.auth.uid) &&
+                        request.resource.data.type != 'wager' &&
+                        (!('amount' in request.resource.data) ||
+                         (request.resource.data.amount is number &&
+                          request.resource.data.amount >= 0)));
       allow update, delete: if isAdmin();
     }
     
@@ -1038,12 +1351,121 @@ service cloud.firestore {
 
     match /live_streams/{streamId} {
       allow read: if true;
-      allow create: if isSignedIn() && isValidSize(request.resource.data, 40);
-      allow update, delete: if isSignedIn() &&
-                              (request.auth.uid == resource.data.streamerId ||
-                               request.auth.uid == resource.data.creatorId ||
-                               request.auth.uid == resource.data.userId ||
-                               isAdmin());
+      allow create: if isSignedIn() &&
+                       isValidSize(request.resource.data, 40) &&
+                       (request.resource.data.streamerId == request.auth.uid ||
+                        request.resource.data.creatorId == request.auth.uid ||
+                        request.resource.data.userId == request.auth.uid) &&
+                       !('streamKey' in request.resource.data) &&
+                       !('hlsURL' in request.resource.data) &&
+                       !('hlsUrl' in request.resource.data) &&
+                       !('playbackURL' in request.resource.data) &&
+                       !('playbackUrl' in request.resource.data) &&
+                       (!('status' in request.resource.data) ||
+                        request.resource.data.status == 'scheduled') &&
+                       (!('viewerCount' in request.resource.data) ||
+                        request.resource.data.viewerCount == 0) &&
+                       (!('peakViewerCount' in request.resource.data) ||
+                        request.resource.data.peakViewerCount == 0) &&
+                       (!('likeCount' in request.resource.data) ||
+                        request.resource.data.likeCount == 0) &&
+                       (!('shareCount' in request.resource.data) ||
+                        request.resource.data.shareCount == 0);
+      allow update: if isAdmin() ||
+                       (isSignedIn() &&
+                        (request.auth.uid == resource.data.streamerId ||
+                         request.auth.uid == resource.data.creatorId ||
+                         request.auth.uid == resource.data.userId) &&
+                        !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny([
+                            'streamerId', 'creatorId', 'userId', 'streamKey',
+                            'hlsURL', 'hlsUrl', 'playbackURL', 'playbackUrl',
+                            'status', 'startedAt', 'endedAt', 'viewerCount',
+                            'peakViewerCount', 'likeCount', 'shareCount'
+                          ]));
+      allow delete: if isAdmin() ||
+                       (isSignedIn() &&
+                        (request.auth.uid == resource.data.streamerId ||
+                         request.auth.uid == resource.data.creatorId ||
+                         request.auth.uid == resource.data.userId));
+    }
+
+    // Immutable viewer QoE facts. Clients can submit only their own bounded
+    // samples; Cloud Functions fold them into creator-visible aggregates.
+    match /live_streams/{streamId}/qoe_events/{eventId} {
+      allow read: if false;
+      allow create: if isSignedIn() &&
+                       exists(/databases/$(database)/documents/live_streams/$(streamId)) &&
+                       request.resource.data.userId == request.auth.uid &&
+                       eventId.size() > 0 && eventId.size() <= 256 &&
+                       request.resource.data.keys().hasOnly([
+                         'userId', 'sessionId', 'eventType', 'createdAt',
+                         'startupMs', 'rebufferMs', 'liveLatencyMs',
+                         'bitrateKbps', 'width', 'height', 'droppedFrames',
+                         'errorCode'
+                       ]) &&
+                       request.resource.data.sessionId is string &&
+                       request.resource.data.sessionId.matches('^[A-Za-z0-9_-]{1,128}$') &&
+                       request.resource.data.eventType in [
+                         'startup', 'rebuffer', 'heartbeat', 'error', 'end'
+                       ] &&
+                       request.resource.data.createdAt == request.time &&
+                       (!('startupMs' in request.resource.data) ||
+                         (request.resource.data.startupMs is number &&
+                          request.resource.data.startupMs >= 0 &&
+                          request.resource.data.startupMs <= 120000)) &&
+                       (!('rebufferMs' in request.resource.data) ||
+                         (request.resource.data.rebufferMs is number &&
+                          request.resource.data.rebufferMs >= 0 &&
+                          request.resource.data.rebufferMs <= 120000)) &&
+                       (!('liveLatencyMs' in request.resource.data) ||
+                         (request.resource.data.liveLatencyMs is number &&
+                          request.resource.data.liveLatencyMs >= 0 &&
+                          request.resource.data.liveLatencyMs <= 300000)) &&
+                       (!('bitrateKbps' in request.resource.data) ||
+                         (request.resource.data.bitrateKbps is number &&
+                          request.resource.data.bitrateKbps >= 0 &&
+                          request.resource.data.bitrateKbps <= 100000)) &&
+                       (!('width' in request.resource.data) ||
+                         (request.resource.data.width is number &&
+                          request.resource.data.width >= 0 &&
+                          request.resource.data.width <= 8192)) &&
+                       (!('height' in request.resource.data) ||
+                         (request.resource.data.height is number &&
+                          request.resource.data.height >= 0 &&
+                          request.resource.data.height <= 8192)) &&
+                       (!('droppedFrames' in request.resource.data) ||
+                         (request.resource.data.droppedFrames is number &&
+                          request.resource.data.droppedFrames >= 0 &&
+                          request.resource.data.droppedFrames <= 100000)) &&
+                       (!('errorCode' in request.resource.data) ||
+                         (request.resource.data.errorCode is string &&
+                          request.resource.data.errorCode.size() <= 64));
+      allow update, delete: if false;
+    }
+
+    match /live_streams/{streamId}/engagement_events/{eventId} {
+      allow read: if false;
+      allow create: if isSignedIn() &&
+                       exists(/databases/$(database)/documents/live_streams/$(streamId)) &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasOnly([
+                         'userId', 'type', 'sessionId', 'createdAt'
+                       ]) &&
+                       request.resource.data.type in ['like', 'unlike', 'share'] &&
+                       request.resource.data.sessionId is string &&
+                       request.resource.data.sessionId.matches('^[A-Za-z0-9_-]{1,128}$') &&
+                       request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /live_stream_quality_signals/{streamId}/{document=**} {
+      allow read: if isSignedIn() &&
+                    (get(/databases/$(database)/documents/live_streams/$(streamId)).data.creatorId == request.auth.uid ||
+                     get(/databases/$(database)/documents/live_streams/$(streamId)).data.streamerId == request.auth.uid ||
+                     get(/databases/$(database)/documents/live_streams/$(streamId)).data.userId == request.auth.uid ||
+                     isAdmin());
+      allow write: if isAdmin();
     }
 
     match /liveStreams/{streamId} {
@@ -1145,9 +1567,10 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
     
+    // Legacy snake_case community rules are defined narrowly below. Keep this
+    // wildcard deny so broad signed-in writes cannot bypass nested fact rules.
     match /community_posts/{document=**} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read, write: if false;
     }
     
     // Playlists - 🔥 OPTIMIZED
@@ -1485,9 +1908,11 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
     
+    // Subscription feeds are server-authored projections. The specific owner-read
+    // rule below grants access to feeds/{uid}/items/{videoId}; this broad legacy
+    // matcher must not make every feed publicly readable or client-writable.
     match /feeds/{document=**} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read, write: if false;
     }
     
     // ========================================
@@ -1608,18 +2033,115 @@ service cloud.firestore {
     // ========================================
     
     match /reports/{reportId} {
-      allow read: if isSignedIn() && 
-                     (request.auth.uid == resource.data.reporterId || isAdmin());
-      allow create: if isSignedIn();
-      allow update: if isAdmin();
+      allow read: if isSignedIn() &&
+                     (request.auth.uid == resource.data.reporterId ||
+                      request.auth.uid == resource.data.reporterUid || isAdmin());
+      // Temporary compatibility for old signed clients. Payloads are still
+      // identity-bound and tightly shaped; new clients use content_reports.
+      allow create: if isSignedIn() && isValidSize(request.resource.data, 10) && (
+                      (request.resource.data.keys().hasOnly([
+                         'id', 'reporterId', 'reportedUserId', 'reason',
+                         'timestamp', 'status', 'type'
+                       ]) &&
+                       request.resource.data.type == 'user_report' &&
+                       request.resource.data.reporterId == request.auth.uid &&
+                       request.resource.data.reportedUserId is string &&
+                       request.resource.data.reportedUserId.size() > 0 &&
+                       request.resource.data.reportedUserId.size() <= 256 &&
+                       request.resource.data.reason is string &&
+                       request.resource.data.reason.size() > 0 &&
+                       request.resource.data.reason.size() <= 200 &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.timestamp == request.time) ||
+                      (request.resource.data.keys().hasOnly([
+                         'type', 'itemId', 'reason', 'reporterUid', 'targetUid',
+                         'messageContent', 'createdAt'
+                       ]) &&
+                       request.resource.data.type == 'chat_message' &&
+                       request.resource.data.reporterUid == request.auth.uid &&
+                       request.resource.data.itemId is string &&
+                       request.resource.data.itemId.size() > 0 &&
+                       request.resource.data.itemId.size() <= 256 &&
+                       request.resource.data.targetUid is string &&
+                       request.resource.data.reason is string &&
+                       request.resource.data.reason.size() > 0 &&
+                       request.resource.data.reason.size() <= 200 &&
+                       request.resource.data.messageContent is string &&
+                       request.resource.data.messageContent.size() <= 10000 &&
+                       request.resource.data.createdAt is timestamp &&
+                       request.resource.data.createdAt <= request.time &&
+                       request.resource.data.createdAt >= request.time - duration.value(5, 'm'))
+                    );
+      allow update, delete: if isAdmin();
     }
 
     match /content_reports/{reportId} {
       allow read: if isSignedIn() &&
-                    (request.auth.uid == resource.data.reporterId ||
-                     request.auth.uid == resource.data.reportedBy ||
-                     isAdmin());
-      allow create: if isSignedIn();
+                    (request.auth.uid == resource.data.reporterId || isAdmin());
+      allow create: if isSignedIn() &&
+                       request.resource.data.reporterId == request.auth.uid &&
+                       isValidSize(request.resource.data, 12) &&
+                       request.resource.data.keys().hasOnly([
+                         'type', 'contentId', 'contentCreatorId', 'reporterId',
+                         'reason', 'reasonTitle', 'details', 'status', 'reviewed',
+                         'createdAt', 'videoId', 'streamId'
+                       ]) &&
+                       request.resource.data.type in [
+                         'video', 'flick', 'comment', 'live_stream', 'user', 'chat_message'
+                       ] &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.reviewed == false &&
+                       request.resource.data.createdAt == request.time &&
+                       request.resource.data.contentId is string &&
+                       request.resource.data.contentId.size() > 0 &&
+                       request.resource.data.contentId.size() <= 256 &&
+                       request.resource.data.contentCreatorId is string &&
+                       request.resource.data.contentCreatorId.size() > 0 &&
+                       request.resource.data.contentCreatorId.size() <= 256 &&
+                       request.resource.data.reason is string &&
+                       request.resource.data.reason.size() > 0 &&
+                       request.resource.data.reason.size() <= 200 &&
+                       (!('reasonTitle' in request.resource.data) ||
+                        (request.resource.data.reasonTitle is string &&
+                         request.resource.data.reasonTitle.size() <= 100)) &&
+                       (!('details' in request.resource.data) ||
+                        (request.resource.data.details is string &&
+                         request.resource.data.details.size() > 0 &&
+                         request.resource.data.details.size() <= 1000)) &&
+                       (!('videoId' in request.resource.data) ||
+                        (request.resource.data.videoId is string &&
+                         request.resource.data.videoId.size() > 0 &&
+                         request.resource.data.videoId.size() <= 256)) &&
+                       (!('streamId' in request.resource.data) ||
+                        (request.resource.data.streamId is string &&
+                         request.resource.data.streamId.size() > 0 &&
+                         request.resource.data.streamId.size() <= 256)) &&
+                       (
+                         (request.resource.data.type == 'video' &&
+                          exists(/databases/$(database)/documents/videos/$(request.resource.data.contentId)) &&
+                          (get(/databases/$(database)/documents/videos/$(request.resource.data.contentId)).data.get('creatorId', '') == request.resource.data.contentCreatorId ||
+                           get(/databases/$(database)/documents/videos/$(request.resource.data.contentId)).data.get('userId', '') == request.resource.data.contentCreatorId)) ||
+                         (request.resource.data.type == 'flick' &&
+                          exists(/databases/$(database)/documents/flicks/$(request.resource.data.contentId)) &&
+                          (get(/databases/$(database)/documents/flicks/$(request.resource.data.contentId)).data.get('creatorId', '') == request.resource.data.contentCreatorId ||
+                           get(/databases/$(database)/documents/flicks/$(request.resource.data.contentId)).data.get('userId', '') == request.resource.data.contentCreatorId)) ||
+                         (request.resource.data.type == 'comment' &&
+                          request.resource.data.videoId is string &&
+                          exists(/databases/$(database)/documents/videos/$(request.resource.data.videoId)/comments/$(request.resource.data.contentId)) &&
+                          get(/databases/$(database)/documents/videos/$(request.resource.data.videoId)/comments/$(request.resource.data.contentId)).data.get('userId', '') == request.resource.data.contentCreatorId) ||
+                         (request.resource.data.type == 'live_stream' &&
+                          exists(/databases/$(database)/documents/live_streams/$(request.resource.data.contentId)) &&
+                          (get(/databases/$(database)/documents/live_streams/$(request.resource.data.contentId)).data.get('streamerId', '') == request.resource.data.contentCreatorId ||
+                           get(/databases/$(database)/documents/live_streams/$(request.resource.data.contentId)).data.get('creatorId', '') == request.resource.data.contentCreatorId ||
+                           get(/databases/$(database)/documents/live_streams/$(request.resource.data.contentId)).data.get('userId', '') == request.resource.data.contentCreatorId)) ||
+                         (request.resource.data.type == 'user' &&
+                          request.resource.data.contentCreatorId == request.resource.data.contentId &&
+                          exists(/databases/$(database)/documents/users/$(request.resource.data.contentId))) ||
+                         (request.resource.data.type == 'chat_message' &&
+                          request.resource.data.streamId is string &&
+                          exists(/databases/$(database)/documents/live/$(request.resource.data.streamId)/messages/$(request.resource.data.contentId)) &&
+                          get(/databases/$(database)/documents/live/$(request.resource.data.streamId)/messages/$(request.resource.data.contentId)).data.get('userId', '') == request.resource.data.contentCreatorId)
+                       );
       allow update, delete: if isAdmin();
     }
     
@@ -1976,20 +2498,51 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ✅ Community posts
+    // ✅ Community posts (legacy snake_case iOS contract)
     match /community_posts/{postId} {
       allow read: if true;
-      allow create: if isSignedIn();
+      allow create: if isSignedIn() &&
+                       request.resource.data.creatorId == request.auth.uid &&
+                       request.resource.data.likeCount == 0 &&
+                       request.resource.data.commentCount == 0 &&
+                       hasValidInitialIOSPoll(request.resource.data) &&
+                       isValidSize(request.resource.data, 30);
       allow update: if isSignedIn() &&
-                       (resource.data.creatorId == request.auth.uid || isAdmin() ||
-                        // Allow vote count updates from any signed-in user
-                        request.resource.data.diff(resource.data).affectedKeys()
-                          .hasOnly(['pollOptions','totalVotes','likeCount','commentCount','updatedAt']));
-      allow delete: if isSignedIn() && (resource.data.creatorId == request.auth.uid || isAdmin());
+                       (isAdmin() ||
+                        (resource.data.creatorId == request.auth.uid &&
+                         !request.resource.data.diff(resource.data).affectedKeys()
+                           .hasAny([
+                             'creatorId', 'likeCount', 'commentCount', 'poll',
+                             'lastEngagementAt'
+                           ])));
+      allow delete: if isSignedIn() &&
+                       (resource.data.creatorId == request.auth.uid || isAdmin());
+
+      match /likes/{userId} {
+        allow get: if isOwner(userId) || isAdmin();
+        allow list: if false;
+        allow create: if isOwner(userId) &&
+                         exists(/databases/$(database)/documents/community_posts/$(postId)) &&
+                         request.resource.data.keys().hasOnly(['userId', 'likedAt']) &&
+                         (!('userId' in request.resource.data) ||
+                          request.resource.data.userId == userId) &&
+                         request.resource.data.likedAt == request.time;
+        allow update: if false;
+        allow delete: if isOwner(userId);
+      }
 
       match /votes/{userId} {
-        allow read: if true;
-        allow create: if isOwner(userId);
+        allow get: if isOwner(userId) || isAdmin();
+        allow list: if false;
+        allow create: if isOwner(userId) &&
+                         exists(/databases/$(database)/documents/community_posts/$(postId)) &&
+                         get(/databases/$(database)/documents/community_posts/$(postId)).data.poll.options is list &&
+                         request.resource.data.keys().hasOnly(['optionIndex', 'votedAt']) &&
+                         request.resource.data.optionIndex is int &&
+                         request.resource.data.optionIndex >= 0 &&
+                         request.resource.data.optionIndex <
+                           get(/databases/$(database)/documents/community_posts/$(postId)).data.poll.options.size() &&
+                         request.resource.data.votedAt == request.time;
         allow update, delete: if false;
       }
     }
@@ -2361,30 +2914,115 @@ service cloud.firestore {
     // 🎵 MUSIC PLATFORM (DistroKid / Apple / Spotify parity)
     // ========================================
 
-    // Catalog: tracks are publicly readable (streaming); only the owning artist
-    // (or admin) can create/edit/delete. Streams increment counters from any
-    // signed-in listener via a constrained update.
+    // Public catalog reads expose only published tracks; owners/admins can inspect
+    // their private upload and review state. Client creates are an exact,
+    // owner-bound metadata shape with trusted counters and lifecycle defaults.
     match /music_tracks/{trackId} {
-      allow read: if true;
-      allow create: if isSignedIn() && creatingOwnArtistData();
-      // 🔐 MONEY-SAFE: payouts are computed as streamCount × rate, so streamCount
-      // is NEVER client-writable — it is incremented server-side (Admin SDK) by the
-      // incrementStreamCountOnPlay trigger from validated music_plays events. This
-      // closes the "mint your own streams → cash out" exploit.
-      // Two allowed client writes:
-      //   1) Owner/admin editing catalog metadata, but streamCount must be unchanged.
-      //   2) Any signed-in listener flipping NON-payout engagement counters
-      //      (likeCount, lastViewedAt, updatedAt) — streamCount excluded.
-      allow update: if isSignedIn() && (
-                       (
-                         (resource.data.artistId == request.auth.uid || isAdmin()) &&
-                         request.resource.data.streamCount == resource.data.streamCount
-                       ) || (
-                         request.resource.data.diff(resource.data).affectedKeys()
-                           .hasOnly(['likeCount','lastViewedAt','updatedAt'])
-                       )
-                    );
-      allow delete: if isSignedIn() && (resource.data.artistId == request.auth.uid || isAdmin());
+      allow read: if (resource.data.isPublished == true &&
+                      resource.data.status == 'published') ||
+                     (isSignedIn() &&
+                      (resource.data.artistId == request.auth.uid || isAdmin()));
+      allow create: if isSignedIn() &&
+                       request.resource.data.keys().hasOnly([
+                         'id', 'title', 'artistId', 'artistName', 'albumName',
+                         'genre', 'isExplicit', 'duration', 'description',
+                         'lyrics', 'artworkURL', 'status', 'moderationStatus',
+                         'isPublished', 'streamCount', 'likeCount', 'createdAt',
+                         'uploadedAt'
+                       ]) &&
+                       request.resource.data.keys().hasAll([
+                         'id', 'title', 'artistId', 'artistName', 'genre',
+                         'isExplicit', 'status', 'moderationStatus',
+                         'isPublished', 'streamCount', 'likeCount', 'createdAt',
+                         'uploadedAt'
+                       ]) &&
+                       request.resource.data.id == trackId &&
+                       request.resource.data.artistId == request.auth.uid &&
+                       request.resource.data.title is string &&
+                       request.resource.data.title.size() > 0 &&
+                       request.resource.data.title.size() <= 200 &&
+                       request.resource.data.artistName is string &&
+                       request.resource.data.artistName.size() > 0 &&
+                       request.resource.data.artistName.size() <= 120 &&
+                       request.resource.data.genre is string &&
+                       request.resource.data.genre.size() > 0 &&
+                       request.resource.data.genre.size() <= 64 &&
+                       request.resource.data.isExplicit is bool &&
+                       (!('albumName' in request.resource.data) ||
+                        request.resource.data.albumName == null ||
+                        (request.resource.data.albumName is string &&
+                         request.resource.data.albumName.size() <= 200)) &&
+                       (!('description' in request.resource.data) ||
+                        (request.resource.data.description is string &&
+                         request.resource.data.description.size() <= 2000)) &&
+                       (!('lyrics' in request.resource.data) ||
+                        (request.resource.data.lyrics is string &&
+                         request.resource.data.lyrics.size() <= 50000)) &&
+                       (!('duration' in request.resource.data) ||
+                        request.resource.data.duration == null ||
+                        (request.resource.data.duration is number &&
+                         request.resource.data.duration > 0 &&
+                         request.resource.data.duration <= 86400)) &&
+                       (!('artworkURL' in request.resource.data) ||
+                        request.resource.data.artworkURL == null ||
+                        (request.resource.data.artworkURL is string &&
+                         request.resource.data.artworkURL.size() <= 2048 &&
+                         isValidImageURL(request.resource.data.artworkURL))) &&
+                       request.resource.data.status == 'pending_review' &&
+                       request.resource.data.moderationStatus == 'pending_review' &&
+                       request.resource.data.isPublished == false &&
+                       request.resource.data.streamCount == 0 &&
+                       request.resource.data.likeCount == 0 &&
+                       request.resource.data.createdAt == request.time &&
+                       request.resource.data.uploadedAt == request.time;
+
+      // Owners may edit bounded catalog metadata only. Identity, engagement,
+      // moderation/publication, media pipeline, distribution and payout fields
+      // are intentionally absent from this allowlist and remain trusted-only.
+      allow update: if isAdmin() ||
+                       (isSignedIn() &&
+                        resource.data.artistId == request.auth.uid &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly([
+                            'title', 'albumName', 'genre', 'isExplicit',
+                            'description', 'lyrics', 'artworkURL', 'updatedAt'
+                          ]) &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['updatedAt']) &&
+                        request.resource.data.updatedAt == request.time &&
+                        request.resource.data.title is string &&
+                        request.resource.data.title.size() > 0 &&
+                        request.resource.data.title.size() <= 200 &&
+                        request.resource.data.genre is string &&
+                        request.resource.data.genre.size() > 0 &&
+                        request.resource.data.genre.size() <= 64 &&
+                        request.resource.data.isExplicit is bool &&
+                        (!('albumName' in request.resource.data) ||
+                         request.resource.data.albumName == null ||
+                         (request.resource.data.albumName is string &&
+                          request.resource.data.albumName.size() <= 200)) &&
+                        (!('description' in request.resource.data) ||
+                         (request.resource.data.description is string &&
+                          request.resource.data.description.size() <= 2000)) &&
+                        (!('lyrics' in request.resource.data) ||
+                         (request.resource.data.lyrics is string &&
+                          request.resource.data.lyrics.size() <= 50000)) &&
+                        (!('artworkURL' in request.resource.data) ||
+                         request.resource.data.artworkURL == null ||
+                         (request.resource.data.artworkURL is string &&
+                          request.resource.data.artworkURL.size() <= 2048 &&
+                          isValidImageURL(request.resource.data.artworkURL))));
+      allow delete: if isSignedIn() &&
+                       (resource.data.artistId == request.auth.uid || isAdmin());
+    }
+
+    // Private source-master and handoff metadata. The owner/admin may inspect a
+    // known document, but only trusted Admin SDK services may create or mutate it.
+    match /music_track_processing/{trackId} {
+      allow get: if isSignedIn() &&
+                   (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow list: if false;
+      allow create, update, delete: if false;
     }
 
     // Albums / EPs
@@ -2403,16 +3041,11 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // 🔐 Play events drive payout-bearing stream counts. A listener may only
-    // CREATE a play event stamped with their own listenerId; they can never edit
-    // or delete one. A server trigger (incrementStreamCountOnPlay) folds these
-    // into music_tracks.streamCount, so the payout basis is never client-set.
+    // Payout-bearing play facts are accepted only through trusted backend
+    // ingestion. Admin SDK writers bypass rules; clients cannot mint plays.
     match /music_plays/{playId} {
       allow read: if isAdmin();
-      allow create: if isSignedIn() &&
-                       (!('listenerId' in request.resource.data) ||
-                        request.resource.data.listenerId == request.auth.uid);
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     // Per-listener rollup (keyed by uid) used by analytics.
@@ -2457,8 +3090,12 @@ service cloud.firestore {
       allow create, update, delete: if isSignedIn() && (ownsArtistData() || creatingOwnArtistData() || isAdmin());
     }
     match /music_track_collaborators/{trackId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn() && (ownsArtistData() || creatingOwnArtistData() || isAdmin());
+      allow get: if isSignedIn() &&
+                   (resource.data.ownerArtistId == request.auth.uid || isAdmin());
+      allow list: if false;
+      // Split basis points and payee identity are money-authoritative.
+      // Admin SDK services bypass rules; no client may write these documents.
+      allow create, update, delete: if false;
     }
     match /music_track_versions/{versionId} {
       allow read: if true;
@@ -2502,6 +3139,116 @@ service cloud.firestore {
       allow create, update: if isOwner(artistId) &&
                        (!('photos' in request.resource.data) || true);
       allow delete: if isOwner(artistId) || isAdmin();
+    }
+
+    // Flint artist discovery profiles are public, but ownership is bound to the
+    // authenticated UID. Verification, activity, audience, stream and tip fields
+    // are initialized safely and remain server-authoritative after creation.
+    match /flint-artists/{artistId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+                       request.resource.data.mychannel_user_id == request.auth.uid &&
+                       request.resource.data.keys().hasOnly([
+                         'id', 'name', 'stage_name', 'bio', 'genres', 'hometown',
+                         'profile_image_url', 'banner_image_url',
+                         'apple_music_artist_id', 'apple_music_url',
+                         'instagram_handle', 'twitter_handle', 'tiktok_handle',
+                         'youtube_channel_id', 'spotify_artist_id',
+                         'soundcloud_url', 'website_url', 'is_verified',
+                         'verified_at', 'verification_badge', 'member_since',
+                         'last_active', 'total_streams', 'monthly_listeners',
+                         'follower_count', 'total_tips', 'featured_track_ids',
+                         'featured_playlist_id', 'latest_release_date',
+                         'mychannel_user_id', 'mychannel_videos'
+                       ]) &&
+                       request.resource.data.keys().hasAll([
+                         'id', 'name', 'genres', 'hometown', 'is_verified',
+                         'verification_badge', 'member_since', 'total_streams',
+                         'monthly_listeners', 'follower_count', 'total_tips',
+                         'featured_track_ids', 'mychannel_user_id',
+                         'mychannel_videos'
+                       ]) &&
+                       request.resource.data.id == artistId &&
+                       request.resource.data.mychannel_user_id == request.auth.uid &&
+                       request.resource.data.name is string &&
+                       request.resource.data.name.size() > 0 &&
+                       request.resource.data.name.size() <= 120 &&
+                       request.resource.data.hometown is string &&
+                       request.resource.data.hometown.size() > 0 &&
+                       request.resource.data.hometown.size() <= 120 &&
+                       request.resource.data.genres is list &&
+                       request.resource.data.genres.size() <= 10 &&
+                       request.resource.data.featured_track_ids is list &&
+                       request.resource.data.featured_track_ids.size() <= 100 &&
+                       request.resource.data.mychannel_videos is list &&
+                       request.resource.data.mychannel_videos.size() <= 100 &&
+                       request.resource.data.is_verified == false &&
+                       (!('verified_at' in request.resource.data) ||
+                        request.resource.data.verified_at == null) &&
+                       request.resource.data.verification_badge in ['none', 'rising'] &&
+                       request.resource.data.member_since is timestamp &&
+                       request.resource.data.member_since <= request.time &&
+                       request.resource.data.member_since >= request.time - duration.value(5, 'm') &&
+                       (!('last_active' in request.resource.data) ||
+                        request.resource.data.last_active == null) &&
+                       request.resource.data.total_streams == 0 &&
+                       request.resource.data.monthly_listeners == 0 &&
+                       request.resource.data.follower_count == 0 &&
+                       request.resource.data.total_tips == 0 &&
+                       (!('bio' in request.resource.data) ||
+                        request.resource.data.bio == null ||
+                        (request.resource.data.bio is string &&
+                         request.resource.data.bio.size() <= 2000)) &&
+                       (!('profile_image_url' in request.resource.data) ||
+                        request.resource.data.profile_image_url == null ||
+                        (request.resource.data.profile_image_url is string &&
+                         request.resource.data.profile_image_url.size() <= 2048 &&
+                         isValidImageURL(request.resource.data.profile_image_url))) &&
+                       (!('banner_image_url' in request.resource.data) ||
+                        request.resource.data.banner_image_url == null ||
+                        (request.resource.data.banner_image_url is string &&
+                         request.resource.data.banner_image_url.size() <= 2048 &&
+                         isValidImageURL(request.resource.data.banner_image_url)));
+      allow update: if isSignedIn() &&
+                       resource.data.mychannel_user_id == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly([
+                           'name', 'stage_name', 'bio', 'genres', 'hometown',
+                           'profile_image_url', 'banner_image_url',
+                           'apple_music_artist_id', 'apple_music_url',
+                           'instagram_handle', 'twitter_handle', 'tiktok_handle',
+                           'youtube_channel_id', 'spotify_artist_id',
+                           'soundcloud_url', 'website_url', 'featured_track_ids',
+                           'featured_playlist_id', 'latest_release_date',
+                           'mychannel_videos'
+                         ]) &&
+                       request.resource.data.name is string &&
+                       request.resource.data.name.size() > 0 &&
+                       request.resource.data.name.size() <= 120 &&
+                       request.resource.data.hometown is string &&
+                       request.resource.data.hometown.size() > 0 &&
+                       request.resource.data.hometown.size() <= 120 &&
+                       request.resource.data.genres is list &&
+                       request.resource.data.genres.size() <= 10 &&
+                       request.resource.data.featured_track_ids is list &&
+                       request.resource.data.featured_track_ids.size() <= 100 &&
+                       request.resource.data.mychannel_videos is list &&
+                       request.resource.data.mychannel_videos.size() <= 100 &&
+                       (!('bio' in request.resource.data) ||
+                        request.resource.data.bio == null ||
+                        (request.resource.data.bio is string &&
+                         request.resource.data.bio.size() <= 2000)) &&
+                       (!('profile_image_url' in request.resource.data) ||
+                        request.resource.data.profile_image_url == null ||
+                        (request.resource.data.profile_image_url is string &&
+                         request.resource.data.profile_image_url.size() <= 2048 &&
+                         isValidImageURL(request.resource.data.profile_image_url))) &&
+                       (!('banner_image_url' in request.resource.data) ||
+                        request.resource.data.banner_image_url == null ||
+                        (request.resource.data.banner_image_url is string &&
+                         request.resource.data.banner_image_url.size() <= 2048 &&
+                         isValidImageURL(request.resource.data.banner_image_url)));
+      allow delete: if isAdmin();
     }
     match /artist_verification/{artistId} {
       allow read: if isOwner(artistId) || isAdmin();
@@ -2652,23 +3399,39 @@ service cloud.firestore {
       return request.auth != null && request.resource.data.creatorId == request.auth.uid;
     }
 
-    // Live shopping streams/shows.
+    // Live shopping streams/shows. Presence-derived counters are trusted-only.
     match /live_shopping_shows/{showId} {
       allow read: if true;
-      allow create: if isSignedIn() && creatingOwnShopData();
-      allow update, delete: if isSignedIn() && (ownsShopData() || isAdmin());
+      allow create: if isSignedIn() && creatingOwnShopData() &&
+                       request.resource.data.get('viewerCount', 0) == 0 &&
+                       request.resource.data.get('peakViewerCount', 0) == 0;
+      allow update: if isSignedIn() && (
+                      isAdmin() ||
+                      (ownsShopData() &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny([
+                           'creatorId', 'viewerCount', 'peakViewerCount',
+                           'viewerCountUpdatedAt'
+                         ]))
+                    );
+      allow delete: if isSignedIn() && (ownsShopData() || isAdmin());
     }
 
-    // Product catalog. Counters (views/checkoutTaps) may be incremented by any
-    // signed-in viewer; all other fields are creator/admin only.
+    // Product catalog. Engagement counters are folded from immutable events by
+    // trusted Functions; creators can edit catalog fields but not analytics.
     match /shopping_products/{productId} {
       allow read: if true;
-      allow create: if isSignedIn() && creatingOwnShopData();
+      allow create: if isSignedIn() && creatingOwnShopData() &&
+                       request.resource.data.get('views', 0) == 0 &&
+                       request.resource.data.get('checkoutTaps', 0) == 0;
       allow update: if isSignedIn() && (
-                      ownsShopData() || isAdmin() ||
-                      // Allow viewers to only bump analytics counters.
-                      request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['views', 'checkoutTaps'])
+                      isAdmin() ||
+                      (ownsShopData() &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny([
+                           'creatorId', 'views', 'checkoutTaps',
+                           'lastEngagementAt'
+                         ]))
                     );
       allow delete: if isSignedIn() && (ownsShopData() || isAdmin());
     }
@@ -2686,25 +3449,73 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Shopping analytics events (append-only by signed-in viewers).
+    // Shopping analytics facts are append-only, auth-bound, and idempotent by
+    // client session. Trusted Functions own all public aggregate counters.
     match /shopping_events/{eventId} {
       allow read: if isAdmin();
-      allow create: if isSignedIn();
-      allow update, delete: if isAdmin();
+      allow create: if isSignedIn() &&
+                       eventId.size() > 0 && eventId.size() <= 256 &&
+                       exists(/databases/$(database)/documents/shopping_products/$(request.resource.data.productId)) &&
+                       request.resource.data.keys().hasOnly([
+                         'type', 'productId', 'userId', 'sessionId', 'createdAt'
+                       ]) &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.type in ['product_view', 'checkout_tap'] &&
+                       request.resource.data.productId is string &&
+                       request.resource.data.productId.matches('^[A-Za-z0-9_-]{1,256}$') &&
+                       request.resource.data.sessionId is string &&
+                       request.resource.data.sessionId.matches('^[A-Za-z0-9_-]{1,128}$') &&
+                       request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
     }
 
-    // ✅ PARITY: communityPosts (camelCase — written by web community page)
-    // Public read; creator deletes own; any signed-in user can increment likes/votes.
+    // ✅ PARITY: communityPosts (camelCase web/Android contract)
     match /communityPosts/{postId} {
       allow read: if true;
       allow create: if isSignedIn() &&
-                       request.resource.data.creatorId == request.auth.uid;
+                       request.resource.data.creatorId == request.auth.uid &&
+                       request.resource.data.likeCount == 0 &&
+                       request.resource.data.commentCount == 0 &&
+                       request.resource.data.isVerified == false &&
+                       hasValidInitialWebPoll(request.resource.data) &&
+                       isValidSize(request.resource.data, 30);
       allow update: if isSignedIn() &&
-                       (resource.data.creatorId == request.auth.uid || isAdmin() ||
-                        request.resource.data.diff(resource.data).affectedKeys()
-                          .hasOnly(['likeCount','commentCount','poll','updatedAt']));
+                       (isAdmin() ||
+                        (resource.data.creatorId == request.auth.uid &&
+                         !request.resource.data.diff(resource.data).affectedKeys()
+                           .hasAny([
+                             'creatorId', 'likeCount', 'commentCount', 'poll',
+                             'lastEngagementAt'
+                           ])));
       allow delete: if isSignedIn() &&
                        (resource.data.creatorId == request.auth.uid || isAdmin());
+
+      match /likes/{userId} {
+        allow get: if isOwner(userId) || isAdmin();
+        allow list: if false;
+        allow create: if isOwner(userId) &&
+                         exists(/databases/$(database)/documents/communityPosts/$(postId)) &&
+                         request.resource.data.keys().hasOnly(['userId', 'likedAt']) &&
+                         request.resource.data.userId == userId &&
+                         request.resource.data.likedAt == request.time;
+        allow update: if false;
+        allow delete: if isOwner(userId);
+      }
+
+      match /votes/{userId} {
+        allow get: if isOwner(userId) || isAdmin();
+        allow list: if false;
+        allow create: if isOwner(userId) &&
+                         exists(/databases/$(database)/documents/communityPosts/$(postId)) &&
+                         get(/databases/$(database)/documents/communityPosts/$(postId)).data.poll is list &&
+                         request.resource.data.keys().hasOnly(['optionIndex', 'votedAt']) &&
+                         request.resource.data.optionIndex is int &&
+                         request.resource.data.optionIndex >= 0 &&
+                         request.resource.data.optionIndex <
+                           get(/databases/$(database)/documents/communityPosts/$(postId)).data.poll.size() &&
+                         request.resource.data.votedAt == request.time;
+        allow update, delete: if false;
+      }
     }
 
     // ✅ PARITY: premiere reminders per user

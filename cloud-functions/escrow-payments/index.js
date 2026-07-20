@@ -59,6 +59,7 @@ const MONEY_POST_PATHS = new Set([
   '/capture-payment',
   '/cancel-payment',
   '/create-transfer',
+  '/settle-match',
   '/create-merch-order',
   '/refund-merch-order',
 ]);
@@ -117,7 +118,7 @@ const PLATFORM_FEE_PERCENT = 0.10;
 // app. Client checks are UX only; THIS is authoritative for money.
 const WAGER_POLICY = {
   minimumAge: 18,
-  kycRequiredAboveDollars: 500,
+  kycRequiredAtOrAboveDollars: 500,
   // Must match iOS WagerPolicy.currentTermsVersion / web wager-policy.ts
   currentTermsVersion: '2025.1',
   // Per-account-tier daily wager limit (USD). Must match WagerPolicy.dailyLimitDollars.
@@ -185,9 +186,9 @@ async function assertWagerCompliance(uid, amountCents) {
     (typeof compliance.age !== 'number' || compliance.age >= WAGER_POLICY.minimumAge);
   if (!ageOK) reasons.push('Age verification required (18+)');
 
-  // 2. KYC for wagers over $500.
-  if (amountDollars > WAGER_POLICY.kycRequiredAboveDollars && compliance.kycStatus !== 'approved') {
-    reasons.push('KYC verification required for wagers over $500');
+  // 2. KYC for wagers of $500 or more.
+  if (amountDollars >= WAGER_POLICY.kycRequiredAtOrAboveDollars && compliance.kycStatus !== 'approved') {
+    reasons.push('KYC verification required for wagers of $500 or more');
   }
 
   // 3. Terms of Service acceptance — require the current version pin.
@@ -370,6 +371,9 @@ functions.http('escrowPayments', async (req, res) => {
         break;
       case '/create-transfer':
         await handleCreateTransfer(req, res);
+        break;
+      case '/settle-match':
+        await handleSettleMatch(req, res);
         break;
       // 🛍️ MERCH (physical goods) — Stripe Connect destination charges.
       // Physical goods MUST use an external processor per Apple Guideline
@@ -717,6 +721,218 @@ async function assertMatchParticipantOrAdmin(decoded, matchId) {
     err.status = 403;
     throw err;
   }
+}
+
+// ============================================================================
+// 🏆 SERVER-AUTHORITATIVE MATCH SETTLEMENT
+// ----------------------------------------------------------------------------
+// The match OUTCOME (status:'completed' + winnerId) is the input the payout in
+// /create-transfer trusts. It must be computed server-side from the recorded
+// submissions — never written by a client — or a participant could name itself
+// winner and drain the escrow. Firestore rules now make status/winnerId/etc.
+// admin-write-only; this endpoint (Admin SDK) is the ONLY path that sets them.
+//
+// This mirrors the iOS MatchVerificationService auto-approve algorithm exactly:
+//   1. both submissions' AI confidence must exceed AUTO_APPROVE_CONFIDENCE
+//   2. self-reported score pairs must cross-validate between the two players
+//   3. the AI-extracted score pair must match the reported pair (order-free),
+//      with BOTH extracted values present
+//   4. a scoreboard must be detected in both videos
+// Winner = higher self-reported score. Ties and any failed check go to referee
+// review (status:'disputed') and NEVER auto-pay.
+// ============================================================================
+const AUTO_APPROVE_CONFIDENCE = 0.9;
+
+// Map a raw match_submissions doc to the fields the algorithm needs.
+function normalizeSubmission(data) {
+  const ai = data.aiAnalysis || {};
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  return {
+    playerId: data.playerId || null,
+    selfReportedScore: num(data.selfReportedScore),
+    opponentScore: num(data.opponentScore),
+    aiAnalysis: {
+      confidence: num(ai.confidence) ?? 0,
+      extractedScore: num(ai.extractedScore),
+      extractedOpponentScore: num(ai.extractedOpponentScore),
+      scoreboardDetected: ai.scoreboardDetected === true,
+    },
+  };
+}
+
+// True if the AI-extracted score pair equals the player's reported pair,
+// ignoring order. Requires BOTH extracted scores present.
+function extractedPairMatchesReported(sub) {
+  const a = sub.aiAnalysis.extractedScore;
+  const b = sub.aiAnalysis.extractedOpponentScore;
+  if (a === null || b === null) return false;
+  if (sub.selfReportedScore === null || sub.opponentScore === null) return false;
+  const ai = [a, b].sort((x, y) => x - y);
+  const rep = [sub.selfReportedScore, sub.opponentScore].sort((x, y) => x - y);
+  return ai[0] === rep[0] && ai[1] === rep[1];
+}
+
+function canAutoApprove(s1, s2) {
+  const highConfidence =
+    s1.aiAnalysis.confidence > AUTO_APPROVE_CONFIDENCE &&
+    s2.aiAnalysis.confidence > AUTO_APPROVE_CONFIDENCE;
+  const scoresMatch =
+    s1.selfReportedScore !== null &&
+    s2.selfReportedScore !== null &&
+    s1.selfReportedScore === s2.opponentScore &&
+    s2.selfReportedScore === s1.opponentScore;
+  const aiOk = extractedPairMatchesReported(s1) && extractedPairMatchesReported(s2);
+  const scoreboards =
+    s1.aiAnalysis.scoreboardDetected && s2.aiAnalysis.scoreboardDetected;
+  return highConfidence && scoresMatch && aiOk && scoreboards;
+}
+
+/**
+ * SETTLE MATCH — server determines and records the verified outcome.
+ * Caller must be a participant or admin. Does NOT move money; after a match is
+ * settled to 'completed' with a winnerId, /create-transfer performs the payout
+ * (and is independently guarded against double-settlement).
+ */
+async function handleSettleMatch(req, res) {
+  const decoded = await requireAuth(req);
+  const { matchId } = req.body;
+  if (!matchId) {
+    return jsonError(res, 400, MONEY_ERROR.MISSING_FIELDS, 'Missing matchId');
+  }
+
+  const matchRef = db.collection('versus_matches').doc(matchId);
+  const matchSnap = await matchRef.get();
+  if (!matchSnap.exists) {
+    return jsonError(res, 404, MONEY_ERROR.NOT_FOUND, 'Match not found');
+  }
+  const match = matchSnap.data();
+
+  const participants = [match.challengerId, match.opponentId].filter(Boolean);
+  if (!isAdmin(decoded) && !participants.includes(decoded.uid)) {
+    return jsonError(res, 403, MONEY_ERROR.FORBIDDEN, 'You are not a participant in this match');
+  }
+
+  // Idempotent: already settled — return the recorded outcome, don't recompute.
+  if (match.status === 'completed' && match.winnerId) {
+    return res.status(200).json({
+      matchId, status: 'completed', winnerId: match.winnerId,
+      loserId: match.loserId || null, alreadySettled: true,
+    });
+  }
+
+  // 👨‍⚖️ Referee / admin override: the caller explicitly names the winner (used
+  // to resolve disputes that failed auto-approve). Requires elevated auth — a
+  // normal participant can NEVER name the winner. The named winner must still be
+  // a recorded participant.
+  const refereeWinnerId = req.body.winnerId;
+  if (refereeWinnerId) {
+    if (!isAdmin(decoded) && decoded.referee !== true) {
+      return jsonError(res, 403, MONEY_ERROR.FORBIDDEN,
+        'Referee or admin privilege required to set a match winner manually');
+    }
+    if (!participants.includes(refereeWinnerId)) {
+      return jsonError(res, 409, MONEY_ERROR.CONFLICT, 'Winner is not a match participant');
+    }
+    const loserId = participants.find((p) => p !== refereeWinnerId) || null;
+    const wagerCents = Math.round((Number(match.wagerAmount) || 0) * 100);
+    const grossCents = wagerCents * 2;
+    const feeCents = Math.round(grossCents * PLATFORM_FEE_PERCENT);
+    const payoutCents = Math.max(0, grossCents - feeCents);
+    await db.runTransaction(async (tx) => {
+      const fresh = await tx.get(matchRef);
+      const d = fresh.exists ? fresh.data() : {};
+      if (d.status === 'completed' && d.winnerId) return;
+      tx.set(matchRef, {
+        status: 'completed',
+        winnerId: refereeWinnerId,
+        loserId,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        verificationMethod: 'referee',
+        reviewedBy: decoded.uid,
+        winnerPayout: payoutCents / 100,
+        platformFee: feeCents / 100,
+      }, { merge: true });
+    });
+    await writeWagerAudit({
+      uid: refereeWinnerId, matchId, amountCents: 0,
+      outcome: 'settled', code: null, detail: `referee=${decoded.uid}`,
+    });
+    console.log(`👨‍⚖️ Match ${matchId} settled by referee ${decoded.uid}: winner ${refereeWinnerId}`);
+    return res.status(200).json({ matchId, status: 'completed', winnerId: refereeWinnerId, loserId });
+  }
+
+  // Need exactly two submissions to settle.
+  const subSnap = await db.collection('match_submissions')
+    .where('matchId', '==', matchId).get();
+  const subs = subSnap.docs.map((d) => normalizeSubmission(d.data()));
+  if (subs.length !== 2) {
+    return jsonError(res, 409, MONEY_ERROR.CONFLICT,
+      `Need exactly 2 submissions to settle (have ${subs.length})`);
+  }
+  const [s1, s2] = subs;
+  if (!s1.playerId || !s2.playerId || s1.playerId === s2.playerId) {
+    return jsonError(res, 409, MONEY_ERROR.CONFLICT, 'Submissions have invalid player IDs');
+  }
+
+  // Failed auto-approve or a tie → referee review; never auto-pay.
+  const tie = s1.selfReportedScore !== null && s1.selfReportedScore === s2.selfReportedScore;
+  if (!canAutoApprove(s1, s2) || tie) {
+    await matchRef.set({
+      status: 'disputed',
+      disputedAt: admin.firestore.FieldValue.serverTimestamp(),
+      verificationMethod: 'server_auto',
+      verificationResult: tie ? 'tie_needs_review' : 'needs_review',
+    }, { merge: true });
+    return res.status(200).json({
+      matchId, status: 'disputed',
+      reason: tie ? 'Tied scores — referee review required'
+                  : 'Scores mismatch or low AI confidence — referee review required',
+    });
+  }
+
+  const winnerId = s1.selfReportedScore > s2.selfReportedScore ? s1.playerId : s2.playerId;
+  const loserId = winnerId === s1.playerId ? s2.playerId : s1.playerId;
+
+  // The computed winner MUST be a recorded participant of this match.
+  if (!participants.includes(winnerId)) {
+    return jsonError(res, 409, MONEY_ERROR.CONFLICT, 'Computed winner is not a match participant');
+  }
+
+  // Display preview amounts (dollars) for the match doc, computed in integer
+  // cents. These mirror the iOS readers; the AUTHORITATIVE payout is still
+  // derived from captured escrow legs in /create-transfer.
+  const wagerCents = Math.round((Number(match.wagerAmount) || 0) * 100);
+  const grossCents = wagerCents * 2;
+  const feeCents = Math.round(grossCents * PLATFORM_FEE_PERCENT);
+  const payoutCents = Math.max(0, grossCents - feeCents);
+
+  // Write the verified outcome idempotently.
+  await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(matchRef);
+    const d = fresh.exists ? fresh.data() : {};
+    if (d.status === 'completed' && d.winnerId) return; // already settled
+    tx.set(matchRef, {
+      status: 'completed',
+      winnerId,
+      loserId,
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      verificationMethod: 'server_auto',
+      winnerPayout: payoutCents / 100,
+      platformFee: feeCents / 100,
+      verifiedScores: {
+        [s1.playerId]: s1.selfReportedScore,
+        [s2.playerId]: s2.selfReportedScore,
+      },
+    }, { merge: true });
+  });
+
+  await writeWagerAudit({
+    uid: winnerId, matchId, amountCents: 0,
+    outcome: 'settled', code: null, detail: `winner=${winnerId}`,
+  });
+
+  console.log(`🏁 Match ${matchId} settled server-side: winner ${winnerId}`);
+  res.status(200).json({ matchId, status: 'completed', winnerId, loserId });
 }
 
 /**

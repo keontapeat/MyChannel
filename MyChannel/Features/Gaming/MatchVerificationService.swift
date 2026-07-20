@@ -259,27 +259,36 @@ final class MatchVerificationService: ObservableObject {
         
         print("💰 [MatchVerification] Payout: $\(winnerPayout) (fee: $\(platformFee))")
         
-        // Step 1: Release escrow to winner. Pass the GROSS pot (both wagers);
-        // MoneyEscrowService recomputes fee from held legs — do not pass net payout.
-        let grossPotDollars = MoneyMath.dollars(fromCents: grossCents)
+        // Step 1: SERVER settles the match. It re-runs this exact auto-approve
+        // algorithm against the recorded submissions and writes the authoritative
+        // status/winnerId — those fields on versus_matches are now admin/CF-write
+        // only, so the client can no longer declare the winner or drain escrow.
+        let settlement = try await escrowService.settleMatch(matchId: matchId)
+        guard settlement.status == "completed", let verifiedWinnerId = settlement.winnerId else {
+            // Server did not auto-approve (mismatch / low confidence / tie) — route
+            // to referee review instead of paying out.
+            return try await flagForReview(
+                matchId: matchId,
+                submission1: submission1,
+                submission2: submission2,
+                reason: "Server verification did not auto-approve payout"
+            )
+        }
+        let verifiedLoserId = settlement.loserId ?? loserId
+
+        // Step 2: Release escrow to the SERVER-verified winner. Pass the GROSS pot
+        // (both wagers); MoneyEscrowService recomputes fee from held legs — do not
+        // pass net payout. The backend derives the authoritative amount + winner
+        // from the recorded outcome. Winner crediting / stats are server-side; we
+        // never credit the in-app wallet from the client (would double-pay and is
+        // blocked by Firestore rules).
         try await escrowService.releaseFunds(
             matchId: matchId,
-            winnerId: winnerId,
-            loserId: loserId,
-            totalPot: grossPotDollars
+            winnerId: verifiedWinnerId,
+            loserId: verifiedLoserId,
+            totalPot: MoneyMath.dollars(fromCents: grossCents)
         )
-        
-        // Step 2: Winner crediting is handled SERVER-SIDE by the escrow settlement
-        // above (Stripe Connect transfer + audit ledger). We intentionally do NOT
-        // credit the in-app wallet from the client here — that would double-pay and
-        // is blocked by Firestore rules (wallets are admin/server-write only).
-        
-        // Step 3: Update match status
-        try await updateMatchStatus(
-            matchId: matchId,
-            status: .completed,
-            winnerId: winnerId
-        )
+        // Step 3: match status is already recorded by /settle-match above.
         
         // Step 4: Save verification record
         let verification = MatchVerification(
@@ -397,22 +406,24 @@ final class MatchVerificationService: ObservableObject {
         let winnerPayout = MoneyMath.dollars(fromCents: MoneyMath.winnerPayoutCents(grossCents: grossCents))
         print("💰 [MatchVerification] Dispute payout preview: $\(winnerPayout)")
         
+        // 👨‍⚖️ Referee override: the server records the referee-named winner
+        // (verified as a participant) and writes status/winnerId/payout. The
+        // caller must hold admin/referee privilege server-side — the outcome
+        // fields on versus_matches are no longer client-writable. Must run BEFORE
+        // releaseFunds, which requires a recorded completed outcome.
+        let settlement = try await escrowService.settleMatch(matchId: matchId, refereeWinnerId: winnerId)
+        guard settlement.status == "completed", let verifiedWinnerId = settlement.winnerId else {
+            throw VerificationError.invalidSubmission
+        }
+
         // Release escrow with GROSS pot; escrow recomputes fee from held legs.
+        // Winner crediting is handled server-side; no client-side wallet
+        // self-credit (blocked by rules; avoids double-pay).
         try await escrowService.releaseFunds(
             matchId: matchId,
-            winnerId: winnerId,
+            winnerId: verifiedWinnerId,
             loserId: loserId,
             totalPot: MoneyMath.dollars(fromCents: grossCents)
-        )
-        
-        // Winner crediting handled server-side by the escrow settlement above.
-        // No client-side wallet self-credit (blocked by rules; avoids double-pay).
-        
-        // Update match status
-        try await updateMatchStatus(
-            matchId: matchId,
-            status: .completed,
-            winnerId: winnerId
         )
         
         // Update verification record
@@ -568,23 +579,11 @@ final class MatchVerificationService: ObservableObject {
         )
     }
     
-    /// Update match status
-    private func updateMatchStatus(matchId: String, status: MatchStatus, winnerId: String?) async throws {
-        var data: [String: Any] = [
-            "status": status.rawValue,
-            "completedAt": FieldValue.serverTimestamp()
-        ]
-        
-        if let winnerId = winnerId {
-            data["winnerId"] = winnerId
-        }
-        
-        try await db
-            .collection("versus_matches")
-            .document(matchId)
-            .updateData(data)
-    }
-    
+    // NOTE: Match status/winnerId are written SERVER-SIDE by the /settle-match
+    // Cloud Function (auto or referee mode). The former client-side
+    // updateMatchStatus helper was removed — those outcome fields on
+    // versus_matches are now admin/CF-write only in Firestore rules.
+
     /// Send verification notifications
     private func sendVerificationNotification(winnerId: String, loserId: String, payout: Double) async {
         print("📱 [MatchVerification] Sending notifications...")

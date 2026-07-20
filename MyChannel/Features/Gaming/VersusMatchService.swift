@@ -222,31 +222,39 @@ class VersusMatchService: ObservableObject, VersusMatching {
             throw MatchError.matchNotFound
         }
         
-        // Calculate winnings in INTEGER CENTS (rounded), matching the server's
-        // settlement math. The stored winnerPayout/platformFee below are a display
-        // preview — the authoritative transfer is computed server-side from the
-        // captured escrow legs.
+        // Winnings preview in INTEGER CENTS (rounded). Only used for the local
+        // release log — the authoritative payout is computed server-side from the
+        // captured escrow legs, and winnerPayout/platformFee on the match doc are
+        // written by /settle-match (those fields are admin/CF-write only now).
         let grossCents = MoneyMath.cents(fromDollars: match.wagerAmount) * 2
-        let platformFee = MoneyMath.dollars(fromCents: MoneyMath.platformFeeCents(grossCents: grossCents))
         let winnerPayout = MoneyMath.dollars(fromCents: MoneyMath.winnerPayoutCents(grossCents: grossCents))
-        
-        // Release funds to winner
+
+        // 🔒 Server settles the match FIRST — it verifies the recorded
+        // submissions and writes the authoritative status + winnerId. The client
+        // can no longer declare the winner (rules block outcome-field writes).
+        let settlement = try await escrowService.settleMatch(matchId: matchId)
+        guard settlement.status == "completed", let verifiedWinnerId = settlement.winnerId else {
+            // Sent to referee review — do not release funds.
+            print("🔎 Match \(matchId) not auto-approved by server (status: \(settlement.status)) — awaiting review")
+            stopMonitoring(matchId: matchId)
+            throw MatchError.invalidData
+        }
+        let verifiedLoserId = settlement.loserId ?? loserId
+
+        // Release funds to the SERVER-verified winner (backend derives amount +
+        // destination from the recorded outcome + captured escrow legs).
         try await escrowService.releaseFunds(
             matchId: matchId,
-            winnerId: winnerId,
-            loserId: loserId,
+            winnerId: verifiedWinnerId,
+            loserId: verifiedLoserId,
             totalPot: winnerPayout
         )
-        
-        // Update match
+
+        // Persist client-owned play stats only. Outcome + money fields
+        // (status / winnerId / completedAt / winnerPayout / platformFee) are
+        // written server-side by /settle-match.
         try await db.collection("versus_matches").document(matchId).updateData([
-            "status": VersusMatch.Status.completed.rawValue,
-            "winnerId": winnerId,
-            "loserId": loserId,
-            "finalStats": try JSONEncoder().encode(finalStats).base64EncodedString(),
-            "completedAt": Timestamp(date: Date()),
-            "winnerPayout": winnerPayout,
-            "platformFee": platformFee
+            "finalStats": try JSONEncoder().encode(finalStats).base64EncodedString()
         ])
         
         // 🔒 Player stats, earnings, and championship points are written

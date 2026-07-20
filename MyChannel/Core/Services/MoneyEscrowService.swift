@@ -354,6 +354,49 @@ class MoneyEscrowService: ObservableObject, MoneyEscrowing {
         }
     }
     
+    // MARK: - 🏁 SETTLE MATCH (server determines & records the winner)
+
+    /// Outcome of a server-side match settlement.
+    struct MatchSettlement {
+        let status: String        // "completed" | "disputed"
+        let winnerId: String?
+        let loserId: String?
+    }
+
+    /// Ask the backend to verify and record the match outcome. The winner is
+    /// computed SERVER-SIDE from the recorded `match_submissions` — the client
+    /// only names the match. Firestore rules make `status`/`winnerId`/payout on
+    /// `versus_matches` admin/CF-write-only, so this is the ONLY path that can
+    /// mark a match completed. When `status == "completed"` the caller may
+    /// proceed to release funds; `"disputed"` means it went to referee review and
+    /// MUST NOT be paid out.
+    /// - Parameter refereeWinnerId: When set, a referee/admin explicitly names
+    ///   the winner (dispute resolution). Requires elevated privilege server-side;
+    ///   a normal participant cannot name the winner. When nil, the server derives
+    ///   the winner automatically from the recorded submissions.
+    func settleMatch(matchId: String, refereeWinnerId: String? = nil) async throws -> MatchSettlement {
+        let url = try backendURL("settle-match")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await AuthTokenProvider.authorize(&request)
+        var body: [String: Any] = ["matchId": matchId]
+        if let refereeWinnerId { body["winnerId"] = refereeWinnerId }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.configured.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw EscrowError.stripeError("Failed to settle match")
+        }
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        return MatchSettlement(
+            status: json["status"] as? String ?? "unknown",
+            winnerId: json["winnerId"] as? String,
+            loserId: json["loserId"] as? String
+        )
+    }
+
     private func createTransfer(amount: Double, destinationAccountId: String, matchId: String) async throws {
         let url = try backendURL("create-transfer")
         var request = URLRequest(url: url)
