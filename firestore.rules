@@ -2170,9 +2170,16 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
     
-    match /content_ratings/{document=**} {
+    // 🔒 Content age-rating gates kids-safety / COPPA age-gating. Only the
+    // video's creator (or an admin) may set it — previously any signed-in user
+    // could overwrite ANY video's rating + age gate, letting an attacker
+    // downgrade 18+ content to all-ages and defeat the age gate. Read stays
+    // public (the rating is shown before playback).
+    match /content_ratings/{videoId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() ||
+                      (exists(/databases/$(database)/documents/videos/$(videoId)) &&
+                       get(/databases/$(database)/documents/videos/$(videoId)).data.creatorId == request.auth.uid));
     }
     
     match /coppa_reports/{document=**} {
