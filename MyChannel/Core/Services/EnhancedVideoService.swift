@@ -40,7 +40,7 @@ class EnhancedVideoService: ObservableObject {
             case .anime: return "Anime"
             case .mukbang: return "Mukbang"
             case .documentaries: return "Documentaries"
-            case .shorts: return "Shorts"
+            case .shorts: return "Flicks"
             case .gaming: return "Gaming"
             case .music: return "Music"
             case .cooking: return "Cooking"

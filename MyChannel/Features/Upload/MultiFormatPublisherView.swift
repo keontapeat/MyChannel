@@ -5,7 +5,7 @@
 //  Created by Keonta.
 //
 //  Publishes a single piece of content to multiple destinations (long-form
-//  video, Flicks/Shorts, community post) using the real Firestore services.
+//  video, Flicks, community post) using the real Firestore services.
 //
 
 import SwiftUI
@@ -31,7 +31,7 @@ struct MultiFormatPublisherView: View {
             Form {
                 Section(header: Text("Destinations")) {
                     Toggle("Long-form Video", isOn: $publishToVideo)
-                    Toggle("Flicks (Shorts)", isOn: $publishToFlicks)
+                    Toggle("Flicks", isOn: $publishToFlicks)
                         .disabled(!isFlicksEligible)
                     Toggle("Community Post", isOn: $publishToCommunity)
                 }

@@ -58,7 +58,7 @@ struct SubscriptionShortsShelf: View {
                         .foregroundColor(.white)
                 }
 
-                Text("Shorts")
+                Text("Flicks")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
 

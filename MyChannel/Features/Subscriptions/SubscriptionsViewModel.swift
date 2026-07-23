@@ -89,7 +89,7 @@ final class SubscriptionsViewModel: ObservableObject {
         case all = "All"
         case today = "Today"
         case videos = "Videos"
-        case shorts = "Shorts"
+        case flicks = "Flicks"
         case live = "Live"
         case posts = "Posts"
         case continueWatching = "Continue watching"
@@ -100,7 +100,7 @@ final class SubscriptionsViewModel: ObservableObject {
             case .all: return "square.grid.2x2"
             case .today: return "calendar"
             case .videos: return "play.rectangle"
-            case .shorts: return "play.square.stack"
+            case .flicks: return "play.square.stack"
             case .live: return "dot.radiowaves.left.and.right"
             case .posts: return "doc.text"
             case .continueWatching: return "play.circle"
@@ -161,7 +161,7 @@ final class SubscriptionsViewModel: ObservableObject {
     
     // MARK: - Computed Properties
     
-    /// Long-form videos only (shorts surfaced in their own shelf, YouTube-style).
+    /// Long-form videos only (Flicks surfaced in their own shelf).
     private var longFormVideos: [Video] {
         videos.filter { !$0.isShort }
     }
@@ -186,8 +186,8 @@ final class SubscriptionsViewModel: ObservableObject {
         case .videos:
             // Long-form only (already the default — just make explicit)
             break
-        case .shorts:
-            result = []  // Shorts are shown in their own shelf; this filter focuses the shorts grid
+        case .flicks:
+            result = []  // Flicks are shown in their own shelf; this filter focuses the Flicks grid
         case .continueWatching:
             result = result.filter {
                 let pct = watchProgress[$0.id] ?? 0
@@ -218,7 +218,7 @@ final class SubscriptionsViewModel: ObservableObject {
         return result
     }
     
-    /// Shorts from subscribed creators, newest first (respects channel focus).
+    /// Flicks from subscribed creators, newest first (respects channel focus).
     var filteredShorts: [Video] {
         var result = shorts
         if let channelId = focusedChannelId {

@@ -43,7 +43,8 @@ struct VideoMoreOptionsSheet: View {
     @State private var showCopyToast = false
     @State private var showShareSheet = false
     @State private var showAddToPlaylist = false
-    @State private var showRequestFeature = false
+    @State private var showCastSheet = false
+    @State private var showEndScreenEditor = false
     @State private var showMyFeatureSlots = false
     @State private var selectedReportReason: VideoReportReason = .spam
     @State private var showReportReasonPicker = false
@@ -105,6 +106,12 @@ struct VideoMoreOptionsSheet: View {
         .fullScreenCover(isPresented: $showRequestFeature) {
             FeatureSlotBookingView(video: video)
         }
+        .sheet(isPresented: $showCastSheet) {
+            CastingSheet()
+        }
+        .sheet(isPresented: $showEndScreenEditor) {
+            EndScreenEditorView(video: video)
+        }
         .fullScreenCover(isPresented: $showMyFeatureSlots) {
             MyFeatureSlotsView()
         }
@@ -124,6 +131,13 @@ struct VideoMoreOptionsSheet: View {
     @ViewBuilder
     private var primaryActionsSection: some View {
         Section {
+            Button(action: {
+                showCastSheet = true
+                feedback()
+            }) {
+                HStack { Label("Play on TV / Cast", systemImage: "airplay.video"); Spacer() }
+            }
+
             Button(action: {
                 showShareSheet = true
                 feedback()
@@ -224,6 +238,16 @@ struct VideoMoreOptionsSheet: View {
                 }
 
                 Button(action: {
+                    showEndScreenEditor = true
+                    feedback()
+                }) {
+                    HStack {
+                        Label("End Screen & Cards", systemImage: "rectangle.stack.badge.plus")
+                        Spacer()
+                    }
+                }
+
+                Button(action: {
                     NotificationCenter.default.post(name: Notification.Name("OpenVideoAnalytics"), object: video)
                     dismiss()
                     feedback()
@@ -312,24 +336,24 @@ struct VideoMoreOptionsSheet: View {
     }
     
     private func reportVideo(reason: VideoReportReason = .spam) async {
-        guard let reporterId = AuthenticationManager.shared.currentUser?.id else { return }
-        #if canImport(FirebaseFirestore)
-        let db = Firestore.firestore()
-        let reportData: [String: Any] = [
-            "type": "video",
-            "contentId": video.id,
-            "contentCreatorId": video.creator.id,
-            "reporterId": reporterId,
-            "reason": reason.rawValue,
-            "reasonTitle": reason.title,
-            "status": "pending",
-            "reviewed": false,
-            "createdAt": FieldValue.serverTimestamp()
-        ]
-        try? await db.collection("content_reports").addDocument(data: reportData)
-        #endif
-        await MainActor.run {
-            NotificationManager.shared.showSuccess("Report submitted. Thank you for keeping MyChannel safe.")
+        guard let reporterId = AuthenticationManager.shared.currentUser?.id else {
+            await MainActor.run { NotificationManager.shared.showError("Sign in to submit a report.") }
+            return
+        }
+        do {
+            _ = try await ContentReportService.submit(
+                type: .video,
+                contentId: video.id,
+                contentCreatorId: video.creator.id,
+                reporterId: reporterId,
+                reason: reason.rawValue,
+                reasonTitle: reason.title
+            )
+            await MainActor.run {
+                NotificationManager.shared.showSuccess("Report submitted. Thank you for keeping MyChannel safe.")
+            }
+        } catch {
+            await MainActor.run { NotificationManager.shared.showError(error.localizedDescription) }
         }
     }
     
@@ -346,17 +370,17 @@ struct VideoMoreOptionsSheet: View {
             "reason": "user_initiated_block",
             "createdAt": FieldValue.serverTimestamp()
         ]
-        try? await db.collection("users").document(currentUserId)
-            .collection("blockedUsers").document(blockedUserId)
-            .setData(blockData)
-        let reportData: [String: Any] = [
-            "type": "block",
-            "reporterId": currentUserId,
-            "blockedUserId": blockedUserId,
-            "status": "actioned",
-            "createdAt": FieldValue.serverTimestamp()
-        ]
-        try? await db.collection("content_reports").addDocument(data: reportData)
+        do {
+            try await db.collection("users").document(currentUserId)
+                .collection("blockedUsers").document(blockedUserId)
+                .setData(blockData)
+        } catch {
+            await MainActor.run { NotificationManager.shared.showError("Unable to block this user.") }
+            return
+        }
+        #else
+        await MainActor.run { NotificationManager.shared.showError("Blocking is temporarily unavailable.") }
+        return
         #endif
         await MainActor.run {
             NotificationCenter.default.post(

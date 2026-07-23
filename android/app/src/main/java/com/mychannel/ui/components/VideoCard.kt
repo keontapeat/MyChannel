@@ -61,6 +61,7 @@ fun VideoCard(
     video: Video,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    rank: Int? = null,
     trailingContent: (@Composable () -> Unit)? = null,
     overflowActions: List<VideoCardAction> = emptyList()
 ) {
@@ -93,6 +94,25 @@ fun VideoCard(
                     durationSeconds = video.duration,
                     modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp)
                 )
+            }
+
+            // Rank badge for Trending
+            if (rank != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black.copy(alpha = 0.75f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "#$rank",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 

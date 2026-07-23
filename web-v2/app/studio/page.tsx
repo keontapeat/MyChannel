@@ -74,12 +74,13 @@ function StatCard({
 }
 
 const NAV_LINKS = [
-  { href: '/upload',              icon: Upload,    label: 'Upload',        color: 'bg-[rgb(var(--color-primary))] text-white' },
-  { href: '/studio/analytics',   icon: BarChart3,  label: 'Analytics',     color: 'bg-blue-600 text-white' },
-  { href: '/studio/videos',      icon: Video,      label: 'Content',       color: 'bg-purple-600 text-white' },
-  { href: '/studio/comments',    icon: MessageSquare, label: 'Comments',   color: 'bg-yellow-500 text-white' },
-  { href: '/studio/monetization',icon: DollarSign, label: 'Monetization',  color: 'bg-green-600 text-white' },
-  { href: '/studio/customization',icon: Palette,   label: 'Customization', color: 'bg-pink-600 text-white' },
+  { href: '/upload',                icon: Upload,    label: 'Upload',        color: 'bg-[rgb(var(--color-primary))] text-white' },
+  { href: '/studio/analytics',      icon: BarChart3,  label: 'Analytics',     color: 'bg-blue-600 text-white' },
+  { href: '/studio/videos',         icon: Video,      label: 'Content',       color: 'bg-purple-600 text-white' },
+  { href: '/studio/comments',       icon: MessageSquare, label: 'Comments',   color: 'bg-yellow-500 text-white' },
+  { href: '/studio/monetization',   icon: DollarSign, label: 'Monetization',  color: 'bg-green-600 text-white' },
+  { href: '/studio/memberships',    icon: Users,      label: 'Memberships',   color: 'bg-pink-600 text-white' },
+  { href: '/studio/customization',  icon: Palette,    label: 'Customization', color: 'bg-indigo-600 text-white' },
 ];
 
 export default function CreatorStudioPage() {
@@ -331,7 +332,7 @@ export default function CreatorStudioPage() {
                       <Link href={`/watch/${v.id}`} className="flex-1 py-2.5 text-[12px] text-center font-medium text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors">
                         Watch
                       </Link>
-                      <Link href={`/studio/videos/${v.id}/edit`} className="flex-1 py-2.5 text-[12px] text-center font-medium text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors flex items-center justify-center gap-1">
+                      <Link href={`/studio/video-edit?videoId=${v.id}`} className="flex-1 py-2.5 text-[12px] text-center font-medium text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors flex items-center justify-center gap-1">
                         <Pencil size={12} /> Edit
                       </Link>
                       <Link href={`/studio/analytics?videoId=${v.id}`} className="flex-1 py-2.5 text-[12px] text-center font-medium text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors flex items-center justify-center gap-1">
@@ -357,7 +358,7 @@ export default function CreatorStudioPage() {
                 {topVideos.map((v, i) => (
                   <Link
                     key={v.id}
-                    href={`/studio/videos/${v.id}/edit`}
+                    href={`/studio/video-edit?videoId=${v.id}`}
                     className="flex items-center gap-3 p-3 bg-[rgb(var(--color-surface))] rounded-xl border border-[rgb(var(--color-border))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors"
                   >
                     <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${

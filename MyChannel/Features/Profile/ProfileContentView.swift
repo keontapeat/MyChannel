@@ -121,7 +121,7 @@ struct ProfileContentView: View {
                     managementContext: videoManagementContext,
                     isLoadingVideos: isLoadingVideos
                 )
-            case .shorts:
+            case .flicks:
                 ProfileShortsView(videos: videos, user: user)
             case .live:
                 ProfileLiveView(videos: videos, user: user)

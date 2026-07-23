@@ -5,7 +5,7 @@
 //   • Videos tab: videos where creatorId == channel.id
 //   • Community tab: communityPosts where creatorId == channel.id
 //   • Subscribe state via SubscribeButton (users/{uid}/subscriptions/{channelId})
-// Shorts/Live/Playlists tabs surface a real empty state until those
+// Flicks/Live/Playlists tabs surface a real empty state until those
 // collections have per-channel data wired (flicks/liveStreams have no
 // creator-scoped list built yet elsewhere in the app).
 
@@ -31,7 +31,7 @@ interface ProfilePageClientProps {
   username: string;
 }
 
-type ProfileTab = 'home' | 'videos' | 'shorts' | 'live' | 'playlists' | 'community' | 'about';
+type ProfileTab = 'home' | 'videos' | 'flicks' | 'live' | 'playlists' | 'community' | 'about';
 
 interface CommunityPostRow {
   id: string;
@@ -67,7 +67,8 @@ function timeAgo(date: Date): string {
   return date.toLocaleDateString();
 }
 
-const ProfilePageClient = ({ username }: ProfilePageClientProps) => {
+const ProfilePageClient = ({ username: initialUsername }: ProfilePageClientProps) => {
+  const [username, setUsername] = useState(initialUsername === '_fallback' ? '' : initialUsername);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>('home');
 
@@ -83,9 +84,19 @@ const ProfilePageClient = ({ username }: ProfilePageClientProps) => {
 
   const isOwner = !!channel && auth?.currentUser?.uid === channel.id;
 
+  useEffect(() => {
+    if (initialUsername !== '_fallback') return;
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const profileIndex = segments.indexOf('profile');
+    const pathUsername = profileIndex >= 0 ? segments[profileIndex + 1] : '';
+    if (pathUsername && pathUsername !== '_fallback') {
+      setUsername(decodeURIComponent(pathUsername));
+    }
+  }, [initialUsername]);
+
   // Resolve channel by username
   useEffect(() => {
-    if (!username || username === '_fallback') { setLoadingChannel(false); setNotFound(true); return; }
+    if (!username) return;
     let cancelled = false;
     setLoadingChannel(true);
     userFirestoreService.fetchUserByUsername(username).then((user) => {
@@ -148,7 +159,7 @@ const ProfilePageClient = ({ username }: ProfilePageClientProps) => {
   const tabs: { id: ProfileTab; label: string }[] = [
     { id: 'home', label: 'Home' },
     { id: 'videos', label: 'Videos' },
-    { id: 'shorts', label: 'Shorts' },
+    { id: 'flicks', label: 'Flicks' },
     { id: 'live', label: 'Live' },
     { id: 'playlists', label: 'Playlists' },
     { id: 'community', label: 'Community' },
@@ -395,10 +406,10 @@ const ProfilePageClient = ({ username }: ProfilePageClientProps) => {
               </div>
             )}
 
-            {['shorts', 'live', 'playlists'].includes(activeTab) && (
+            {['flicks', 'live', 'playlists'].includes(activeTab) && (
               <div className="py-20 text-center">
                 <p className="text-[rgb(var(--color-text-secondary))] text-lg">
-                  No {activeTab} yet
+                  No {activeTab === 'flicks' ? 'Flicks' : activeTab} yet
                 </p>
               </div>
             )}

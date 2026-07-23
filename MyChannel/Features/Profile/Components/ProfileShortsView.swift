@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Profile Shorts View
+// MARK: - Profile Flicks View
 struct ProfileShortsView: View {
     let videos: [Video]
     let user: User

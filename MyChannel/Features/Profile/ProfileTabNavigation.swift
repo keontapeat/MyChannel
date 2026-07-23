@@ -134,7 +134,7 @@ private struct UIKitProfileTabRow: UIViewRepresentable {
             switch tab {
             case .videos:
                 return parent.user.videoCount > 0 ? parent.user.videoCount : nil
-            case .shorts:
+            case .flicks:
                 return parent.user.videoCount > 5 ? parent.user.videoCount / 3 : nil
             case .live:
                 return nil

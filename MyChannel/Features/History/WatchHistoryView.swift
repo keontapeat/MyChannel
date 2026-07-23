@@ -11,7 +11,7 @@ import UIKit
 private enum HistoryTypeFilter: String, CaseIterable, Identifiable {
     case all = "All"
     case videos = "Videos"
-    case shorts = "Shorts"
+    case flicks = "Flicks"
     case live = "Live"
     case posts = "Posts"
     
@@ -23,7 +23,7 @@ private enum HistoryTypeFilter: String, CaseIterable, Identifiable {
             return true
         case .videos:
             return item.contentType == .video
-        case .shorts:
+        case .flicks:
             return item.contentType == .flick || item.contentType == .story
         case .live:
             return item.contentType == .liveTV

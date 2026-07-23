@@ -1,6 +1,8 @@
 package com.mychannel.ui.navigation
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
@@ -8,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -23,7 +26,6 @@ import com.mychannel.ui.screens.*
 import com.mychannel.ui.screens.auth.ProfileSetupScreen
 import com.mychannel.ui.screens.upload.StudioScreen
 import com.mychannel.ui.screens.upload.UploadScreen
-import com.mychannel.ui.screens.SettingsScreen
 import com.mychannel.viewmodel.AuthStatus
 import com.mychannel.viewmodel.AuthViewModel
 
@@ -72,33 +74,35 @@ fun MyChannelNavigation(
 @Composable
 private fun MainNavigation() {
     val navController = rememberNavController()
-    
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+    val isFlicks = currentDestination?.hierarchy?.any { it.route == Screen.Flicks.route } == true
+
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentDestination = navBackStackEntry?.destination
-                
-                bottomNavItems.forEach { screen ->
-                    NavigationBarItem(
-                        icon = { 
-                            Icon(
-                                painter = painterResource(id = screen.icon),
-                                contentDescription = screen.title
-                            )
-                        },
-                        label = { Text(screen.title) },
-                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
-                        onClick = {
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            if (!isFlicks) {
+                NavigationBar {
+                    bottomNavItems.forEach { screen ->
+                        NavigationBarItem(
+                            icon = {
+                                Icon(
+                                    painter = painterResource(id = screen.icon),
+                                    contentDescription = screen.title
+                                )
+                            },
+                            label = { Text(screen.title) },
+                            selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                            onClick = {
+                                navController.navigate(screen.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -106,7 +110,7 @@ private fun MainNavigation() {
         NavHost(
             navController = navController,
             startDestination = Screen.Home.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = if (isFlicks) Modifier.fillMaxSize() else Modifier.padding(innerPadding)
         ) {
             // Bottom-nav tabs
             composable(Screen.Home.route) { HomeScreen(navController) }
@@ -117,6 +121,7 @@ private fun MainNavigation() {
 
             // Full-screen destinations
             composable(STUDIO_ROUTE) { StudioScreen(navController) }
+            composable(MUSIC_ROUTE) { MusicScreen(navController) }
 
             composable(
                 route = "video/{videoId}",
@@ -152,7 +157,21 @@ private fun MainNavigation() {
 
             composable(NOTIFICATIONS_ROUTE) { NotificationsScreen(navController) }
 
-            composable(VS_MATCH_ROUTE) { VSMatchScreen(navController) }
+            composable(VS_MATCH_ROUTE) {
+                // 🔒 LAUNCH GATE (real-money): VS Match wagering is disabled for the
+                // initial Play release (see BuildConfig.WAGERING_ENABLED / gaming-law
+                // + Google Play RMG enrollment). Even deep links / notification taps
+                // land on the unavailable screen instead of the live wager UI.
+                if (com.mychannel.BuildConfig.WAGERING_ENABLED) {
+                    VSMatchScreen(navController)
+                } else {
+                    FeatureUnavailableScreen(
+                        title = "VS Matches",
+                        message = "VS Matches are coming soon.",
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+            }
 
             // Profile / Channel
             composable(PROFILE_ROUTE) { ProfileScreen(navController, channelId = null) }
@@ -195,26 +214,65 @@ private fun MainNavigation() {
             // Downloads (offline)
             composable(DOWNLOADS_ROUTE) { DownloadsScreen(navController) }
 
-            // History (watch history full page — reuse LibraryScreen with tab param or dedicated)
+            // History (full dedicated screen)
             composable("history") {
-                LibraryScreen(navController = navController)
+                HistoryScreen(navController = navController)
             }
 
-            // Watch Later
+            // Watch Later (full dedicated screen)
             composable("watch_later") {
-                LibraryScreen(navController = navController)
+                WatchLaterScreen(navController = navController)
             }
 
-            // Playlists
+            // Playlists (full dedicated screen)
             composable("playlists") {
-                LibraryScreen(navController = navController)
+                PlaylistsScreen(navController = navController)
             }
 
-            // Community posts
-            composable(COMMUNITY_ROUTE) { CommunityScreen(navController) }
+            // Trending
+            composable("trending") { TrendingScreen(navController) }
+
+            // Stories
+            composable("stories") { StoriesScreen(navController) }
+
+            // Movies
+            composable("movies") { MoviesScreen(navController) }
+
+            // Memberships for a channel
+            composable(
+                route = "memberships/{channelId}",
+                arguments = listOf(navArgument("channelId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                MembershipsScreen(
+                    channelId = backStackEntry.arguments?.getString("channelId") ?: "",
+                    navController = navController
+                )
+            }
+
+            // Playlist detail
+            composable(
+                route = "playlist/{playlistId}",
+                arguments = listOf(navArgument("playlistId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                PlaylistDetailScreen(
+                    playlistId = backStackEntry.arguments?.getString("playlistId") ?: "",
+                    navController = navController
+                )
+            }
 
             // Premieres
             composable(PREMIERES_ROUTE) { PremieresScreen(navController) }
+
+            // End screen editor
+            composable(
+                route = "end_screen/{videoId}",
+                arguments = listOf(navArgument("videoId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                EndScreenEditorScreen(
+                    videoId = backStackEntry.arguments?.getString("videoId") ?: "",
+                    navController = navController
+                )
+            }
 
             // Super Thanks
             composable(
@@ -266,6 +324,7 @@ sealed class Screen(val route: String, val title: String, val icon: Int) {
  * is kept as a plain route constant outside the [Screen] bottom-nav hierarchy.
  */
 const val STUDIO_ROUTE = "studio"
+const val MUSIC_ROUTE = "music"
 const val SEARCH_ROUTE = "search"
 const val NOTIFICATIONS_ROUTE = "notifications"
 const val VS_MATCH_ROUTE = "vs_matches"
@@ -285,3 +344,37 @@ val bottomNavItems = listOf(
     Screen.Library
 )
 
+
+/**
+ * Generic placeholder shown when a feature is disabled for the current release
+ * (e.g. real-money VS Matches gated behind [com.mychannel.BuildConfig.WAGERING_ENABLED]).
+ * Keeps deep links / notification taps from reaching a disabled surface.
+ */
+@Composable
+private fun FeatureUnavailableScreen(
+    title: String,
+    message: String,
+    onBack: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(text = title, style = MaterialTheme.typography.headlineSmall)
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Button(onClick = onBack) {
+                Text(text = "Go Back")
+            }
+        }
+    }
+}

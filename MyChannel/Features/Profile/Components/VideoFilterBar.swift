@@ -102,12 +102,12 @@ enum VideoVisibilityFilter: CaseIterable {
 }
 
 enum VideoTypeFilter: CaseIterable {
-    case all, shorts, longForm, live
+    case all, flicks, longForm, live
     
     var title: String {
         switch self {
         case .all: return "Type"
-        case .shorts: return "Shorts"
+        case .flicks: return "Flicks"
         case .longForm: return "Long"
         case .live: return "Live"
         }
@@ -116,7 +116,7 @@ enum VideoTypeFilter: CaseIterable {
     var icon: String? {
         switch self {
         case .all: return "star.fill"
-        case .shorts: return "play.rectangle.on.rectangle"
+        case .flicks: return "play.rectangle.on.rectangle"
         case .longForm: return "rectangle.stack"
         case .live: return "dot.radiowaves.left.and.right"
         }

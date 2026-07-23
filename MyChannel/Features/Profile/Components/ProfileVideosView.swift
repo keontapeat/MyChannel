@@ -325,7 +325,7 @@ struct ProfileVideosView: View {
         switch typeFilter {
         case .all:
             return true
-        case .shorts:
+        case .flicks:
             return video.duration <= 60
         case .longForm:
             return video.duration > 60

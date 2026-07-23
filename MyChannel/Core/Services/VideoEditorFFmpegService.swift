@@ -2,7 +2,7 @@ import Foundation
 import AVFoundation
 
 /// A Beast Mode service that powers on-device video compression, 
-/// trimming, and advanced editing for "Shorts" using native AVFoundation.
+/// trimming, and advanced editing for Flicks using native AVFoundation.
 final class VideoEditorFFmpegService {
     static let shared = VideoEditorFFmpegService()
     

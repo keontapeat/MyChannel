@@ -319,7 +319,7 @@ export default function VideoManagerPage() {
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <Link href={`/studio/videos/${v.id}/edit`}>
+                      <Link href={`/studio/video-edit?videoId=${v.id}`}>
                         <h3 className="text-[13px] font-semibold text-[rgb(var(--color-text-primary))] line-clamp-2 mb-1 hover:text-[rgb(var(--color-primary))] transition-colors">
                           {v.title}
                         </h3>
@@ -349,7 +349,7 @@ export default function VideoManagerPage() {
                       {menuOpen === v.id && (
                         <div className="absolute right-0 top-8 z-30 w-44 bg-[rgb(var(--color-background))] border border-[rgb(var(--color-border))] rounded-xl shadow-xl overflow-hidden">
                           <Link
-                            href={`/studio/videos/${v.id}/edit`}
+                            href={`/studio/video-edit?videoId=${v.id}`}
                             className="flex items-center gap-2 px-3 py-2.5 text-[13px] text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors"
                             onClick={() => setMenuOpen(null)}
                           >
