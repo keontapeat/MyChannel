@@ -2,7 +2,7 @@
 //  WagerPolicyTests.swift
 //  MyChannelTests
 //
-//  Tests for the real-money wager compliance thresholds (18+, KYC > $500,
+//  Tests for the real-money wager compliance thresholds (18+, KYC $500+,
 //  per-tier daily limits, region allowlist). These gate real money, so the
 //  boundaries are pinned down here.
 //
@@ -20,10 +20,11 @@ final class WagerPolicyTests: XCTestCase {
         XCTAssertTrue(WagerPolicy.isOfAge(45))
     }
 
-    // MARK: - KYC threshold (> $500)
+    // MARK: - KYC threshold ($500+)
 
-    func testKYCRequiredOnlyAbove500() {
-        XCTAssertFalse(WagerPolicy.requiresKYC(amountDollars: 500), "exactly $500 should not require KYC")
+    func testKYCRequiredAtOrAbove500() {
+        XCTAssertFalse(WagerPolicy.requiresKYC(amountDollars: 499.99))
+        XCTAssertTrue(WagerPolicy.requiresKYC(amountDollars: 500), "exactly $500 must require KYC")
         XCTAssertTrue(WagerPolicy.requiresKYC(amountDollars: 500.01))
         XCTAssertTrue(WagerPolicy.requiresKYC(amountDollars: 5000))
         XCTAssertFalse(WagerPolicy.requiresKYC(amountDollars: 100))

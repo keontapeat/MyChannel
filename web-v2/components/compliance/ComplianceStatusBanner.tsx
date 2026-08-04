@@ -47,7 +47,9 @@ export function ComplianceStatusBanner({ preflight, className = '' }: Compliance
 
   const dailyLimit = dailyLimitDollars(preflight.tier);
   const remainingDaily = Math.max(0, dailyLimit - preflight.alreadyWageredToday);
-  const kycNeeded = requiresKYC(amount > 0 ? amount : WAGER_POLICY.kycRequiredAboveDollars + 1);
+  const kycNeeded = requiresKYC(
+    amount > 0 ? amount : WAGER_POLICY.kycRequiredAtOrAboveDollars
+  );
   const regionOk = isRegionAllowed(preflight.region);
   const termsOk = preflight.termsAcceptedVersion === WAGER_POLICY.currentTermsVersion;
   const ageOk = preflight.age >= WAGER_POLICY.minimumAge;
@@ -94,7 +96,7 @@ export function ComplianceStatusBanner({ preflight, className = '' }: Compliance
             preflight.kycApproved
               ? 'Approved'
               : kycNeeded
-                ? 'Required for wagers over $500'
+                ? 'Required for wagers of $500 or more'
                 : 'Not required at this amount'
           }
           tone={kycTone}

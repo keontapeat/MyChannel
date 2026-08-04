@@ -13,7 +13,8 @@ import XCTest
 final class VSMatchComplianceServiceTests: XCTestCase {
 
     func testKYCGateMatchesServiceThreshold() {
-        XCTAssertFalse(WagerPolicy.requiresKYC(amountDollars: 500))
+        XCTAssertFalse(WagerPolicy.requiresKYC(amountDollars: 499.99))
+        XCTAssertTrue(WagerPolicy.requiresKYC(amountDollars: 500))
         XCTAssertTrue(WagerPolicy.requiresKYC(amountDollars: 500.01))
     }
 
@@ -73,7 +74,7 @@ final class VSMatchComplianceServiceTests: XCTestCase {
         let reasons = ComplianceError.aggregatedReasons(from: errors)
         XCTAssertEqual(reasons.count, 3)
         XCTAssertTrue(reasons.contains("Age verification required (18+)"))
-        XCTAssertTrue(reasons.contains("KYC verification required for wagers over $500"))
+        XCTAssertTrue(reasons.contains("KYC verification required for wagers of $500 or more"))
         XCTAssertTrue(reasons.contains("Real money wagering not available in your region"))
     }
 
@@ -97,7 +98,7 @@ final class VSMatchComplianceServiceTests: XCTestCase {
             XCTAssertEqual(nested.count, 2)
             let joined = ComplianceError.multipleErrors(errors).localizedDescription ?? ""
             XCTAssertTrue(joined.contains("Age verification required (18+)"))
-            XCTAssertTrue(joined.contains("KYC verification required for wagers over $500"))
+            XCTAssertTrue(joined.contains("KYC verification required for wagers of $500 or more"))
         } else {
             XCTFail("Expected multipleErrors case")
         }

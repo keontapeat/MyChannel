@@ -56,7 +56,7 @@ export default function WalletKYCPage() {
           <ShieldCheck className="text-green-400" size={28} />
           <div>
             <h1 className="text-2xl font-bold">Identity verification</h1>
-            <p className="text-sm text-gray-400">Required for wagers over $500</p>
+            <p className="text-sm text-gray-400">Required for wagers of $500 or more</p>
           </div>
         </header>
         <p className="mb-6 text-gray-300">

@@ -36,7 +36,7 @@ export const MONEY_CONTRACT = {
   wager: {
     minDollars: WAGER_POLICY.minWagerDollars,
     maxDollars: WAGER_POLICY.maxWagerDollars,
-    kycRequiredAboveDollars: WAGER_POLICY.kycRequiredAboveDollars,
+    kycRequiredAtOrAboveDollars: WAGER_POLICY.kycRequiredAtOrAboveDollars,
     platformFeePercent: WAGER_POLICY.platformFeePercent,
     allowedRegions: Array.from(WAGER_POLICY.allowedRegions),
     dailyLimitDollars: {

@@ -248,7 +248,7 @@ struct VSMatchComplianceSheet: View {
                     .opacity(isBusy && !isStartingKYC || isKYCDebounced ? 0.5 : 1)
                     .accessibilityLabel(
                         kycStatus == .notStarted
-                            ? "Verify identity with government ID for wagers over five hundred dollars"
+                            ? "Verify identity with government ID for wagers of five hundred dollars or more"
                             : "Re-verify identity with government ID"
                     )
                 }
@@ -261,13 +261,13 @@ struct VSMatchComplianceSheet: View {
         case .approved:
             return "Your identity is verified."
         case .pending:
-            return "Your identity verification is under review. You'll be able to place wagers over $500 once it's approved."
+            return "Your identity verification is under review. You'll be able to place wagers of $500 or more once it's approved."
         case .rejected:
             return "Identity verification was declined. Tap Re-verify Identity to try again with a valid government ID and clear selfie."
         case .expired:
-            return "Your identity verification expired. Please re-verify to wager over $500."
+            return "Your identity verification expired. Please re-verify to wager $500 or more."
         case .notStarted:
-            return "Wagers over $500 require identity verification via Stripe Identity (government ID + selfie)."
+            return "Wagers of $500 or more require identity verification via Stripe Identity (government ID + selfie)."
         }
     }
 

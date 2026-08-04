@@ -34,8 +34,9 @@ describe("wager-policy (mjs)", () => {
     assert.equal(isValidWagerAmount(0.99), false);
   });
 
-  it("requires KYC above $500", () => {
-    assert.equal(requiresKYC(500), false);
+  it("requires KYC at $500 and above", () => {
+    assert.equal(requiresKYC(499.99), false);
+    assert.equal(requiresKYC(500), true);
     assert.equal(requiresKYC(500.01), true);
   });
 
@@ -76,11 +77,11 @@ describe("wager-policy (mjs)", () => {
     assert.deepEqual(result, { ok: true });
   });
 
-  it("preflight rejects KYC when wager over $500", () => {
+  it("preflight rejects KYC at the $500 boundary", () => {
     const result = canWagerClientPreflight({
       age: 21,
       kycApproved: false,
-      amountDollars: 500.01,
+      amountDollars: 500,
       region: "US-CA",
       alreadyWageredToday: 0,
       tier: "verified",

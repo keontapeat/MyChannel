@@ -185,7 +185,7 @@ final class VSMatchComplianceService: ObservableObject, ComplianceChecking {
             errors.append(.ageNotVerified)
         }
         
-        // 2. KYC verification (for amounts > $500)
+        // 2. KYC verification (for amounts of $500 or more)
         if WagerPolicy.requiresKYC(amountDollars: amount) {
             let kycStatus = await getKYCStatus(userId: userId)
             if kycStatus != .approved {
@@ -461,7 +461,7 @@ enum ComplianceError: LocalizedError {
         case .ageNotVerified:
             return "Age verification required (18+)"
         case .kycRequired:
-            return "KYC verification required for wagers over $500"
+            return "KYC verification required for wagers of $500 or more"
         case .termsNotAccepted:
             return "Terms of Service must be accepted"
         case .regionRestricted:

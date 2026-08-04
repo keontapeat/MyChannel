@@ -1495,6 +1495,14 @@ struct GamingEsportsView: View {
     }
     
     private func acceptChallenge(_ match: VSMatch) {
+        // 🔒 LAUNCH GATE (real-money): accepting a challenge locks escrow. Blocked
+        // for the initial release until real-money wagering is licensed/enrolled.
+        // This is the money-mutating guard — never let escrow move with the flag off.
+        guard AppConfig.Features.enableCreatorMonetization else {
+            joinAlertMessage = "VS Match challenges are coming soon."
+            showJoinAlert = true
+            return
+        }
         guard acceptingMatchId == nil else { return }
         guard let userId = AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id else {
             joinAlertMessage = "Sign in to accept challenges."

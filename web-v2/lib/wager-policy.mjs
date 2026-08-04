@@ -7,7 +7,7 @@ export const WAGER_POLICY = {
   minimumAge: 18,
   minWagerDollars: 1,
   maxWagerDollars: 100_000,
-  kycRequiredAboveDollars: 500,
+  kycRequiredAtOrAboveDollars: 500,
   currentTermsVersion: "2025.1",
   platformFeePercent: 0.1,
   allowedRegions: new Set([
@@ -22,12 +22,22 @@ export const WAGER_POLICY = {
   ]),
 };
 
+/** Resolve medal division from wager amount (USD). Keep in sync with wager-policy.ts. */
+export function getMedalDivision(wagerAmount) {
+  if (wagerAmount >= 10_001) return "legend";
+  if (wagerAmount >= 5_001) return "diamond";
+  if (wagerAmount >= 1_001) return "platinum";
+  if (wagerAmount >= 501) return "gold";
+  if (wagerAmount >= 101) return "silver";
+  return "bronze";
+}
+
 export function isOfAge(age) {
   return age >= WAGER_POLICY.minimumAge;
 }
 
 export function requiresKYC(amountDollars) {
-  return amountDollars > WAGER_POLICY.kycRequiredAboveDollars;
+  return amountDollars >= WAGER_POLICY.kycRequiredAtOrAboveDollars;
 }
 
 export function isValidWagerAmount(amountDollars) {
@@ -85,7 +95,7 @@ export function canWagerClientPreflight(input) {
     );
   }
   if (requiresKYC(input.amountDollars) && !input.kycApproved) {
-    reasons.push("KYC required for wagers over $500");
+    reasons.push("KYC required for wagers of $500 or more");
   }
   if (!isRegionAllowed(input.region)) {
     reasons.push("Real-money play not available in your region");

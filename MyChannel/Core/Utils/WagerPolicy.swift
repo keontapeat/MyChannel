@@ -19,8 +19,8 @@ enum WagerPolicy {
     static let minWagerDollars: Double = 1
     static let maxWagerDollars: Double = 100_000
 
-    /// KYC is required for wagers strictly greater than this amount (USD).
-    static let kycRequiredAboveDollars: Double = 500
+    /// KYC is required for wagers at or above this amount (USD).
+    static let kycRequiredAtOrAboveDollars: Double = 500
 
     /// Current VS Match Terms of Service version. Bump this when the wagering
     /// terms change so previously-accepted users are re-prompted.
@@ -31,7 +31,9 @@ enum WagerPolicy {
 
     static func isOfAge(_ age: Int) -> Bool { age >= minimumAge }
 
-    static func requiresKYC(amountDollars: Double) -> Bool { amountDollars > kycRequiredAboveDollars }
+    static func requiresKYC(amountDollars: Double) -> Bool {
+        amountDollars >= kycRequiredAtOrAboveDollars
+    }
 
     static func isValidWagerAmount(_ amountDollars: Double) -> Bool {
         amountDollars >= minWagerDollars && amountDollars <= maxWagerDollars

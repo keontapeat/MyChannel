@@ -10,8 +10,8 @@ export const WAGER_POLICY = {
   minimumAge: 18,
   minWagerDollars: 1,
   maxWagerDollars: 100_000,
-  /** KYC required for wagers strictly greater than this amount (USD). */
-  kycRequiredAboveDollars: 500,
+  /** KYC required for wagers at or above this amount (USD). */
+  kycRequiredAtOrAboveDollars: 500,
   currentTermsVersion: "2025.1",
   platformFeePercent: 0.1,
   allowedRegions: new Set([
@@ -52,7 +52,7 @@ export function isOfAge(age: number): boolean {
 }
 
 export function requiresKYC(amountDollars: number): boolean {
-  return amountDollars > WAGER_POLICY.kycRequiredAboveDollars;
+  return amountDollars >= WAGER_POLICY.kycRequiredAtOrAboveDollars;
 }
 
 export function isValidWagerAmount(amountDollars: number): boolean {
@@ -131,7 +131,7 @@ export function canWagerClientPreflight(input: {
     );
   }
   if (requiresKYC(input.amountDollars) && !input.kycApproved) {
-    reasons.push("KYC required for wagers over $500");
+    reasons.push("KYC required for wagers of $500 or more");
   }
   if (!isRegionAllowed(input.region)) {
     reasons.push("Real-money play not available in your region");
