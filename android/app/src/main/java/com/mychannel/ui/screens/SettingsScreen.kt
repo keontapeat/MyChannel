@@ -12,14 +12,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,7 +33,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.mychannel.viewmodel.AuthViewModel
 
 /**
  * Settings screen — playback, notifications, privacy, parental controls,
@@ -38,7 +43,10 @@ import androidx.navigation.NavController
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(navController: NavController) {
+fun SettingsScreen(
+    navController: NavController,
+    authViewModel: AuthViewModel = hiltViewModel()
+) {
     // Persistent toggles — in production these would be backed by DataStore
     var autoplay by remember { mutableStateOf(true) }
     var hd by remember { mutableStateOf(false) }
@@ -50,6 +58,77 @@ fun SettingsScreen(navController: NavController) {
     var restrictedMode by remember { mutableStateOf(false) }
     var locationRestrictions by remember { mutableStateOf(false) }
     var backgroundPlay by remember { mutableStateOf(true) }
+
+    // Account deletion — two-step confirmation (App Store / Google Play requirement).
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showDeleteFinal by remember { mutableStateOf(false) }
+    var deleteConfirmText by remember { mutableStateOf("") }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete account?") },
+            text = {
+                Text(
+                    "This permanently removes your account and all associated data — " +
+                        "your videos, comments, profile, subscriptions, and playlists. " +
+                        "This cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    deleteConfirmText = ""
+                    showDeleteFinal = true
+                }) {
+                    Text("Continue", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showDeleteFinal) {
+        AlertDialog(
+            onDismissRequest = { showDeleteFinal = false },
+            title = { Text("Final confirmation") },
+            text = {
+                Column {
+                    Text("Type DELETE to permanently delete your account.")
+                    OutlinedTextField(
+                        value = deleteConfirmText,
+                        onValueChange = { deleteConfirmText = it },
+                        singleLine = true,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = deleteConfirmText.trim().equals("DELETE", ignoreCase = false),
+                    onClick = {
+                        showDeleteFinal = false
+                        deleteConfirmText = ""
+                        authViewModel.deleteAccount {
+                            navController.navigate("home") {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                    }
+                ) {
+                    Text("Delete account", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDeleteFinal = false
+                    deleteConfirmText = ""
+                }) { Text("Cancel") }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -99,6 +178,11 @@ fun SettingsScreen(navController: NavController) {
                     checked = parentalControls
                 ) { parentalControls = it }
             }
+            item {
+                NavigationRow("Kids Mode") {
+                    navController.navigate("kids_mode")
+                }
+            }
             item { HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp)) }
             item {
                 ToggleRow(
@@ -139,12 +223,26 @@ fun SettingsScreen(navController: NavController) {
             }
             item { HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp)) }
             item {
+                NavigationRow("Switch Account", onClick = {
+                    navController.navigate("account_switcher")
+                })
+            }
+            item {
                 NavigationRow("Sign out", onClick = {
-                    com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
-                    navController.navigate("home") {
-                        popUpTo(0) { inclusive = true }
+                    authViewModel.signOut {
+                        navController.navigate("home") {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 })
+            }
+            item { HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp)) }
+            item {
+                NavigationRow(
+                    label = "Delete account",
+                    sublabel = "Permanently delete your account and data",
+                    onClick = { showDeleteConfirm = true }
+                )
             }
             item { HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp)) }
         }

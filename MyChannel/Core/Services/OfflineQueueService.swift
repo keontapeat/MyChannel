@@ -140,19 +140,37 @@ final class OfflineQueueService: ObservableObject {
         case .like:
             guard let videoId = p["videoId"], let userId = p["userId"] else { return }
             #if canImport(FirebaseFirestore)
-            let ref = Firestore.firestore().collection("videos").document(videoId).collection("likes").document(userId)
-            try await ref.setData(["userId": userId, "createdAt": FieldValue.serverTimestamp()])
-            try await Firestore.firestore().collection("videos").document(videoId)
-                .updateData(["likeCount": FieldValue.increment(Int64(1))])
+            let db = Firestore.firestore()
+            let videoRef = db.collection("videos").document(videoId)
+            let likeRef = videoRef.collection("likes").document(userId)
+            let eventRef = videoRef.collection("events").document("offline_\(action.id)")
+            let batch = db.batch()
+            batch.setData(["userId": userId, "createdAt": FieldValue.serverTimestamp()], forDocument: likeRef)
+            batch.setData([
+                "userId": userId,
+                "type": "like",
+                "sessionId": action.id,
+                "createdAt": FieldValue.serverTimestamp()
+            ], forDocument: eventRef)
+            try await batch.commit()
             #endif
 
         case .unlike:
             guard let videoId = p["videoId"], let userId = p["userId"] else { return }
             #if canImport(FirebaseFirestore)
-            try await Firestore.firestore().collection("videos").document(videoId)
-                .collection("likes").document(userId).delete()
-            try await Firestore.firestore().collection("videos").document(videoId)
-                .updateData(["likeCount": FieldValue.increment(Int64(-1))])
+            let db = Firestore.firestore()
+            let videoRef = db.collection("videos").document(videoId)
+            let likeRef = videoRef.collection("likes").document(userId)
+            let eventRef = videoRef.collection("events").document("offline_\(action.id)")
+            let batch = db.batch()
+            batch.deleteDocument(likeRef)
+            batch.setData([
+                "userId": userId,
+                "type": "unlike",
+                "sessionId": action.id,
+                "createdAt": FieldValue.serverTimestamp()
+            ], forDocument: eventRef)
+            try await batch.commit()
             #endif
 
         case .comment:

@@ -8,32 +8,41 @@ extension VideoDetailView {
     private var videoPlayerSection: some View {
         ZStack {
             if showingYouTubeAd, let ad = currentVideoAd {
-                // 🔥 YOUTUBE-STYLE AD PLAYER
                 youtubeStyleAdPlayer(ad: ad)
             } else if isYouTube {
                 youtubePlayerView
-            } else {
+            } else if case .allowed = playbackAuthorization {
                 avPlayerView
+            } else {
+                playbackAuthorizationOverlay
+            }
+
+            if membershipGateActive {
+                membershipGateOverlay
             }
         }
         .background(
-            // 🔥 BEAST MODE: True Cinematic Ambient Mode (Blurred Video Mirror)
             Group {
                 if ambientService.isEnabled {
+                    let palette = ambientService.currentPalette
                     ZStack {
-                        if isYouTube {
-                            youtubePlayerView
-                        } else {
-                            if let player = activePlayer {
-                                PiPEnabledVideoPlayer(player: player)
-                            }
-                        }
+                        LinearGradient(
+                            colors: [
+                                Color(palette.dominant),
+                                Color(palette.secondary),
+                                Color(palette.accent)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .blur(radius: 60)
+                        .scaleEffect(1.2)
+                        .opacity(0.75 * ambientService.glowIntensity)
+                        .animation(
+                            reduceMotion ? nil : .easeInOut(duration: ambientService.transitionDuration),
+                            value: palette.dominant
+                        )
                     }
-                    .aspectRatio(16.0/9.0, contentMode: .fill)
-                    .blur(radius: 80, opaque: true)
-                    .scaleEffect(1.2)
-                    .opacity(0.65)
-                    .animation(.easeInOut(duration: 1.0), value: ambientService.isEnabled)
                 } else {
                     Color.black
                 }
@@ -46,11 +55,73 @@ extension VideoDetailView {
         }
         // 🔥 FIX: Removed highPriorityGesture - taps handled by PlayerTapCaptureView now
     }
+
+    @ViewBuilder
+    private var playbackAuthorizationOverlay: some View {
+        ZStack(alignment: .top) {
+            Color.black
+                .aspectRatio(16.0 / 9.0, contentMode: .fit)
+
+            switch playbackAuthorization {
+            case .checking:
+                VStack(spacing: AppTheme.Spacing.md) {
+                    ProgressView()
+                        .tint(.white)
+                    Text("Authorizing playback…")
+                        .font(AppTheme.Typography.body)
+                        .foregroundColor(.white)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Authorizing playback")
+            case .blocked(let message):
+                VStack(spacing: AppTheme.Spacing.md) {
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text(message)
+                        .font(AppTheme.Typography.body)
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                    HStack(spacing: 12) {
+                        Button("Retry") {
+                            authorizationTask?.cancel()
+                            authorizationTask = Task { await authorizeAndStartPlayback() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .frame(minHeight: 44)
+
+                        Button("Close") {
+                            closeVideoDetail()
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.white)
+                        .frame(minHeight: 44)
+                    }
+                }
+                .padding(AppTheme.Spacing.lg)
+                .accessibilityElement(children: .contain)
+            case .allowed:
+                EmptyView()
+            }
+
+            // Always allow exit while authorizing / blocked — player chrome isn't mounted yet.
+            HStack {
+                Button(action: { closeVideoDetail() }) {
+                    playerCircleButtonLabel(systemName: "xmark")
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .accessibilityLabel("Close video")
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+        }
+    }
     
     // 🔥 YOUTUBE-STYLE AD PLAYER VIEW
     @ViewBuilder
     func youtubeStyleAdPlayer(ad: VideoAd) -> some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             // Ad video player - show video only when ready
             if let player = adManager.adPlayer, adManager.isAdVideoReady {
                 RawPlayerLayerView(player: player, videoGravity: .resizeAspect)
@@ -59,7 +130,6 @@ extension VideoDetailView {
                         // Ensure playback starts when view appears
                         if player.rate == 0 {
                             player.play()
-                            print("▶️ [VideoDetailView] Called play() on ad player in view")
                         }
                     }
             } else {
@@ -77,7 +147,20 @@ extension VideoDetailView {
                         }
                     }
             }
-            
+
+            // Always allow exit during ads / ad loading.
+            HStack {
+                Button(action: { closeVideoDetail() }) {
+                    playerCircleButtonLabel(systemName: "xmark")
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .accessibilityLabel("Close video")
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .zIndex(50)
+
             // YouTube-style ad overlay - only show when video is ready
             if adManager.isAdVideoReady {
                 YouTubeStyleAdOverlay(
@@ -88,10 +171,9 @@ extension VideoDetailView {
                         skipCurrentAd()
                     },
                     onLearnMore: {
-                        if let url = URL(string: ad.clickURL), !ad.clickURL.isEmpty {
-                            adManager.clickAd()
-                            UIApplication.shared.open(url)
-                        }
+                        guard let url = SafePlaybackURL.external(ad.clickURL) else { return }
+                        adManager.clickAd()
+                        UIApplication.shared.open(url)
                     }
                 )
             }
@@ -100,21 +182,12 @@ extension VideoDetailView {
     
     // 🔥 SKIP AD HANDLER
     func skipCurrentAd() {
-        print("⏭️ [VideoDetailView] Skipping ad")
+        #if DEBUG
+        print("⏭️ [VideoDetailView] Requesting ad skip")
+        #endif
+        // GoogleIMAAdManager owns the transition callback. Starting content here
+        // as well races onAdSkipped and can create two AVPlayer items.
         adManager.skipAd()
-        showingYouTubeAd = false
-        currentVideoAd = nil
-        
-        // Resume main video
-        playerManager.setupPlayer(with: video)
-        playerManager.applyFastStartTuning()
-        if AppState.shared.preferredVideoQuality != .auto {
-            playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
-        }
-        playerManager.requestAutoPlay()
-        
-        // Register for PiP
-        GlobalVideoPlayerManager.shared.registerLocalPlayer(video: video, player: playerManager.player)
     }
     
     @ViewBuilder
@@ -129,46 +202,44 @@ extension VideoDetailView {
         .frame(maxWidth: .infinity)
         .aspectRatio(16.0/9.0, contentMode: .fit)
         .background(Color.black)
-        
+
         // Minimal top bar for YouTube embed
         HStack {
-            // 🔥 YOUTUBE PARITY: Chevron down to minimize (not close!)
-            Button(action: { dismiss() }) {
-                ZStack {
-                    Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                    Image(systemName: "chevron.down").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
-                }
+            Button(action: {
+                userExplicitlyClosed = true
+                dismiss()
+            }) {
+                playerCircleButtonLabel(systemName: "chevron.down", iconSize: 16)
             }
             .buttonStyle(ScaleButtonStyle())
             .accessibilityLabel("Minimize")
-            
+
             Spacer()
-            
+
             Text(video.title)
                 .font(.system(size: 15, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(PlayerChrome.onSurface)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
-                .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.4)))
-            
+                .background(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.sm).fill(PlayerChrome.scrimSoft))
+
             Spacer()
-            
-            Spacer().frame(width: 36)
+
+            Button(action: { closeVideoDetail() }) {
+                playerCircleButtonLabel(systemName: "xmark")
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .accessibilityLabel("Close video")
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
     
-    // 🔥 FIX: Get the correct player (global if from mini player, local otherwise)
     var activePlayer: AVPlayer? {
-        let globalPlayer = GlobalVideoPlayerManager.shared
-        if globalPlayer.currentVideo?.id == video.id, let globalPlayerInstance = globalPlayer.player {
-            return globalPlayerInstance  // Use global player if same video (from mini player)
-        }
-        return playerManager.player  // Otherwise use local player
+        activePlayerManager.player
     }
     
     @ViewBuilder
@@ -199,9 +270,152 @@ extension VideoDetailView {
         if showUpNext, let next = (upNextVideo ?? recommendedVideos.first(where: { $0.id != video.id })) {
             endScreenOverlay(next: next)
         }
-        
+
+        // Poll / Quiz overlay
+        if AppConfig.Features.enableVideoPollsQuizzes, var poll = displayedPoll {
+            VideoPollOverlayView(
+                poll: Binding(
+                    get: { displayedPoll ?? poll },
+                    set: { displayedPoll = $0 }
+                ),
+                onVote: { optionId in
+                    guard let uid = AppState.shared.currentUser?.id else { return }
+                    Task { [weak pollService] in
+                        try? await pollService?.vote(pollId: poll.id, optionId: optionId, uid: uid)
+                    }
+                },
+                onDismiss: {
+                    withAnimation(.easeOut(duration: 0.25)) { displayedPoll = nil }
+                }
+            )
+            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            .zIndex(200)
+        }
+
+        // Shoppable product-tag chips
+        if AppConfig.Features.enableShoppableVideo {
+            let currentTags = (shoppableService.tagsByVideo[video.id] ?? []).filter {
+                playerManager.currentTime >= $0.startSeconds && playerManager.currentTime <= $0.endSeconds
+            }
+            if !currentTags.isEmpty {
+                VStack {
+                    Spacer()
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(currentTags) { tag in
+                                Button {
+                                    UIApplication.shared.open(tag.merchantURL)
+                                    HapticManager.shared.impact(style: .light)
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "bag.fill")
+                                            .font(.system(size: 11))
+                                        VStack(alignment: .leading, spacing: 0) {
+                                            Text(tag.title)
+                                                .font(.system(size: 12, weight: .semibold))
+                                                .lineLimit(1)
+                                            if let price = tag.price, let currency = tag.currency {
+                                                Text("\(currency) \(price)")
+                                                    .font(.system(size: 10))
+                                                    .opacity(0.85)
+                                            }
+                                        }
+                                    }
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(Capsule().fill(Color.black.opacity(0.75)))
+                                    .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.5))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                    .padding(.bottom, 80)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(190)
+                .allowsHitTesting(true)
+            }
+        }
+
+        // Info Cards overlay (YouTube-style interactive cards)
+        InfoCardsContainerView(
+            manager: infoCardManager,
+            onCardTap: { card in
+                if let urlString = card.destination.urlString {
+                    if urlString.hasPrefix("mychannel://"), let url = URL(string: urlString) {
+                        UIApplication.shared.open(url)
+                    } else if let url = SafePlaybackURL.external(urlString) {
+                        UIApplication.shared.open(url)
+                    } else if let url = URL(string: urlString),
+                              url.scheme?.lowercased() == "https",
+                              url.host != nil {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                HapticManager.shared.impact(style: .light)
+            }
+        )
+        .zIndex(180)
+
         // Loading / error overlays + seek/dubbing/status indicators
         avPlayerStatusOverlays
+    }
+
+    @ViewBuilder
+    private var membershipGateOverlay: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.opacity(0.85)
+            VStack(spacing: 20) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 44))
+                    .foregroundColor(.white)
+                Text("Members Only")
+                    .font(.title2.bold())
+                    .foregroundColor(.white)
+                Text("Join this channel to watch this video.")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+
+                Button {
+                    HapticManager.shared.impact(style: .medium)
+                    showingMembershipSheet = true
+                } label: {
+                    Text("Join channel")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(minHeight: 44)
+                        .padding(.horizontal, 28)
+                        .background(Capsule().fill(AppTheme.Colors.primary))
+                }
+                .accessibilityLabel("Join channel membership")
+
+                Button {
+                    closeVideoDetail()
+                } label: {
+                    Text("Close")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white.opacity(0.85))
+                        .frame(minHeight: 44)
+                }
+                .accessibilityLabel("Close video")
+            }
+            .padding(24)
+
+            Button(action: { closeVideoDetail() }) {
+                playerCircleButtonLabel(systemName: "xmark")
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .accessibilityLabel("Close video")
+        }
+        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+        .transition(.opacity)
+        .zIndex(400)
     }
     
     // MARK: - avPlayerView split: video layer
@@ -223,7 +437,10 @@ extension VideoDetailView {
                             .onEnded { value in
                                 lastPinchScale = pinchScale
                                 if pinchScale < 1.1 {
-                                    withAnimation(.spring()) { pinchScale = 1.0; lastPinchScale = 1.0 }
+                                    withAnimation(reduceMotion ? nil : .spring()) {
+                                        pinchScale = 1.0
+                                        lastPinchScale = 1.0
+                                    }
                                 }
                             }
                     )
@@ -240,9 +457,9 @@ extension VideoDetailView {
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: activePlayer == nil)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: activePlayer == nil)
         .onLongPressGesture(minimumDuration: 0.5) {
-            withAnimation(.spring()) { showDebugHUD.toggle() }
+            withAnimation(reduceMotion ? nil : .spring()) { showDebugHUD.toggle() }
         }
     }
     
@@ -429,7 +646,7 @@ extension VideoDetailView {
                 let t = playerManager.currentTime
                 return (t >= top.startSec && t <= top.endSec) ? 1 : 0
             }())
-            .animation(.easeInOut, value: playerManager.currentTime)
+            .animation(reduceMotion ? nil : .easeInOut, value: playerManager.currentTime)
         }
         // Auto-skip silence indicator
         if showSilenceSkipIndicator {
@@ -494,7 +711,7 @@ extension VideoDetailView {
                         Image(systemName: isForward ? "play.fill" : "backward.fill")
                     }
                     .font(.system(size: 14))
-                    Text(isForward ? "10 seconds" : "10 seconds")
+                    Text("10 seconds")
                         .font(.system(size: 14, weight: .medium))
                 }
                 .foregroundColor(.white)
@@ -543,7 +760,9 @@ extension VideoDetailView {
                         showSeekRippleBackward = false
                     }
                     HapticManager.shared.impact(style: .medium)
+                    #if DEBUG
                     print("⏪ Double-tap left: Rewind 10s")
+                    #endif
                 } else {
                     playerManager.seekForward(10)
                     showSeekRippleForward = true
@@ -552,7 +771,9 @@ extension VideoDetailView {
                         showSeekRippleForward = false
                     }
                     HapticManager.shared.impact(style: .medium)
+                    #if DEBUG
                     print("⏩ Double-tap right: Forward 10s")
+                    #endif
                 }
             },
             onLongPressStateChanged: { isActive in
@@ -562,18 +783,26 @@ extension VideoDetailView {
                         playbackRate = 2.0
                         playerManager.setPlaybackRate(2.0)
                         isLongPressSpeedUp = true
-                        withAnimation(.spring(response: 0.2)) { showSpeedUpIndicator = true }
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.2)) {
+                            showSpeedUpIndicator = true
+                        }
                         HapticManager.shared.impact(style: .medium)
+                        #if DEBUG
                         print("⚡ [YouTube] Long-press 2x speed activated")
+                        #endif
                     }
                 } else {
                     if isLongPressSpeedUp {
                         playbackRate = savedPlaybackRate
                         playerManager.setPlaybackRate(savedPlaybackRate)
                         isLongPressSpeedUp = false
-                        withAnimation(.spring(response: 0.2)) { showSpeedUpIndicator = false }
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.2)) {
+                            showSpeedUpIndicator = false
+                        }
                         HapticManager.shared.impact(style: .light)
+                        #if DEBUG
                         print("⚡ [YouTube] Long-press released — back to \(savedPlaybackRate)x")
+                        #endif
                     }
                 }
             },
@@ -632,7 +861,9 @@ extension VideoDetailView {
                     let progress = playerManager.duration > 0 ? targetTime / playerManager.duration : 0
                     playerManager.seek(to: progress)
                     HapticManager.shared.impact(style: .light)
+                    #if DEBUG
                     print("⏩ [YouTube] Swipe-seek to \(Int(targetTime))s (delta: \(Int(seekDeltaSeconds))s)")
+                    #endif
                 }
 
                 if controlsCoordinator.showBrightnessOverlay {
@@ -661,7 +892,9 @@ extension VideoDetailView {
         .zIndex(1)
     }
     func handlePlayerTap() {
+        #if DEBUG
         print("📱 Video tapped - Current controls state: \(controlsCoordinator.showControls)")
+        #endif
         controlsCoordinator.toggleControls()
     }
 
@@ -681,6 +914,20 @@ extension VideoDetailView {
         .opacity(controlsCoordinator.showControls && !showUpNext ? 1.0 : 0.0)  // 🔥 FIX: Hide controls when end screen is active
     }
     
+    /// Shared label for the small circular chrome buttons (chevron, gear, close).
+    /// Centralizes the fixed white-on-black player look via PlayerChrome tokens.
+    @ViewBuilder
+    func playerCircleButtonLabel(systemName: String, iconSize: CGFloat = 14, weight: Font.Weight = .semibold) -> some View {
+        ZStack {
+            Circle()
+                .fill(PlayerChrome.controlBackground)
+                .frame(width: PlayerChrome.controlButtonSize, height: PlayerChrome.controlButtonSize)
+            Image(systemName: systemName)
+                .font(.system(size: iconSize, weight: weight))
+                .foregroundColor(PlayerChrome.onSurface)
+        }
+    }
+
     @ViewBuilder
     var topControlBar: some View {
         HStack {
@@ -688,17 +935,16 @@ extension VideoDetailView {
             // This allows users to continue watching while navigating the app
             Button(action: {
                 HapticManager.shared.impact(style: .medium)
-                // Start native iOS PiP — dismiss ONLY after PiP bubble appears.
-                // If PiP fails (simulator / PiP disabled), just dismiss normally.
+                guard effectivePlaybackSession?.capabilities.supportsPictureInPicture == true else {
+                    Task { await minimizeToMiniPlayer() }
+                    return
+                }
                 PiPPlayerManager.shared.startPiP(
                     onStarted: { dismiss() },
-                    onFailed:  { dismiss() }
+                    onFailed: { Task { await minimizeToMiniPlayer() } }
                 )
             }) {
-                ZStack {
-                    Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                    Image(systemName: "chevron.down").font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
-                }
+                playerCircleButtonLabel(systemName: "chevron.down", iconSize: 16)
             }
             .buttonStyle(ScaleButtonStyle())
             .accessibilityLabel("Minimize to Picture in Picture")
@@ -720,7 +966,7 @@ extension VideoDetailView {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
             }
-            .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.4)))
+            .background(RoundedRectangle(cornerRadius: AppTheme.CornerRadius.sm).fill(PlayerChrome.scrimSoft))
             
             Spacer()
             
@@ -728,7 +974,7 @@ extension VideoDetailView {
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
-        .background(LinearGradient(colors: [.black.opacity(0.8), .clear], startPoint: .top, endPoint: .bottom))
+        .background(PlayerChrome.topGradient)
         .opacity(controlsCoordinator.showControls ? 1.0 : 0.0)
     }
     
@@ -738,29 +984,24 @@ extension VideoDetailView {
     @ViewBuilder
     var topControlButtons: some View {
         HStack(spacing: 10) {
-            // AirPlay / Cast (YouTube keeps casting up top)
-            AirPlayRoutePickerView()
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(.black.opacity(0.7)))
-                .accessibilityLabel("Cast / AirPlay")
+            if effectivePlaybackSession?.capabilities.supportsCasting == true {
+                AirPlayRoutePickerView()
+                    .frame(width: PlayerChrome.controlButtonSize, height: PlayerChrome.controlButtonSize)
+                    .background(Circle().fill(PlayerChrome.controlBackground))
+                    .accessibilityLabel("Cast or AirPlay")
+            }
 
             // Consolidated settings menu (YouTube's gear)
             playerSettingsMenu
 
             // Close video completely
             Button(action: {
+                #if DEBUG
                 print("❌ [VideoDetailView] Close button tapped - exiting video")
-                userExplicitlyClosed = true
-                playerManager.pause()
-                globalPlayer.closePlayer()
-                dismiss()
+                #endif
+                closeVideoDetail()
             }) {
-                ZStack {
-                    Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
-                }
+                playerCircleButtonLabel(systemName: "xmark")
             }
             .buttonStyle(ScaleButtonStyle())
             .accessibilityLabel("Close video")
@@ -776,12 +1017,7 @@ extension VideoDetailView {
             HapticManager.shared.impact(style: .light)
             showingPlayerSettings = true
         }) {
-            ZStack {
-                Circle().fill(.black.opacity(0.7)).frame(width: 36, height: 36)
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-            }
+            playerCircleButtonLabel(systemName: "gearshape.fill")
         }
         .buttonStyle(ScaleButtonStyle())
         .accessibilityLabel("Player settings")
@@ -791,13 +1027,15 @@ extension VideoDetailView {
     var centerControls: some View {
         HStack(spacing: 24) {
             Button(action: { 
+                #if DEBUG
                 print("⏪ [VideoDetailView] Rewind button tapped")
+                #endif
                 playerManager.seekBackward(10)
                 HapticManager.shared.impact(style: .light)
             }) {
                 Image(systemName: "gobackward.10")
                     .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(PlayerChrome.onSurface)
             }
             .frame(width: 60, height: 60)  // 🔥 FIX: Larger tap target
             .contentShape(Rectangle())  // 🔥 FIX: Explicit content shape
@@ -806,7 +1044,9 @@ extension VideoDetailView {
             .accessibilityAddTraits(.isButton)
             
             Button(action: { 
+                #if DEBUG
                 print("▶️ [VideoDetailView] Play/Pause button tapped - Current state: \(playerManager.isPlaying)")
+                #endif
                 playerManager.togglePlayPause()
                 HapticManager.shared.impact(style: .medium)
                 
@@ -815,7 +1055,7 @@ extension VideoDetailView {
             }) {
                 Image(systemName: playerManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 56, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(PlayerChrome.onSurface)
             }
             .frame(width: 80, height: 80)  // 🔥 FIX: Larger tap target
             .contentShape(Rectangle())  // 🔥 FIX: Explicit content shape
@@ -824,13 +1064,15 @@ extension VideoDetailView {
             .accessibilityAddTraits(.isButton)
             
             Button(action: { 
+                #if DEBUG
                 print("⏩ [VideoDetailView] Forward button tapped")
+                #endif
                 playerManager.seekForward(10)
                 HapticManager.shared.impact(style: .light)
             }) {
                 Image(systemName: "goforward.10")
                     .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(PlayerChrome.onSurface)
             }
             .frame(width: 60, height: 60)  // 🔥 FIX: Larger tap target
             .contentShape(Rectangle())  // 🔥 FIX: Explicit content shape
@@ -849,7 +1091,7 @@ extension VideoDetailView {
             progressSlider
             progressTimeControls
         }
-        .background(LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom))
+        .background(PlayerChrome.bottomGradient)
         .opacity(controlsCoordinator.showControls ? 1.0 : 0.0)
     }
     
@@ -1006,16 +1248,16 @@ extension VideoDetailView {
     @ViewBuilder
     var progressTimeControls: some View {
         HStack {
-            Text(formatTime(playerManager.currentTime)).foregroundColor(.white).font(.caption.monospacedDigit())
+            Text(formatTime(playerManager.currentTime)).foregroundColor(PlayerChrome.onSurface).font(.caption.monospacedDigit())
             Spacer()
             quickControls
-            Text(formatTime(playerManager.duration)).foregroundColor(.white).font(.caption.monospacedDigit())
+            Text(formatTime(playerManager.duration)).foregroundColor(PlayerChrome.onSurface).font(.caption.monospacedDigit())
 
             // 🔥 YOUTUBE PARITY: Fullscreen toggle lives at the bottom-right, next to duration
             Button(action: { presentFullscreenPlayer() }) {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(PlayerChrome.onSurface)
                     .frame(width: 30, height: 30)
                     .contentShape(Rectangle())
             }
@@ -1033,7 +1275,7 @@ extension VideoDetailView {
             Button(action: { showingPlaybackSpeedSelector = true }) {
                 Text(playbackRate == 1.0 ? "1x" : String(format: "%.2gx", playbackRate))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(playbackRate != 1.0 ? AppTheme.Colors.primary : .white)
+                    .foregroundColor(playbackRate != 1.0 ? PlayerChrome.accent : PlayerChrome.onSurface)
             }
             .buttonStyle(ScaleButtonStyle())
             .accessibilityLabel("Playback speed, \(playbackRate == 1.0 ? "1" : String(format: "%.2g", playbackRate)) times")
@@ -1047,7 +1289,7 @@ extension VideoDetailView {
             }) {
                 Image(systemName: "list.bullet")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(showingQueueSidebar ? AppTheme.Colors.primary : .white)
+                    .foregroundColor(showingQueueSidebar ? PlayerChrome.accent : PlayerChrome.onSurface)
             }
             .buttonStyle(ScaleButtonStyle())
             .accessibilityLabel("Up next queue")
@@ -1070,7 +1312,7 @@ extension VideoDetailView {
     // MARK: - YouTube-Style End Screen Overlay
     @ViewBuilder
     func endScreenOverlay(next: Video) -> some View {
-        ZStack {
+        ZStack(alignment: .topTrailing) {
             // Dark overlay background
             Rectangle()
                 .fill(Color.black.opacity(0.85))
@@ -1087,27 +1329,18 @@ extension VideoDetailView {
                 HStack(spacing: 10) {
                     // Thumbnail with duration badge - smaller
                     ZStack(alignment: .bottomTrailing) {
-                        AsyncImage(url: URL(string: next.thumbnailURL)) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(16/9, contentMode: .fill)
-                            case .failure:
-                                Rectangle()
-                                    .fill(Color.gray.opacity(0.3))
-                                    .overlay(
-                                        Image(systemName: "photo")
-                                            .foregroundColor(.white.opacity(0.5))
-                                            .font(.system(size: 20))
-                                    )
-                            case .empty:
-                                Rectangle()
-                                    .fill(Color.gray.opacity(0.3))
-                                    .overlay(ProgressView().tint(.white))
-                            @unknown default:
-                                Rectangle().fill(Color.gray.opacity(0.3))
-                            }
+                        CachedAsyncImage(url: URL(string: next.thumbnailURL)) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(16/9, contentMode: .fill)
+                        } placeholder: {
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.3))
+                                .overlay(
+                                    Image(systemName: "photo")
+                                        .foregroundColor(.white.opacity(0.5))
+                                        .font(.system(size: 20))
+                                )
                         }
                         .frame(width: 120, height: 68)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -1146,7 +1379,7 @@ extension VideoDetailView {
 
                 // Action buttons - compact YouTube style
                 HStack(spacing: 12) {
-                    // Cancel button
+                    // Cancel endscreen (stay on this video)
                     Button {
                         HapticManager.shared.impact(style: .light)
                         cancelEndscreen()
@@ -1162,6 +1395,24 @@ extension VideoDetailView {
                             )
                     }
                     .buttonStyle(.plain)
+
+                    // Close the detail player entirely
+                    Button {
+                        HapticManager.shared.impact(style: .medium)
+                        closeVideoDetail()
+                    } label: {
+                        Text("Close")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close video")
 
                     // Play now button with countdown ring
                     Button {
@@ -1202,6 +1453,14 @@ extension VideoDetailView {
                 }
                 .padding(.bottom, 32)
             }
+
+            Button(action: { closeVideoDetail() }) {
+                playerCircleButtonLabel(systemName: "xmark")
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .accessibilityLabel("Close video")
         }
         .aspectRatio(16.0/9.0, contentMode: .fit)
         .transition(.asymmetric(
@@ -1246,9 +1505,8 @@ extension VideoDetailView {
                     Button(action: {
                         playerManager.hasError = false
                         playerManager.errorMessage = nil
-                        playerManager.setupPlayer(with: video)
-                        // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP
-                        globalPlayer.registerLocalPlayer(video: video, player: playerManager.player)
+                        authorizationTask?.cancel()
+                        authorizationTask = Task { await authorizeAndStartPlayback() }
                     }) {
                         Text("Retry")
                             .font(.system(size: 16, weight: .semibold))
@@ -1263,9 +1521,7 @@ extension VideoDetailView {
                     
                     Button(action: {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                            userExplicitlyClosed = true
-                            globalPlayer.closePlayer()
-                            dismiss()
+                            closeVideoDetail()
                         }
                     }) {
                         Text("Close Video")
@@ -1284,9 +1540,7 @@ extension VideoDetailView {
             
             Button(action: {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                    userExplicitlyClosed = true
-                    globalPlayer.closePlayer()
-                    dismiss()
+                    closeVideoDetail()
                 }
             }) {
                 Image(systemName: "xmark")
@@ -1432,6 +1686,7 @@ extension VideoDetailView {
 
                 // Video metadata and controls
                 VideoDetailMetaView(video: video,
+                                    supportsOfflineDownload: effectivePlaybackSession?.capabilities.supportsOfflineDownload == true,
                                     isSubscribed: $isSubscribed,
                                     isWatchLater: $isWatchLater,
                                     isLiked: $isLiked,
@@ -1559,7 +1814,7 @@ extension VideoDetailView {
                     }
             )
         .sheet(isPresented: $showingCommentComposer) {
-            RealTimeCommentsView(video: video)
+            RealTimeCommentsView(video: video, currentPlaybackTime: playerManager.currentTime)
                 .presentationDetents([.large])
                 .background(
                     UIKitSheetConfigurator(
@@ -1674,7 +1929,8 @@ extension VideoDetailView {
                     qualityLabel: videoQuality.displayName,
                     speedLabel: playbackRate == 1.0 ? "Normal" : String(format: "%.2gx", playbackRate),
                     audioLabel: currentAudioTrack,
-                    captionsAvailable: !playerManager.availableSubtitleOptions().isEmpty,
+                    captionsAvailable: effectivePlaybackSession?.capabilities.supportsCaptions == true &&
+                        !activePlayerManager.availableSubtitleOptions().isEmpty,
                     chaptersAvailable: (video.chapters?.isEmpty == false) || !video.parsedChaptersFromDescription.isEmpty,
                     isLooping: $isLooping,
                     isAmbient: Binding(
@@ -1683,6 +1939,9 @@ extension VideoDetailView {
                             if newValue != ambientService.isEnabled {
                                 ambientService.toggle()
                                 showAmbientGlow = ambientService.isEnabled
+                                if ambientService.isEnabled, let player = activePlayerManager.player {
+                                    ambientService.startLiveExtraction(for: player)
+                                }
                             }
                         }
                     ),
@@ -1690,7 +1949,10 @@ extension VideoDetailView {
                     showStats: $showDebugHUD,
                     onQuality: { showingQualitySelector = true },
                     onSpeed: { showingPlaybackSpeedSelector = true },
-                    onCaptions: { showingSubtitlePicker = true },
+                    onCaptions: {
+                        guard effectivePlaybackSession?.capabilities.supportsCaptions == true else { return }
+                        showingSubtitlePicker = true
+                    },
                     onChapters: {
                         if (video.chapters?.isEmpty == false) || !video.parsedChaptersFromDescription.isEmpty {
                             showingChapters = true

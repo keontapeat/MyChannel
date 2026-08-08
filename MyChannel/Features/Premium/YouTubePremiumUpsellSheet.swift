@@ -254,16 +254,20 @@ struct YouTubePremiumUpsellSheet: View {
                     }
                 }
             } else {
-                // Fallback: simulate subscription for demo
+                // Never unlock Premium without a StoreKit product in Release (3.1.1)
+#if DEBUG
                 try await Task.sleep(nanoseconds: 1_500_000_000)
                 try await premiumService.subscribe(to: .pro)
-                
                 showConfetti = true
                 HapticManager.shared.notification(type: .success)
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
                     dismiss()
                 }
+#else
+                HapticManager.shared.notification(type: .error)
+                print("❌ Premium product unavailable — purchase aborted")
+#endif
             }
         } catch {
             HapticManager.shared.notification(type: .error)
@@ -503,10 +507,16 @@ struct StopAdsUpsellSheet: View {
                 Button(action: {
                     Task {
                         isLoading = true
-                        try? await premiumService.subscribe(to: .pro)
-                        HapticManager.shared.notification(type: .success)
-                        isLoading = false
-                        dismiss()
+                        // PremiumService.subscribe performs StoreKit purchase and fails closed (3.1.1)
+                        do {
+                            try await premiumService.subscribe(to: .pro)
+                            HapticManager.shared.notification(type: .success)
+                            isLoading = false
+                            dismiss()
+                        } catch {
+                            HapticManager.shared.notification(type: .error)
+                            isLoading = false
+                        }
                     }
                 }) {
                     HStack {

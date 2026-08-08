@@ -104,7 +104,7 @@ struct LiveTVPlayerView: View {
             Task { @MainActor in
                 let manager = LiveTVManager.shared
                 if manager.channels.isEmpty {
-                    channels = LiveTVChannel.sampleChannels
+                    channels = LiveTVChannel.appStoreSafeChannels
                 } else {
                     channels = manager.channels
                 }

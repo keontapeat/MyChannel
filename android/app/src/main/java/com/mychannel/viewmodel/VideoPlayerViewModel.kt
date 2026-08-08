@@ -6,6 +6,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 import com.mychannel.data.remote.ModerationDataSource
 import com.mychannel.domain.model.Comment
 import com.mychannel.domain.model.ContentReportReason
@@ -122,7 +125,23 @@ class VideoPlayerViewModel @Inject constructor(
             }
             if (currentVideoId != videoId) return@launch
 
-            val playbackPosition = dataStore.data.first()[playbackKey(videoId)] ?: 0L
+            val playbackPosition = run {
+                val local = dataStore.data.first()[playbackKey(videoId)] ?: 0L
+                if (local > 0L) local
+                else {
+                    // Try cloud watch history for cross-device resume
+                    val uid = FirebaseAuth.getInstance().currentUser?.uid
+                    if (uid != null) {
+                        runCatching {
+                            FirebaseFirestore.getInstance()
+                                .collection("users").document(uid)
+                                .collection("watch-history").document(videoId)
+                                .get().await()
+                                .getLong("positionMs") ?: 0L
+                        }.getOrDefault(0L)
+                    } else 0L
+                }
+            }
             lastSavedPositionMs = playbackPosition
             _uiState.update {
                 it.copy(
@@ -397,9 +416,24 @@ class VideoPlayerViewModel @Inject constructor(
         if (valueToSave == 0L && lastSavedPositionMs == 0L) return
         lastSavedPositionMs = valueToSave
         viewModelScope.launch {
+            // Local DataStore (fast, offline-capable)
             dataStore.edit { preferences ->
                 val key = playbackKey(videoId)
                 if (valueToSave == 0L) preferences.remove(key) else preferences[key] = valueToSave
+            }
+            // Cloud sync — write to Firestore watch-history collection
+            val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@launch
+            runCatching {
+                FirebaseFirestore.getInstance()
+                    .collection("users").document(uid)
+                    .collection("watch-history").document(videoId)
+                    .set(
+                        mapOf(
+                            "videoId" to videoId,
+                            "positionMs" to valueToSave,
+                            "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                        )
+                    )
             }
         }
     }

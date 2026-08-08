@@ -596,22 +596,26 @@ struct ContentManagementView: View {
     
     private var filteredVideos: [Video] {
         let filtered = videos.filter { video in
-            // Apply filter
             let matchesFilter: Bool
             switch filterOption {
             case .all:
                 matchesFilter = true
             case .published:
-                matchesFilter = true // All videos in this demo are published
-            case .drafts, .scheduled, .unlisted, .private_:
-                matchesFilter = false // Not implemented yet
+                matchesFilter = video.visibility == .public && video.scheduledAt == nil
+            case .drafts:
+                matchesFilter = video.visibility == .private && video.scheduledAt == nil
+            case .scheduled:
+                matchesFilter = video.scheduledAt != nil
+            case .unlisted:
+                matchesFilter = video.visibility == .unlisted
+            case .private_:
+                matchesFilter = video.visibility == .private
             }
-            
-            // Apply search
-            let matchesSearch = searchText.isEmpty || 
+
+            let matchesSearch = searchText.isEmpty ||
                 video.title.localizedCaseInsensitiveContains(searchText) ||
                 video.description.localizedCaseInsensitiveContains(searchText)
-            
+
             return matchesFilter && matchesSearch
         }
         

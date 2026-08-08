@@ -1,12 +1,18 @@
 package com.mychannel.viewmodel
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import com.google.common.truth.Truth.assertThat
+import com.mychannel.data.remote.ModerationDataSource
 import com.mychannel.domain.model.Channel
 import com.mychannel.domain.model.Comment
 import com.mychannel.domain.model.LiveStream
+import com.mychannel.domain.model.PlaybackSession
 import com.mychannel.domain.model.Story
 import com.mychannel.domain.model.Video
 import com.mychannel.domain.repository.ChannelRepository
+import com.mychannel.domain.repository.PlaybackSessionRepository
 import com.mychannel.domain.repository.VideoRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,6 +27,8 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 
 /**
  * Unit tests for [VideoPlayerViewModel] (REQ-5.x).
@@ -34,12 +42,19 @@ class VideoPlayerViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var videoRepo: FakeVideoRepository
     private lateinit var channelRepo: FakeChannelRepository
+    private lateinit var playbackRepo: FakePlaybackSessionRepository
+    private lateinit var moderationDataSource: ModerationDataSource
+    private lateinit var dataStore: DataStore<Preferences>
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         videoRepo = FakeVideoRepository()
         channelRepo = FakeChannelRepository()
+        playbackRepo = FakePlaybackSessionRepository()
+        moderationDataSource = mock()
+        dataStore = mock()
+        whenever(dataStore.data).thenReturn(flowOf(emptyPreferences()))
     }
 
     @After
@@ -47,7 +62,13 @@ class VideoPlayerViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel() = VideoPlayerViewModel(videoRepo, channelRepo)
+    private fun createViewModel() = VideoPlayerViewModel(
+        videoRepo,
+        channelRepo,
+        playbackRepo,
+        moderationDataSource,
+        dataStore
+    )
 
     @Test
     fun `loadVideo populates video and clears loading`() = runTest {
@@ -64,14 +85,29 @@ class VideoPlayerViewModelTest {
     }
 
     @Test
-    fun `loadVideo increments the view count once`() = runTest {
+    fun `loadVideo does not count a view before qualified playback`() = runTest {
         videoRepo.video = Video(id = "v1", channelId = "c1")
         val viewModel = createViewModel()
 
         viewModel.loadVideo("v1")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertThat(videoRepo.viewCountIncrements).isEqualTo(1)
+        assertThat(playbackRepo.watchTimeReports).isEqualTo(0)
+    }
+
+    @Test
+    fun `qualified playback counts a view once`() = runTest {
+        videoRepo.video = Video(id = "v1", channelId = "c1")
+        val viewModel = createViewModel()
+        viewModel.loadVideo("v1")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.recordQualifiedView("v1")
+        viewModel.recordQualifiedView("v1")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertThat(playbackRepo.watchTimeReports).isEqualTo(1)
+        assertThat(playbackRepo.lastQualifiedView).isTrue()
     }
 
     @Test
@@ -114,7 +150,7 @@ class VideoPlayerViewModelTest {
         viewModel.loadVideo("v1")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertThat(videoRepo.viewCountIncrements).isEqualTo(1)
+        assertThat(playbackRepo.authorizationCalls).isEqualTo(1)
     }
 
     @Test
@@ -138,8 +174,8 @@ class VideoPlayerViewModelTest {
 
         viewModel.loadVideo("v1")
         videoRepo.trending.value = listOf(
-            Video(id = "v1", title = "current"),
-            Video(id = "v2", title = "other")
+            Video(id = "v1", title = "current", processingStatus = "ready", moderationStatus = "approved"),
+            Video(id = "v2", title = "other", processingStatus = "ready", moderationStatus = "approved")
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -184,11 +220,50 @@ class VideoPlayerViewModelTest {
     fun `toggleLike before a video is loaded is a no-op`() = runTest {
         val viewModel = createViewModel()
 
-        viewModel.toggleLike(true)
+        viewModel.toggleLike()
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.isLiked).isFalse()
         assertThat(videoRepo.toggleLikeCalls).isEqualTo(0)
+    }
+
+    private class FakePlaybackSessionRepository : PlaybackSessionRepository {
+        var authorizationCalls = 0
+        var watchTimeReports = 0
+        var lastQualifiedView = false
+        var failure: Throwable? = null
+
+        override suspend fun authorize(videoId: String): Result<PlaybackSession> {
+            authorizationCalls++
+            failure?.let { return Result.failure(it) }
+            return Result.success(
+                PlaybackSession(
+                    sessionId = "session-$videoId",
+                    videoId = videoId,
+                    manifestUrl = "https://storage.googleapis.com/test/$videoId.m3u8",
+                    expiresAtEpochMs = null,
+                    adsEnabled = false,
+                    supportsHls = true,
+                    supportsDash = false,
+                    supportsCaptions = true,
+                    supportsOfflineDownload = false,
+                    supportsPictureInPicture = true,
+                    supportsCasting = true
+                )
+            )
+        }
+
+        override suspend fun reportWatchTime(
+            videoId: String,
+            sessionId: String,
+            watchTimeSeconds: Int,
+            completionRate: Double?,
+            qualifiedView: Boolean
+        ): Result<Unit> {
+            watchTimeReports++
+            lastQualifiedView = qualifiedView
+            return Result.success(Unit)
+        }
     }
 
     private class FakeVideoRepository : VideoRepository {
@@ -222,7 +297,11 @@ class VideoPlayerViewModelTest {
             return Result.success(Unit)
         }
 
+        override suspend fun toggleDislike(videoId: String, dislike: Boolean): Result<Unit> =
+            Result.success(Unit)
+
         override suspend fun isLiked(videoId: String): Result<Boolean> = Result.success(liked)
+        override suspend fun isDisliked(videoId: String): Result<Boolean> = Result.success(false)
         override suspend fun isSaved(videoId: String): Result<Boolean> = Result.success(saved)
 
         override suspend fun setSaved(video: Video, save: Boolean): Result<Unit> =

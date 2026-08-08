@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, BellRing, BellOff, ChevronDown, Check } from 'lucide-react';
 import {
-  doc, getDoc, setDoc, deleteDoc, updateDoc, increment, serverTimestamp,
+  doc, getDoc, setDoc, deleteDoc, updateDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase/config';
 
@@ -74,10 +74,8 @@ export default function SubscribeButton({ channelId }: SubscribeButtonProps) {
           subscribedAt: serverTimestamp(),
         });
         setLevel('personalized');
-        await updateDoc(doc(db, 'users', channelId), { subscriberCount: increment(1) });
       } else {
         await deleteDoc(ref);
-        await updateDoc(doc(db, 'users', channelId), { subscriberCount: increment(-1) });
       }
     } catch {
       setIsSubscribed(!next); // rollback

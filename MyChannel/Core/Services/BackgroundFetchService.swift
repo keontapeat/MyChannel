@@ -26,10 +26,32 @@ actor BackgroundFetchService {
     
     /// Register the background task with the system
     nonisolated func register() {
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: refreshTaskId, using: nil) { task in
-            self.handleAppRefresh(task: task as! BGAppRefreshTask)
+        // Guard before calling register — an unlisted identifier throws
+        // NSInternalInconsistencyException and kills launch (Guideline 2.1(a)).
+        let permitted = Bundle.main.object(
+            forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers"
+        ) as? [String] ?? []
+        guard permitted.contains(refreshTaskId) else {
+            print("⚠️ [BackgroundFetch] Skipping register — \(refreshTaskId) not in Info.plist")
+            return
         }
-        print("🔄 [BackgroundFetch] Registered BGAppRefreshTask")
+
+        let didRegister = BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: refreshTaskId,
+            using: nil
+        ) { task in
+            guard let refreshTask = task as? BGAppRefreshTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            self.handleAppRefresh(task: refreshTask)
+        }
+
+        if didRegister {
+            print("🔄 [BackgroundFetch] Registered BGAppRefreshTask")
+        } else {
+            print("⚠️ [BackgroundFetch] BGAppRefreshTask handler was not registered")
+        }
     }
     
     /// Schedule the next background fetch

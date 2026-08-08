@@ -7,6 +7,9 @@
 
 import SwiftUI
 import Combine
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 // MARK: - Info Card Service Protocol
 protocol InfoCardServiceProtocol {
@@ -21,102 +24,86 @@ protocol InfoCardServiceProtocol {
 @MainActor
 class InfoCardService: ObservableObject, InfoCardServiceProtocol {
     static let shared = InfoCardService()
-    
-    @Published var cards: [String: [InfoCard]] = [:] // videoId -> cards
+
+    @Published var cards: [String: [InfoCard]] = [:]
     @Published var isLoading = false
     @Published var error: Error?
-    
-    private init() {
-        // Load sample data
-        loadSampleData()
+
+    private init() {}
+
+    // MARK: - Firestore collection helper
+    #if canImport(FirebaseFirestore)
+    private func collection(for videoId: String) -> CollectionReference {
+        Firestore.firestore().collection("videos").document(videoId).collection("info-cards")
     }
-    
-    private func loadSampleData() {
-        // Group sample cards by videoId
-        for card in InfoCard.sampleCards {
-            if cards[card.videoId] == nil {
-                cards[card.videoId] = []
-            }
-            cards[card.videoId]?.append(card)
-        }
-    }
-    
+    #endif
+
     // MARK: - Public Methods
     func getCards(for videoId: String) async throws -> [InfoCard] {
         isLoading = true
         defer { isLoading = false }
-        
-        // Simulate network delay
-        try await Task.sleep(nanoseconds: 300_000_000)
-        
-        return cards[videoId]?.sorted(by: { $0.timestamp < $1.timestamp }) ?? []
+        #if canImport(FirebaseFirestore)
+        let snap = try await collection(for: videoId).getDocuments()
+        let fetched = snap.documents.compactMap { try? $0.data(as: InfoCard.self) }
+            .sorted { $0.timestamp < $1.timestamp }
+        await MainActor.run { self.cards[videoId] = fetched }
+        return fetched
+        #else
+        return cards[videoId]?.sorted { $0.timestamp < $1.timestamp } ?? []
+        #endif
     }
-    
+
     func createCard(_ card: InfoCard) async throws -> InfoCard {
         isLoading = true
         defer { isLoading = false }
-        
-        try await Task.sleep(nanoseconds: 500_000_000)
-        
-        if cards[card.videoId] == nil {
-            cards[card.videoId] = []
-        }
+        #if canImport(FirebaseFirestore)
+        try collection(for: card.videoId).document(card.id).setData(from: card)
+        var updated = cards[card.videoId] ?? []
+        updated.append(card)
+        cards[card.videoId] = updated
+        #else
+        if cards[card.videoId] == nil { cards[card.videoId] = [] }
         cards[card.videoId]?.append(card)
-        
+        #endif
         return card
     }
-    
+
     func updateCard(_ card: InfoCard) async throws -> InfoCard {
         isLoading = true
         defer { isLoading = false }
-        
-        try await Task.sleep(nanoseconds: 300_000_000)
-        
+        #if canImport(FirebaseFirestore)
+        try collection(for: card.videoId).document(card.id).setData(from: card)
+        #endif
         guard var videoCards = cards[card.videoId],
               let index = videoCards.firstIndex(where: { $0.id == card.id }) else {
             throw InfoCardError.cardNotFound
         }
-        
         videoCards[index] = card
         cards[card.videoId] = videoCards
-        
         return card
     }
-    
+
     func deleteCard(id: String) async throws {
         isLoading = true
         defer { isLoading = false }
-        
-        try await Task.sleep(nanoseconds: 300_000_000)
-        
         for (videoId, videoCards) in cards {
-            if videoCards.contains(where: { $0.id == id }) {
+            if let card = videoCards.first(where: { $0.id == id }) {
+                #if canImport(FirebaseFirestore)
+                try await collection(for: videoId).document(id).delete()
+                #endif
                 cards[videoId] = videoCards.filter { $0.id != id }
                 return
             }
         }
-        
         throw InfoCardError.cardNotFound
     }
-    
+
     func reorderCards(videoId: String, cardIds: [String]) async throws {
         isLoading = true
         defer { isLoading = false }
-        
-        try await Task.sleep(nanoseconds: 200_000_000)
-        
-        guard var videoCards = cards[videoId] else {
-            throw InfoCardError.videoNotFound
-        }
-        
-        var reorderedCards: [InfoCard] = []
-        for cardId in cardIds {
-            if let card = videoCards.first(where: { $0.id == cardId }) {
-                reorderedCards.append(card)
-            }
-        }
-        
-        cards[videoId] = reorderedCards
+        guard let videoCards = cards[videoId] else { throw InfoCardError.videoNotFound }
+        let reordered = cardIds.compactMap { id in videoCards.first { $0.id == id } }
+        cards[videoId] = reordered
     }
     
     // MARK: - Helper Methods

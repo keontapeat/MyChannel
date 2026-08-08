@@ -306,15 +306,8 @@ class EnhancedSubscriptionService: ObservableObject {
             .collection("subscriptions")
             .document(channelId)
             .setData(subscriptionData)
-        
-        try await db.collection("users")
-            .document(channelId)
-            .collection("subscribers")
-            .document(userId)
-            .setData([
-                "subscribedAt": FieldValue.serverTimestamp(),
-                "source": "manual"
-            ], merge: true)
+
+        // Canonical count and reverse-edge fanout are server-owned.
         
         // Track analytics
         let subscribeTime = Date().timeIntervalSince(startTime)
@@ -342,12 +335,8 @@ class EnhancedSubscriptionService: ObservableObject {
             .collection("subscriptions")
             .document(channelId)
             .delete()
-        
-        try await db.collection("users")
-            .document(channelId)
-            .collection("subscribers")
-            .document(userId)
-            .delete()
+
+        // Canonical count and reverse-edge cleanup are server-owned.
         
         // Track analytics
         EnhancedAnalyticsManager.shared.logEvent("channel_unsubscribed", parameters: [

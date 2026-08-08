@@ -81,8 +81,8 @@ final class CommunityPostService: ObservableObject {
             if let poll = poll {
                 data["poll"] = [
                     "question": poll.question,
-                    "options": poll.options.map { ["text": $0.text, "voteCount": $0.voteCount] },
-                    "totalVotes": poll.totalVotes
+                    "options": poll.options.map { ["text": $0.text, "voteCount": 0] },
+                    "totalVotes": 0
                 ]
             }
             try await ref.setData(data)

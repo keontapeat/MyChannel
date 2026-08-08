@@ -9,16 +9,18 @@ final class ValetSecureStorageService {
 
     // MARK: - Valet instances (different protection levels)
 
-    /// Most secure: requires device passcode, non-migratable
+    /// Hardened device-only storage. Uses `.afterFirstUnlockThisDeviceOnly` (not
+    /// `.whenPasscodeSetThisDeviceOnly`) so cold launch / App Review devices that are
+    /// momentarily locked do not hang keychain reads during scene-update.
     private let secureValet: Valet = {
         Valet.valet(with: Identifier(nonEmpty: "live.mychannel.secure")!,
-                    accessibility: .whenPasscodeSetThisDeviceOnly)
+                    accessibility: .afterFirstUnlockThisDeviceOnly)
     }()
 
     /// Standard secure: accessible after first unlock, survives backups
     private let standardValet: Valet = {
         Valet.valet(with: Identifier(nonEmpty: "live.mychannel.standard")!,
-                    accessibility: .whenUnlocked)
+                    accessibility: .afterFirstUnlockThisDeviceOnly)
     }()
 
     /// Shared (for app group / widget access)

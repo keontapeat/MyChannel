@@ -13,6 +13,9 @@ import Combine
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+#if canImport(FirebaseDatabase)
+import FirebaseDatabase
+#endif
 
 // MARK: - Firestore Live Stream Document
 struct FirestoreLiveStream: Identifiable, Equatable {
@@ -30,6 +33,8 @@ struct FirestoreLiveStream: Identifiable, Equatable {
     var viewerCount: Int
     let startedAt: Date
     var endedAt: Date?
+    /// HLS playback URL — set by the broadcasting device when stream is active.
+    var playbackURL: String?
 
     static func == (lhs: FirestoreLiveStream, rhs: FirestoreLiveStream) -> Bool {
         lhs.id == rhs.id && lhs.status == rhs.status && lhs.viewerCount == rhs.viewerCount
@@ -46,9 +51,16 @@ final class LiveStreamManager: ObservableObject {
     private var db: Firestore { Firestore.firestore() }
     private var listener: ListenerRegistration?
     #endif
+    #if canImport(FirebaseDatabase)
+    private var viewerPresenceRefs: [String: DatabaseReference] = [:]
+    private var viewerCountRefs: [String: DatabaseReference] = [:]
+    private var viewerCountHandles: [String: DatabaseHandle] = [:]
+    private var activeListObservedStreamIds: Set<String> = []
+    #endif
 
     @Published var activeStreams: [FirestoreLiveStream] = []
     @Published var myCurrentStream: FirestoreLiveStream? = nil
+    @Published private(set) var liveViewerCounts: [String: Int] = [:]
 
     // MARK: - Go Live
     func goLive(
@@ -119,21 +131,92 @@ final class LiveStreamManager: ObservableObject {
         print("⬛ [LiveStreamManager] Ended stream: \(stream.id)")
     }
 
-    // MARK: - Increment Viewer Count
+    // MARK: - Viewer Presence
     func joinAsViewer(streamId: String) async {
-        #if canImport(FirebaseFirestore)
-        try? await db.collection("live_streams").document(streamId).updateData([
-            "viewerCount": FieldValue.increment(Int64(1))
-        ])
+        #if canImport(FirebaseDatabase)
+        guard isValidStreamId(streamId), viewerPresenceRefs[streamId] == nil,
+              let user = AppState.shared.currentUser ?? AuthenticationManager.shared.currentUser else {
+            return
+        }
+
+        let connectionId = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        let streamRef = Database.database().reference()
+            .child("live_viewers").child(streamId)
+        let presenceRef = streamRef.child("viewers").child(user.id).child(connectionId)
+
+        viewerPresenceRefs[streamId] = presenceRef
+        do {
+            try await presenceRef.onDisconnectRemoveValue()
+            try await presenceRef.setValue([
+                "joinedAt": ServerValue.timestamp(),
+                "displayName": String(user.displayName.prefix(100))
+            ])
+            observeViewerCount(streamId: streamId)
+        } catch {
+            viewerPresenceRefs.removeValue(forKey: streamId)
+            try? await presenceRef.cancelDisconnectOperations()
+            try? await presenceRef.removeValue()
+            print("⚠️ [LiveStreamManager] Failed to register viewer presence")
+        }
         #endif
     }
 
     func leaveAsViewer(streamId: String) async {
-        #if canImport(FirebaseFirestore)
-        try? await db.collection("live_streams").document(streamId).updateData([
-            "viewerCount": FieldValue.increment(Int64(-1))
-        ])
+        #if canImport(FirebaseDatabase)
+        if let presenceRef = viewerPresenceRefs.removeValue(forKey: streamId) {
+            try? await presenceRef.cancelDisconnectOperations()
+            try? await presenceRef.removeValue()
+        }
+        if !activeListObservedStreamIds.contains(streamId) {
+            stopObservingViewerCount(streamId: streamId)
+        }
         #endif
+    }
+
+    func viewerCount(for streamId: String, fallback: Int) -> Int {
+        liveViewerCounts[streamId] ?? max(0, fallback)
+    }
+
+    #if canImport(FirebaseDatabase)
+    private func observeViewerCount(streamId: String) {
+        guard viewerCountHandles[streamId] == nil else { return }
+        let countRef = Database.database().reference()
+            .child("live_viewers").child(streamId).child("viewerCount")
+        viewerCountRefs[streamId] = countRef
+        viewerCountHandles[streamId] = countRef.observe(.value) { [weak self] snapshot in
+            let rawCount = (snapshot.value as? NSNumber)?.intValue ?? 0
+            Task { @MainActor in
+                self?.liveViewerCounts[streamId] = max(0, rawCount)
+            }
+        }
+    }
+
+    private func stopObservingViewerCount(streamId: String) {
+        if let countRef = viewerCountRefs.removeValue(forKey: streamId),
+           let handle = viewerCountHandles.removeValue(forKey: streamId) {
+            countRef.removeObserver(withHandle: handle)
+        }
+        liveViewerCounts.removeValue(forKey: streamId)
+    }
+
+    private func syncActiveViewerCountObservers(streamIds: Set<String>) {
+        let removedStreamIds = activeListObservedStreamIds.subtracting(streamIds)
+        activeListObservedStreamIds = streamIds
+        for streamId in streamIds {
+            observeViewerCount(streamId: streamId)
+        }
+        for streamId in removedStreamIds where viewerPresenceRefs[streamId] == nil {
+            stopObservingViewerCount(streamId: streamId)
+        }
+    }
+    #endif
+
+    private func isValidStreamId(_ streamId: String) -> Bool {
+        guard streamId.count <= 128 else { return false }
+        return streamId.range(
+            of: "^[A-Za-z0-9_-]+$",
+            options: .regularExpression
+        ) != nil
     }
 
     // MARK: - Real-time Listener for Active Streams
@@ -147,7 +230,13 @@ final class LiveStreamManager: ObservableObject {
             .addSnapshotListener { [weak self] snapshot, error in
                 guard let self, let docs = snapshot?.documents else { return }
                 Task { @MainActor in
-                    self.activeStreams = docs.compactMap { Self.parse(doc: $0) }
+                    let streams = docs.compactMap { Self.parse(doc: $0) }
+                    self.activeStreams = streams
+                    #if canImport(FirebaseDatabase)
+                    self.syncActiveViewerCountObservers(
+                        streamIds: Set(streams.map(\.id))
+                    )
+                    #endif
                 }
             }
         print("📡 [LiveStreamManager] Listening for active live streams")
@@ -161,6 +250,9 @@ final class LiveStreamManager: ObservableObject {
         #if canImport(FirebaseFirestore)
         listener?.remove()
         listener = nil
+        #endif
+        #if canImport(FirebaseDatabase)
+        syncActiveViewerCountObservers(streamIds: [])
         #endif
     }
 
@@ -177,18 +269,27 @@ final class LiveStreamManager: ObservableObject {
 
     // MARK: - Send Chat Message
     func sendChatMessage(streamId: String, content: String) async {
-        guard let user = AppState.shared.currentUser ?? AuthenticationManager.shared.currentUser else { return }
-        let msgId = UUID().uuidString
+        guard isValidStreamId(streamId),
+              let user = AppState.shared.currentUser ?? AuthenticationManager.shared.currentUser else {
+            return
+        }
+        let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty, normalized.count <= 500 else { return }
 
-        #if canImport(FirebaseFirestore)
-        let data: [String: Any] = [
-            "userId": user.id,
-            "username": user.displayName,
-            "avatarUrl": user.profileImageURL ?? "",
-            "content": content,
-            "createdAt": FieldValue.serverTimestamp()
-        ]
-        try? await db.collection("live_streams").document(streamId).collection("chat").document(msgId).setData(data)
+        #if canImport(FirebaseDatabase)
+        let messageRef = Database.database().reference()
+            .child("live_chat").child(streamId)
+            .child("messages").childByAutoId()
+        do {
+            try await messageRef.setValue([
+                "text": normalized,
+                "userId": user.id,
+                "displayName": String(user.displayName.prefix(100)),
+                "timestamp": ServerValue.timestamp()
+            ])
+        } catch {
+            print("⚠️ [LiveStreamManager] Failed to send chat message")
+        }
         #endif
     }
 
@@ -210,7 +311,8 @@ final class LiveStreamManager: ObservableObject {
             status: d["status"] as? String ?? "live",
             viewerCount: d["viewerCount"] as? Int ?? 0,
             startedAt: (d["startedAt"] as? Timestamp)?.dateValue() ?? Date(),
-            endedAt: (d["endedAt"] as? Timestamp)?.dateValue()
+            endedAt: (d["endedAt"] as? Timestamp)?.dateValue(),
+            playbackURL: d["playbackURL"] as? String
         )
     }
     #endif

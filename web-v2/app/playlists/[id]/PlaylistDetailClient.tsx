@@ -21,8 +21,9 @@ interface PlaylistDetailClientProps {
   playlistId: string;
 }
 
-export default function PlaylistDetailClient({ playlistId }: PlaylistDetailClientProps) {
+export default function PlaylistDetailClient({ playlistId: initialPlaylistId }: PlaylistDetailClientProps) {
   const router = useRouter();
+  const [playlistId, setPlaylistId] = useState(initialPlaylistId === '_fallback' ? '' : initialPlaylistId);
   const [uid, setUid] = useState<string | null>(auth?.currentUser?.uid ?? null);
   const [authResolved, setAuthResolved] = useState(!!auth?.currentUser);
   const [title, setTitle] = useState('');
@@ -32,6 +33,14 @@ export default function PlaylistDetailClient({ playlistId }: PlaylistDetailClien
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialPlaylistId !== '_fallback') return;
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const playlistsIndex = segments.indexOf('playlists');
+    const pathId = playlistsIndex >= 0 ? segments[playlistsIndex + 1] : '';
+    if (pathId && pathId !== '_fallback') setPlaylistId(decodeURIComponent(pathId));
+  }, [initialPlaylistId]);
 
   useEffect(() => {
     const unsub = auth?.onAuthStateChanged?.((u) => { setUid(u?.uid ?? null); setAuthResolved(true); });

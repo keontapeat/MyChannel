@@ -25,11 +25,13 @@ data class SearchUiState(
     val channelResults: List<Channel> = emptyList(),
     val searchHistory: List<String> = emptyList(),
     val trendingSearches: List<String> = emptyList(),
+    val typeaheadSuggestions: List<String> = emptyList(),
     val isSearching: Boolean = false,
     val error: String? = null
 ) {
     val hasResults: Boolean get() = videoResults.isNotEmpty() || channelResults.isNotEmpty()
     val showSuggestions: Boolean get() = query.isBlank()
+    val showTypeahead: Boolean get() = query.isNotBlank() && !isSearching && typeaheadSuggestions.isNotEmpty()
 }
 
 @OptIn(FlowPreview::class)
@@ -62,13 +64,34 @@ class SearchViewModel @Inject constructor(
             .filter { it.length >= 2 }
             .onEach { query -> performSearch(query) }
             .launchIn(viewModelScope)
+
+        // Typeahead suggestions from history + trending matching current prefix
+        queryFlow
+            .debounce(150)
+            .distinctUntilChanged()
+            .onEach { query ->
+                if (query.isBlank()) {
+                    _uiState.update { it.copy(typeaheadSuggestions = emptyList()) }
+                    return@onEach
+                }
+                val lower = query.lowercase()
+                val historyMatches = _uiState.value.searchHistory
+                    .filter { it.lowercase().startsWith(lower) }
+                    .take(3)
+                val trendingMatches = _uiState.value.trendingSearches
+                    .filter { it.lowercase().startsWith(lower) && !historyMatches.contains(it) }
+                    .take(3)
+                val combined = (historyMatches + trendingMatches).distinct().take(5)
+                _uiState.update { it.copy(typeaheadSuggestions = combined) }
+            }
+            .launchIn(viewModelScope)
     }
 
     fun onQueryChange(query: String) {
         _uiState.update { it.copy(query = query, error = null) }
         queryFlow.value = query
         if (query.isBlank()) {
-            _uiState.update { it.copy(videoResults = emptyList(), channelResults = emptyList()) }
+            _uiState.update { it.copy(videoResults = emptyList(), channelResults = emptyList(), typeaheadSuggestions = emptyList()) }
         }
     }
 

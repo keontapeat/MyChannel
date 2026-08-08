@@ -59,6 +59,11 @@ class NotificationRepositoryImpl @Inject constructor(
         notificationDataSource.updateFcmToken(uid, token)
     }
 
+    override suspend fun unregisterFcmToken(token: String): Result<Unit> = runCatching {
+        val uid = requireUserId()
+        notificationDataSource.deleteFcmToken(uid, token)
+    }
+
     private fun requireUserId(): String =
         authDataSource.currentUserId ?: throw IllegalStateException("Not authenticated")
 }

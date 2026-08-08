@@ -52,13 +52,20 @@ final class StorySeenTracker: ObservableObject {
 
     func unseenCount(from stories: [String]) -> Int { stories.filter { !seenStoryIds.contains($0) }.count }
 
-    func clearExpired(olderThan hours: Int = 24) async throws {
+    func clearExpired(userId: String, olderThan hours: Int = 24) async throws {
+        guard !userId.isEmpty else { return }
         let cutoff = Date().addingTimeInterval(-Double(hours * 3600))
+        // Scope the query to the caller's own docs. Firestore Security Rules
+        // reject a `story_seen` query that isn't constrained to the signed-in
+        // user's `userId`, so we filter on userId server-side and evaluate the
+        // `seenAt` expiry client-side (avoids a userId+seenAt composite index).
         let snapshot = try await db.collection("story_seen")
-            .whereField("seenAt", isLessThan: cutoff)
-            .limit(to: 100)
+            .whereField("userId", isEqualTo: userId)
+            .limit(to: 500)
             .getDocuments()
         for doc in snapshot.documents {
+            let seenAt = (doc.data()["seenAt"] as? Timestamp)?.dateValue()
+            guard let seenAt, seenAt < cutoff else { continue }
             if let storyId = doc.data()["storyId"] as? String { seenStoryIds.remove(storyId) }
             try await doc.reference.delete()
         }

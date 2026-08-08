@@ -882,23 +882,33 @@ class PostUploadEditorViewModel: ObservableObject {
                 return
                 
             case .holdForReview:
-                // FLAG for manual review — write to moderation queue
+                // Treat the client prefilter as a review request, never as a
+                // privileged moderation decision. Stop publication until reviewed.
                 print("⚠️ [CPS Guardian] Content FLAGGED for review: \(triageResult.reasoning)")
-                if let uid = AuthenticationManager.shared.currentUser?.id {
-                    Task {
-                        #if canImport(FirebaseFirestore)
-                        try? await Firestore.firestore().collection("reports").addDocument(data: [
-                            "type": "auto_flag",
-                            "itemType": "video_upload",
-                            "reporterUid": "cps_guardian",
-                            "targetUid": uid,
-                            "reason": triageResult.reasoning,
-                            "status": "pending_review",
-                            "createdAt": Timestamp(date: Date()),
-                        ])
-                        #endif
-                    }
+                guard let uid = AuthenticationManager.shared.currentUser?.id else {
+                    await MainActor.run { errorMessage = "Sign in before requesting content review." }
+                    return
                 }
+                do {
+                    _ = try await ContentReportService.submit(
+                        type: .video,
+                        contentId: video.id,
+                        contentCreatorId: uid,
+                        reporterId: uid,
+                        reason: String(triageResult.reasoning.prefix(200)),
+                        reasonTitle: "Automated prefilter review"
+                    )
+                    await MainActor.run {
+                        errorMessage = "This video is held for Trust & Safety review and was not published."
+                    }
+                    HapticManager.shared.notification(type: .warning)
+                } catch {
+                    await MainActor.run {
+                        errorMessage = "Unable to queue this video for review: \(error.localizedDescription)"
+                    }
+                    HapticManager.shared.notification(type: .error)
+                }
+                return
                 
             case .allowWithWarning:
                 // ALLOW with warning — surface a banner to the creator

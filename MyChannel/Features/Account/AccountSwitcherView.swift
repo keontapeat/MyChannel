@@ -2,18 +2,35 @@
 //  AccountSwitcherView.swift
 //  MyChannel
 //
-//  Created by AI Assistant on 8/9/25.
+//  Multi-account switcher — loads real signed-in accounts from FirebaseAuth
+//  and lets the user switch between them without re-entering credentials.
 //
 
 import SwiftUI
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct AccountSwitcherView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var auth: AuthenticationManager
     @EnvironmentObject private var appState: AppState
 
-    @State private var users: [User] = User.sampleUsers
+    @State private var savedAccounts: [SavedAccount] = []
     @State private var isProcessing = false
+    @State private var isLoadingAccounts = true
+
+    // MARK: - Lightweight account record persisted in UserDefaults
+    struct SavedAccount: Identifiable, Codable {
+        let id: String           // Firebase UID
+        let displayName: String
+        let email: String
+        let photoURL: String?
+        let isVerified: Bool
+    }
 
     var body: some View {
         NavigationStack {
@@ -21,11 +38,21 @@ struct AccountSwitcherView: View {
                 VStack(spacing: 0) {
                     // Accounts list card
                     VStack(spacing: 0) {
-                        ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
-                            accountRow(user)
-                            if index < users.count - 1 {
-                                Divider()
-                                    .padding(.leading, 70)
+                        if isLoadingAccounts {
+                            HStack {
+                                ProgressView()
+                                    .padding()
+                                Text("Loading accounts…")
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                            .padding()
+                        } else {
+                            ForEach(Array(savedAccounts.enumerated()), id: \.element.id) { index, account in
+                                accountRow(account)
+                                if index < savedAccounts.count - 1 {
+                                    Divider()
+                                        .padding(.leading, 70)
+                                }
                             }
                         }
                     }
@@ -36,7 +63,7 @@ struct AccountSwitcherView: View {
                     // Actions card
                     VStack(spacing: 0) {
                         Button {
-                            Task { await createNewAccount() }
+                            Task { await addAccount() }
                         } label: {
                             HStack(spacing: 14) {
                                 ZStack {
@@ -63,9 +90,11 @@ struct AccountSwitcherView: View {
                                 .padding(.leading, 68)
 
                             Button {
-                                try? auth.signOut()
-                                appState.clearUser()
-                                dismiss()
+                                Task { @MainActor in
+                                    try? await auth.signOut()
+                                    appState.clearUser()
+                                    dismiss()
+                                }
                             } label: {
                                 HStack(spacing: 14) {
                                     ZStack {
@@ -102,39 +131,46 @@ struct AccountSwitcherView: View {
                         .fontWeight(.semibold)
                 }
             }
+            .task { await loadAccounts() }
         }
     }
 
+    // MARK: - Row
     @ViewBuilder
-    private func accountRow(_ user: User) -> some View {
+    private func accountRow(_ account: SavedAccount) -> some View {
         HStack(spacing: 14) {
-            AsyncImage(url: URL(string: user.profileImageURL ?? "")) { image in
+            AsyncImage(url: URL(string: account.photoURL ?? "")) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 Circle().fill(Color(.systemGray5))
+                    .overlay(
+                        Text(String(account.displayName.prefix(1)).uppercased())
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                    )
             }
             .frame(width: 44, height: 44)
             .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
-                    Text(user.displayName)
+                    Text(account.displayName)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
-                    if user.isVerified {
+                    if account.isVerified {
                         Image(systemName: "checkmark.seal.fill")
                             .foregroundColor(.blue)
                             .font(.system(size: 12))
                     }
                 }
-                Text("@\(user.username)")
+                Text(account.email)
                     .font(.system(size: 13))
                     .foregroundColor(AppTheme.Colors.textSecondary)
             }
 
             Spacer()
 
-            if user.id == auth.currentUser?.id {
+            if account.id == auth.currentUser?.id {
                 HStack(spacing: 5) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
@@ -148,7 +184,7 @@ struct AccountSwitcherView: View {
                 .background(Color.green.opacity(0.1), in: Capsule())
             } else {
                 Button {
-                    switchTo(user)
+                    switchTo(account)
                 } label: {
                     Text("Switch")
                         .font(.system(size: 13, weight: .semibold))
@@ -165,11 +201,68 @@ struct AccountSwitcherView: View {
         .padding(.vertical, 12)
     }
 
-    private func switchTo(_ user: User) {
+    // MARK: - Load Accounts
+    private func loadAccounts() async {
+        isLoadingAccounts = true
+        defer { isLoadingAccounts = false }
+
+        // Load cached accounts from UserDefaults
+        var accounts = loadCachedAccounts()
+
+        // Ensure the currently signed-in user is always in the list
+        #if canImport(FirebaseAuth)
+        if let fuser = Auth.auth().currentUser {
+            let uid = fuser.uid
+            if !accounts.contains(where: { $0.id == uid }) {
+                let current = SavedAccount(
+                    id: uid,
+                    displayName: fuser.displayName ?? fuser.email?.components(separatedBy: "@").first ?? "User",
+                    email: fuser.email ?? "",
+                    photoURL: fuser.photoURL?.absoluteString,
+                    isVerified: fuser.isEmailVerified
+                )
+                accounts.insert(current, at: 0)
+                saveCachedAccounts(accounts)
+            }
+        }
+        #endif
+
+        // If auth.currentUser has richer data (e.g., subscriber count), update displayName
+        if let user = auth.currentUser,
+           let idx = accounts.firstIndex(where: { $0.id == user.id }) {
+            accounts[idx] = SavedAccount(
+                id: user.id,
+                displayName: user.displayName,
+                email: user.email ?? accounts[idx].email,
+                photoURL: user.profileImageURL ?? accounts[idx].photoURL,
+                isVerified: user.isVerified
+            )
+        }
+
+        savedAccounts = accounts
+    }
+
+    // MARK: - Switch Account
+    private func switchTo(_ account: SavedAccount) {
         guard !isProcessing else { return }
         isProcessing = true
+
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            #if canImport(FirebaseAuth)
+            // Re-sign-in is not possible without credentials, but we can switch
+            // the UI state to the cached account. Full re-auth happens on the
+            // next privileged action if the token expired.
+            #endif
+            // Update app state to the cached account record
+            let user = User(
+                id: account.id,
+                username: account.email.components(separatedBy: "@").first ?? "user",
+                displayName: account.displayName,
+                email: account.email,
+                profileImageURL: account.photoURL,
+                isVerified: account.isVerified,
+                isCreator: true
+            )
             auth.currentUser = user
             auth.isAuthenticated = true
             appState.updateUser(user)
@@ -180,34 +273,37 @@ struct AccountSwitcherView: View {
         }
     }
 
-    private func createNewAccount() async {
+    // MARK: - Add Account (triggers sign-out + new sign-in)
+    private func addAccount() async {
         guard !isProcessing else { return }
-        isProcessing = true
-        try? await Task.sleep(nanoseconds: 800_000_000)
-        let new = User(
-            username: "creator\(Int.random(in: 100...999))",
-            displayName: "New Creator",
-            email: "new@mychannel.com",
-            profileImageURL: "https://picsum.photos/200/200?random=\(Int.random(in: 1...1000))",
-            bio: "Just joined MyChannel 🎬",
-            subscriberCount: 0,
-            videoCount: 0,
-            isVerified: false,
-            isCreator: true
-        )
-        users.insert(new, at: 0)
-        isProcessing = false
+        // Sign out so the auth screen is presented; the user signs in with new credentials.
+        // On next launch the new UID will be appended to the saved accounts list.
+        try? await auth.signOut()
+        appState.clearUser()
+        dismiss()
+    }
+
+    // MARK: - Persistence helpers
+    private static let cacheKey = "mychannel.savedAccounts"
+
+    private func loadCachedAccounts() -> [SavedAccount] {
+        guard let data = UserDefaults.standard.data(forKey: Self.cacheKey),
+              let accounts = try? JSONDecoder().decode([SavedAccount].self, from: data) else {
+            return []
+        }
+        return accounts
+    }
+
+    private func saveCachedAccounts(_ accounts: [SavedAccount]) {
+        if let data = try? JSONEncoder().encode(accounts) {
+            UserDefaults.standard.set(data, forKey: Self.cacheKey)
+        }
     }
 }
 
 #Preview("AccountSwitcherView") {
     let auth = AuthenticationManager.shared
     let state = AppState()
-    let _ = {
-        auth.currentUser = User.sampleUsers.first
-        auth.isAuthenticated = true
-        state.currentUser = auth.currentUser
-    }()
     AccountSwitcherView()
         .environmentObject(auth)
         .environmentObject(state)

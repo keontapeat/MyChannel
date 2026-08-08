@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -57,7 +58,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import android.widget.Toast
 import androidx.navigation.NavController
+import com.mychannel.ui.components.ReportBlockOptionsSheet
+import com.mychannel.ui.components.ReportReasonSheet
 import com.mychannel.viewmodel.LiveStreamViewModel
 
 /**
@@ -76,8 +80,45 @@ fun LiveStreamScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    var showOptions by remember { mutableStateOf(false) }
+    var showReportReasons by remember { mutableStateOf(false) }
 
     LaunchedEffect(streamId) { viewModel.loadStream(streamId) }
+
+    // Surface moderation feedback (report/block) as a toast, then clear it.
+    LaunchedEffect(uiState.moderationMessage) {
+        uiState.moderationMessage?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            viewModel.clearModerationMessage()
+        }
+    }
+
+    if (showOptions) {
+        ReportBlockOptionsSheet(
+            reportLabel = "Report stream",
+            blockLabel = "Block streamer",
+            onDismiss = { showOptions = false },
+            onReport = {
+                showOptions = false
+                showReportReasons = true
+            },
+            onBlock = {
+                showOptions = false
+                viewModel.blockStreamer()
+            }
+        )
+    }
+
+    if (showReportReasons) {
+        ReportReasonSheet(
+            title = "Report stream",
+            onDismiss = { showReportReasons = false },
+            onSelectReason = { reason ->
+                showReportReasons = false
+                viewModel.reportStream(reason)
+            }
+        )
+    }
 
     val exoPlayer = remember(uiState.streamUrl) {
         if (uiState.streamUrl.isNullOrBlank()) null
@@ -155,8 +196,13 @@ fun LiveStreamScreen(
                     color = Color.White
                 )
             }
-            IconButton(onClick = { navController.popBackStack() }) {
-                Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { showOptions = true }) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = Color.White)
+                }
+                IconButton(onClick = { navController.popBackStack() }) {
+                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
+                }
             }
         }
 

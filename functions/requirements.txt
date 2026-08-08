@@ -4,3 +4,4 @@ firebase-functions>=0.1.0
 firebase-admin>=6.5.0
 google-cloud-aiplatform>=1.61.1
 google-cloud-storage>=2.16.0
+google-cloud-vision>=3.7.2

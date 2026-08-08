@@ -318,19 +318,10 @@ final class MusicCatalogService: ObservableObject {
         )
     }
     
-    /// Music Hub: pin SHARIFE COOPER (iTunes track 1582751629, BE FOREAL / MIA Ghost) at #1; drop TRUMP from the pooled list.
+    /// Applies neutral Music Hub ordering without artist-specific pins or title exclusions.
     func applyMusicHubTopSongsEdits(_ songs: [CatalogSong], country: String = "US") async -> [CatalogSong] {
-        let pinTrackId = 1582751629
-        let filtered = songs.filter {
-            $0.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != "trump"
-        }
-        let lookupURL = "https://itunes.apple.com/lookup?id=\(pinTrackId)&country=\(country)"
-        guard let pinned = (try? await fetchSongs(from: lookupURL))?.first else {
-            return dedupeSongs(filtered)
-        }
-        var merged = filtered.filter { $0.id != pinned.id }
-        merged.insert(pinned, at: 0)
-        return dedupeSongs(merged)
+        _ = country
+        return dedupeSongs(songs)
     }
     
     /// Music Hub **On Repeat**: 10 slots — round-robin across `FeaturedFriendArtist` so every friend shows up.

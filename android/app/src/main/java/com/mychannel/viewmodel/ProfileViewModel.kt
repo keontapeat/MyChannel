@@ -2,6 +2,9 @@ package com.mychannel.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mychannel.data.remote.ModerationDataSource
+import com.mychannel.domain.model.ContentReportReason
+import com.mychannel.domain.model.ContentReportType
 import com.mychannel.domain.model.Video
 import com.mychannel.domain.repository.AuthRepository
 import com.mychannel.domain.repository.ChannelRepository
@@ -34,20 +37,26 @@ data class ProfileUiState(
     val links: List<String> = emptyList(),
     val videos: List<Video> = emptyList(),
     val isSubscribed: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    /** Transient user feedback for moderation actions (report/block); shown then cleared. */
+    val moderationMessage: String? = null
 )
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val channelRepository: ChannelRepository,
-    private val videoRepository: VideoRepository
+    private val videoRepository: VideoRepository,
+    private val moderationDataSource: ModerationDataSource
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
     private var targetChannelId: String = ""
+
+    /** Expose the current Firebase user ID so composables can read it without a repo reference. */
+    val currentUserId: String get() = authRepository.currentUserId ?: ""
 
     init {
         // Default: load own profile
@@ -108,5 +117,50 @@ class ProfileViewModel @Inject constructor(
             }
             _uiState.update { it.copy(isSubscribed = !currentlySubscribed) }
         }
+    }
+
+    /**
+     * Reports the viewed user/channel. For a USER report the Firestore rule
+     * requires contentId == contentCreatorId == the user id and the user doc to
+     * exist, so both are set to [targetChannelId].
+     */
+    fun reportUser(reason: ContentReportReason) {
+        val userId = targetChannelId.ifBlank { return }
+        viewModelScope.launch {
+            val message = runCatching {
+                moderationDataSource.submitReport(
+                    type = ContentReportType.USER,
+                    contentId = userId,
+                    contentCreatorId = userId,
+                    reason = reason
+                )
+            }.fold(
+                onSuccess = { "Report submitted. Thanks for keeping MyChannel safe." },
+                onFailure = { it.message ?: "Unable to submit report." }
+            )
+            _uiState.update { it.copy(moderationMessage = message) }
+        }
+    }
+
+    /** Blocks the viewed user so their content can be filtered from feeds. */
+    fun blockUser() {
+        val userId = targetChannelId.ifBlank { return }
+        viewModelScope.launch {
+            val message = runCatching {
+                moderationDataSource.blockUser(
+                    blockedUserId = userId,
+                    blockedUserDisplayName = _uiState.value.displayName,
+                    blockedUserUsername = _uiState.value.username
+                )
+            }.fold(
+                onSuccess = { "User blocked. You won't see their content." },
+                onFailure = { it.message ?: "Unable to block user." }
+            )
+            _uiState.update { it.copy(moderationMessage = message) }
+        }
+    }
+
+    fun clearModerationMessage() {
+        _uiState.update { it.copy(moderationMessage = null) }
     }
 }

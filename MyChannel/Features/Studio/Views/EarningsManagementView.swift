@@ -279,27 +279,91 @@ struct EarningsManagementView: View {
     }
     
     // MARK: - Earnings Chart
-    
+
     private var earningsChartSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Earnings Over Time")
                 .font(.system(size: 20, weight: .semibold))
-            
-            // Chart placeholder
+
+            if let e = earnings {
+                earningsBarChart(earnings: e)
+            } else {
+                // Show skeleton while loading
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial)
+                    .frame(height: 200)
+                    .overlay(ProgressView())
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func earningsBarChart(earnings: CreatorEarnings) -> some View {
+        let breakdown = earnings.revenueBreakdown
+        let data: [(label: String, value: Double)] = [
+            ("Ad Revenue",    breakdown.adRevenue),
+            ("Tips",          breakdown.tipRevenue),
+            ("Memberships",   breakdown.membershipRevenue),
+            ("Merch",         breakdown.merchandiseRevenue),
+            ("Live",          breakdown.liveStreamRevenue),
+            ("Brand Deals",   breakdown.brandDealRevenue),
+            ("Courses",       breakdown.courseRevenue),
+            ("NFTs",          breakdown.nftRevenue)
+        ].filter { $0.value > 0 }
+
+        if data.isEmpty {
             RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
+                .fill(AppTheme.Colors.surface)
                 .frame(height: 200)
                 .overlay(
-                    VStack(spacing: 12) {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                            .font(.system(size: 40))
-                            .foregroundColor(.green)
-                        
-                        Text("Earnings trending up 📈")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
+                    Text("No earnings data for this period")
+                        .font(.subheadline)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
                 )
+        } else {
+            Chart {
+                ForEach(data, id: \.label) { item in
+                    BarMark(
+                        x: .value("Source", item.label),
+                        y: .value("Revenue", item.value)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [AppTheme.Colors.primary, AppTheme.Colors.primary.opacity(0.6)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(4)
+                }
+            }
+            .chartXAxis {
+                AxisMarks { value in
+                    AxisValueLabel(centered: true) {
+                        if let label = value.as(String.self) {
+                            Text(label)
+                                .font(.system(size: 9))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                        }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks(preset: .automatic) { value in
+                    AxisGridLine()
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text("$\(Int(v))")
+                                .font(.system(size: 10))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                    }
+                }
+            }
+            .frame(height: 200)
+            .padding(.top, 8)
         }
     }
     

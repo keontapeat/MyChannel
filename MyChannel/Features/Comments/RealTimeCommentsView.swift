@@ -13,6 +13,7 @@ import FirebaseFirestore
 
 struct RealTimeCommentsView: View {
     let video: Video
+    var currentPlaybackTime: Double = 0
     @StateObject private var commentsManager = RealTimeCommentsManager()
     @State private var newCommentText = ""
     @State private var showingCommentComposer = false
@@ -93,7 +94,8 @@ struct RealTimeCommentsView: View {
         .sheet(isPresented: $showingCommentComposer) {
             CommentComposerSheet(
                 video: video,
-                replyingTo: selectedComment
+                replyingTo: selectedComment,
+                currentPlaybackTime: currentPlaybackTime
             ) { newComment in
                 commentsManager.addComment(newComment)
                 selectedComment = nil
@@ -664,10 +666,12 @@ struct CommentComposerSheet: View {
     let video: Video
     let replyingTo: RealTimeComment?
     let onSubmit: (RealTimeComment) -> Void
-    
+    var currentPlaybackTime: Double = 0
+
     @Environment(\.dismiss) private var dismiss
     @State private var commentText = ""
     @State private var isPosting = false
+    @State private var linkToTimestamp = false
     @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
@@ -761,6 +765,33 @@ struct CommentComposerSheet: View {
                         .fill(AppTheme.Colors.divider)
                         .frame(height: 1)
                         .padding(.leading, 44)
+
+                    // Timestamp link toggle (only for comments, not replies)
+                    if replyingTo == nil && currentPlaybackTime > 0 && AppConfig.Features.enableTimestampedComments {
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                linkToTimestamp.toggle()
+                            }
+                            HapticManager.shared.impact(style: .light)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: linkToTimestamp ? "clock.badge.checkmark.fill" : "clock")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(linkToTimestamp ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                                Text(linkToTimestamp ? "Linked to \(formatTimestamp(currentPlaybackTime))" : "Comment at \(formatTimestamp(currentPlaybackTime))")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(linkToTimestamp ? AppTheme.Colors.primary : AppTheme.Colors.textSecondary)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(linkToTimestamp ? AppTheme.Colors.primary.opacity(0.12) : AppTheme.Colors.surface)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.leading, 44)
+                    }
                 }
                 .padding(.horizontal)
                 
@@ -801,13 +832,36 @@ struct CommentComposerSheet: View {
         isPosting = true
         if let uid = AppState.shared.currentUser?.id {
             Task {
+                // Post regular comment
                 try? await CommentsFirestoreService.shared.post(videoId: video.id, userId: uid, text: commentText, parentId: replyingTo?.id)
+
+                // Also post as timestamped comment if the user linked it
+                if linkToTimestamp && replyingTo == nil && AppConfig.Features.enableTimestampedComments {
+                    let authorName = AppState.shared.currentUser?.displayName ?? uid
+                    try? await TimestampedCommentsService.shared.postComment(
+                        videoId: video.id,
+                        authorUid: uid,
+                        authorName: authorName,
+                        body: commentText,
+                        timestampSec: currentPlaybackTime
+                    )
+                }
+
                 await MainActor.run {
                     isPosting = false
                     dismiss()
                 }
             }
         }
+    }
+
+    private func formatTimestamp(_ seconds: Double) -> String {
+        let totalSec = Int(seconds)
+        let h = totalSec / 3600
+        let m = (totalSec % 3600) / 60
+        let s = totalSec % 60
+        if h > 0 { return String(format: "%d:%02d:%02d", h, m, s) }
+        return String(format: "%d:%02d", m, s)
     }
 }
 
@@ -860,26 +914,28 @@ class RealTimeCommentsManager: ObservableObject {
     }
     
     func reportComment(commentId: String) {
-        guard let reporterId = AppState.shared.currentUser?.id else { return }
-        #if canImport(FirebaseFirestore)
-        let db = Firestore.firestore()
-        let comment = comments.first(where: { $0.id == commentId })
-        let reportData: [String: Any] = [
-            "type": "comment",
-            "contentId": commentId,
-            "videoId": videoId ?? "",
-            "contentCreatorId": comment?.author.id ?? "",
-            "reporterId": reporterId,
-            "reason": "user_reported",
-            "status": "pending",
-            "reviewed": false,
-            "createdAt": FieldValue.serverTimestamp()
-        ]
-        Task {
-            try? await db.collection("content_reports").addDocument(data: reportData)
+        guard let reporterId = AppState.shared.currentUser?.id,
+              let videoId,
+              let comment = comments.first(where: { $0.id == commentId }) else {
+            NotificationManager.shared.showError("This comment is unavailable.")
+            return
         }
-        #endif
-        NotificationManager.shared.showSuccess("Comment reported. Thank you for keeping MyChannel safe.")
+
+        Task {
+            do {
+                _ = try await ContentReportService.submit(
+                    type: .comment,
+                    contentId: commentId,
+                    contentCreatorId: comment.author.id,
+                    reporterId: reporterId,
+                    reason: "user_reported",
+                    videoId: videoId
+                )
+                NotificationManager.shared.showSuccess("Comment reported. Thank you for keeping MyChannel safe.")
+            } catch {
+                NotificationManager.shared.showError(error.localizedDescription)
+            }
+        }
     }
     
     func pin(commentId: String) {

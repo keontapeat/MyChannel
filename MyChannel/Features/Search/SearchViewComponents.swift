@@ -7,12 +7,44 @@ struct ConversationalAIView: View {
     let query: String
     let aiResult: SearchV3Result?
     let isThinking: Bool
+    var conversationHistory: [ConversationalSearchService.HistoryTurn] = []
     let onFollowUp: (String) -> Void
-    
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // User Query Bubble
+            LazyVStack(alignment: .leading, spacing: 20) {
+
+                // Prior conversation turns
+                ForEach(conversationHistory) { turn in
+                    // User bubble
+                    HStack {
+                        Spacer()
+                        Text(turn.userText)
+                            .font(AppTheme.Typography.body)
+                            .foregroundColor(.white)
+                            .padding(12)
+                            .background(AppTheme.Colors.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .padding(.horizontal)
+                    }
+                    // Assistant bubble
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "sparkles")
+                            .foregroundColor(.purple)
+                            .font(.system(size: 18))
+                            .padding(.top, 4)
+                        Text(turn.assistantText)
+                            .font(AppTheme.Typography.body)
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                            .padding(12)
+                            .background(AppTheme.Colors.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                }
+
+                // Current query bubble
                 HStack {
                     Spacer()
                     Text(query)
@@ -23,14 +55,14 @@ struct ConversationalAIView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         .padding(.horizontal)
                 }
-                
-                // AI Response Bubble
+
+                // AI Response
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: "sparkles")
                         .foregroundColor(.purple)
                         .font(.system(size: 20))
                         .padding(.top, 4)
-                        
+
                     if isThinking {
                         HStack(spacing: 4) {
                             Circle().fill(Color.purple).frame(width: 8, height: 8)
@@ -51,7 +83,7 @@ struct ConversationalAIView: View {
                             Text(card.summary)
                                 .font(AppTheme.Typography.body)
                                 .foregroundColor(AppTheme.Colors.textPrimary)
-                            
+
                             if !card.citations.isEmpty {
                                 Divider()
                                 Text("Sources:")
@@ -67,7 +99,7 @@ struct ConversationalAIView: View {
                                     .foregroundColor(.purple)
                                 }
                             }
-                            
+
                             if !result.followUpSuggestions.isEmpty {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack {
@@ -91,7 +123,7 @@ struct ConversationalAIView: View {
                         .background(AppTheme.Colors.surface)
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
-                    
+
                     Spacer()
                 }
                 .padding(.horizontal)

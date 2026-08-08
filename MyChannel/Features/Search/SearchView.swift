@@ -33,6 +33,7 @@ struct SearchView: View {
     @StateObject private var voiceSearch = VoiceSearchService()
     @StateObject private var trendingService = TrendingSearchService.shared
     @StateObject private var historyService = SearchHistoryService.shared
+    @StateObject private var conversationalService = ConversationalSearchService.shared
     
     @State private var searchText: String = ""
     @State private var selectedScope: SearchScope = .all
@@ -76,7 +77,6 @@ struct SearchView: View {
                             }
                         }) {
                             HStack {
-                                Image(systemName: "sparkles")
                                 Text("Ask AI")
                                     .fontWeight(.semibold)
                             }
@@ -128,6 +128,7 @@ struct SearchView: View {
                             query: searchText,
                             aiResult: aiResult,
                             isThinking: isAIThinking,
+                            conversationHistory: conversationalService.history,
                             onFollowUp: { followUp in
                                 searchText = followUp
                                 performAISearch(isFollowUp: true)
@@ -461,14 +462,18 @@ struct SearchView: View {
                     conversationId: isFollowUp ? aiResult?.conversationId : nil
                 )
                 
-                let result = try await AISearchAgentV3Service.shared.multiModalQuery(query)
-                
+                async let v3Fetch = AISearchAgentV3Service.shared.multiModalQuery(query)
+                async let historyFetch: ConversationalReply? = {
+                    guard AppConfig.Features.enableConversationalSearch else { return nil }
+                    return try? await conversationalService.ask(searchText, userId: AppState.shared.currentUser?.id)
+                }()
+
+                let (result, _) = try await (v3Fetch, historyFetch)
                 guard !Task.isCancelled else { return }
                 self.aiResult = result
             } catch {
                 guard !Task.isCancelled else { return }
                 print("🚨 [SearchView] AI Search error: \(error)")
-                // For now, keep previous result or show error.
             }
         }
     }

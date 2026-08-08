@@ -8,6 +8,7 @@
 
 import AVKit
 import SwiftUI
+import UIKit
 
 @MainActor
 class NativePiPController: NSObject, ObservableObject {
@@ -47,7 +48,21 @@ class NativePiPController: NSObject, ObservableObject {
         }
         playerLayer?.player = player
         lastPlayer = player
-        
+
+        // 🔴 PiP REQUIREMENT: The AVPlayerLayer backing the controller must be
+        // part of the on-screen view hierarchy, otherwise iOS keeps
+        // `isPictureInPicturePossible == false` and PiP never starts when the
+        // app backgrounds. A detached layer (the previous behavior) is why the
+        // native mini-player stopped appearing. Attach it behind the app's
+        // content in the key window: rendered by the compositor (so PiP
+        // qualifies) but covered by opaque UI (so the user never sees it).
+        if let layer = playerLayer, layer.superlayer == nil, let window = Self.keyWindow {
+            layer.frame = window.bounds
+            layer.videoGravity = .resizeAspect
+            window.layer.insertSublayer(layer, at: 0)
+        }
+        playerLayer?.frame = Self.keyWindow?.bounds ?? playerLayer?.frame ?? .zero
+
         // 🔥 PERF: Setup controller immediately without async
         if let controller = AVPictureInPictureController(playerLayer: playerLayer!) {
             // 🔥 PERF: Invalidate old observer before creating new one
@@ -144,9 +159,24 @@ class NativePiPController: NSObject, ObservableObject {
         pipPossibleObservation?.invalidate()
         pipPossibleObservation = nil
         pipController = nil
+        playerLayer?.removeFromSuperlayer()
         playerLayer = nil
         lastPlayer = nil
         isPiPPossible = false
+    }
+
+    /// The app's foreground key window — needed to host the PiP source layer in
+    /// the live view hierarchy so `isPictureInPicturePossible` can become true.
+    private static var keyWindow: UIWindow? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .filter { $0.activationState == .foregroundActive }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }
+        ?? UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }
     }
 }
 

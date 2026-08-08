@@ -93,27 +93,6 @@ final class StoryActionService: ObservableObject {
             "status": "sent"
         ]
         try await db.collection("story_replies").addDocument(data: replyData)
-        try await db.collection("stories").document(storyId).setData([
-            "replyCount": FieldValue.increment(Int64(1)),
-            "commentCount": FieldValue.increment(Int64(1))
-        ], merge: true)
-        
-        // Flow reply into inbox
-        if creatorId != userId {
-            let notificationData: [String: Any] = [
-                "userId": creatorId,
-                "type": "storyReply",
-                "title": "New Story Reply",
-                "body": trimmed,
-                "deepLink": "mychannel://story/\(storyId)",
-                "isRead": false,
-                "createdAt": FieldValue.serverTimestamp(),
-                "groupedCount": 1
-            ]
-            try await db.collection("notifications").addDocument(data: notificationData)
-        }
-        
-        await StoriesIntegrationService.shared.trackStoryEngagement(storyId: storyId, action: "comment", userId: userId)
         #endif
     }
 

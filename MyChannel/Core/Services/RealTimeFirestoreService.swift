@@ -33,17 +33,13 @@ final class RealTimeFirestoreService: ObservableObject {
     }
     
     func joinLiveStream(videoId: String) {
-        // Increment viewers using FieldValue.increment
-        db.collection("videos").document(videoId).updateData([
-            "activeViewers": FieldValue.increment(Int64(1))
-        ])
+        // Compatibility bridge: canonical presence is connection-scoped in RTDB
+        // and trusted Functions derive the aggregate viewer count.
+        Task { await LiveStreamManager.shared.joinAsViewer(streamId: videoId) }
     }
     
     func leaveLiveStream(videoId: String) {
-        // Decrement viewers
-        db.collection("videos").document(videoId).updateData([
-            "activeViewers": FieldValue.increment(Int64(-1))
-        ])
+        Task { await LiveStreamManager.shared.leaveAsViewer(streamId: videoId) }
         viewersListener?.remove()
         viewersListener = nil
     }

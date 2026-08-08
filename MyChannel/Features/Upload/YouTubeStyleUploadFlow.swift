@@ -745,14 +745,26 @@ struct YouTubeStyleUploadFlow: View {
                     Text("Publishing Your Video")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.primary)
-                    
-                    Text(uploadManager.isUploading ? "Uploading..." : (uploadManager.uploadError != nil ? "Failed" : "Processing"))
+
+                    Text(
+                        uploadManager.uploadError != nil
+                            ? "Failed"
+                            : (uploadManager.isUploading ? "Uploading..." : "Finishing up...")
+                    )
                         .font(.system(size: 16))
                         .foregroundColor(.secondary)
-                    
+
                     Text("\(Int(uploadManager.uploadProgress * 100))% complete")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.red)
+
+                    if let error = uploadManager.uploadError {
+                        Text(error)
+                            .font(.system(size: 13))
+                            .foregroundColor(.red)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 4)
+                    }
                 }
             }
             
@@ -806,7 +818,7 @@ struct YouTubeStyleUploadFlow: View {
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.primary)
                     
-                    Text("Your video is now live and ready to be discovered")
+                    Text("Your video was uploaded and is processing. It’ll be ready to watch shortly.")
                         .font(.system(size: 16))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -962,7 +974,7 @@ struct YouTubeStyleUploadFlow: View {
         // If we're moving from thumbnail selection to publishing, start the upload
         if currentStep == .thumbnailSelection {
             currentStep = .publishing
-            startUpload()
+            // startUpload runs from publishingView.onAppear to avoid double-start
             return
         }
         
@@ -1114,7 +1126,9 @@ struct YouTubeStyleUploadFlow: View {
     
     private func startUpload() {
         guard let videoURL = videoURL else { return }
-        
+        // publishingView.onAppear + nextStep both call this — only start once.
+        guard !uploadManager.isUploading else { return }
+
         // Configure VideoUploadManager with the details from the flow
         uploadManager.videoURL = videoURL
         uploadManager.title = videoTitle
@@ -1124,16 +1138,16 @@ struct YouTubeStyleUploadFlow: View {
         uploadManager.isUnlisted = selectedVisibility == .unlisted
         uploadManager.thumbnail = videoThumbnail
         uploadManager.videoDuration = videoDuration
-        
+
         // Map category string to VideoCategory
         if let category = VideoCategory(rawValue: selectedCategory.lowercased()) {
             uploadManager.selectedCategory = category
         }
-        
+
         Task { @MainActor in
             print("🎬 Starting upload with VideoUploadManager")
             await uploadManager.uploadVideo()
-            
+
             // uploadVideo() internally calls resetForm() which clears some state,
             // but uploadedVideo remains set on success, and uploadError on failure.
             if uploadManager.uploadedVideo != nil {

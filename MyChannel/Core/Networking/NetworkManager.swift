@@ -8,6 +8,9 @@
 import Foundation
 import Network
 import Combine
+#if canImport(FirebaseAppCheck)
+import FirebaseAppCheck
+#endif
 
 // MARK: - Network Manager
 @MainActor
@@ -223,13 +226,43 @@ class APIClient: ObservableObject {
         return request
     }
     
+    private func appCheckToken() async -> String? {
+        #if canImport(FirebaseAppCheck)
+        guard FirebaseManager.shared.isConfigured else { return nil }
+        // Hard timeout — App Attest/DeviceCheck must never block networking forever
+        // (App Review 0x8BADF00D when `GACAppAttestProvider.state` hung on a locked device).
+        return await withTaskGroup(of: String?.self) { group in
+            group.addTask {
+                await withCheckedContinuation { continuation in
+                    AppCheck.appCheck().token(forcingRefresh: false) { token, _ in
+                        continuation.resume(returning: token?.token)
+                    }
+                }
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first ?? nil
+        }
+        #else
+        return nil
+        #endif
+    }
+
     // MARK: - Generic Request Method
     func request<T: Codable>(
         _ apiRequest: APIRequest,
         responseType: T.Type
     ) async throws -> APIResponse<T> {
-        guard let urlRequest = buildURLRequest(from: apiRequest) else {
+        guard var urlRequest = buildURLRequest(from: apiRequest) else {
             throw APIError.invalidURL
+        }
+        if urlRequest.value(forHTTPHeaderField: "X-Firebase-AppCheck") == nil,
+           let token = await appCheckToken() {
+            urlRequest.setValue(token, forHTTPHeaderField: "X-Firebase-AppCheck")
         }
         
         await MainActor.run {

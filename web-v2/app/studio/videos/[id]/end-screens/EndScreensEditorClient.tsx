@@ -181,7 +181,8 @@ function ElementCard({
   );
 }
 
-export default function EndScreensEditorClient({ videoId }: { videoId: string }) {
+export default function EndScreensEditorClient({ videoId: initialVideoId }: { videoId: string }) {
+  const [videoId, setVideoId] = useState(initialVideoId === '_fallback' ? '' : initialVideoId);
   const [elements, setElements] = useState<EndScreenElement[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -191,7 +192,15 @@ export default function EndScreensEditorClient({ videoId }: { videoId: string })
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    if (!videoId || videoId === '_fallback') { setLoading(false); return; }
+    if (initialVideoId !== '_fallback') return;
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const videosIndex = segments.indexOf('videos');
+    const pathId = videosIndex >= 0 ? segments[videosIndex + 1] : '';
+    if (pathId && pathId !== '_fallback') setVideoId(decodeURIComponent(pathId));
+  }, [initialVideoId]);
+
+  useEffect(() => {
+    if (!videoId) return;
 
     const load = async () => {
       try {

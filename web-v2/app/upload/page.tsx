@@ -5,7 +5,7 @@
 import { useState, useRef } from 'react';
 import { Upload, X, Film, Image as ImageIcon, ShieldAlert } from 'lucide-react';
 import { StorageService } from '@/lib/firebase/storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase/config';
 import { useRouter } from 'next/navigation';
 
@@ -44,41 +44,6 @@ async function checkModeration(
     return await res.json();
   } catch {
     return null;
-  }
-}
-
-// Creates the video_transcode_jobs doc that triggers functions/main.py's
-// start_transcode_job Cloud Function (real GCP Transcoder API → multi-quality
-// HLS/DASH). Previously nothing in the app wrote this doc, so every video
-// played back as a single progressive MP4 and the whole transcode pipeline
-// (already built and working) never ran. Best-effort: failure here doesn't
-// block publishing — the video still plays via the direct MP4 URL, it just
-// won't get adaptive-bitrate HLS renditions.
-// `firestoreVideoId` is the actual videos/{id} document id the transcode
-// webhook must update. `storagePathVideoId` is the id segment used in the
-// gs:// object path StorageService.uploadVideo wrote to — note these are NOT
-// the same value today (the Firestore doc id comes from addDoc's auto-id,
-// while the storage path uses the locally-generated `video_${timestamp}`
-// string), so both must be passed explicitly rather than assumed equal.
-async function enqueueTranscodeJob(
-  firestoreVideoId: string,
-  storagePathVideoId: string,
-  creatorId: string
-): Promise<void> {
-  const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-  if (!bucket) return;
-
-  try {
-    await addDoc(collection(db, 'video_transcode_jobs'), {
-      videoId: firestoreVideoId,
-      creatorId,
-      sourcePath: `gs://${bucket}/videos/${creatorId}/${storagePathVideoId}/video.mp4`,
-      outputBucket: bucket,
-      createdAt: serverTimestamp(),
-      status: 'pending',
-    });
-  } catch (err) {
-    console.error('Failed to enqueue transcode job:', err);
   }
 }
 
@@ -215,72 +180,87 @@ const UploadPage = () => {
     setIsUploading(true);
 
     try {
-      const videoId = `video_${Date.now()}`;
+      const videoId = crypto.randomUUID();
+      const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+      if (!bucket) throw new Error('Firebase Storage bucket is not configured.');
+      const sourcePath = `gs://${bucket}/temp_uploads/${uid}/${videoId}/source.mp4`;
 
-      // Upload video
-      const videoURL = await StorageService.uploadVideo(
+      // Upload the raw source into owner-only quarantine. No download token is
+      // minted; only trusted processing services can read or publish it.
+      await StorageService.uploadVideo(
         videoFile,
         uid,
         videoId,
-        (progress) => {
-          setUploadProgress(progress.progress);
-        }
+        (progress) => setUploadProgress(progress.progress)
       );
 
-      // Upload thumbnail if provided
       let thumbnailURL = '';
       if (thumbnailFile) {
         thumbnailURL = await StorageService.uploadThumbnail(thumbnailFile, uid, videoId);
       }
 
-      // Save video metadata to Firestore
-      const isPublic = visibility === 'public';
-      const docData: Record<string, any> = {
-        id: videoId,
-        title,
-        description,
-        category,
-        tags,
-        isPublic,
-        status: visibility,
-        videoURL,
-        thumbnailURL: thumbnailURL || '',
+      const isScheduled = isPremiere && Boolean(scheduledAt);
+      const publicationStatus = isScheduled ? 'scheduled' : visibility;
+      const docData: Record<string, unknown> = {
+        title: title.trim(),
+        description: description.trim(),
+        sourcePath,
         creatorId: uid,
+        userId: uid,
+        ownerUid: uid,
+        channelId: uid,
+        channelName: auth.currentUser?.displayName ?? '',
         viewCount: 0,
         likeCount: 0,
         dislikeCount: 0,
         commentCount: 0,
         shareCount: 0,
+        totalWatchTime: 0,
         duration: 0,
+        createdAt: serverTimestamp(),
+        uploadedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        tags,
+        category,
+        isLive: false,
+        isShort: false,
+        privacyStatus: visibility,
+        visibility: publicationStatus,
+        isPublic: visibility === 'public' && !isScheduled,
         ageRestricted,
         madeForKids,
         commentsEnabled,
+        allowComments: commentsEnabled,
         likesEnabled: true,
         downloadsEnabled: false,
         isPremiere,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        status: publicationStatus,
+        processingStatus: 'uploaded',
       };
 
-      if (isPremiere && scheduledAt) {
-        docData.scheduledAt = new Date(scheduledAt);
-        docData.status = 'scheduled';
-        docData.isPublic = false;
+      if (thumbnailURL) {
+        docData.thumbnailURL = thumbnailURL;
+        docData.thumbnailUrl = thumbnailURL;
       }
+      if (isScheduled) docData.scheduledAt = new Date(scheduledAt);
+      if (blockedRegions.length > 0) docData.blockedRegions = blockedRegions;
 
-      if (blockedRegions.length > 0) {
-        docData.blockedRegions = blockedRegions;
-      }
+      // Commit metadata and the immutable processing marker together. The
+      // marker is written last logically and deterministically, so retries
+      // cannot create duplicate videos or transcode jobs.
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'videos', videoId), docData);
+      batch.set(doc(db, 'uploads', videoId), {
+        videoId,
+        ownerUid: uid,
+        sourcePath,
+        status: 'uploaded',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await batch.commit();
 
-      const docRef = await addDoc(collection(db, 'videos'), docData);
-
-      console.log('✅ Video saved to Firestore:', docRef.id);
-
-      // Kick off real server-side transcoding (multi-quality HLS/DASH via
-      // GCP Transcoder API — see functions/main.py start_transcode_job).
-      // Best-effort: the video is already playable via the direct MP4 URL
-      // above even if this fails, so we don't block on it or surface an error.
-      await enqueueTranscodeJob(docRef.id, videoId, uid);
+      console.log('✅ Video accepted for processing:', videoId);
 
       // Reset form
       setVideoFile(null);
@@ -295,7 +275,7 @@ const UploadPage = () => {
       setIsPremiere(false);
       setScheduledAt('');
 
-      router.push(`/watch/${docRef.id}`);
+      router.push(`/watch/${videoId}`);
     } catch (error) {
       console.error('Upload error:', error);
       setError('Upload failed. Please try again.');

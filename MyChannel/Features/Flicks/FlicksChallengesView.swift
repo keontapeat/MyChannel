@@ -7,6 +7,9 @@
 //
 
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct FlicksChallengesView: View {
     @StateObject private var viewModel = FlicksChallengesViewModel()
@@ -657,31 +660,143 @@ struct PastWinnerCard: View {
 struct SubmitChallengeSheet: View {
     let challenge: FlicksChallenge
     @Environment(\.dismiss) private var dismiss
-    
+
+    @State private var selectedVideoId: String? = nil
+    @State private var entryCaption: String = ""
+    @State private var isSubmitting = false
+    @State private var showSuccess = false
+    @State private var errorMessage: String? = nil
+
+    private var myVideos: [Video] { Video.sampleVideos.filter { $0.creatorId == AppState.shared.currentUser?.id } }
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Text("Submit your Flick to the challenge")
-                    .font(.system(size: 17))
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                
-                // Challenge selection and submission flow
-                Text("Submission flow coming soon")
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                
-                Spacer()
+            Form {
+                Section("Challenge") {
+                    HStack(spacing: 12) {
+                        Image(systemName: "trophy.fill")
+                            .foregroundColor(.yellow)
+                            .font(.title2)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(challenge.title)
+                                .font(.headline)
+                            Text("Prize pool: $\(challenge.totalPrize)")
+                                .font(.caption)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                        }
+                    }
+                }
+
+                Section("Select Your Flick") {
+                    if myVideos.isEmpty {
+                        Text("Upload a Flick first to enter this challenge.")
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .font(.subheadline)
+                    } else {
+                        ForEach(myVideos.prefix(10)) { video in
+                            HStack {
+                                AsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                                    image.resizable().aspectRatio(16/9, contentMode: .fill)
+                                } placeholder: {
+                                    Rectangle().fill(AppTheme.Colors.surface)
+                                }
+                                .frame(width: 72, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                                Text(video.title)
+                                    .lineLimit(2)
+                                    .font(.subheadline)
+                                Spacer()
+                                if selectedVideoId == video.id {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture { selectedVideoId = video.id }
+                        }
+                    }
+                }
+
+                Section("Entry Caption (optional)") {
+                    TextField("Add a message with your entry…", text: $entryCaption, axis: .vertical)
+                        .lineLimit(3)
+                }
+
+                if let msg = errorMessage {
+                    Section {
+                        Text(msg).foregroundColor(.red).font(.caption)
+                    }
+                }
             }
-            .padding(24)
-            .background(AppTheme.Colors.background)
             .navigationTitle("Submit to Challenge")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Submit") { submitEntry() }
+                        .disabled(selectedVideoId == nil || isSubmitting)
+                        .bold()
+                }
+            }
+            .overlay {
+                if isSubmitting {
+                    ZStack {
+                        Color.black.opacity(0.35).ignoresSafeArea()
+                        ProgressView("Submitting…")
+                            .padding(24)
+                            .background(.regularMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
                     }
                 }
             }
+            .alert("Entry Submitted! 🎉", isPresented: $showSuccess) {
+                Button("Done") { dismiss() }
+            } message: {
+                Text("Your Flick has been entered into \"\(challenge.title)\". Good luck!")
+            }
+        }
+    }
+
+    private func submitEntry() {
+        guard let videoId = selectedVideoId,
+              let uid = AppState.shared.currentUser?.id else { return }
+        isSubmitting = true
+        errorMessage = nil
+
+        Task {
+            #if canImport(FirebaseFirestore)
+            let entry: [String: Any] = [
+                "challengeId": challenge.id,
+                "videoId": videoId,
+                "userId": uid,
+                "caption": entryCaption,
+                "submittedAt": FieldValue.serverTimestamp(),
+                "status": "pending_review"
+            ]
+            do {
+                try await Firestore.firestore()
+                    .collection("challenge-submissions")
+                    .addDocument(data: entry)
+                await MainActor.run {
+                    isSubmitting = false
+                    showSuccess = true
+                }
+            } catch {
+                await MainActor.run {
+                    isSubmitting = false
+                    errorMessage = "Submission failed: \(error.localizedDescription)"
+                }
+            }
+            #else
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            await MainActor.run {
+                isSubmitting = false
+                showSuccess = true
+            }
+            #endif
         }
     }
 }

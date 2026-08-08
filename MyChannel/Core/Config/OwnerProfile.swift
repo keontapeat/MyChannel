@@ -51,6 +51,7 @@ struct OwnerProfile {
         FriendArtist(name: "MBK BO Demon",        instagram: "@mbkbodemon",          avatar: "asset://MBKBODemonAvatar"),
         FriendArtist(name: "Mbk Keelan",          instagram: "@mbkkeelan",           avatar: "asset://MbkKeelanAvatar"),
         FriendArtist(name: "MBK Uncle Ruckus",    instagram: "@mbkuncleruckus",      avatar: "asset://MBKUncleRuckusAvatar"),
+        FriendArtist(name: "Mia Getem",           instagram: "@mia_getem",           avatar: "asset://MiaGetemAvatar"),
         FriendArtist(name: "MIA Ghost",           instagram: "@miaghost",            avatar: "asset://MiaGhostAvatar"),
         FriendArtist(name: "Mia Pat Man",         instagram: "@miapatman",           avatar: "asset://MiaPatManAvatar"),
         FriendArtist(name: "Mia Rerock",          instagram: "@miarerock",           avatar: "asset://MiaRerockAvatar"),
@@ -67,11 +68,12 @@ struct OwnerProfile {
         FriendArtist(name: "Yung Sak Runner",     instagram: "@yungsakrunner",       avatar: "asset://YungSakRunnerAvatar"),
 
         // ── TOP INDIE FILMMAKERS ─────────────────────────────────────────────────
-        // Shot By Keonta #1, Tee Cee #2, Merch Hd #3
-        FriendArtist(name: "Shot By Keonta", instagram: "@sbkeonta_",  avatar: "asset://ShotByKeontaThumbnail", category: "filmmaker"),
-        FriendArtist(name: "Tee Cee",        instagram: "@teecee",     avatar: "asset://TeeCeeAvatar",          category: "filmmaker", pinnedRank: 1),
-        FriendArtist(name: "Merch Hd",       instagram: "@merchhd",    avatar: "asset://MerchHDAvatar",         category: "filmmaker", pinnedRank: 2),
-        FriendArtist(name: "Pros KT",        instagram: "@proskt",     avatar: "asset://ProsKtAvatar",          category: "filmmaker", pinnedRank: 3),
+        // Big Hornet Productions #1, Tee Cee #2, Merch Hd #3, Pros KT #4
+        FriendArtist(name: "Shot By Keonta",        instagram: "@sbkeonta_",   avatar: "asset://ShotByKeontaThumbnail", category: "filmmaker"),
+        FriendArtist(name: "Big Hornet Productions", instagram: "@bighornetpro", avatar: "asset://bighornetpro",   category: "filmmaker", pinnedRank: 1),
+        FriendArtist(name: "Tee Cee",               instagram: "@teecee",      avatar: "asset://TeeCeeAvatar",          category: "filmmaker", pinnedRank: 2),
+        FriendArtist(name: "Merch Hd",              instagram: "@merchhd",     avatar: "asset://MerchHDAvatar",         category: "filmmaker", pinnedRank: 3),
+        FriendArtist(name: "Pros KT",               instagram: "@proskt",      avatar: "asset://ProsKtAvatar",          category: "filmmaker", pinnedRank: 4),
 
         // ── TOP MYCHANNELS ───────────────────────────────────────────────────────
         // Ktrip #1, Baby Juu #2, Mbk Cari #3 — then all artists also appear as channels

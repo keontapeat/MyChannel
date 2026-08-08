@@ -212,9 +212,13 @@ final class IncidentCommandService: ObservableObject {
 
     private func applyEscalationPolicy(incidentId: String, policy: EscalationPolicy) async {
         for role in policy.notifyRoles {
-            try? await db.collection("notifications").addDocument(data: [
-                "type": "incident_escalation", "incidentId": incidentId,
-                "role": role, "createdAt": Timestamp(date: Date())
+            try? await db.collection("admin_alerts").addDocument(data: [
+                "type": "incident_escalation",
+                "incidentId": incidentId,
+                "role": role,
+                "priority": "critical",
+                "resolved": false,
+                "createdAt": FieldValue.serverTimestamp()
             ])
         }
         if let runbook = policy.autoRunbook {

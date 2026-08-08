@@ -225,11 +225,10 @@ struct DownloadButtonView: View {
                 }
             )
         } else {
-            // Ad not ready - give free unlock (good UX)
-            print("⚠️ [Download] Ad not ready, granting free unlock")
-            adUnlockedDownload = true
+            // Ad not ready — do NOT silently unlock premium downloads (Guideline 3.1.1).
+            print("⚠️ [Download] Rewarded ad not ready — download remains locked")
             isWatchingAd = false
-            action()
+            HapticManager.shared.notification(type: .warning)
         }
     }
     

@@ -10,109 +10,129 @@ import SwiftUI
 
 // MARK: - Top Controls
 
+enum FlicksFeedMode: String, CaseIterable {
+    case flicks = "Flicks"
+    case following = "Following"
+}
+
 struct FlicksTopControls: View {
     @Binding var showSearchBar: Bool
     @Binding var searchText: String
     @Binding var flicksMuted: Bool
     @Binding var captionsEnabled: Bool
+    @Binding var selectedFeed: FlicksFeedMode
+    let creators: [FlickCreator]
     var showUI: Bool
 
     var body: some View {
-        VStack {
-            HStack {
-                Button {
-                    showSearchBar.toggle()
-                    HapticManager.shared.impact(style: .light)
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(Color.black.opacity(0.55))
-                            .frame(width: 44, height: 44)
-
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
+        VStack(spacing: 12) {
+            ZStack {
+                HStack(spacing: 8) {
+                    circularControl(icon: "magnifyingglass", label: "Search Flicks") {
+                        showSearchBar.toggle()
+                    }
+                    Spacer()
+                    circularControl(
+                        icon: flicksMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                        label: flicksMuted ? "Unmute" : "Mute"
+                    ) {
+                        flicksMuted.toggle()
+                    }
+                    circularControl(
+                        icon: captionsEnabled ? "captions.bubble.fill" : "captions.bubble",
+                        label: captionsEnabled ? "Turn off captions" : "Turn on captions"
+                    ) {
+                        captionsEnabled.toggle()
                     }
                 }
-                .buttonStyle(ScaleButtonStyle())
-                .accessibilityLabel("Search Flicks")
 
-                Button {
-                    flicksMuted.toggle()
-                    HapticManager.shared.impact(style: .light)
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(Color.black.opacity(0.55))
-                            .frame(width: 44, height: 44)
-
-                        Image(systemName: flicksMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                }
-                .buttonStyle(ScaleButtonStyle())
-                .accessibilityLabel(flicksMuted ? "Unmute" : "Mute")
-
-                Button {
-                    captionsEnabled.toggle()
-                    HapticManager.shared.impact(style: .light)
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(captionsEnabled ? Color.white.opacity(0.9) : Color.black.opacity(0.55))
-                            .frame(width: 44, height: 44)
-
-                        Image(systemName: "captions.bubble.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(captionsEnabled ? .black : .white)
-                    }
-                }
-                .buttonStyle(ScaleButtonStyle())
-                .accessibilityLabel(captionsEnabled ? "Turn off captions" : "Turn on captions")
-
-                Spacer()
-            }
-            .padding(.top, 56)
-            .padding(.trailing, 24)
-            .padding(.leading, 20)
-
-            if showSearchBar {
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 16))
-                        .foregroundColor(.white.opacity(0.6))
-
-                    TextField("Search Flicks...", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
-                        .accessibilityLabel("Search Flicks")
-
-                    if !searchText.isEmpty {
+                HStack(spacing: 18) {
+                    ForEach(FlicksFeedMode.allCases, id: \.self) { mode in
                         Button {
-                            searchText = ""
+                            selectedFeed = mode
                             HapticManager.shared.impact(style: .light)
                         } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 20))
-                                .foregroundColor(.white.opacity(0.6))
+                            VStack(spacing: 5) {
+                                Text(mode.rawValue)
+                                    .font(.system(size: 17, weight: selectedFeed == mode ? .bold : .semibold))
+                                    .foregroundColor(selectedFeed == mode ? .white : .white.opacity(0.62))
+                                Capsule()
+                                    .fill(Color.white)
+                                    .frame(width: selectedFeed == mode ? 22 : 0, height: 2)
+                            }
                         }
-                        .accessibilityLabel("Clear search")
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(selectedFeed == mode ? .isSelected : [])
+                    }
+
+                    HStack(spacing: -7) {
+                        ForEach(Array(creators.prefix(3))) { creator in
+                            AppAsyncImage(
+                                url: URL(string: creator.profileImageURL),
+                                content: { $0.resizable().aspectRatio(contentMode: .fill) },
+                                placeholder: { Circle().fill(Color.white.opacity(0.25)) }
+                            )
+                            .frame(width: 25, height: 25)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.white.opacity(0.9), lineWidth: 1.5))
+                            .accessibilityLabel(creator.displayName)
+                        }
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color.black.opacity(0.55))
-                .cornerRadius(12)
-                .padding(.horizontal, 20)
-                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 54)
+
+            if showSearchBar {
+                searchField
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             Spacer()
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: selectedFeed)
+        .animation(.easeOut(duration: 0.2), value: showSearchBar)
         .opacity(showUI ? 1 : 0)
         .allowsHitTesting(showUI)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.white.opacity(0.65))
+            TextField("Search Flicks", text: $searchText)
+                .textFieldStyle(.plain)
+                .foregroundColor(.white)
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.white.opacity(0.65))
+                }
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .font(.system(size: 15, weight: .medium))
+        .padding(.horizontal, 14)
+        .frame(height: 44)
+        .background(.ultraThinMaterial.opacity(0.72), in: Capsule())
+        .padding(.horizontal, 20)
+    }
+
+    private func circularControl(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button {
+            HapticManager.shared.impact(style: .light)
+            action()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 44, height: 44)
+                .background(Color.black.opacity(0.32), in: Circle())
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .accessibilityLabel(label)
     }
 }
 

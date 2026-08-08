@@ -7,35 +7,55 @@ import Combine
 import UIKit
 
 struct VideoDetailView: View {
+    enum PlaybackAuthorizationState: Equatable {
+        case checking
+        case allowed
+        case blocked(String)
+    }
+
     let video: Video
     @Environment(\.dismiss) var dismiss
     @Environment(\.scenePhase) var scenePhase
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     @EnvironmentObject var globalPlayer: GlobalVideoPlayerManager
-    @StateObject var playerManager = VideoPlayerManager() // Single player manager
-    @StateObject var appState = AppState.shared
-    @StateObject var recommendationService = VideoDetailRecommendationService.shared
-    @StateObject var controlsCoordinator = PlayerControlsCoordinator()
+    @StateObject var playerManager: VideoPlayerManager
+    @StateObject var controlsCoordinator = PlayerControlsCoordinator() // view-owned
+    @State var playbackAuthorization: PlaybackAuthorizationState = .checking
+    @State var playbackSession: VideoPlaybackSession?
+    @State var authorizedVideo: Video?
+    @State var hasStartedContentPlayback = false
+    @State var lastProgressSaveSecond = -1
+    @State var isUsingGlobalPlayer = false
+    @State var playbackRenewalTask: Task<Void, Never>?
+    @State var pendingAuthorizationResumeTime: TimeInterval?
+    // Shared singletons are observed, not owned — @ObservedObject is the correct
+    // wrapper (@StateObject would tie their lifecycle to this view).
+    @ObservedObject var appState = AppState.shared
+    @ObservedObject var recommendationService = VideoDetailRecommendationService.shared
     
     // 🔥 REAL-TIME VIEW COUNT: Make view count reactive
     @State var currentViewCount: Int
-    @StateObject var viewTracker = RealtimeViewTracker.shared
+    @ObservedObject var viewTracker = RealtimeViewTracker.shared
 
     var isYouTube: Bool { video.contentSource == .youtube && video.externalID != nil }
     
     init(video: Video) {
         self.video = video
+        let globalPlayer = GlobalVideoPlayerManager.shared
+        let initialManager: VideoPlayerManager
+        if globalPlayer.currentVideo?.id == video.id,
+           globalPlayer.authorizedPlaybackSession?.videoId == video.id,
+           let retainedManager = globalPlayer.exposedPlayerManager {
+            initialManager = retainedManager
+        } else {
+            initialManager = VideoPlayerManager()
+        }
+        _playerManager = StateObject(wrappedValue: initialManager)
         _currentViewCount = State(initialValue: video.viewCount)
     }
 
     // MARK: - Player States
-    @State var showPlayer = false
-    @State var isPlayerReady = false
-    @State var isBuffering = false
     @State var playbackRate: Float = 1.0
-    @State var isFullscreen = false
-    @State var showPlayerControls = true
-    @State var playerControlsTimer: Timer?
-    @State var isDraggingSeeker = false
     @State var videoQuality: VideoQuality = .auto
     
 
@@ -59,7 +79,6 @@ struct VideoDetailView: View {
     @State var showingVideoEditor = false  // 🔥 FIX: Add video editor sheet
     @State var showSeekRippleForward = false
     @State var showSeekRippleBackward = false
-    @State var lastDoubleTapTime = Date.distantPast  // 🔥 YOUTUBE PARITY: Double-tap detection
     @State var showingChapters = false
     @State var currentChapterTitle: String = ""
     @State var showingChapterTooltip = false
@@ -69,7 +88,7 @@ struct VideoDetailView: View {
     @State var upNextCountdown = 5
     @State var upNextVideo: Video? = nil
     @State var autoplayEnabled = true
-    @State var upNextTimer: Timer? = nil
+    @State var upNextCountdownTask: Task<Void, Never>? = nil
     @State var showingUpNextList = false
     @State var videoToPresent: Video? = nil
     @State var showingSubtitlePicker = false
@@ -83,8 +102,8 @@ struct VideoDetailView: View {
     @State var midrolls: [VMAPResponse.Midroll] = []
     @State var servedMidrollIndices: Set<Int> = []
     
-    // 🔥 YOUTUBE-STYLE ADS: New ad state management
-    @StateObject var adManager = GoogleIMAAdManager.shared
+    // 🔥 YOUTUBE-STYLE ADS: New ad state management (shared singleton — observed)
+    @ObservedObject var adManager = GoogleIMAAdManager.shared
     @State var currentVideoAd: VideoAd?
     @State var showingYouTubeAd = false
     @State var adSkipped = false
@@ -135,15 +154,36 @@ struct VideoDetailView: View {
     // MARK: - YouTube Parity: Loop Toggle
     @State var isLooping = false
 
-    // MARK: - Wired Phase 141–154 Services
-    @StateObject var ambientService = AmbientModeService.shared
-    @StateObject var heatmapService = SentimentHeatmapService.shared
-    @StateObject var timestampedCommentsService = TimestampedCommentsService.shared
-    @StateObject var speedCurvesService = PlaybackSpeedCurvesService.shared
+    // MARK: - Wired Phase 141–154 Services (shared singletons — observed)
+    @ObservedObject var ambientService = AmbientModeService.shared
+    @ObservedObject var heatmapService = SentimentHeatmapService.shared
+    @ObservedObject var timestampedCommentsService = TimestampedCommentsService.shared
+    @ObservedObject var speedCurvesService = PlaybackSpeedCurvesService.shared
     @State var pinchScale: CGFloat = 1.0
     @State var lastPinchScale: CGFloat = 1.0
     @State var showAmbientGlow = false
     @State var showSilenceSkipIndicator = false
+
+    // MARK: - Video Polls / Quizzes
+    @ObservedObject var pollService = VideoPollsQuizzesService.shared
+    @State var displayedPoll: VideoPoll? = nil
+
+    // MARK: - Shoppable Video
+    @ObservedObject var shoppableService = ShoppableVideoService.shared
+
+    // MARK: - Info Cards (YouTube-style interactive overlay)
+    @StateObject var infoCardManager = InfoCardPlaybackManager()
+
+    // MARK: - Membership Gating
+    @State var membershipGateActive = false
+    @State var checkingMembership = false
+    @State var showingMembershipSheet = false
+
+    /// Cancels in-flight authorize / ad-timeout work when the user leaves.
+    @State var authorizationTask: Task<Void, Never>?
+    @State var adLoadTimeoutTask: Task<Void, Never>?
+    /// Bumps on each authorize attempt so late completions are ignored.
+    @State var authorizationGeneration: UInt64 = 0
     
     // MARK: - YouTube Parity: Brightness / Volume Swipe
     @State var currentBrightness: CGFloat = UIScreen.main.brightness
@@ -220,15 +260,15 @@ struct VideoDetailView: View {
         }
         .onAppear {
             if !isViewAppeared {
-                print("🎬 Setting up video player for: \(video.title)")
-                print("🔗 Video URL: \(video.videoURL)")
-                print("🎥 Video source: \(video.contentSource)")
-                print("🆔 Video ID: \(video.id)")
-                print("📱 Is YouTube: \(isYouTube)")
-                print("💰 Video monetized: \(video.monetization?.isMonetized ?? false)")
+                // Arm native PiP registration so the leave-the-app mini player is
+                // set up the moment the AVPlayer is created (avoids the nil-player race).
+                playerManager.registersForGlobalPiP = true
+                #if DEBUG
+                print("🎬 [VideoDetailView] Preparing playback for video ID: \(video.id)")
+                #endif
                 
                 // 🔥 YOUTUBE PARITY: Check if this video is already playing in PiP / global player
-                let globalPlayer = GlobalVideoPlayerManager.shared
+                // (`globalPlayer` is the injected @EnvironmentObject — same shared instance.)
                 let isSameVideoInGlobal = globalPlayer.currentVideo?.id == video.id && globalPlayer.player != nil
                 let isPiPActive = PiPPlayerManager.shared.pipController?.isPictureInPictureActive == true
                     || NativePiPController.shared.isActive
@@ -236,256 +276,114 @@ struct VideoDetailView: View {
                 // 🔥 YOUTUBE PARITY: ALWAYS stop PiP when opening VideoDetailView
                 // YouTube never shows PiP and fullscreen at the same time
                 if isPiPActive {
-                    print("⏹️ [VideoDetailView] Stopping PiP — fullscreen player taking over")
                     PiPPlayerManager.shared.stopPiP()
                     NativePiPController.shared.stopPiP()
                 }
                 
-                // 🔥 YOUTUBE PARITY: If same video was in PiP/global, adopt it seamlessly
-                if isSameVideoInGlobal {
-                    print("✅ [VideoDetailView] Same video from PiP/global — adopting player seamlessly")
-                    if let _ = globalPlayer.exposedPlayerManager {
-                        isPlayerReady = true
-                        showPlayer = true
-                        isViewAppeared = true
-                        
-                        // Mark as fullscreen so PiP doesn't re-trigger
-                        globalPlayer.showingFullscreen = true
-                        
-                        // Update view count
-                        Task {
-                            let latestCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
-                            currentViewCount = latestCount
-                        }
-                        
-                        // Sync playback state — ensure video keeps playing
-                        if let player = globalPlayer.player {
-                            playbackRate = player.rate
-                            if player.timeControlStatus != .playing && globalPlayer.isPlaying {
-                                player.play()
-                            }
-                        }
-                        
-                        print("✅ [VideoDetailView] Adopted global player — seamless transition from PiP")
-                        return
+                // If the same authorized video is already global, reuse its
+                // retained manager and server session without rebuilding from metadata.
+                if isSameVideoInGlobal,
+                   globalPlayer.exposedPlayerManager != nil,
+                   let retainedSession = globalPlayer.authorizedPlaybackSession,
+                   let retainedVideo = globalPlayer.authorizedPlayableVideo,
+                   retainedSession.videoId == video.id,
+                   retainedVideo.id == video.id {
+                    isViewAppeared = true
+                    isUsingGlobalPlayer = true
+                    playbackSession = retainedSession
+                    authorizedVideo = retainedVideo
+                    playbackAuthorization = .allowed
+                    hasStartedContentPlayback = true
+                    globalPlayer.showingFullscreen = true
+
+                    Task {
+                        let latestCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
+                        currentViewCount = latestCount
                     }
+
+                    if let player = globalPlayer.player {
+                        playbackRate = player.rate
+                        if player.timeControlStatus != .playing && globalPlayer.isPlaying {
+                            player.play()
+                        }
+                    }
+                    return
                 }
                 
-                // 🔥 Different video — stop everything and start fresh
+                // Different video — stop everything and start from a server-authorized manifest.
                 GlobalVideoPlayerManager.shared.stopImmediately()
-                
+
                 if !isYouTube {
-                    // 🔥 ADD ADS LOGIC: Check for ads before playing video
-                    Task { @MainActor in
-                        // 🔥 NO ADS ON YOUR OWN VIDEOS - Skip ads if watching your own content
-                        if let currentUser = AuthenticationManager.shared.currentUser,
-                           video.creator.id == currentUser.id {
-                            print("🎬 Your own video - skipping ALL ads, playing instantly!")
-                            playerManager.setupPlayer(with: video)
-                            playerManager.applyFastStartTuning()
-                            if AppState.shared.preferredVideoQuality != .auto {
-                                playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
-                                videoQuality = AppState.shared.preferredVideoQuality
-                            }
-                            playerManager.requestAutoPlay()
-                            
-                            // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP support
-                            GlobalVideoPlayerManager.shared.registerLocalPlayer(video: video, player: playerManager.player)
-                            return
-                        }
-                        
-                        // Premium gating: no ads for subscribers
-                        if (try? await StoreKitService.shared.hasActiveSubscription()) == true {
-                            print("👑 Premium user - no ads")
-                            playerManager.setupPlayer(with: video)
-                            playerManager.applyFastStartTuning()
-                            if AppState.shared.preferredVideoQuality != .auto {
-                                playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
-                                videoQuality = AppState.shared.preferredVideoQuality
-                            }
-                            playerManager.requestAutoPlay()
-                            
-                            // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP support
-                            GlobalVideoPlayerManager.shared.registerLocalPlayer(video: video, player: playerManager.player)
-                            return
-                        }
-                        
-                        // 🔥 ADS OFF BY DEFAULT: Only show video ads if you enable them (e.g. in Settings)
-                        let videoAdsEnabled = UserDefaults.standard.bool(forKey: "preferences.videoAdsEnabled")
-                        guard videoAdsEnabled else {
-                            print("🎬 Video ads disabled - playing directly")
-                            playerManager.setupPlayer(with: video)
-                            playerManager.applyFastStartTuning()
-                            if AppState.shared.preferredVideoQuality != .auto {
-                                playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
-                                videoQuality = AppState.shared.preferredVideoQuality
-                            }
-                            playerManager.requestAutoPlay()
-                            GlobalVideoPlayerManager.shared.registerLocalPlayer(video: video, player: playerManager.player)
-                            return
-                        }
-                        
-                        print("🎯 Checking ads for video: \(video.title)")
-                        print("💰 Video monetization: \(video.monetization?.isMonetized ?? false)")
-                        
-                        let personalized = UserDefaults.standard.bool(forKey: "preferences.personalizedAdsEnabled")
-                        adManager.requestPreRollAd(for: video, personalized: personalized) { [self] ad in
-                            if let ad = ad {
-                                print("✅ [VideoDetailView] Got YouTube-style ad: \(ad.mediaURL)")
-                                
-                                // Show YouTube-style ad
-                                currentVideoAd = ad
-                                showingYouTubeAd = true
-                                
-                                // Setup ad manager callbacks
-                                adManager.onAdComplete = {
-                                    Task { @MainActor in
-                                        print("🎬 [VideoDetailView] Ad completed, playing main video")
-                                        showingYouTubeAd = false
-                                        currentVideoAd = nil
-                                        
-                                        // Track revenue to Firebase
-                                        let revenue = Double.random(in: 0.02...0.15)  // Real CPM range
-                                        await AdsService.trackAdRevenue(for: video, adRevenue: revenue)
-                                        
-                                        // Play main video
-                                        playerManager.setupPlayer(with: video)
-                                        playerManager.applyFastStartTuning()
-                                        if AppState.shared.preferredVideoQuality != .auto {
-                                            playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
-                                            videoQuality = AppState.shared.preferredVideoQuality
-                                        }
-                                        playerManager.requestAutoPlay()
-                                        
-                                        globalPlayer.registerLocalPlayer(video: video, player: playerManager.player)
-                                    }
-                                }
-                                
-                                adManager.onAdSkipped = {
-                                    Task { @MainActor in
-                                        print("⏭️ [VideoDetailView] Ad skipped, playing main video")
-                                        showingYouTubeAd = false
-                                        currentVideoAd = nil
-                                        
-                                        // Still track partial revenue (skipped ads pay less)
-                                        let revenue = Double.random(in: 0.005...0.03)
-                                        await AdsService.trackAdRevenue(for: video, adRevenue: revenue)
-                                        
-                                        playerManager.setupPlayer(with: video)
-                                        playerManager.applyFastStartTuning()
-                                        if AppState.shared.preferredVideoQuality != .auto {
-                                            playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
-                                            videoQuality = AppState.shared.preferredVideoQuality
-                                        }
-                                        playerManager.requestAutoPlay()
-                                        
-                                        globalPlayer.registerLocalPlayer(video: video, player: playerManager.player)
-                                    }
-                                }
-                                
-                                // Play the ad
-                                adManager.playAd(ad)
-                                
-                            } else {
-                                print("❌ No ads available - playing video directly")
-                                // No ad, play video directly
-                                playerManager.setupPlayer(with: video)
-                                playerManager.applyFastStartTuning()
-                                if AppState.shared.preferredVideoQuality != .auto {
-                                    playerManager.setPreferredQuality(AppState.shared.preferredVideoQuality)
-                                    videoQuality = AppState.shared.preferredVideoQuality
-                                }
-                                playerManager.requestAutoPlay()
-                                
-                                // 🔥 FIX: Register video with GlobalVideoPlayerManager for PiP
-                                globalPlayer.registerLocalPlayer(video: video, player: playerManager.player)
-                            }
-                        }
-                    }
-                    // Log watch start to history
+                    authorizationTask?.cancel()
+                    authorizationTask = Task { await authorizeAndStartPlayback() }
                     if let uid = AppState.shared.currentUser?.id {
                         Task { await HistoryService.shared.logStart(userId: uid, video: video) }
                     }
-                    
-                    // 🔥 FIX: Track view count when video actually starts playing (not just on appear)
-                    // This ensures views are only counted when user actually watches
-                    // We'll track in the player observer when playback actually starts
-                    // Fetch simple VMAP for preroll and pause content while ad plays
-                    Task {
-                        // 🔥 NO VMAP ADS: Skip unless video ads are enabled (same as preroll)
-                        if !UserDefaults.standard.bool(forKey: "preferences.videoAdsEnabled") {
-                            return
-                        }
-                        if let currentUser = AuthenticationManager.shared.currentUser,
-                           video.creator.id == currentUser.id {
-                            print("🎬 Skipping VMAP ads - your video!")
-                            return
-                        }
-                        
-                        if let vmap = await AdsService.shared.fetchVMAP(videoId: video.id) {
-                            let uid = AppState.shared.currentUser?.id ?? "anonymous"
-                            if let preroll = vmap.prerollUrl, !preroll.isEmpty, AdsFrequencyCapService.shared.canShow(userId: uid, adUnit: "pre_roll") {
-                                prerollURL = preroll
-                                showingAd = true
-                                pendingContentResume = true
-                                playerManager.pause()
-                                AdsFrequencyCapService.shared.recordExposure(userId: uid, adUnit: "pre_roll", placement: "video_start", duration: 0, skippable: true, completed: false)
-                            }
-                            self.midrolls = vmap.midrolls ?? []
-                            self.servedMidrollIndices = []
-                        }
-                    }
+                } else {
+                    // YouTube embeds remain governed by YouTube's own authenticated
+                    // player policy and never receive a raw MyChannel media URL.
+                    playbackAuthorization = .allowed
                 }
                 controlsCoordinator.showControlsAndResetTimer()
                 isViewAppeared = true
             }
         }
         .onDisappear {
-            print("🎬 VideoDetailView disappearing")
-            playerControlsTimer?.invalidate()
+            authorizationTask?.cancel()
+            authorizationTask = nil
+            adLoadTimeoutTask?.cancel()
+            adLoadTimeoutTask = nil
+            playbackRenewalTask?.cancel()
+            playbackRenewalTask = nil
+            #if DEBUG
+            print("🎬 [VideoDetailView] Disappearing")
+            #endif
             controlsCoordinator.cleanup()
+            upNextCountdownTask?.cancel()
+            upNextCountdownTask = nil
             
-            // 🔥 YOUTUBE PARITY: Save watch progress when leaving
-            let _uid = AppState.shared.currentUser?.id ?? "anonymous"
-            let _pos = playerManager.currentTime
-            let _dur = playerManager.duration
-            let _vid = video.id
-            Task { try? await WatchProgressService.shared.saveProgress(userId: _uid, videoId: _vid, position: _pos, duration: _dur) }
+            // Persist remote progress only for authenticated users. Anonymous
+            // progress remains local and never collides under a shared user key.
+            if let userId = AppState.shared.currentUser?.id {
+                let position = activePlaybackTime
+                let duration = activePlaybackDuration
+                Task {
+                    try? await WatchProgressService.shared.saveProgress(
+                        userId: userId,
+                        videoId: video.id,
+                        position: position,
+                        duration: duration
+                    )
+                }
+            }
             
             // 🔥 YOUTUBE PARITY: If user explicitly closed (X button), don't start PiP
-            guard !userExplicitlyClosed else {
-                print("❌ [VideoDetailView] User explicitly closed — no PiP")
-                return
-            }
+            guard !userExplicitlyClosed else { return }
             
             // If native PiP is already active (chevron button started it), nothing to do
             let nativePiPActive = PiPPlayerManager.shared.pipController?.isPictureInPictureActive == true
                 || NativePiPController.shared.isActive
-            guard !nativePiPActive else {
-                print("✅ [VideoDetailView] Native PiP already active — no action needed")
-                return
-            }
+            guard !nativePiPActive else { return }
             
-            // 🔥 YOUTUBE PARITY: Swipe-dismiss or back gesture → mini player
-            // Hand off to GlobalVideoPlayerManager so FloatingMiniPlayer can show.
-            // Also attempt native PiP — FloatingMiniPlayer is the reliable fallback.
-            if !isYouTube {
+            // Swipe-dismiss or back gesture keeps the already-authorized player
+            // in the in-app mini player. The retained session owns renewal.
+            if !isYouTube,
+               let session = effectivePlaybackSession,
+               let playableVideo = effectivePlayableVideo {
                 Task { @MainActor in
-                    let wasPlaying = playerManager.isPlaying
-                    // Adopt player — sets globalPlayer.currentVideo + showingFullscreen = false,
-                    // which makes FloatingMiniPlayer appear immediately in MainTabView.
-                    await globalPlayer.adoptExternalPlayerManager(playerManager, video: video, showFullscreen: false)
+                    let manager = activePlayerManager
+                    let wasPlaying = manager.isPlaying
+                    await globalPlayer.adoptExternalPlayerManager(
+                        manager,
+                        video: video,
+                        showFullscreen: false,
+                        session: session,
+                        playableVideo: playableVideo
+                    )
                     globalPlayer.showingFullscreen = false
-                    if wasPlaying {
-                        if let player = globalPlayer.player, player.rate == 0 {
-                            player.play()
-                            globalPlayer.isPlaying = true
-                        }
-                        // Bonus: try native PiP; FloatingMiniPlayer is already showing as fallback
-                        PiPPlayerManager.shared.startPiP(
-                            onStarted: { print("✅ [onDisappear] Native PiP started") },
-                            onFailed:  { print("⚠️ [onDisappear] PiP unavailable — FloatingMiniPlayer active") }
-                        )
+                    if wasPlaying, let player = globalPlayer.player, player.rate == 0 {
+                        player.play()
+                        globalPlayer.isPlaying = true
                     }
                 }
             }
@@ -496,8 +394,10 @@ struct VideoDetailView: View {
             if newPhase == .active {
                 // Restore inline playback if PiP was stopped by returning to app
                 let pipActive = PiPPlayerManager.shared.pipController?.isPictureInPictureActive ?? false
-                if !pipActive && !playerManager.isPlaying {
-                    print("🔄 [VideoDetailView] Returned to foreground, PiP not active")
+                if !pipActive && !activePlayerManager.isPlaying {
+                    #if DEBUG
+                    print("[VideoDetailView] Returned to foreground with playback paused")
+                    #endif
                 }
             }
         }
@@ -512,39 +412,33 @@ struct VideoDetailView: View {
             }
         }
         .onChange(of: playerManager.isPlaying) { newValue in
-            #if DEBUG
-            print("🎵 Player state changed to: \(newValue ? "Playing" : "Paused")")
-            #endif
-            controlsCoordinator.updatePlayingState(newValue)
-            if newValue {
-                Task {
-                    let latestCount = await RealtimeViewTracker.shared.getViewCount(for: video.id)
-                    await MainActor.run {
-                        currentViewCount = latestCount
-                        print("📊 [VideoDetailView] View count updated after play: \(latestCount)")
-                    }
-                }
-            }
+            guard !isUsingGlobalPlayer else { return }
+            handlePlaybackStateChanged(newValue)
+        }
+        .onChange(of: globalPlayer.isPlaying) { newValue in
+            guard isUsingGlobalPlayer, globalPlayer.currentVideo?.id == video.id else { return }
+            handlePlaybackStateChanged(newValue)
         }
         .onReceive(playerManager.$currentTime) { _ in
+            guard !isUsingGlobalPlayer else { return }
+            handleCurrentTimeChange()
+        }
+        .onReceive(globalPlayer.$currentTime) { _ in
+            guard isUsingGlobalPlayer, globalPlayer.currentVideo?.id == video.id else { return }
             handleCurrentTimeChange()
         }
         // 🔥 FIX: Listen for "Open Video Editor" notification
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenVideoEditor"))) { notification in
             if let editVideo = notification.object as? Video, editVideo.id == video.id {
-                print("📝 [VideoDetailView] Opening video editor")
                 showingVideoEditor = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { notification in
-            // CRITICAL FIX: Only trigger endscreen if this is OUR player item, not other players (banners, previews, etc)
             if let item = notification.object as? AVPlayerItem,
-               item == playerManager.player?.currentItem {
-                // 🔥 YOUTUBE PARITY: Loop video if enabled
+               item == activePlayerManager.player?.currentItem {
                 if isLooping {
-                    playerManager.seek(to: 0)
-                    playerManager.play()
-                    print("🔁 [YouTube] Looping video")
+                    activePlayerManager.seek(to: 0)
+                    activePlayerManager.play()
                 } else {
                     beginEndscreen()
                 }
@@ -562,7 +456,6 @@ struct VideoDetailView: View {
                let videoId = userInfo["videoId"] as? String,
                videoId == video.id,
                let viewCount = userInfo["viewCount"] as? Int {
-                print("📊 [VideoDetailView] View count updated: \(viewCount)")
                 currentViewCount = viewCount
             }
         }
@@ -578,7 +471,9 @@ struct VideoDetailView: View {
             async let viewCountFetch = RealtimeViewTracker.shared.getViewCount(for: video.id)
             async let recsFetch = recommendationService.recommendations(for: video, userId: appState.currentUser?.id, limit: 20)
             let (latestCount, recs) = await (viewCountFetch, recsFetch)
-            print("📊 [VideoDetailView] Latest view count from Firestore: \(latestCount)")
+            #if DEBUG
+            print("📊 [VideoDetailView] Latest view count: \(latestCount)")
+            #endif
 
             await MainActor.run {
                 currentViewCount = latestCount
@@ -587,21 +482,80 @@ struct VideoDetailView: View {
 
             recommendationService.prefetchNextPlayerItem(from: recs)
 
-            // Heatmap, comments, silence detection in parallel
+            // Heatmap, comments, silence detection, polls in parallel
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { _ = try? await heatmapService.loadHeatmap(videoId: video.id) }
                 group.addTask { _ = try? await timestampedCommentsService.loadComments(videoId: video.id) }
                 group.addTask { _ = try? await speedCurvesService.detectSilence(videoId: video.id) }
+                if AppConfig.Features.enableVideoPollsQuizzes {
+                    group.addTask { _ = try? await pollService.loadPolls(videoId: video.id) }
+                }
+                if AppConfig.Features.enableShoppableVideo {
+                    group.addTask { _ = try? await shoppableService.loadTags(videoId: video.id) }
+                }
+                group.addTask { await infoCardManager.loadCards(for: video.id) }
+                // Apply volume normalization: adjust player gain to reach target LUFS
+                if AppConfig.Features.enableVolumeNormalization {
+                    group.addTask {
+                        if let profile = try? await VolumeNormalizationService.shared.analyzeVolume(videoId: video.id) {
+                            let gainDB = profile.targetLUFS - profile.integratedLUFS
+                            let gainLinear = min(2.0, max(0.1, Float(pow(10.0, gainDB / 20.0))))
+                            await MainActor.run { playerManager.setVolume(gainLinear) }
+                        }
+                    }
+                }
+                // Membership gate check — also run for signed-out users (gate stays on).
+                if AppConfig.Features.enableMembershipPerks, video.isMembersOnly == true {
+                    let creatorId = video.creatorId
+                    let uid = AppState.shared.currentUser?.id
+                    group.addTask {
+                        if let uid {
+                            await checkMembershipAccess(channelId: creatorId, userId: uid)
+                        } else {
+                            await MainActor.run {
+                                membershipGateActive = true
+                                activePlayerManager.pause()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingMembershipSheet) {
+            ChannelMembershipView(
+                channelId: video.creatorId,
+                channelName: video.creator.displayName,
+                channelAvatarURL: video.creator.profileImageURL
+            )
+            .presentationDetents([.medium, .large])
+        }
+        .onChange(of: showingMembershipSheet) { isPresented in
+            // Re-check membership after the sheet closes in case the user joined.
+            guard !isPresented,
+                  AppConfig.Features.enableMembershipPerks,
+                  video.isMembersOnly == true,
+                  let uid = AppState.shared.currentUser?.id else { return }
+            Task {
+                await checkMembershipAccess(channelId: video.creatorId, userId: uid)
+                if !membershipGateActive {
+                    authorizationTask?.cancel()
+                    authorizationTask = Task { await authorizeAndStartPlayback() }
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SeekToTimestamp"))) { notification in
             if let timestamp = notification.object as? TimeInterval {
-                let progress = playerManager.duration > 0 ? timestamp / playerManager.duration : 0
-                playerManager.seek(to: progress)
+                let duration = activePlayerManager.duration
+                let progress = duration > 0 ? timestamp / duration : 0
+                activePlayerManager.seek(to: progress)
             }
         }
-        // 🔥 YOUTUBE PARITY: Auto quality selection + Resume playback position when video loads
         .onChange(of: playerManager.duration) { newDuration in
+            guard !isUsingGlobalPlayer else { return }
+            handleDurationChange(newDuration)
+        }
+        .onChange(of: globalPlayer.duration) { newDuration in
+            guard isUsingGlobalPlayer, globalPlayer.currentVideo?.id == video.id else { return }
             handleDurationChange(newDuration)
         }
         // 🔥 YOUTUBE PARITY: Queue sidebar

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import StoreKit
 
 struct SuperChatView<Service: LiveChatServiceProtocol & ObservableObject>: View {
     let streamId: String
@@ -186,22 +187,72 @@ struct SuperChatView<Service: LiveChatServiceProtocol & ObservableObject>: View 
     private func sendSuperChat() {
         isProcessingPayment = true
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            let superChatMessage = LiveChatMessage(
-                streamId: streamId,
-                userId: AppState.shared.currentUser?.id ?? "",
-                username: AppState.shared.currentUser?.displayName ?? "User",
-                content: message.isEmpty ? "Thanks for the stream!" : message,
-                messageType: .superChat,
-                superChatAmount: selectedAmount
-            )
-            Task {
-                try? await chatService.sendMessage(superChatMessage)
-                await MainActor.run {
+            do {
+                let productId = superChatProductId(for: selectedAmount)
+                let products = try await Product.products(for: [productId])
+                guard let product = products.first else {
+                    // Product not found — only allow free fallback in debug/TestFlight builds
+#if DEBUG
+                    await postSuperChatMessage()
                     isProcessingPayment = false
                     showingPaymentSuccess = true
+#else
+                    isProcessingPayment = false
+#endif
+                    return
                 }
+                let result = try await product.purchase()
+                switch result {
+                case .success(let verification):
+                    switch verification {
+                    case .verified(let transaction):
+                        await postSuperChatMessage()
+                        await transaction.finish()
+                        isProcessingPayment = false
+                        showingPaymentSuccess = true
+                    case .unverified:
+                        isProcessingPayment = false
+                    }
+                case .userCancelled:
+                    isProcessingPayment = false
+                case .pending:
+                    isProcessingPayment = false
+                @unknown default:
+                    isProcessingPayment = false
+                }
+            } catch {
+                // IAP unavailable — only allow free post in debug/simulator
+#if DEBUG
+                await postSuperChatMessage()
+                isProcessingPayment = false
+                showingPaymentSuccess = true
+#else
+                isProcessingPayment = false
+#endif
             }
+        }
+    }
+
+    private func postSuperChatMessage() async {
+        let superChatMessage = LiveChatMessage(
+            streamId: streamId,
+            userId: AppState.shared.currentUser?.id ?? "",
+            username: AppState.shared.currentUser?.displayName ?? "User",
+            content: message.isEmpty ? "Thanks for the stream!" : message,
+            messageType: .superChat,
+            superChatAmount: selectedAmount
+        )
+        try? await chatService.sendMessage(superChatMessage)
+    }
+
+    private func superChatProductId(for amount: Double) -> String {
+        switch amount {
+        case ..<5:   return "com.mychannel.superchat.2"
+        case ..<10:  return "com.mychannel.superchat.5"
+        case ..<20:  return "com.mychannel.superchat.10"
+        case ..<50:  return "com.mychannel.superchat.20"
+        case ..<100: return "com.mychannel.superchat.50"
+        default:     return "com.mychannel.superchat.100"
         }
     }
 }

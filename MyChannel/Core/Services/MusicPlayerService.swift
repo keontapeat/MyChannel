@@ -53,8 +53,14 @@ final class MusicPlayerService: ObservableObject {
     // MARK: - Private
     private var player: AVPlayer?
     private var timeObserver: Any?
+    private var endObserver: NSObjectProtocol?
+    private var artworkTask: Task<Void, Never>?
+    private var playbackSessionId: UUID?
+    private var hasSubmittedQualifiedPlay = false
+    private var listenedSeconds: Double = 0
+    private var lastObservedTime: Double?
+    private var remoteCommandTargets: [(command: MPRemoteCommand, token: Any)] = []
     private var nowPlayingCenter = MPNowPlayingInfoCenter.default()
-    private var cancellables = Set<AnyCancellable>()
     
     private init() {
         configureAudioSession()
@@ -182,19 +188,22 @@ final class MusicPlayerService: ObservableObject {
     }
     
     func stop() {
-        if let obs = timeObserver {
-            player?.removeTimeObserver(obs)
-            timeObserver = nil
-        }
+        removePlaybackObservers()
+        artworkTask?.cancel()
+        artworkTask = nil
         player?.pause()
         player = nil
-        
+
         isPlaying = false
         isBuffering = false
         progress = 0
         currentTime = 0
         duration = 0
         currentSong = nil
+        playbackSessionId = nil
+        hasSubmittedQualifiedPlay = false
+        listenedSeconds = 0
+        lastObservedTime = nil
         nowPlayingCenter.nowPlayingInfo = nil
     }
     
@@ -230,58 +239,49 @@ final class MusicPlayerService: ObservableObject {
     // MARK: - Private helpers
     
     private func startPlayback(for song: Song) {
-        guard let url = song.streamURL ?? song.alternateStreamURLs.first else {
-            // No stream available; nothing to play
+        guard let url = publicPlaybackURL(for: song) else {
             return
         }
-        
+
         isBuffering = true
         currentSong = song
-        
-        if let obs = timeObserver {
-            player?.removeTimeObserver(obs)
-            timeObserver = nil
-        }
-        
+        removePlaybackObservers()
+        artworkTask?.cancel()
+
         let item = AVPlayerItem(url: url)
         player = AVPlayer(playerItem: item)
-        
+        playbackSessionId = UUID()
+        hasSubmittedQualifiedPlay = false
+        listenedSeconds = 0
+        lastObservedTime = 0
+
         addObservers()
         player?.play()
         isPlaying = true
-        
+
         updateNowPlayingInfo(for: song)
-        
-        // Track recently played in Firestore
+
         Task {
             await saveToRecentlyPlayed(song: song)
         }
     }
+
+    private func publicPlaybackURL(for song: Song) -> URL? {
+        let candidates = ([song.streamURL] + song.alternateStreamURLs.map(Optional.some)).compactMap { $0 }
+        let publicCandidates = candidates.filter {
+            $0.scheme?.lowercased() == "https" && $0.host?.isEmpty == false
+        }
+        return publicCandidates.first { $0.pathExtension.lowercased() == "m3u8" }
+            ?? publicCandidates.first { $0.pathExtension.lowercased() == "mp3" }
+            ?? publicCandidates.first
+    }
     
     private func saveToRecentlyPlayed(song: Song) async {
         #if canImport(FirebaseAuth) && canImport(FirebaseFirestore)
-        let uid = Auth.auth().currentUser?.uid
-        let listenerId = uid ?? "anonymous_\(UUID().uuidString)"
+        guard let uid = Auth.auth().currentUser?.uid else { return }
         let db = Firestore.firestore()
-        
-        do {
-            let regionCode = Locale.current.regionCode ?? "US"
-            let countryName = Locale.current.localizedString(forRegionCode: regionCode) ?? regionCode
-            #if canImport(UIKit)
-            let deviceType: String = {
-                switch UIDevice.current.userInterfaceIdiom {
-                case .pad: return "iPad"
-                case .phone: return "iPhone"
-                case .tv: return "Apple TV"
-                case .mac: return "Mac"
-                default: return "Other"
-                }
-            }()
-            #else
-            let deviceType = "Unknown"
-            #endif
 
-            // Save to user's recently played collection
+        do {
             let playData: [String: Any] = [
                 "songId": song.id,
                 "title": song.title,
@@ -291,56 +291,34 @@ final class MusicPlayerService: ObservableObject {
                 "duration": song.duration,
                 "playedAt": FieldValue.serverTimestamp()
             ]
+            try await db.collection("users").document(uid)
+                .collection("recently_played")
+                .document(song.id)
+                .setData(playData, merge: true)
 
-            if let uid {
-                try await db.collection("users").document(uid)
-                    .collection("recently_played")
-                    .document(song.id)
-                    .setData(playData, merge: true)
-            }
-
-            try await db.collection("music_plays").document().setData([
-                "songId": song.id,
-                "artistId": song.primaryArtistId,
-                "listenerId": listenerId,
-                "playedAt": FieldValue.serverTimestamp(),
-                "country": countryName,
-                "countryCode": regionCode,
-                "deviceType": deviceType
-            ])
-
-            // 🔐 streamCount is payout-bearing and is incremented SERVER-SIDE by the
-            // incrementStreamCountOnPlay Cloud Function from the music_plays event
-            // above. The client must not write it directly (Firestore rules deny it).
-            
-            // Keep only last 50 recently played
-            if let uid {
-                let snapshot = try await db.collection("users").document(uid)
-                    .collection("recently_played")
-                    .order(by: "playedAt", descending: true)
-                    .getDocuments()
-                
-                if snapshot.documents.count > 50 {
-                    let toDelete = snapshot.documents.suffix(from: 50)
-                    for doc in toDelete {
-                        try await doc.reference.delete()
-                    }
+            let snapshot = try await db.collection("users").document(uid)
+                .collection("recently_played")
+                .order(by: "playedAt", descending: true)
+                .getDocuments()
+            if snapshot.documents.count > 50 {
+                for document in snapshot.documents.dropFirst(50) {
+                    try await document.reference.delete()
                 }
             }
         } catch {
-            print("Error saving to recently played: \(error)")
+            // Playback remains available when optional listening history cannot be saved.
         }
         #endif
     }
     
     private func addObservers() {
         guard let player else { return }
-        
+
         let interval = CMTime(seconds: 0.25, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            guard let self else { return }
-            guard let item = player.currentItem else { return }
+            guard let self, let item = player.currentItem else { return }
             let durationSeconds = item.duration.seconds
+            self.recordPlayback(currentTime: time.seconds)
             self.duration = durationSeconds.isFinite ? durationSeconds : 0
             self.currentTime = time.seconds
             if durationSeconds > 0 {
@@ -351,17 +329,20 @@ final class MusicPlayerService: ObservableObject {
             self.isBuffering = item.isPlaybackLikelyToKeepUp == false && !item.isPlaybackBufferEmpty
             self.updateElapsed(time: time.seconds, duration: durationSeconds)
         }
-        
-        NotificationCenter.default.addObserver(
+
+        endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
         ) { [weak self] _ in
             guard let self else { return }
+            let finalTime = player.currentItem?.duration.seconds ?? self.duration
+            self.recordPlayback(currentTime: finalTime, isFinalSample: true)
             switch self.repeatMode {
             case .one:
-                self.seek(toFraction: 0)
-                self.player?.play()
+                if let currentSong = self.currentSong {
+                    self.startPlayback(for: currentSong)
+                }
             case .all:
                 self.skipNext()
             case .off:
@@ -371,6 +352,40 @@ final class MusicPlayerService: ObservableObject {
                     self.skipNext()
                 }
             }
+        }
+    }
+
+    private func removePlaybackObservers() {
+        if let timeObserver {
+            player?.removeTimeObserver(timeObserver)
+            self.timeObserver = nil
+        }
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+            self.endObserver = nil
+        }
+    }
+
+    private func recordPlayback(currentTime: Double, isFinalSample: Bool = false) {
+        defer { lastObservedTime = currentTime }
+        guard isPlaying,
+              isFinalSample || (player?.rate ?? 0) > 0,
+              let previousTime = lastObservedTime else { return }
+        let forwardDelta = currentTime - previousTime
+        guard forwardDelta > 0, forwardDelta <= 1.5 else { return }
+        listenedSeconds += forwardDelta
+        guard listenedSeconds >= 30,
+              !hasSubmittedQualifiedPlay,
+              let songId = currentSong?.id,
+              let sessionId = playbackSessionId else { return }
+        hasSubmittedQualifiedPlay = true
+        let qualifiedSeconds = max(30, Int(listenedSeconds.rounded(.down)))
+        Task {
+            try? await MusicAPIClient.shared.submitQualifiedPlay(
+                trackId: songId,
+                sessionId: sessionId,
+                qualifiedSeconds: qualifiedSeconds
+            )
         }
     }
     
@@ -386,27 +401,33 @@ final class MusicPlayerService: ObservableObject {
     
     private func configureRemoteCommands() {
         let commands = MPRemoteCommandCenter.shared()
-        
-        commands.playCommand.addTarget { [weak self] _ in
+        let playTarget = commands.playCommand.addTarget { [weak self] _ in
             self?.resumeFromRemote()
             return .success
         }
-        commands.pauseCommand.addTarget { [weak self] _ in
+        let pauseTarget = commands.pauseCommand.addTarget { [weak self] _ in
             self?.pauseFromRemote()
             return .success
         }
-        commands.togglePlayPauseCommand.addTarget { [weak self] _ in
+        let toggleTarget = commands.togglePlayPauseCommand.addTarget { [weak self] _ in
             self?.togglePlayPause()
             return .success
         }
-        commands.nextTrackCommand.addTarget { [weak self] _ in
+        let nextTarget = commands.nextTrackCommand.addTarget { [weak self] _ in
             self?.skipNext()
             return .success
         }
-        commands.previousTrackCommand.addTarget { [weak self] _ in
+        let previousTarget = commands.previousTrackCommand.addTarget { [weak self] _ in
             self?.skipPrevious()
             return .success
         }
+        remoteCommandTargets = [
+            (commands.playCommand, playTarget),
+            (commands.pauseCommand, pauseTarget),
+            (commands.togglePlayPauseCommand, toggleTarget),
+            (commands.nextTrackCommand, nextTarget),
+            (commands.previousTrackCommand, previousTarget)
+        ]
     }
     
     private func resumeFromRemote() {

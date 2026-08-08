@@ -116,6 +116,13 @@ interface VideoRepository {
     /** Fetch trending videos, optionally filtered by [category]. */
     suspend fun fetchTrending(category: String?, limit: Int): List<Video>
 
+    /**
+     * Fetch personalized recommendations from the recommendation service.
+     * Falls back to trending on failure. Uses hybrid algorithm (content-based +
+     * collaborative filtering).
+     */
+    suspend fun fetchPersonalizedRecommendations(limit: Int = 20): Result<List<Video>>
+
     // ── Movies ─────────────────────────────────────────────────────────────────
 
     /** Fetch movie-length videos (duration >= 1800s). */

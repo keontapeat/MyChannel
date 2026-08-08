@@ -2,7 +2,7 @@
 //  AdRefundService.swift
 //  MyChannel
 //
-//  Stub refund path for unused ad spend. See docs/ads-remaining.md
+//  Refund unused prepaid ad balance via the ads-billing Cloud Function.
 //
 
 import Foundation
@@ -16,17 +16,17 @@ enum AdRefundReason: String, Codable, Sendable {
 
 enum AdRefundError: LocalizedError {
     case nothingToRefund
-    case notImplemented
+    case networkError(String)
 
     var errorDescription: String? {
         switch self {
         case .nothingToRefund: return "No refundable ad spend on this campaign"
-        case .notImplemented: return "Ad spend refunds are not yet available"
+        case .networkError(let msg): return "Refund request failed: \(msg)"
         }
     }
 }
 
-/// Refunds unused prepaid ad balance (30-day window, prorated for paused campaigns).
+/// Refunds unused prepaid ad balance by calling the ads-billing Cloud Function.
 @MainActor
 final class AdRefundService {
     static let shared = AdRefundService()
@@ -39,10 +39,36 @@ final class AdRefundService {
         let idempotencyKey: String
     }
 
+    struct RefundResponse: Decodable {
+        let refundedCents: Int
+        let transactionId: String
+    }
+
     func requestRefund(_ request: RefundRequest) async throws -> Int {
         guard !request.campaignId.isEmpty else { throw AdRefundError.nothingToRefund }
-        // Idempotency: ad_refund_{campaignId}_{reason} — enforced server-side in production.
-        _ = request
-        throw AdRefundError.notImplemented
+
+        guard let token = try? await AuthenticationManager.sharedToken() else {
+            throw AdRefundError.networkError("Not authenticated")
+        }
+
+        let url = URL(string: "\(AppConfig.API.gatewayBaseURL)/ads/refund")!
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue(request.idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "campaignId": request.campaignId,
+            "advertiserId": request.advertiserId,
+            "reason": request.reason.rawValue
+        ])
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw AdRefundError.networkError("Server error \((response as? HTTPURLResponse)?.statusCode ?? 0)")
+        }
+
+        let decoded = try JSONDecoder().decode(RefundResponse.self, from: data)
+        return decoded.refundedCents
     }
 }

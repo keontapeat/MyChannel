@@ -209,27 +209,24 @@ struct PublicProfileView: View {
 
     // MARK: - Moderation Actions
     private func reportUser() async {
-        guard let currentUserId = AuthenticationManager.shared.currentUser?.id else { return }
-        let db = Firestore.firestore()
-        let reportRef = db.collection("reports").document()
-        
-        let reportData: [String: Any] = [
-            "id": reportRef.documentID,
-            "reporterId": currentUserId,
-            "reportedUserId": user.id,
-            "reason": selectedReportReason,
-            "timestamp": FieldValue.serverTimestamp(),
-            "status": "pending",
-            "type": "user_report"
-        ]
-        
+        guard let currentUserId = AuthenticationManager.shared.currentUser?.id else {
+            await MainActor.run { NotificationManager.shared.showError("Sign in to submit a report.") }
+            return
+        }
+
         do {
-            try await reportRef.setData(reportData)
+            _ = try await ContentReportService.submit(
+                type: .user,
+                contentId: user.id,
+                contentCreatorId: user.id,
+                reporterId: currentUserId,
+                reason: selectedReportReason
+            )
             await MainActor.run {
                 NotificationManager.shared.showSuccess("User reported to moderation.")
             }
         } catch {
-            print("Failed to report user: \(error)")
+            await MainActor.run { NotificationManager.shared.showError(error.localizedDescription) }
         }
     }
     

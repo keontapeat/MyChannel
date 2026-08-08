@@ -15,9 +15,6 @@ import {
   limit,
   startAfter,
   Timestamp,
-  increment,
-  arrayUnion,
-  arrayRemove,
   DocumentSnapshot,
 } from 'firebase/firestore';
 import { db } from './config';
@@ -156,7 +153,7 @@ export class ShoppingService {
 
   static async getLiveStream(streamId: string): Promise<LiveShoppingStream | null> {
     try {
-      const docRef = doc(db, 'live_shopping_streams', streamId);
+      const docRef = doc(db, 'live_shopping_shows', streamId);
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) return null;
@@ -181,7 +178,7 @@ export class ShoppingService {
   ): Promise<LiveShoppingStream[]> {
     try {
       const q = query(
-        collection(db, 'live_shopping_streams'),
+        collection(db, 'live_shopping_shows'),
         where('status', '==', status),
         orderBy('viewerCount', 'desc'),
         limit(limitCount)
@@ -201,17 +198,8 @@ export class ShoppingService {
     }
   }
 
-  static async incrementStreamViewers(streamId: string): Promise<void> {
-    try {
-      const docRef = doc(db, 'live_shopping_streams', streamId);
-      await updateDoc(docRef, {
-        viewerCount: increment(1),
-      });
-    } catch (error) {
-      console.error('Error incrementing viewers:', error);
-      throw error;
-    }
-  }
+  // Viewer counts are derived from authenticated RTDB presence by trusted
+  // Functions. Clients never increment aggregate counters directly.
 
   // ==================== SHOPPING CART ====================
 

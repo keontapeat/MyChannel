@@ -2,9 +2,8 @@
 
 // 🔥 YOUTUBE-LEVEL PREMIUM VIDEO CARD COMPONENT 🔥
 
-import Link from 'next/link';
 import { CheckCircle, MoreVertical, Minimize2, EyeOff, UserX } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMiniPlayer } from '@/contexts/MiniPlayerContext';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase/config';
@@ -30,6 +29,17 @@ export default function VideoCard({ video, index = 0 }: VideoCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const { openMiniPlayer } = useMiniPlayer();
+
+  useEffect(() => {
+    if (!showMenu) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowMenu(false);
+    };
+
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [showMenu]);
 
   const handlePlayInMiniPlayer = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -73,23 +83,20 @@ export default function VideoCard({ video, index = 0 }: VideoCardProps) {
     } catch { /* non-fatal */ }
   };
 
-  // Hide dismissed cards without layout shift
-  if (dismissed) {
-    return (
-      <div className="aspect-video rounded-xl bg-[rgb(var(--color-surface))] flex items-center justify-center">
-        <p className="text-[12px] text-[rgb(var(--color-text-tertiary))]">Video removed from feed</p>
-      </div>
-    );
-  }
+  // Remove dismissed recommendations immediately so the feed closes the gap.
+  if (dismissed) return null;
 
   return (
-    <Link 
-      href={`/watch/${video.id}`}
-      className={`video-card group block fade-in-up stagger-${(index % 4) + 1} relative`}
+    <article
+      className={`video-card group relative block fade-in-up stagger-${(index % 4) + 1}`}
     >
-      <div className="space-y-3">
+      <div className="space-y-2.5 sm:space-y-3">
         {/* Thumbnail Container */}
-        <div className="relative aspect-video rounded-xl overflow-hidden bg-[rgb(var(--color-surface))]">
+        <a
+          href={`/watch/${video.id}`}
+          aria-label={`Watch ${video.title}`}
+          className="relative block aspect-video overflow-hidden bg-[rgb(var(--color-surface))] sm:rounded-xl"
+        >
           <img
             src={video.thumbnailURL}
             alt={video.title}
@@ -106,7 +113,7 @@ export default function VideoCard({ video, index = 0 }: VideoCardProps) {
               <div className="w-0 h-0 border-t-[8px] border-t-transparent border-l-[14px] border-l-white border-b-[8px] border-b-transparent ml-1" />
             </div>
           </div>
-        </div>
+        </a>
 
         {/* Video Info */}
         <div className="flex gap-3 px-0.5">
@@ -191,6 +198,6 @@ export default function VideoCard({ video, index = 0 }: VideoCardProps) {
           </div>
         </>
       )}
-    </Link>
+    </article>
   );
 }

@@ -4,16 +4,36 @@ import type { AGIAgent } from '@/types';
 
 // Money Maker Agents
 import { dynamicPricingAgent } from './money-maker/DynamicPricingAgent';
+import { adBiddingAgent } from './money-maker/AdBiddingAgent';
+import { revenueMaximizerAgent } from './money-maker/RevenueMaximizerAgent';
+import { creatorPayoutAgent } from './money-maker/CreatorPayoutAgent';
+import { subscriptionOptimizerAgent } from './money-maker/SubscriptionOptimizer';
 // Growth Agents
 import { viralPredictionAgent } from './growth/ViralPredictionAgent';
+import { retentionPredictorAgent } from './growth/RetentionPredictorAgent';
+import { onboardingOptimizerAgent } from './growth/OnboardingOptimizer';
+import { subscriberGrowthAgent } from './growth/SubscriberGrowthAgent';
 // Gaming Agents
 import { matchOrchestratorAgent } from './gaming/MatchOrchestratorAgent';
+import { antiCheatAgent } from './gaming/AntiCheatAgent';
+import { fairnessAgent } from './gaming/FairnessAgent';
+import { tournamentAgent } from './gaming/TournamentAgent';
 // Safety Agents
 import { contentModerationAgent } from './safety/ContentModerationAgent';
+import { fraudDetectionAgent } from './safety/FraudDetectionAgent';
+import { copyrightDetectionAgent } from './safety/CopyrightDetectionAgent';
+import { toxicityFilterAgent } from './safety/ToxicityFilterAgent';
+import { ageVerificationAgent } from './safety/AgeVerificationAgent';
 // Analytics Agents
 import { creatorAnalyticsAgent } from './analytics/CreatorAnalyticsAgent';
+import { watchTimeAnalyticsAgent } from './analytics/WatchTimeAnalyticsAgent';
+import { thumbnailOptimizerAgent } from './analytics/ThumbnailOptimizerAgent';
+import { audienceInsightsAgent } from './analytics/AudienceInsightsAgent';
 // Scale Agents
 import { cdnOptimizerAgent } from './scale/CDNOptimizerAgent';
+import { costOptimizerAgent } from './scale/CostOptimizerAgent';
+import { smartNotificationAgent } from './scale/SmartNotificationAgent';
+import { autoScalerAgent } from './scale/AutoScalerAgent';
 
 export class AGIAgentManager {
   private static instance: AGIAgentManager;
@@ -34,21 +54,41 @@ export class AGIAgentManager {
   private registerAgents(): void {
     // ── Money Maker Agents ──────────────────────────────────────────────────
     this.registerAgent(dynamicPricingAgent);
+    this.registerAgent(adBiddingAgent);
+    this.registerAgent(revenueMaximizerAgent);
+    this.registerAgent(creatorPayoutAgent);
+    this.registerAgent(subscriptionOptimizerAgent);
 
     // ── Growth Agents ───────────────────────────────────────────────────────
     this.registerAgent(viralPredictionAgent);
+    this.registerAgent(retentionPredictorAgent);
+    this.registerAgent(onboardingOptimizerAgent);
+    this.registerAgent(subscriberGrowthAgent);
 
     // ── Gaming Agents ───────────────────────────────────────────────────────
     this.registerAgent(matchOrchestratorAgent);
+    this.registerAgent(antiCheatAgent);
+    this.registerAgent(fairnessAgent);
+    this.registerAgent(tournamentAgent);
 
     // ── Safety Agents ───────────────────────────────────────────────────────
     this.registerAgent(contentModerationAgent);
+    this.registerAgent(fraudDetectionAgent);
+    this.registerAgent(copyrightDetectionAgent);
+    this.registerAgent(toxicityFilterAgent);
+    this.registerAgent(ageVerificationAgent);
 
     // ── Analytics Agents ────────────────────────────────────────────────────
     this.registerAgent(creatorAnalyticsAgent);
+    this.registerAgent(watchTimeAnalyticsAgent);
+    this.registerAgent(thumbnailOptimizerAgent);
+    this.registerAgent(audienceInsightsAgent);
 
     // ── Scale Agents ─────────────────────────────────────────────────────────
     this.registerAgent(cdnOptimizerAgent);
+    this.registerAgent(costOptimizerAgent);
+    this.registerAgent(smartNotificationAgent);
+    this.registerAgent(autoScalerAgent);
 
     console.log(`🤖 [AGIAgentManager] Registered ${this.agents.size} agents`);
   }

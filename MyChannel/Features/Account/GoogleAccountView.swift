@@ -72,9 +72,11 @@ struct GoogleAccountView: View {
                                 .buttonStyle(.plain)
 
                                 Button {
-                                    try? auth.signOut()
-                                    HapticManager.shared.impact(style: .light)
-                                    dismiss()
+                                    Task { @MainActor in
+                                        try? await auth.signOut()
+                                        HapticManager.shared.impact(style: .light)
+                                        dismiss()
+                                    }
                                 } label: {
                                     HStack(spacing: 8) {
                                         Image(systemName: "rectangle.portrait.and.arrow.right")

@@ -6,6 +6,12 @@ import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getDatabase, Database } from 'firebase/database';
 import { getFunctions, Functions } from 'firebase/functions';
+import {
+  getToken,
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+  type AppCheck,
+} from 'firebase/app-check';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -25,12 +31,30 @@ let auth: Auth;
 let firestore: Firestore;
 let storage: FirebaseStorage;
 let realtimeDb: Database;
+let appCheck: AppCheck | null = null;
+type AppCheckGlobal = typeof globalThis & { __mychannelAppCheck?: AppCheck };
+const appCheckGlobal = globalThis as AppCheckGlobal;
 // Cloud Functions callables live in the story-functions codebase (us-east1).
 let functions: Functions;
 
 if (typeof window !== 'undefined') {
   // Client-side initialization
   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+  const siteKey = process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY;
+  if (siteKey) {
+    appCheck = appCheckGlobal.__mychannelAppCheck ?? null;
+    if (!appCheck) {
+      try {
+        appCheck = initializeAppCheck(app, {
+          provider: new ReCaptchaEnterpriseProvider(siteKey),
+          isTokenAutoRefreshEnabled: true,
+        });
+        appCheckGlobal.__mychannelAppCheck = appCheck;
+      } catch {
+        appCheck = null;
+      }
+    }
+  }
   auth = getAuth(app);
   firestore = getFirestore(app);
   storage = getStorage(app);
@@ -51,7 +75,18 @@ if (typeof window !== 'undefined') {
 }
 
 // Export Firebase services
-export { app, auth, firestore, storage, realtimeDb, functions };
+export { app, auth, firestore, storage, realtimeDb, functions, appCheck };
+
+/** Headers for authenticated custom backends. Firebase SDK calls attach App Check automatically. */
+export async function getAppCheckHeaders(): Promise<Record<string, string>> {
+  if (!appCheck) return {};
+  try {
+    const result = await getToken(appCheck, false);
+    return result.token ? {'X-Firebase-AppCheck': result.token} : {};
+  } catch {
+    return {};
+  }
+}
 
 // Alias for compatibility
 export const db = firestore;

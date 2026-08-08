@@ -41,7 +41,8 @@ class VideoRepositoryImpl @Inject constructor(
     private val liveStreamDataSource: FirestoreLiveStreamDataSource,
     private val storyDataSource: FirestoreStoryDataSource,
     private val videoDao: VideoDao,
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val recommendationApi: com.mychannel.data.remote.RecommendationApi
 ) : VideoRepository {
 
     override fun observeTrending(): Flow<List<Video>> =
@@ -239,6 +240,34 @@ class VideoRepositoryImpl @Inject constructor(
         return q.get().await().documents
             .mapNotNull { it.toObject(Video::class.java)?.copy(id = it.id) }
     }
+
+    /**
+     * Fetches personalized recommendations from the recommendation service
+     * using hybrid algorithm (content-based 70% + collaborative filtering 30%).
+     * Falls back to trending on network/auth failure.
+     */
+    override suspend fun fetchPersonalizedRecommendations(limit: Int): Result<List<Video>> =
+        runCatching {
+            val response = recommendationApi.getPersonalRecommendations(limit = limit)
+            response.videos.map { rec ->
+                Video(
+                    id = rec.id,
+                    title = rec.title,
+                    description = rec.description,
+                    thumbnailUrl = rec.thumbnailUrl,
+                    duration = rec.duration.toLong(),
+                    viewCount = rec.viewCount,
+                    likeCount = rec.likeCount,
+                    channelId = rec.creator?.id ?: "",
+                    channelName = rec.creator?.displayName ?: "",
+                    channelAvatarUrl = rec.creator?.avatarUrl ?: "",
+                    isVerified = rec.creator?.verified ?: false
+                )
+            }
+        }.recoverCatching {
+            // Fallback: trending from Firestore
+            fetchTrending(null, limit)
+        }
 
     // ── Movies ─────────────────────────────────────────────────────────────────
 

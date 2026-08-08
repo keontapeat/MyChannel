@@ -8,6 +8,9 @@
 //
 
 import SwiftUI
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 struct CollabFinderView: View {
     @StateObject private var viewModel = CollabFinderViewModel()
@@ -609,25 +612,190 @@ struct CreatorCollabSheet: View {
     let creator: CollabCreator
     @ObservedObject var viewModel: CollabFinderViewModel
     @Environment(\.dismiss) private var dismiss
-    
+
+    @State private var proposalMessage = ""
+    @State private var selectedCollabType = "Guest Appearance"
+    @State private var isSendingProposal = false
+    @State private var proposalSent = false
+
+    private let collabTypes = ["Guest Appearance", "Co-Production", "Shoutout Exchange", "Challenge Video", "Review Collab"]
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    Text("Full creator profile & collab proposal coming soon")
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    // Creator Header
+                    HStack(spacing: 16) {
+                        AsyncImage(url: URL(string: creator.avatarURL)) { image in
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Circle().fill(AppTheme.Colors.primary.opacity(0.3))
+                                .overlay(Text(String(creator.name.prefix(1))).font(.title2.bold()).foregroundColor(.white))
+                        }
+                        .frame(width: 72, height: 72)
+                        .clipShape(Circle())
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Text(creator.name)
+                                    .font(.title3.bold())
+                                if creator.isVerified {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                }
+                            }
+                            Text(creator.category)
+                                .font(.subheadline)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            HStack(spacing: 12) {
+                                Label(creator.subscribers, systemImage: "person.2.fill")
+                                    .font(.caption).foregroundColor(AppTheme.Colors.textSecondary)
+                                Label(creator.avgViews + " avg", systemImage: "eye.fill")
+                                    .font(.caption).foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, 24)
+
+                    // Engagement badge
+                    HStack(spacing: 16) {
+                        statBadge(value: String(format: "%.1f%%", creator.engagementRate), label: "Engagement")
+                        statBadge(value: creator.avgViews, label: "Avg Views")
+                        statBadge(value: creator.subscribers, label: "Subscribers")
+                    }
+                    .padding(.horizontal, 24)
+
+                    Divider()
+
+                    // Proposal form
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Send Collab Proposal")
+                            .font(.headline)
+                            .padding(.horizontal, 24)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Collaboration Type")
+                                .font(.subheadline.bold())
+                                .padding(.horizontal, 24)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(collabTypes, id: \.self) { type in
+                                        Button {
+                                            withAnimation { selectedCollabType = type }
+                                            HapticManager.shared.impact(style: .light)
+                                        } label: {
+                                            Text(type)
+                                                .font(.caption.bold())
+                                                .foregroundColor(selectedCollabType == type ? .white : AppTheme.Colors.textPrimary)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 7)
+                                                .background(Capsule().fill(selectedCollabType == type ? AppTheme.Colors.primary : AppTheme.Colors.surface))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.horizontal, 24)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Message")
+                                .font(.subheadline.bold())
+                                .padding(.horizontal, 24)
+                            TextEditor(text: $proposalMessage)
+                                .frame(minHeight: 100)
+                                .padding(12)
+                                .background(AppTheme.Colors.surface)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.Colors.divider, lineWidth: 1))
+                                .padding(.horizontal, 24)
+                                .overlay(
+                                    Group {
+                                        if proposalMessage.isEmpty {
+                                            Text("Introduce yourself and describe the collab idea…")
+                                                .font(.body)
+                                                .foregroundColor(AppTheme.Colors.textTertiary)
+                                                .padding(.horizontal, 36)
+                                                .padding(.vertical, 20)
+                                                .allowsHitTesting(false)
+                                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                        }
+                                    }
+                                )
+                        }
+
+                        Button {
+                            sendProposal()
+                        } label: {
+                            HStack {
+                                if isSendingProposal { ProgressView().tint(.white) }
+                                else { Text("Send Proposal") }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(proposalMessage.isEmpty ? AppTheme.Colors.textTertiary : AppTheme.Colors.primary)
+                            .foregroundColor(.white)
+                            .font(.headline)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                        .disabled(proposalMessage.trimmingCharacters(in: .whitespaces).isEmpty || isSendingProposal)
+                        .padding(.horizontal, 24)
+                    }
                 }
-                .padding(24)
+                .padding(.vertical, 20)
             }
-            .background(AppTheme.Colors.background)
             .navigationTitle(creator.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
                 }
+            }
+            .alert("Proposal Sent! 🤝", isPresented: $proposalSent) {
+                Button("Done") { dismiss() }
+            } message: {
+                Text("Your collaboration proposal has been sent to \(creator.name).")
+            }
+        }
+    }
+
+    private func statBadge(value: String, label: String) -> some View {
+        VStack(spacing: 4) {
+            Text(value).font(.system(size: 17, weight: .bold))
+            Text(label).font(.caption).foregroundColor(AppTheme.Colors.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(AppTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func sendProposal() {
+        isSendingProposal = true
+        Task {
+            // Write proposal to Firestore
+            #if canImport(FirebaseFirestore)
+            let data: [String: Any] = [
+                "fromUserId": AppState.shared.currentUser?.id ?? "",
+                "fromUserName": AppState.shared.currentUser?.displayName ?? "",
+                "toCreatorId": creator.id,
+                "toCreatorName": creator.name,
+                "collabType": selectedCollabType,
+                "message": proposalMessage,
+                "status": "pending",
+                "sentAt": FirebaseFirestore.FieldValue.serverTimestamp()
+            ]
+            try? await FirebaseFirestore.Firestore.firestore()
+                .collection("collab-proposals")
+                .addDocument(data: data)
+            #else
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            #endif
+            await MainActor.run {
+                isSendingProposal = false
+                proposalSent = true
+                HapticManager.shared.notification(type: .success)
             }
         }
     }
@@ -637,27 +805,133 @@ struct CreatorCollabSheet: View {
 struct CollabFiltersSheet: View {
     @ObservedObject var viewModel: CollabFinderViewModel
     @Environment(\.dismiss) private var dismiss
-    
+
+    @State private var selectedCategory: String = "All"
+    @State private var minSubscribers: Double = 0
+    @State private var maxSubscribers: Double = 10
+    @State private var minEngagement: Double = 0
+    @State private var onlyVerified: Bool = false
+
+    private let categories = ["All"] + CollabCategory.allCategories.map(\.name)
+    private let subLabels = ["0", "10K", "100K", "500K", "1M", "5M", "10M+"]
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    Text("Filter options coming soon")
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+            Form {
+                Section("Category") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(categories, id: \.self) { cat in
+                                Button {
+                                    withAnimation { selectedCategory = cat }
+                                    HapticManager.shared.impact(style: .light)
+                                } label: {
+                                    Text(cat)
+                                        .font(.caption.bold())
+                                        .foregroundColor(selectedCategory == cat ? .white : AppTheme.Colors.textPrimary)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 7)
+                                        .background(Capsule().fill(selectedCategory == cat ? AppTheme.Colors.primary : AppTheme.Colors.surface))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 0))
                 }
-                .padding(24)
+
+                Section("Subscriber Range") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(subRangeLabel(minSubscribers))
+                            Spacer()
+                            Text("to")
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            Spacer()
+                            Text(subRangeLabel(maxSubscribers))
+                        }
+                        .font(.subheadline)
+                        HStack {
+                            Text("Min")
+                                .font(.caption)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            Slider(value: $minSubscribers, in: 0...10, step: 1)
+                        }
+                        HStack {
+                            Text("Max")
+                                .font(.caption)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                            Slider(value: $maxSubscribers, in: 0...10, step: 1)
+                        }
+                    }
+                }
+
+                Section("Engagement Rate") {
+                    HStack {
+                        Text("Min: \(String(format: "%.0f%%", minEngagement))")
+                            .font(.subheadline)
+                        Spacer()
+                    }
+                    Slider(value: $minEngagement, in: 0...20, step: 0.5)
+                }
+
+                Section("Other") {
+                    Toggle("Verified Creators Only", isOn: $onlyVerified)
+                }
+
+                Section {
+                    Button {
+                        applyFilters()
+                        dismiss()
+                        HapticManager.shared.impact(style: .medium)
+                    } label: {
+                        Text("Apply Filters")
+                            .frame(maxWidth: .infinity)
+                            .bold()
+                    }
+                    .tint(AppTheme.Colors.primary)
+
+                    Button {
+                        resetFilters()
+                    } label: {
+                        Text("Reset")
+                            .frame(maxWidth: .infinity)
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .background(AppTheme.Colors.background)
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+                    Button("Cancel") { dismiss() }
                 }
             }
         }
+    }
+
+    private func subRangeLabel(_ val: Double) -> String {
+        let labels = ["Any", "10K", "50K", "100K", "500K", "1M", "5M", "10M", "50M", "100M", "No limit"]
+        return labels[min(Int(val), labels.count - 1)]
+    }
+
+    private func applyFilters() {
+        viewModel.applyFilters(
+            category: selectedCategory == "All" ? nil : selectedCategory,
+            onlyVerified: onlyVerified,
+            minEngagement: minEngagement > 0 ? minEngagement : nil
+        )
+    }
+
+    private func resetFilters() {
+        selectedCategory = "All"
+        minSubscribers = 0
+        maxSubscribers = 10
+        minEngagement = 0
+        onlyVerified = false
+        viewModel.applyFilters(category: nil, onlyVerified: false, minEngagement: nil)
     }
 }
 

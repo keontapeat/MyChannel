@@ -69,9 +69,10 @@ final class GlobalPlayerViewTracking {
         }
 
         let userId = AuthenticationManager.shared.currentUser?.id
-        await viewTracker.startViewSession(videoId: video.id, userId: userId)
-
-        currentViewSessionId = UUID().uuidString
+        currentViewSessionId = await viewTracker.startViewSession(
+            videoId: video.id,
+            userId: userId
+        )
 
         universityWatchVideo = video
         universityMaxPosition = 0

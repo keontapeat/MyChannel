@@ -51,33 +51,38 @@ class LazyServiceManager: ObservableObject {
     // MARK: - Service Registration
     
     private func registerAllServices() {
-        // CRITICAL: Must load at launch (<500ms)
-        register("Security", priority: .critical) {
-            AppSecurityService.shared.configure()
-        }
-
-        register("ValetStorage", priority: .critical) {
-            _ = ValetSecureStorageService.shared
-        }
-
-        register("JWTSigning", priority: .critical) {
-            _ = JWTRequestSigningService.shared
-        }
-
-        register("CertValidation", priority: .critical) {
-            _ = CertificateValidationService.shared
-        }
-
-        register("ScreenProtection", priority: .critical) {
-            _ = ScreenProtectionService.shared
-        }
-
+        // CRITICAL: first-frame only. Keep this tiny — App Review 2.1(a) crash logs
+        // (build 54) showed TrustKit / keychain / App Attest work on the critical path
+        // aborting or hanging launch before the splash could render.
         register("Firebase", priority: .critical) {
             FirebaseManager.shared.configureIfPossible()
         }
         
         register("Authentication", priority: .critical) {
             // Auth manager already initialized as @StateObject
+        }
+
+        // HIGH: security / keychain after first frame. Keychain
+        // (`.whenPasscodeSetThisDeviceOnly`) and DeviceCheck must not block scene-update
+        // while the review device is still locked.
+        register("Security", priority: .high) {
+            AppSecurityService.shared.configure()
+        }
+
+        register("ValetStorage", priority: .high) {
+            _ = ValetSecureStorageService.shared
+        }
+
+        register("JWTSigning", priority: .high) {
+            _ = JWTRequestSigningService.shared
+        }
+
+        register("CertValidation", priority: .medium) {
+            _ = CertificateValidationService.shared
+        }
+
+        register("ScreenProtection", priority: .medium) {
+            _ = ScreenProtectionService.shared
         }
         
         // HIGH: Load within 1 second
@@ -294,7 +299,22 @@ class LazyServiceManager: ObservableObject {
             }
             
             let startTime = Date()
-            await service.initializer()
+            // Never let one service abort cold launch — degrade and continue.
+            do {
+                try await withThrowingTaskGroup(of: Void.self) { group in
+                    group.addTask { await service.initializer() }
+                    // Soft timeout so a hung SDK (App Check / keychain) cannot trip
+                    // FrontBoard's 10s scene-update watchdog (0x8BADF00D).
+                    group.addTask {
+                        try await Task.sleep(nanoseconds: 3_000_000_000)
+                        throw CancellationError()
+                    }
+                    _ = try await group.next()
+                    group.cancelAll()
+                }
+            } catch {
+                print("⚠️ [LazyServiceManager] \(service.name) failed/timed out: \(error)")
+            }
             let duration = Date().timeIntervalSince(startTime)
             
             await MainActor.run {

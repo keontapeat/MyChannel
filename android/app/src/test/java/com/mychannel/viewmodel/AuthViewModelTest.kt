@@ -285,7 +285,7 @@ class AuthViewModelTest {
             return Result.success(nextUser.copy(username = username, bio = bio))
         }
 
-        override fun signOut() {
+        override suspend fun signOut() {
             authState.value = null
         }
 

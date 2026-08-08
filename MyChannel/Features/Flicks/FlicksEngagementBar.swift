@@ -36,75 +36,45 @@ struct FlicksEngagementBar: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    Button(action: onCreatorTap) {
-                        AppAsyncImage(
-                            url: URL(string: flick.creator.profileImageURL),
-                            content: { image in
-                                image.resizable().aspectRatio(contentMode: .fill)
-                            },
-                            placeholder: {
-                                Circle().fill(Color.white.opacity(0.3))
-                            }
-                        )
-                        .frame(width: 40, height: 40)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                    }
-                    .accessibilityLabel("Creator \(flick.creator.displayName)")
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 4) {
-                            Text(flick.creator.displayName)
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-
-                            if flick.creator.isVerified {
-                                Image(systemName: "checkmark.seal.fill")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.blue)
-                                    .fixedSize()
-                            }
-                        }
-
-                        Text("@\(flick.creator.username)")
-                            .font(.system(size: 13, weight: .regular))
-                            .foregroundColor(.white.opacity(0.75))
-                            .lineLimit(1)
-                    }
-
-                    Button(action: onFollow) {
-                        Text(isFollowing ? "Following" : "Follow")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(isFollowing ? Color.white.opacity(0.18) : Color.red)
-                            )
-                    }
-                    .accessibilityLabel(isFollowing ? "Unfollow creator" : "Follow creator")
-                }
+            VStack(alignment: .leading, spacing: 9) {
+                creatorRow
 
                 Text(flick.title)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(2)
 
-                if !flick.tags.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(flick.tags.prefix(3), id: \.self) { tag in
-                            Text("#\(tag)")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.white.opacity(0.85))
-                                .lineLimit(1)
-                        }
-                    }
+                if !flick.description.isEmpty {
+                    Text(flick.description)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(.white.opacity(0.88))
+                        .lineLimit(2)
                 }
+
+                if !flick.tags.isEmpty {
+                    Text(flick.tags.prefix(3).map { "#\($0)" }.joined(separator: "  "))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(1)
+                }
+
+                Button(action: onComment) {
+                    HStack {
+                        Text("Add a comment…")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundColor(.white.opacity(0.72))
+                        Spacer()
+                        Image(systemName: "face.smiling")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundColor(.white.opacity(0.72))
+                    }
+                    .padding(.horizontal, 18)
+                    .frame(height: 46)
+                    .background(Color.black.opacity(0.46), in: Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .accessibilityLabel("Add a comment")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, infoRightPadding)
@@ -132,9 +102,48 @@ struct FlicksEngagementBar: View {
                 onMore: onMore,
                 onSound: onSound
             )
-            .frame(width: 72, alignment: .center)
+            .frame(width: 64, alignment: .center)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, bottomInset)
+    }
+
+    private var creatorRow: some View {
+        HStack(spacing: 10) {
+            Button(action: onCreatorTap) {
+                AppAsyncImage(
+                    url: URL(string: flick.creator.profileImageURL),
+                    content: { $0.resizable().aspectRatio(contentMode: .fill) },
+                    placeholder: { Circle().fill(Color.white.opacity(0.3)) }
+                )
+                .frame(width: 40, height: 40)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+            }
+            .accessibilityLabel("Creator \(flick.creator.displayName)")
+
+            HStack(spacing: 4) {
+                Text(flick.creator.username)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                if flick.creator.isVerified {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white)
+                }
+            }
+
+            Button(action: onFollow) {
+                Text(isFollowing ? "Following" : "Follow")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .frame(height: 32)
+                    .background(Color.black.opacity(isFollowing ? 0.32 : 0.48), in: Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.75), lineWidth: 1))
+            }
+            .accessibilityLabel(isFollowing ? "Unfollow creator" : "Follow creator")
+        }
     }
 }

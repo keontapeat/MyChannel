@@ -271,7 +271,7 @@ struct AILiveTVSection: View {
                         // so this matches the channels the rest of the app displays.
                         let healthyChannels = StreamHealthMLAgent.shared.healthyChannelIds
                         let sourceChannels = LiveTVManager.shared.channels.isEmpty
-                            ? LiveTVChannel.sampleChannels
+                            ? LiveTVChannel.appStoreSafeChannels
                             : LiveTVManager.shared.channels
                         let categoryChannels = sourceChannels.filter { 
                             $0.category == category && (healthyChannels.isEmpty || healthyChannels.contains($0.id))

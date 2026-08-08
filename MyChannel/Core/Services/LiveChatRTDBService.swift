@@ -3,122 +3,132 @@ import FirebaseDatabase
 import FirebaseAuth
 import Combine
 
-/// Manages ultra-low latency live chat messages and user presence
-/// during a live stream using Firebase Realtime Database.
+/// Compatibility wrapper for canonical low-latency live chat and presence.
+/// New surfaces should prefer `LiveStreamManager` directly.
+@MainActor
 final class LiveChatRTDBService: ObservableObject {
     static let shared = LiveChatRTDBService()
-    
-    private let db = Database.database().reference()
-    
-    @Published var messages: [LiveChatMessage] = []
-    @Published var viewerCount: Int = 0
-    
+
+    @Published private(set) var messages: [LiveChatMessage] = []
+    @Published private(set) var viewerCount: Int = 0
+
+    private let database = Database.database().reference()
+    private var activeStreamId: String?
+    private var presenceRef: DatabaseReference?
+    private var messagesQuery: DatabaseQuery?
     private var messagesHandle: DatabaseHandle?
-    private var viewersHandle: DatabaseHandle?
-    
+    private var viewerCountRef: DatabaseReference?
+    private var viewerCountHandle: DatabaseHandle?
+
     private init() {}
-    
+
     struct LiveChatMessage: Identifiable, Codable {
-        var id: String
+        let id: String
         let userId: String
-        let username: String
+        let displayName: String
         let text: String
         let timestamp: TimeInterval
-        let isSuperChat: Bool
-        let superChatAmount: Double?
     }
-    
-    /// Joins a live stream chat room, sets up presence, and starts listening for messages
+
     func joinLiveStream(streamId: String, username: String) {
-        guard let userId = Auth.auth().currentUser?.uid else { return }
-        
-        let streamRef = db.child("live_streams").child(streamId)
-        
-        // 1. Presence System
-        let myConnectionsRef = streamRef.child("viewers").child(userId)
-        
-        // Add to connected list when online
-        myConnectionsRef.setValue(true)
-        
-        // Remove from connected list when disconnected (automatically handled by RTDB)
-        myConnectionsRef.onDisconnectRemoveValue()
-        
-        // Track overall viewer count
-        viewersHandle = streamRef.child("viewers").observe(.value) { [weak self] snapshot in
-            self?.viewerCount = Int(snapshot.childrenCount)
+        guard isValidStreamId(streamId),
+              let userId = Auth.auth().currentUser?.uid else { return }
+
+        cleanupCurrentSession()
+        activeStreamId = streamId
+        messages.removeAll(keepingCapacity: true)
+
+        let connectionId = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        let liveViewersRef = database.child("live_viewers").child(streamId)
+        let newPresenceRef = liveViewersRef
+            .child("viewers").child(userId).child(connectionId)
+        presenceRef = newPresenceRef
+        newPresenceRef.onDisconnectRemoveValue()
+        newPresenceRef.setValue([
+            "joinedAt": ServerValue.timestamp(),
+            "displayName": String(username.prefix(100))
+        ])
+
+        let countRef = liveViewersRef.child("viewerCount")
+        viewerCountRef = countRef
+        viewerCountHandle = countRef.observe(.value) { [weak self] snapshot in
+            let count = max(0, (snapshot.value as? NSNumber)?.intValue ?? 0)
+            Task { @MainActor in self?.viewerCount = count }
         }
-        
-        // 2. Chat Messages Listener
-        messagesHandle = streamRef.child("messages")
+
+        let query = database.child("live_chat").child(streamId).child("messages")
             .queryOrdered(byChild: "timestamp")
             .queryLimited(toLast: 100)
-            .observe(.childAdded) { [weak self] snapshot in
-                guard let data = snapshot.value as? [String: Any],
-                      let text = data["text"] as? String,
-                      let senderId = data["userId"] as? String,
-                      let senderName = data["username"] as? String,
-                      let timestamp = data["timestamp"] as? TimeInterval else { return }
-                
-                let isSuperChat = data["isSuperChat"] as? Bool ?? false
-                let amount = data["superChatAmount"] as? Double
-                
-                let message = LiveChatMessage(
-                    id: snapshot.key,
-                    userId: senderId,
-                    username: senderName,
-                    text: text,
-                    timestamp: timestamp,
-                    isSuperChat: isSuperChat,
-                    superChatAmount: amount
-                )
-                
-                DispatchQueue.main.async {
-                    self?.messages.append(message)
-                    // Keep memory bounded
-                    if self?.messages.count ?? 0 > 200 {
-                        self?.messages.removeFirst()
-                    }
+        messagesQuery = query
+        messagesHandle = query.observe(.childAdded) { [weak self] snapshot in
+            guard let data = snapshot.value as? [String: Any],
+                  let text = data["text"] as? String,
+                  let senderId = data["userId"] as? String,
+                  let displayName = data["displayName"] as? String,
+                  let timestamp = data["timestamp"] as? NSNumber else { return }
+
+            let message = LiveChatMessage(
+                id: snapshot.key,
+                userId: senderId,
+                displayName: displayName,
+                text: text,
+                timestamp: timestamp.doubleValue
+            )
+            Task { @MainActor in
+                guard let self else { return }
+                self.messages.append(message)
+                if self.messages.count > 200 {
+                    self.messages.removeFirst(self.messages.count - 200)
                 }
             }
+        }
     }
-    
-    /// Leaves the live stream, cleaning up listeners and presence
+
     func leaveLiveStream(streamId: String) {
-        guard let userId = Auth.auth().currentUser?.uid else { return }
-        
-        let streamRef = db.child("live_streams").child(streamId)
-        streamRef.child("viewers").child(userId).removeValue()
-        
-        if let messagesHandle = messagesHandle {
-            streamRef.child("messages").removeObserver(withHandle: messagesHandle)
-        }
-        if let viewersHandle = viewersHandle {
-            streamRef.child("viewers").removeObserver(withHandle: viewersHandle)
-        }
-        
-        self.messages.removeAll()
-        self.viewerCount = 0
+        guard activeStreamId == streamId else { return }
+        cleanupCurrentSession()
     }
-    
-    /// Sends a message to the live stream
-    func sendMessage(streamId: String, text: String, username: String, isSuperChat: Bool = false, amount: Double? = nil) {
-        guard let userId = Auth.auth().currentUser?.uid else { return }
-        
-        let streamRef = db.child("live_streams").child(streamId)
-        let messageRef = streamRef.child("messages").childByAutoId()
-        
-        var messageData: [String: Any] = [
-            "userId": userId,
-            "username": username,
-            "text": text,
-            "timestamp": ServerValue.timestamp()
-        ]
-        
-        if isSuperChat {
-            messageData["isSuperChat"] = true
-            messageData["superChatAmount"] = amount
+
+    func sendMessage(streamId: String, text: String, username: String) {
+        guard isValidStreamId(streamId),
+              let userId = Auth.auth().currentUser?.uid else { return }
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty, normalized.count <= 500 else { return }
+
+        database.child("live_chat").child(streamId).child("messages")
+            .childByAutoId().setValue([
+                "userId": userId,
+                "displayName": String(username.prefix(100)),
+                "text": normalized,
+                "timestamp": ServerValue.timestamp()
+            ])
+    }
+
+    private func cleanupCurrentSession() {
+        presenceRef?.cancelDisconnectOperations()
+        presenceRef?.removeValue()
+        presenceRef = nil
+
+        if let messagesQuery, let messagesHandle {
+            messagesQuery.removeObserver(withHandle: messagesHandle)
         }
-        
-        messageRef.setValue(messageData)
+        if let viewerCountRef, let viewerCountHandle {
+            viewerCountRef.removeObserver(withHandle: viewerCountHandle)
+        }
+        self.messagesQuery = nil
+        self.messagesHandle = nil
+        self.viewerCountRef = nil
+        self.viewerCountHandle = nil
+        activeStreamId = nil
+        messages.removeAll()
+        viewerCount = 0
+    }
+
+    private func isValidStreamId(_ streamId: String) -> Bool {
+        guard !streamId.isEmpty, streamId.count <= 128 else { return false }
+        return streamId.range(
+            of: "^[A-Za-z0-9_-]+$",
+            options: .regularExpression
+        ) != nil
     }
 }

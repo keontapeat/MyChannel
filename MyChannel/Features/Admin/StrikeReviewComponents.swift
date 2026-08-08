@@ -412,11 +412,15 @@ struct StrikeCaseReviewSheet: View {
 
     private func loadReporterCount() {
         let db = Firestore.firestore()
-        db.collection("reports")
-            .whereField("reportedUserId", isEqualTo: strikeCase.userId)
+        db.collection("content_reports")
+            .whereField("contentCreatorId", isEqualTo: strikeCase.userId)
+            .limit(to: 100)
             .getDocuments { snap, _ in
+                let userReports = snap?.documents.filter {
+                    $0.data()["type"] as? String == "user"
+                }
                 Task { @MainActor in
-                    reporterCount = snap?.documents.count ?? 0
+                    reporterCount = userReports?.count ?? 0
                 }
             }
     }

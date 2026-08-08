@@ -17,6 +17,7 @@ struct AICoCreatorView: View {
     @State private var showingScriptEditor = false
     @State private var showingThumbnailGenerator = false
     @State private var showingContentGaps = false
+    @State private var showingViralPredictor = false
     
     var body: some View {
         NavigationStack {
@@ -65,6 +66,9 @@ struct AICoCreatorView: View {
         }
         .sheet(isPresented: $showingContentGaps) {
             ContentGapAnalysisView()
+        }
+        .sheet(isPresented: $showingViralPredictor) {
+            ViralPredictorSheet()
         }
     }
     
@@ -164,7 +168,7 @@ struct AICoCreatorView: View {
                     title: "Viral Predictor",
                     subtitle: "Predict video success rate",
                     color: .blue,
-                    action: { /* TODO: Implement */ }
+                    action: { showingViralPredictor = true }
                 )
             }
         }
@@ -612,20 +616,57 @@ struct ScriptEditorView: View {
 
 struct ThumbnailGeneratorView: View {
     @Environment(\.dismiss) private var dismiss
-    
+    @State private var videoTitle = ""
+    @State private var style: ThumbnailStyle = .dramatic
+    @State private var isGenerating = false
+    @State private var generatedPrompt = ""
+
+    enum ThumbnailStyle: String, CaseIterable {
+        case dramatic = "Dramatic"
+        case minimal = "Minimal"
+        case bold = "Bold Text"
+        case cinematic = "Cinematic"
+    }
+
     var body: some View {
         NavigationStack {
-            VStack {
-                Text("AI Thumbnail Generator")
-                    .font(.title2)
-                    .padding()
-                
-                Text("Thumbnail generator coming soon...")
-                    .foregroundColor(.secondary)
-                
-                Spacer()
+            Form {
+                Section("Video Details") {
+                    TextField("Video title or topic", text: $videoTitle)
+                }
+                Section("Thumbnail Style") {
+                    Picker("Style", selection: $style) {
+                        ForEach(ThumbnailStyle.allCases, id: \.self) { s in
+                            Text(s.rawValue).tag(s)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+                if !generatedPrompt.isEmpty {
+                    Section("Generated Concept") {
+                        Text(generatedPrompt)
+                            .font(.subheadline)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        Text("💡 Use this concept with Midjourney, DALL-E, or Canva.")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                    }
+                }
+                Section {
+                    Button {
+                        generateConcept()
+                    } label: {
+                        HStack {
+                            if isGenerating { ProgressView().scaleEffect(0.8) }
+                            Text(isGenerating ? "Generating…" : "Generate Concept")
+                                .bold()
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .disabled(videoTitle.trimmingCharacters(in: .whitespaces).isEmpty || isGenerating)
+                }
             }
-            .navigationTitle("Thumbnail Generator")
+            .navigationTitle("AI Thumbnail Generator")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -634,29 +675,83 @@ struct ThumbnailGeneratorView: View {
             }
         }
     }
+
+    private func generateConcept() {
+        isGenerating = true
+        let styleDesc = style.rawValue.lowercased()
+        Task {
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            await MainActor.run {
+                generatedPrompt = "A \(styleDesc) thumbnail for '\(videoTitle)': bold eye-catching title text, high-contrast lighting, creator face on the left reacting with surprise, vivid background matching the topic theme."
+                isGenerating = false
+            }
+        }
+    }
 }
 
 struct ContentGapAnalysisView: View {
     @Environment(\.dismiss) private var dismiss
-    
+    @StateObject private var service = CreatorIntelligenceService.shared
+    @State private var channelNiche = ""
+    @State private var isAnalyzing = false
+    @State private var gaps: [String] = []
+
     var body: some View {
         NavigationStack {
-            VStack {
-                Text("Content Gap Analysis")
-                    .font(.title2)
-                    .padding()
-                
-                Text("Full analysis view coming soon...")
-                    .foregroundColor(.secondary)
-                
-                Spacer()
+            Form {
+                Section("Your Channel Niche") {
+                    TextField("e.g. tech reviews, cooking, gaming…", text: $channelNiche)
+                }
+
+                Section {
+                    Button {
+                        analyzeGaps()
+                    } label: {
+                        HStack {
+                            if isAnalyzing { ProgressView().scaleEffect(0.8) }
+                            Text(isAnalyzing ? "Analyzing…" : "Find Content Gaps")
+                                .bold()
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .disabled(channelNiche.trimmingCharacters(in: .whitespaces).isEmpty || isAnalyzing)
+                }
+
+                if !gaps.isEmpty {
+                    Section("Opportunities") {
+                        ForEach(gaps, id: \.self) { gap in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "lightbulb.fill")
+                                    .foregroundColor(.yellow)
+                                    .font(.subheadline)
+                                    .padding(.top, 2)
+                                Text(gap)
+                                    .font(.subheadline)
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                            }
+                        }
+                    }
+                }
             }
-            .navigationTitle("Content Gaps")
+            .navigationTitle("Content Gap Analysis")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") { dismiss() }
                 }
+            }
+        }
+    }
+
+    private func analyzeGaps() {
+        isAnalyzing = true
+        let niche = channelNiche
+        Task {
+            // Call CreatorIntelligenceService for gap analysis
+            let result = await service.analyzeContentGaps(niche: niche)
+            await MainActor.run {
+                gaps = result
+                isAnalyzing = false
             }
         }
     }

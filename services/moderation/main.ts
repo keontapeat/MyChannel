@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import admin from 'firebase-admin';
 import jwt from 'jsonwebtoken';
 
@@ -51,9 +52,16 @@ const spamTerms = ['free money', 'click here', 'guaranteed profit', 'double your
 const profanityTerms = ['fuck', 'shit', 'damn', 'ass', 'bitch', 'crap', 'hell', 'dick'];
 const scamTerms = ['bitconnect', 'ponzi', 'pyramid scheme', 'mlm scam', 'investment scam'];
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function countMatches(text: string, terms: string[]): number {
   const lower = text.toLowerCase();
-  return terms.reduce((sum, term) => sum + (lower.includes(term) ? 1 : 0), 0);
+  return terms.reduce((sum, term) => {
+    const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegExp(term)}(?=$|[^a-z0-9])`, 'i');
+    return sum + (pattern.test(lower) ? 1 : 0);
+  }, 0);
 }
 
 function detectLinkSpam(text: string): { count: number; suspicious: boolean } {
@@ -208,14 +216,14 @@ function evaluateThumbnailUri(thumbnailUri: string) {
   if (!/^https?:\/\//i.test(trimmed) && !/^gs:\/\//i.test(trimmed)) {
     flags.push('invalid_thumbnail_uri');
   }
-  if (adultTerms.some(term => lower.includes(term))) {
+  if (countMatches(lower, adultTerms) > 0) {
     flags.push('adult_thumbnail_hint');
   }
-  if (violenceTerms.some(term => lower.includes(term))) {
+  if (countMatches(lower, violenceTerms) > 0) {
     flags.push('violent_thumbnail_hint');
   }
 
-  const score = flags.includes('invalid_thumbnail_uri') ? 0.25 : flags.length * 0.3;
+  const score = flags.includes('invalid_thumbnail_uri') ? 0.8 : flags.length * 0.3;
   const normalizedScore = Math.min(Number(score.toFixed(2)), 1);
   const severity = classifySeverity(normalizedScore, flags);
   const recommendedAction = recommendAction(normalizedScore, flags);
@@ -235,8 +243,18 @@ function evaluateThumbnailUri(thumbnailUri: string) {
 }
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'https://mychannel.live',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'Content-Type'],
+}));
+app.use(express.json({limit: '16kb'}));
+app.use('/v1/moderate', rateLimit({
+  windowMs: 60_000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
@@ -244,10 +262,19 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.post('/v1/moderate/video', async (req, res) => {
   try {
     if (!(await requireAuth(req, res))) return;
-    const { title, description, thumbnailUri } = req.body || {};
-    const titleResult = evaluateText(String(title || ''));
-    const descriptionResult = evaluateText(String(description || ''));
-    const thumbnailResult = evaluateThumbnailUri(String(thumbnailUri || ''));
+    const {title: rawTitle, description: rawDescription, thumbnailUri: rawThumbnailUri} = req.body || {};
+    const title = String(rawTitle || '').trim();
+    const description = String(rawDescription || '').trim();
+    const thumbnailUri = String(rawThumbnailUri || '').trim();
+    if (title.length > 200 || description.length > 5000 || thumbnailUri.length > 2048) {
+      return res.status(400).json({error: 'Moderation input exceeds allowed length'});
+    }
+    if (!title && !description && !thumbnailUri) {
+      return res.status(400).json({error: 'At least one moderation input is required'});
+    }
+    const titleResult = evaluateText(title);
+    const descriptionResult = evaluateText(description);
+    const thumbnailResult = evaluateThumbnailUri(thumbnailUri);
     const flags = mergeFlags(
       titleResult.flags,
       descriptionResult.flags,
@@ -257,6 +284,9 @@ app.post('/v1/moderate/video', async (req, res) => {
     const severity = classifySeverity(overallScore, flags);
     const recommendedAction = recommendAction(overallScore, flags);
     const result = {
+      engine: 'heuristic_prefilter',
+      schemaVersion: 1,
+      finalDecisionRequired: true,
       titleSafe: titleResult.safe,
       descriptionSafe: descriptionResult.safe,
       thumbnailSafe: thumbnailResult.safe,
@@ -291,8 +321,9 @@ app.post('/v1/moderate/video', async (req, res) => {
       }
     };
     return res.json(result);
-  } catch (e: any) {
-    return res.status(500).json({ error: e?.message || 'internal' });
+  } catch (error) {
+    console.error('Moderation request failed:', error instanceof Error ? error.message : error);
+    return res.status(500).json({error: 'Moderation request failed'});
   }
 });
 

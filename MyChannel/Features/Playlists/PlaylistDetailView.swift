@@ -445,9 +445,28 @@ struct PlaylistVideoRow: View {
         .padding(.vertical, 8)
         .confirmationDialog("Video Options", isPresented: $showingActionSheet) {
             Button("Play", action: onPlay)
-            Button("Play Next") { /* TODO */ }
-            Button("Add to Queue") { /* TODO */ }
-            Button("Share") { /* TODO */ }
+            Button("Play Next") {
+                let mgr = GlobalVideoPlayerManager.shared
+                // Insert directly after current position
+                if let idx = mgr.videoQueue.firstIndex(where: { $0.id == mgr.currentVideo?.id }) {
+                    let insertAt = min(idx + 1, mgr.videoQueue.count)
+                    if !mgr.videoQueue.contains(where: { $0.id == video.id }) {
+                        mgr.videoQueue.insert(video, at: insertAt)
+                    }
+                } else {
+                    mgr.addToQueue(video)
+                }
+                HapticManager.shared.notification(type: .success)
+            }
+            Button("Add to Queue") {
+                GlobalVideoPlayerManager.shared.addToQueue(video)
+                HapticManager.shared.notification(type: .success)
+            }
+            Button("Share") {
+                if let url = URL(string: video.link ?? "https://mychannel.app/watch?v=\(video.id)") {
+                    UIApplication.shared.open(url)
+                }
+            }
             Button("Remove from Playlist", role: .destructive, action: onRemove)
             Button("Cancel", role: .cancel) { }
         }

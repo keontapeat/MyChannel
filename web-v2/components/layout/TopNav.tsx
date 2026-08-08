@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, Bell, User, Menu, Upload, Video, DollarSign, Settings, LogOut, Mic } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface TopNavProps {
   onToggleSidebar?: () => void;
@@ -16,9 +17,25 @@ export default function TopNav({ onToggleSidebar }: TopNavProps) {
   const [userMenu, setUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Replace with real auth context when wired
-  const isAuth = false;
-  const user = { name: 'Keonta', avatar: '' };
+  // Shared auth state from the root-level provider — survives page/component
+  // remounts during client-side navigation, so it never flickers back to
+  // "signed out" when moving between routes.
+  const { user: firebaseUser, isAuthenticated: isAuth, authResolved, signOut } = useAuth();
+
+  const user = {
+    name: firebaseUser?.displayName || firebaseUser?.email?.split('@')[0] || 'Creator',
+    avatar: firebaseUser?.photoURL || '',
+  };
+
+  const handleSignOut = async () => {
+    setUserMenu(false);
+    try {
+      await signOut();
+      router.push('/');
+    } catch (err) {
+      console.error('Sign out failed:', err);
+    }
+  };
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
@@ -34,35 +51,35 @@ export default function TopNav({ onToggleSidebar }: TopNavProps) {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-14 bg-[rgb(var(--color-background))] z-50 flex items-center justify-between px-4 gap-4">
+    <header className="fixed top-0 left-0 right-0 z-50 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-end justify-between gap-2 bg-[rgb(var(--color-background))]/95 px-3 pb-2 pt-[env(safe-area-inset-top)] backdrop-blur sm:items-center sm:gap-4 sm:px-4 sm:pb-0">
 
       {/* ── Left: hamburger + logo ── */}
-      <div className="flex items-center gap-4 flex-shrink-0">
+      <div className="flex min-w-0 flex-shrink-0 items-center gap-2 sm:gap-4">
         <button
           onClick={onToggleSidebar}
-          className="p-2 -ml-2 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition-colors"
-          aria-label="Menu"
+          className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-[rgb(var(--color-surface-hover))]"
+          aria-label="Open navigation menu"
         >
           <Menu size={20} className="text-[rgb(var(--color-text-primary))]" />
         </button>
 
-        <Link href="/" className="flex items-center gap-2 flex-shrink-0">
+        <Link href="/" className="flex flex-shrink-0 items-center gap-2" aria-label="MyChannel home">
           <img
             src="/logo.png"
-            alt="MyChannel"
+            alt=""
             width={32}
             height={32}
-            className="w-8 h-8 object-contain"
+            className="h-8 w-8 object-contain"
           />
-          <span className="text-[18px] font-semibold tracking-tight text-[rgb(var(--color-text-primary))] hidden sm:block leading-none">
+          <span className="hidden text-[18px] font-semibold leading-none tracking-tight text-[rgb(var(--color-text-primary))] md:block">
             MyChannel
           </span>
         </Link>
       </div>
 
-      {/* ── Center: search ── */}
-      <div className="flex flex-1 items-center justify-center max-w-[600px]">
-        <form onSubmit={submit} className="flex w-full">
+      {/* ── Center: desktop/tablet search; mobile opens the dedicated search screen ── */}
+      <div className="hidden min-w-0 flex-1 items-center justify-center sm:flex sm:max-w-[600px]">
+        <form onSubmit={submit} className="flex min-w-0 w-full">
           {/* Input */}
           <div
             className={`flex flex-1 items-center h-10 border rounded-l-full pl-4 pr-3 bg-[rgb(var(--color-background))] transition-colors ${
@@ -103,7 +120,10 @@ export default function TopNav({ onToggleSidebar }: TopNavProps) {
 
       {/* ── Right: actions ── */}
       <div className="flex items-center gap-1 flex-shrink-0">
-        {isAuth ? (
+        {!authResolved ? (
+          // Avoid flashing "Sign in" before Firebase reports the real auth state
+          <div className="w-9 h-9 rounded-full bg-[rgb(var(--color-surface))] animate-pulse" />
+        ) : isAuth ? (
           <>
             {/* Create */}
             <Link
@@ -159,7 +179,10 @@ export default function TopNav({ onToggleSidebar }: TopNavProps) {
                       </Link>
                     ))}
                     <div className="my-1 border-t border-[rgb(var(--color-border))]" />
-                    <button className="flex w-full items-center gap-3 px-4 py-2.5 text-[13.5px] text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors">
+                    <button
+                      onClick={handleSignOut}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-[13.5px] text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-colors"
+                    >
                       <LogOut size={18} className="text-[rgb(var(--color-text-secondary))]" />
                       Sign out
                     </button>

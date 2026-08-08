@@ -16,7 +16,7 @@ import {
   DocumentData,
   Timestamp
 } from 'firebase/firestore';
-import { firestore } from '../config';
+import { firestore, getAppCheckHeaders } from '../config';
 
 // Video interface matching iOS app
 export interface Video {
@@ -337,9 +337,10 @@ class VideoService {
     const apiUrl = process.env.NEXT_PUBLIC_SEARCH_API_URL;
     if (apiUrl) {
       try {
+        const headers = await getAppCheckHeaders();
         const res = await fetch(
           `${apiUrl}/v1/search?q=${encodeURIComponent(term)}&limit=${pageSize}`,
-          { signal: AbortSignal.timeout(5000) }
+          { headers, signal: AbortSignal.timeout(5000) }
         );
         if (res.ok) {
           const json = await res.json();
@@ -441,9 +442,10 @@ class VideoService {
     if (!q || !apiUrl) return [];
 
     try {
+      const headers = await getAppCheckHeaders();
       const res = await fetch(
         `${apiUrl}/v1/suggest?q=${encodeURIComponent(q)}&limit=${limitCount}`,
-        { signal: AbortSignal.timeout(3000) }
+        { headers, signal: AbortSignal.timeout(3000) }
       );
       if (!res.ok) return [];
       const json = await res.json();

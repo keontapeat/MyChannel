@@ -36,6 +36,22 @@ struct MovieDetailOverviewSection: View {
 struct MovieDetailMetadataGrid: View {
     let movie: FreeMovie
 
+    /// Prefer a human date from `releaseDate`; fall back to the year.
+    private var releasedText: String {
+        let raw = movie.releaseDate.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return String(movie.year) }
+        let inFormatter = DateFormatter()
+        inFormatter.dateFormat = "yyyy-MM-dd"
+        inFormatter.locale = Locale(identifier: "en_US_POSIX")
+        if let date = inFormatter.date(from: raw) {
+            let out = DateFormatter()
+            out.dateStyle = .medium
+            out.timeStyle = .none
+            return out.string(from: date)
+        }
+        return String(movie.year)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Details")
@@ -47,6 +63,16 @@ struct MovieDetailMetadataGrid: View {
                 GridItem(.flexible())
             ], spacing: 16) {
                 MovieDetailMetadataCard("Director", movie.director.isEmpty ? "Unknown" : movie.director, "person.fill")
+                if movie.imdbRating > 0 {
+                    MovieDetailMetadataCard("IMDb", String(format: "%.1f / 10", movie.imdbRating), "star.fill")
+                }
+                if movie.runtime > 0 {
+                    MovieDetailMetadataCard("Runtime", movie.formattedRuntime, "clock.fill")
+                }
+                MovieDetailMetadataCard("Released", releasedText, "calendar")
+                if !movie.rating.isEmpty {
+                    MovieDetailMetadataCard("Rated", movie.rating.uppercased(), "checkmark.shield.fill")
+                }
                 MovieDetailMetadataCard("Language", movie.language, "globe")
                 MovieDetailMetadataCard("Country", movie.country, "flag.fill")
                 MovieDetailMetadataCard("Source", movie.streamingSource.displayName, "tv.fill")
@@ -79,16 +105,63 @@ struct MovieDetailCastSection: View {
 struct MovieDetailCastCard: View {
     let actor: String
 
+    /// Up to two initials from the actor's name.
+    private var initials: String {
+        let parts = actor
+            .split(separator: " ")
+            .compactMap { $0.first.map(String.init) }
+        return parts.prefix(2).joined().uppercased()
+    }
+
+    /// Stable gradient derived from the name so each actor keeps a consistent color.
+    private var avatarColors: [Color] {
+        let palette: [[Color]] = [
+            [AppTheme.Colors.primary, AppTheme.Colors.secondary],
+            [Color(red: 0.36, green: 0.42, blue: 0.94), Color(red: 0.55, green: 0.34, blue: 0.90)],
+            [Color(red: 0.94, green: 0.42, blue: 0.36), Color(red: 0.90, green: 0.30, blue: 0.55)],
+            [Color(red: 0.20, green: 0.66, blue: 0.60), Color(red: 0.16, green: 0.44, blue: 0.66)],
+            [Color(red: 0.95, green: 0.62, blue: 0.20), Color(red: 0.90, green: 0.36, blue: 0.30)]
+        ]
+        let hash = abs(actor.unicodeScalars.reduce(0) { $0 &+ Int($1.value) })
+        return palette[hash % palette.count]
+    }
+
+    @State private var profileURL: URL?
+
+    private var initialsAvatar: some View {
+        Circle()
+            .fill(
+                LinearGradient(
+                    colors: avatarColors,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(
+                Text(initials.isEmpty ? "?" : initials)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.white)
+            )
+    }
+
     var body: some View {
         VStack(spacing: 8) {
-            Circle()
-                .fill(.ultraThinMaterial)
-                .frame(width: 60, height: 60)
-                .overlay(
-                    Image(systemName: "person.fill")
-                        .foregroundColor(.white.opacity(0.6))
-                        .font(.system(size: 24))
-                )
+            CachedAsyncImage(url: profileURL) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                initialsAvatar
+            }
+            .frame(width: 60, height: 60)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(.white.opacity(0.15), lineWidth: 1))
+            .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
+            .task {
+                if profileURL == nil {
+                    profileURL = await CastImageResolver.shared.profileURL(for: actor)
+                }
+            }
 
             Text(actor)
                 .font(.system(size: 12, weight: .medium))

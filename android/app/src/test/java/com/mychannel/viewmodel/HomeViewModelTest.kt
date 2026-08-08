@@ -218,7 +218,12 @@ class HomeViewModelTest {
         override suspend fun toggleLike(videoId: String, like: Boolean): Result<Unit> =
             Result.success(Unit)
 
+        override suspend fun toggleDislike(videoId: String, dislike: Boolean): Result<Unit> =
+            Result.success(Unit)
+
         override suspend fun isLiked(videoId: String): Result<Boolean> = Result.success(false)
+
+        override suspend fun isDisliked(videoId: String): Result<Boolean> = Result.success(false)
 
         override suspend fun isSaved(videoId: String): Result<Boolean> = Result.success(false)
 

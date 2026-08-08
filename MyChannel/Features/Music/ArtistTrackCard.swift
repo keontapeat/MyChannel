@@ -13,7 +13,6 @@ import SwiftUI
 struct ArtistTrackCard: View {
     let track: UploadedTrack
     @State private var showComments = false
-    @State private var isLiked = false
     @ObservedObject private var preview = AudioPreviewPlayer.shared
 
     private var isPlaying: Bool {
@@ -94,15 +93,10 @@ struct ArtistTrackCard: View {
 
             // Action row
             HStack(spacing: 14) {
-                Button {
-                    isLiked.toggle()
-                    MusicDiscoveryFeedService.shared.toggleLike(trackId: track.id, liked: isLiked)
-                    HapticManager.shared.impact(style: .light)
-                } label: {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(isLiked ? .red : .secondary)
-                }
+                Image(systemName: "heart")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.secondary.opacity(0.55))
+                    .accessibilityLabel("Likes unavailable")
 
                 Button {
                     showComments = true
@@ -162,7 +156,7 @@ struct ArtistTrackCard: View {
     // MARK: - Playback
 
     private func togglePlayback() {
-        guard let url = URL(string: track.audioURL) else { return }
+        let url = track.playbackURL
         if isPlaying {
             preview.pause()
         } else {
@@ -171,9 +165,9 @@ struct ArtistTrackCard: View {
                 trackId: track.id,
                 title: track.title,
                 artist: track.artistName,
-                artworkURL: track.artworkURL.flatMap { URL(string: $0) }
+                artworkURL: track.artworkURL.flatMap { URL(string: $0) },
+                reportsQualifiedPlay: true
             )
-            MusicDiscoveryFeedService.shared.incrementStream(trackId: track.id)
         }
     }
 

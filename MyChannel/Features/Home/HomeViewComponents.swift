@@ -120,7 +120,7 @@ struct QuickTuneSection: View {
     }
     
     private var channels: [LiveTVChannel] {
-        let source = liveChannelsAPI.isEmpty ? LiveTVChannel.sampleChannels : liveChannelsAPI
+        let source = liveChannelsAPI.isEmpty ? LiveTVChannel.appStoreSafeChannels : liveChannelsAPI
         return Array(source.prefix(8))
     }
 }

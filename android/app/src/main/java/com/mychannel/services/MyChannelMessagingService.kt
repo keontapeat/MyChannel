@@ -8,7 +8,13 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.mychannel.MainActivity
 import com.mychannel.R
+import com.mychannel.domain.repository.NotificationRepository
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Firebase Cloud Messaging service.
@@ -19,10 +25,16 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MyChannelMessagingService : FirebaseMessagingService() {
 
+    @Inject
+    lateinit var notificationRepository: NotificationRepository
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        // Token refresh — upload the new token to Firestore via a background job.
-        // The token is stored server-side for targeting this device.
+        serviceScope.launch {
+            notificationRepository.updateFcmToken(token)
+        }
     }
 
     override fun onMessageReceived(message: RemoteMessage) {

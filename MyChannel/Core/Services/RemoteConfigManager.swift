@@ -28,9 +28,9 @@ class RemoteConfigManager: ObservableObject {
     @Published var fetchStatus: ConfigFetchStatus = .noFetchYet
     
     #if canImport(FirebaseRemoteConfig)
-    private let remoteConfig = RemoteConfig.remoteConfig()
+    private lazy var remoteConfig = RemoteConfig.remoteConfig()
     #endif
-    
+
     // Default configuration values
     private let defaults: [String: NSObject] = [
         // Search Features
@@ -60,14 +60,14 @@ class RemoteConfigManager: ObservableObject {
         "super_chat_enabled": true as NSObject,
         "live_polls_enabled": true as NSObject,
         
-        // Gaming & VS Matches
-        "vs_matches_enabled": true as NSObject,
-        "tournaments_enabled": true as NSObject,
+        // Gaming & VS Matches — OFF until 5.3 licensing clears
+        "vs_matches_enabled": false as NSObject,
+        "tournaments_enabled": false as NSObject,
         "gaming_leaderboards_enabled": true as NSObject,
         
-        // Monetization
-        "creator_monetization_enabled": true as NSObject,
-        "fan_funding_enabled": true as NSObject,
+        // Monetization — viewer tips / real-money off for App Review
+        "creator_monetization_enabled": false as NSObject,
+        "fan_funding_enabled": false as NSObject,
         "premium_subscriptions_enabled": true as NSObject,
         "ad_revenue_sharing": 0.7 as NSObject,
         
@@ -91,7 +91,7 @@ class RemoteConfigManager: ObservableObject {
         
         // Safety & Security
         "content_filtering_level": "moderate" as NSObject,
-        "age_verification_required": false as NSObject,
+        "age_verification_required": true as NSObject,
         "coppa_compliance_enabled": true as NSObject,
         
         // Analytics
@@ -108,67 +108,70 @@ class RemoteConfigManager: ObservableObject {
     
     func configure() {
         #if canImport(FirebaseRemoteConfig)
+        guard FirebaseManager.shared.isConfigured else {
+            isConfigured = false
+            return
+        }
+
         let settings = RemoteConfigSettings()
         settings.minimumFetchInterval = 3600 // 1 hour in production
         #if DEBUG
         settings.minimumFetchInterval = 0 // No throttling in debug
         #endif
-        
+
         remoteConfig.configSettings = settings
         remoteConfig.setDefaults(defaults)
-        
+
         isConfigured = true
-        
+
         // Fetch initial configuration
         Task {
             await fetchAndActivate()
         }
         #endif
     }
-    
+
     // MARK: - Fetch Configuration
-    
+
     func fetchAndActivate() async {
         #if canImport(FirebaseRemoteConfig)
+        guard isConfigured else { return }
+
         do {
             let status = try await remoteConfig.fetchAndActivate()
-            await MainActor.run {
-                self.fetchStatus = .success
-                self.lastFetchTime = Date()
-            }
-            
+            fetchStatus = .success
+            lastFetchTime = Date()
+
             print("✅ [RemoteConfig] Fetch completed with status: \(status)")
-            
+
             // Log important config changes
             logConfigChanges()
-            
         } catch {
             print("🚨 [RemoteConfig] Fetch failed: \(error)")
-            await MainActor.run {
-                self.fetchStatus = .failure
-            }
+            fetchStatus = .failure
         }
         #endif
     }
-    
+
     func fetch() async {
         #if canImport(FirebaseRemoteConfig)
+        guard isConfigured else { return }
+
         do {
             try await remoteConfig.fetch()
-            await MainActor.run {
-                self.lastFetchTime = Date()
-            }
+            lastFetchTime = Date()
         } catch {
             print("🚨 [RemoteConfig] Fetch failed: \(error)")
         }
         #endif
     }
-    
+
     func activate() async -> Bool {
         #if canImport(FirebaseRemoteConfig)
+        guard isConfigured else { return false }
+
         do {
-            let activated = try await remoteConfig.activate()
-            return activated
+            return try await remoteConfig.activate()
         } catch {
             print("🚨 [RemoteConfig] Activate failed: \(error)")
             return false
@@ -281,41 +284,45 @@ class RemoteConfigManager: ObservableObject {
     }
     
     // MARK: - Generic Getters
-    
+
     private func getBool(for key: String) -> Bool {
         #if canImport(FirebaseRemoteConfig)
+        guard isConfigured else { return defaults[key] as? Bool ?? false }
         return remoteConfig.configValue(forKey: key).boolValue
         #else
         return defaults[key] as? Bool ?? false
         #endif
     }
-    
+
     func getString(for key: String) -> String {
         #if canImport(FirebaseRemoteConfig)
+        guard isConfigured else { return defaults[key] as? String ?? "" }
         return remoteConfig.configValue(forKey: key).stringValue ?? ""
         #else
         return defaults[key] as? String ?? ""
         #endif
     }
-    
+
     private func getInt(for key: String) -> Int {
         #if canImport(FirebaseRemoteConfig)
+        guard isConfigured else { return defaults[key] as? Int ?? 0 }
         return Int(remoteConfig.configValue(forKey: key).numberValue.intValue)
         #else
         return defaults[key] as? Int ?? 0
         #endif
     }
-    
+
     private func getDouble(for key: String) -> Double {
         #if canImport(FirebaseRemoteConfig)
+        guard isConfigured else { return defaults[key] as? Double ?? 0.0 }
         return remoteConfig.configValue(forKey: key).numberValue.doubleValue
         #else
         return defaults[key] as? Double ?? 0.0
         #endif
     }
-    
+
     // MARK: - Utilities
-    
+
     private func logConfigChanges() {
         let importantKeys = [
             "ai_search_enabled",
@@ -324,17 +331,21 @@ class RemoteConfigManager: ObservableObject {
             "creator_monetization_enabled",
             "beta_features_enabled"
         ]
-        
+
         for key in importantKeys {
             let value = getBool(for: key)
             print("🎛️ [RemoteConfig] \(key): \(value)")
         }
     }
-    
+
     // Get all current configuration as dictionary
     func getAllConfig() -> [String: Any] {
+        #if canImport(FirebaseRemoteConfig)
+        guard isConfigured else { return defaults.mapValues { $0 as Any } }
+        #endif
+
         var config: [String: Any] = [:]
-        
+
         for (key, _) in defaults {
             #if canImport(FirebaseRemoteConfig)
             let configValue = remoteConfig.configValue(forKey: key)
@@ -352,7 +363,7 @@ class RemoteConfigManager: ObservableObject {
             config[key] = defaults[key]
             #endif
         }
-        
+
         return config
     }
 }
@@ -360,10 +371,12 @@ class RemoteConfigManager: ObservableObject {
 // MARK: - Feature Flag Extensions
 
 extension RemoteConfigManager {
-    
+
     // Check if a feature is enabled with fallback
     func isFeatureEnabled(_ feature: String, fallback: Bool = false) -> Bool {
         #if canImport(FirebaseRemoteConfig)
+        guard isConfigured else { return defaults[feature] as? Bool ?? fallback }
+
         let configValue = remoteConfig.configValue(forKey: feature)
         if configValue.source == .static {
             return fallback
@@ -373,21 +386,23 @@ extension RemoteConfigManager {
         return defaults[feature] as? Bool ?? fallback
         #endif
     }
-    
+
     // Get feature configuration with type safety
     func getFeatureConfig<T>(_ feature: String, type: T.Type, fallback: T) -> T {
         #if canImport(FirebaseRemoteConfig)
+        guard isConfigured else { return defaults[feature] as? T ?? fallback }
+
         let configValue = remoteConfig.configValue(forKey: feature)
-        
+
         switch type {
         case is Bool.Type:
-            return configValue.boolValue as! T
+            return configValue.boolValue as? T ?? fallback
         case is String.Type:
-            return (configValue.stringValue ?? fallback as! String) as! T
+            return configValue.stringValue as? T ?? fallback
         case is Int.Type:
-            return configValue.numberValue.intValue as! T
+            return configValue.numberValue.intValue as? T ?? fallback
         case is Double.Type:
-            return configValue.numberValue.doubleValue as! T
+            return configValue.numberValue.doubleValue as? T ?? fallback
         default:
             return fallback
         }
@@ -395,9 +410,9 @@ extension RemoteConfigManager {
         return defaults[feature] as? T ?? fallback
         #endif
     }
-    
+
     // ML Enhancement feature flag
     var isMLEnhancementEnabled: Bool {
-        return isFeatureEnabled("ml_enhancement_enabled", fallback: true)
+        isFeatureEnabled("ml_enhancement_enabled", fallback: true)
     }
 }

@@ -2,6 +2,9 @@ package com.mychannel.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mychannel.data.remote.ModerationDataSource
+import com.mychannel.domain.model.ContentReportReason
+import com.mychannel.domain.model.ContentReportType
 import com.mychannel.domain.repository.VideoRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,16 +25,20 @@ data class ChatMessage(val id: String, val username: String, val text: String)
 data class LiveStreamUiState(
     val streamUrl: String? = null,
     val streamTitle: String = "",
+    val channelId: String = "",
     val channelName: String = "",
     val viewerCount: Long = 0L,
     val chatMessages: List<ChatMessage> = emptyList(),
     val isLoading: Boolean = true,
-    val error: String? = null
+    val error: String? = null,
+    /** Transient user feedback for moderation actions (report/block); shown then cleared. */
+    val moderationMessage: String? = null
 )
 
 @HiltViewModel
 class LiveStreamViewModel @Inject constructor(
-    private val videoRepository: VideoRepository
+    private val videoRepository: VideoRepository,
+    private val moderationDataSource: ModerationDataSource
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LiveStreamUiState())
@@ -52,6 +59,7 @@ class LiveStreamViewModel @Inject constructor(
                         it.copy(
                             streamUrl = video.videoUrl,
                             streamTitle = video.title,
+                            channelId = video.channelId,
                             channelName = video.channelName,
                             isLoading = false
                         )
@@ -75,5 +83,50 @@ class LiveStreamViewModel @Inject constructor(
             text = text
         )
         _uiState.update { it.copy(chatMessages = it.chatMessages + msg) }
+    }
+
+    /**
+     * Reports the current live stream. Android loads streams from the `videos`
+     * collection (via [VideoRepository.getVideo]), so it reports as
+     * [ContentReportType.VIDEO] to satisfy the Firestore rule's `videos/{id}`
+     * existence check.
+     */
+    fun reportStream(reason: ContentReportReason) {
+        val streamId = currentStreamId.ifBlank { return }
+        viewModelScope.launch {
+            val message = runCatching {
+                moderationDataSource.submitReport(
+                    type = ContentReportType.VIDEO,
+                    contentId = streamId,
+                    contentCreatorId = _uiState.value.channelId,
+                    reason = reason
+                )
+            }.fold(
+                onSuccess = { "Report submitted. Thanks for keeping MyChannel safe." },
+                onFailure = { it.message ?: "Unable to submit report." }
+            )
+            _uiState.update { it.copy(moderationMessage = message) }
+        }
+    }
+
+    /** Blocks the streamer so their content can be filtered from feeds. */
+    fun blockStreamer() {
+        val channelId = _uiState.value.channelId.ifBlank { return }
+        viewModelScope.launch {
+            val message = runCatching {
+                moderationDataSource.blockUser(
+                    blockedUserId = channelId,
+                    blockedUserDisplayName = _uiState.value.channelName
+                )
+            }.fold(
+                onSuccess = { "Streamer blocked. You won't see their content." },
+                onFailure = { it.message ?: "Unable to block streamer." }
+            )
+            _uiState.update { it.copy(moderationMessage = message) }
+        }
+    }
+
+    fun clearModerationMessage() {
+        _uiState.update { it.copy(moderationMessage = null) }
     }
 }

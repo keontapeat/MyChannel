@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import StoreKit
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
@@ -428,18 +429,53 @@ struct SuperThanksSheet: View {
     private func sendSuperThanks() {
         isSending = true
         HapticManager.shared.impact(style: .medium)
-        
-        Task {
-            // Simulate payment processing
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            
-            // Save to Firestore
-            await saveSuperThanks()
-            
-            await MainActor.run {
+
+        Task { @MainActor in
+            do {
+                let productId = "com.mychannel.superthanks.\(selectedAmount.amountCents / 100)"
+                let products = try await Product.products(for: [productId])
+                guard let product = products.first else {
+                    // Product not in App Store Connect — never grant digital goods free in Release (3.1.1)
+#if DEBUG
+                    await saveSuperThanks()
+                    isSending = false
+                    showingSuccess = true
+                    HapticManager.shared.successPattern()
+#else
+                    isSending = false
+#endif
+                    return
+                }
+                let result = try await product.purchase()
+                switch result {
+                case .success(let verification):
+                    switch verification {
+                    case .verified(let transaction):
+                        await saveSuperThanks()
+                        await transaction.finish()
+                        isSending = false
+                        showingSuccess = true
+                        HapticManager.shared.successPattern()
+                    case .unverified:
+                        isSending = false
+                    }
+                case .userCancelled:
+                    isSending = false
+                case .pending:
+                    isSending = false
+                @unknown default:
+                    isSending = false
+                }
+            } catch {
+                // IAP unavailable — free grant only in DEBUG (Guideline 3.1.1)
+#if DEBUG
+                await saveSuperThanks()
                 isSending = false
                 showingSuccess = true
                 HapticManager.shared.successPattern()
+#else
+                isSending = false
+#endif
             }
         }
     }

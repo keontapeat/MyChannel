@@ -837,10 +837,15 @@ struct ProductDetailSheet: View {
                 SafariView(url: link.url)
                     .ignoresSafeArea()
             }
-            .alert("Store Coming Soon", isPresented: $showNoStoreAlert) {
-                Button("OK", role: .cancel) {}
+            .alert("Connect Your Store", isPresented: $showNoStoreAlert) {
+                Button("Connect Storefront") {
+                    if let url = URL(string: "https://mychannel.app/creator/storefront/connect") {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                Button("Later", role: .cancel) {}
             } message: {
-                Text("This creator hasn't connected their storefront yet. Check back soon to buy \(product.name).")
+                Text("This creator hasn't connected their storefront yet. Tap 'Connect Storefront' to set up your shop and start selling.")
             }
         }
     }
@@ -895,11 +900,16 @@ struct ARTryOnView: View {
 
 struct LiveShoppingStreamView: View {
     let show: LiveShoppingShow
+    @ObservedObject private var liveManager = LiveStreamManager.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showProducts = true
     @State private var chatMessage = ""
     @State private var streamProducts: [ShoppingProduct] = []
     @State private var selectedProduct: ShoppingProduct?
+
+    private var viewerCount: Int {
+        liveManager.viewerCount(for: show.id, fallback: show.viewerCount)
+    }
     
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -943,7 +953,7 @@ struct LiveShoppingStreamView: View {
                                 Text(show.creator.name)
                                     .font(.system(size: 13, weight: .bold))
                                     .foregroundColor(.white)
-                                Text("\(show.viewerCount.abbreviated) watching")
+                                Text("\(viewerCount.abbreviated) watching")
                                     .font(.system(size: 10, weight: .medium))
                                     .foregroundColor(.white.opacity(0.7))
                             }
@@ -1058,7 +1068,11 @@ struct LiveShoppingStreamView: View {
         }
         .navigationBarHidden(true)
         .task {
+            await liveManager.joinAsViewer(streamId: show.id)
             await loadStreamProducts()
+        }
+        .onDisappear {
+            Task { await liveManager.leaveAsViewer(streamId: show.id) }
         }
         .sheet(item: $selectedProduct) { product in
             ProductDetailSheet(

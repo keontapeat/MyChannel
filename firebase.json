@@ -26,6 +26,16 @@
       "runtime": "nodejs20"
     },
     {
+      "source": "cloud-functions/agi-scheduler",
+      "codebase": "agi-scheduler",
+      "runtime": "nodejs20"
+    },
+    {
+      "source": "cloud-functions/ai-proxy",
+      "codebase": "ai-proxy",
+      "runtime": "nodejs20"
+    },
+    {
       "source": "functions-v2",
       "codebase": "platform-functions",
       "runtime": "python312"
@@ -42,13 +52,62 @@
     }
   ],
   "hosting": {
-    "public": "public",
+    "public": "web-v2/out",
     "ignore": [
       "firebase.json",
-      "**/.*",
+      "**/.DS_Store",
+      "**/.git/**",
       "**/node_modules/**"
     ],
     "rewrites": [
+      {
+        "source": "/studio/videos/*/edit",
+        "destination": "/studio/videos/_fallback/edit/index.html"
+      },
+      {
+        "source": "/studio/videos/*/captions",
+        "destination": "/studio/videos/_fallback/captions/index.html"
+      },
+      {
+        "source": "/studio/videos/*/chapters",
+        "destination": "/studio/videos/_fallback/chapters/index.html"
+      },
+      {
+        "source": "/studio/videos/*/end-screens",
+        "destination": "/studio/videos/_fallback/end-screens/index.html"
+      },
+      {
+        "source": "/studio/videos/*",
+        "destination": "/studio/videos/_fallback/edit/index.html"
+      },
+      {
+        "source": "/live/*",
+        "destination": "/live/_fallback/index.html"
+      },
+      {
+        "source": "/profile/*",
+        "destination": "/profile/_fallback/index.html"
+      },
+      {
+        "source": "/product/*",
+        "destination": "/product/_fallback/index.html"
+      },
+      {
+        "source": "/playlists/*",
+        "destination": "/playlists/_fallback/index.html"
+      },
+      {
+        "source": "/medals/match/*/spectate",
+        "destination": "/medals/match/_fallback/spectate/index.html"
+      },
+      {
+        "source": "/medals/match/**",
+        "destination": "/medals/match/_fallback/index.html"
+      },
+      {
+        "source": "/watch/**",
+        "destination": "/watch/_fallback/index.html"
+      },
       {
         "source": "/privacy",
         "destination": "/privacy/index.html"
@@ -67,6 +126,15 @@
       }
     ],
     "headers": [
+      {
+        "source": "/.well-known/apple-app-site-association",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      },
       {
         "source": "**",
         "headers": [

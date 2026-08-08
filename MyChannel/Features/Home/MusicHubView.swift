@@ -18,6 +18,7 @@ struct MusicHubView: View {
     @State private var newReleaseSongs: [CatalogSong] = []
     @State private var searchText: String = ""
     @State private var loading: Bool = true
+    @State private var loadError: String?
     @ObservedObject private var preview = AudioPreviewPlayer.shared
     @State private var searchTask: Task<Void, Never>? = nil
     @State private var recentQueries: [String] = []
@@ -57,6 +58,17 @@ struct MusicHubView: View {
                         welcomeHeader
                         
                         VStack(spacing: 32) {
+                            quickActionsRow
+
+                            if showArtistCTA {
+                                artistUploadCTA
+                            }
+
+                            hubLoadStateSection
+                            discoveryLoadStateSection
+                            newArtistDropsSection
+                            trendingOnMyChannelSection
+
                             // Pinned Artists
                             discoverArtistsSection
                             
@@ -137,7 +149,7 @@ struct MusicHubView: View {
                 }
             }
             .onDisappear {
-                AudioPreviewPlayer.shared.stop()
+                searchTask?.cancel()
             }
             .onChange(of: searchText) { newValue in
                 searchTask?.cancel()
@@ -449,6 +461,99 @@ struct MusicHubView: View {
         .padding(.horizontal, 20)
     }
     
+    // MARK: - Structured Load States
+
+    @ViewBuilder
+    private var hubLoadStateSection: some View {
+        if loading {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Loading your music hub…")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+        } else if let loadError {
+            musicStateMessage(
+                icon: "exclamationmark.triangle.fill",
+                title: "Music couldn’t load",
+                message: loadError,
+                actionTitle: "Try Again"
+            ) {
+                Task { await load() }
+            }
+        } else if trending.isEmpty && albums.isEmpty {
+            musicStateMessage(
+                icon: "music.note.list",
+                title: "No catalog music yet",
+                message: "Try again shortly or upload an original track.",
+                actionTitle: "Upload Music"
+            ) {
+                showUploadSheet = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var discoveryLoadStateSection: some View {
+        if discoveryFeed.isLoading && discoveryFeed.newDrops.isEmpty {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Loading creator discoveries…")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+        } else if let error = discoveryFeed.errorMessage,
+                  discoveryFeed.newDrops.isEmpty,
+                  discoveryFeed.trendingUploads.isEmpty {
+            musicStateMessage(
+                icon: "wifi.exclamationmark",
+                title: "Creator music is unavailable",
+                message: error,
+                actionTitle: "Retry"
+            ) {
+                Task { await discoveryFeed.fetchAll() }
+            }
+        } else if discoveryFeed.newDrops.isEmpty && discoveryFeed.trendingUploads.isEmpty {
+            musicStateMessage(
+                icon: "sparkles",
+                title: "Fresh drops are on the way",
+                message: "Approved creator uploads will appear here after processing and review.",
+                actionTitle: "Upload Music"
+            ) {
+                showUploadSheet = true
+            }
+        }
+    }
+
+    private func musicStateMessage(
+        icon: String,
+        title: String,
+        message: String,
+        actionTitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundColor(.secondary)
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+            Text(message)
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            Button(actionTitle, action: action)
+                .font(.system(size: 14, weight: .semibold))
+                .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+    }
+
     // MARK: - New Artist Drops Section
     
     private var newArtistDropsSection: some View {
@@ -1364,43 +1469,42 @@ struct MusicHubView: View {
     
     private func load() async {
         loading = true
-        
+        loadError = nil
+
         let instantFriendArtists = FeaturedFriendArtist.friends.map { $0.catalogArtist }
         artists = instantFriendArtists
         topArtists = instantFriendArtists.shuffled()
-        
-        Task {
+
+        do {
             async let hubTask = MusicCatalogService.shared.loadFriendHubMusic()
             async let onRepeatTask = MusicCatalogService.shared.songsForOnRepeatPinnedFriends()
-            let hub = await hubTask
-            let onRepeatSongs = await onRepeatTask
+            async let discoveryTask: Void = discoveryFeed.fetchAll()
+            let (hub, onRepeatSongs, _) = await (hubTask, onRepeatTask, discoveryTask)
+            try Task.checkCancellation()
+
             let editedSongs = await MusicCatalogService.shared.applyMusicHubTopSongsEdits(hub.songs)
-            await MainActor.run {
-                if !editedSongs.isEmpty {
-                    trending = editedSongs
-                    topCharts = Array(editedSongs.prefix(100))
-                }
-                if !hub.albums.isEmpty {
-                    topAlbums = hub.albums
-                    albums = hub.albums
-                }
-                let newestFiltered = Array(hub.songsNewestFirst.prefix(100)).filter {
-                    $0.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != "trump"
-                }
-                newReleaseSongs = newestFiltered.isEmpty ? Array(editedSongs.prefix(100)) : newestFiltered
-                if !onRepeatSongs.isEmpty { quickPicks = onRepeatSongs }
-                loading = false
-            }
-        }
-        
-        // Phase 4: Refresh friend artist artwork in background (non-blocking)
-        Task {
+            try Task.checkCancellation()
+            trending = editedSongs
+            topCharts = Array(editedSongs.prefix(100))
+            topAlbums = hub.albums
+            albums = hub.albums
+            let newest = Array(hub.songsNewestFirst.prefix(100))
+            newReleaseSongs = newest.isEmpty ? Array(editedSongs.prefix(100)) : newest
+            quickPicks = onRepeatSongs
+            loading = false
+
             let freshFriendArtists: [CatalogArtist] = await withTaskGroup(of: CatalogArtist.self) { group in
                 for friend in FeaturedFriendArtist.friends {
                     group.addTask {
-                        if let freshUrl = await MusicCatalogService.shared.freshArtworkURL(forArtistId: friend.appleMusicId),
-                           !freshUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            return CatalogArtist(id: friend.appleMusicId, name: friend.name, linkUrl: friend.catalogArtist.linkUrl, artworkUrl: freshUrl)
+                        if let freshURL = await MusicCatalogService.shared.freshArtworkURL(
+                            forArtistId: friend.appleMusicId
+                        ), !freshURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            return CatalogArtist(
+                                id: friend.appleMusicId,
+                                name: friend.name,
+                                linkUrl: friend.catalogArtist.linkUrl,
+                                artworkUrl: freshURL
+                            )
                         }
                         return friend.catalogArtist
                     }
@@ -1411,29 +1515,26 @@ struct MusicHubView: View {
                     results.first { $0.id == friend.appleMusicId }
                 }
             }
-            await MainActor.run {
-                let freshIds = Set(freshFriendArtists.map { $0.id })
-                let filtered = artists.filter { !freshIds.contains($0.id) }
-                artists = freshFriendArtists + filtered
-                topArtists = freshFriendArtists.shuffled()
-            }
-        }
-        
-        // Phase 5: Local + For You (non-blocking; fall back to friend hub pool)
-        Task {
+            try Task.checkCancellation()
+            let freshIds = Set(freshFriendArtists.map { $0.id })
+            artists = freshFriendArtists + artists.filter { !freshIds.contains($0.id) }
+            topArtists = freshFriendArtists.shuffled()
+
             let city = appState.currentUser?.location ?? ""
-            if !city.isEmpty, let loc = try? await MusicCatalogService.shared.searchSongs(term: city, limit: 30) {
-                await MainActor.run { local = loc }
+            if !city.isEmpty {
+                local = (try? await MusicCatalogService.shared.searchSongs(term: city, limit: 30)) ?? []
             }
-            await MainActor.run {
-                if local.isEmpty {
-                    local = Array(trending.prefix(8))
-                }
-            }
+            try Task.checkCancellation()
+            if local.isEmpty { local = Array(trending.prefix(8)) }
             await loadForYou(curatedFallback: Array(trending.prefix(12)))
+        } catch is CancellationError {
+            return
+        } catch {
+            loading = false
+            loadError = error.localizedDescription
         }
     }
-    
+
     private func performSearch() async {
         let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard term.count >= 2 else { return }

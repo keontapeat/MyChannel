@@ -6,9 +6,10 @@
 //   • End screen overlay in the last 20s
 //   • Super Thanks button
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
+import {safeExternalUrl} from '@/lib/video-detail-security';
 import VideoPlayer from './VideoPlayer';
 import type { PlayerChapter } from './VideoPlayer';
 import ClipCreatorModal from './ClipCreatorModal';
@@ -45,6 +46,8 @@ interface VideoPlayerWithChaptersProps {
   startTime?: number;
   onSuperThanks?: () => void;
   onEnded?: () => void;
+  onPlay?: () => void;
+  onPause?: () => void;
   onTimeUpdate?: (currentTime: number) => void;
 }
 
@@ -54,6 +57,44 @@ function secondsToTimestamp(secs: number): string {
   const s = Math.floor(secs % 60);
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function sanitizeChapter(id: string, value: Record<string, unknown>, videoDuration: number): Chapter | null {
+  const title = typeof value.title === 'string' ? value.title.trim().slice(0, 200) : '';
+  const startTime = Number(value.startTime);
+  if (!title || !Number.isFinite(startTime) || startTime < 0 ||
+      (videoDuration > 0 && startTime >= videoDuration)) return null;
+  return {id, title, startTime};
+}
+
+function sanitizeEndScreen(
+  id: string,
+  value: Record<string, unknown>,
+  videoDuration: number,
+): EndScreenElement | null {
+  const allowedTypes = new Set(['video', 'subscribe', 'channel', 'link', 'playlist']);
+  const type = typeof value.type === 'string' ? value.type : '';
+  const startTime = Number(value.startTime);
+  const elementDuration = Number(value.duration);
+  const posX = Number(value.posX);
+  const posY = Number(value.posY);
+  if (!allowedTypes.has(type) || !Number.isFinite(startTime) || startTime < 0 ||
+      !Number.isFinite(elementDuration) || elementDuration <= 0 || elementDuration > 300 ||
+      !Number.isFinite(posX) || !Number.isFinite(posY) ||
+      (videoDuration > 0 && startTime >= videoDuration)) return null;
+
+  return {
+    id,
+    type: type as EndScreenElement['type'],
+    startTime,
+    duration: elementDuration,
+    posX: Math.max(0, Math.min(1, posX)),
+    posY: Math.max(0, Math.min(1, posY)),
+    targetVideoId: typeof value.targetVideoId === 'string' ? value.targetVideoId.slice(0, 128) : undefined,
+    channelName: typeof value.channelName === 'string' ? value.channelName.slice(0, 100) : undefined,
+    linkURL: typeof value.linkURL === 'string' ? value.linkURL.slice(0, 2048) : undefined,
+    linkTitle: typeof value.linkTitle === 'string' ? value.linkTitle.slice(0, 100) : undefined,
+  };
 }
 
 export default function VideoPlayerWithChapters({
@@ -68,16 +109,25 @@ export default function VideoPlayerWithChapters({
   startTime,
   onSuperThanks,
   onEnded,
+  onPlay,
+  onPause,
   onTimeUpdate,
 }: VideoPlayerWithChaptersProps) {
-  const [currentTime, setCurrentTime] = useState(0);
-  const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [endScreens, setEndScreens] = useState<EndScreenElement[]>([]);
-  const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
-  const [showEndScreens, setShowEndScreens] = useState(false);
+  const [playbackClock, setPlaybackClock] = useState({videoId, time: 0});
+  const [chapterState, setChapterState] = useState<{videoId: string; items: Chapter[]}>(
+    {videoId, items: []},
+  );
+  const [endScreenState, setEndScreenState] = useState<{
+    videoId: string;
+    items: EndScreenElement[];
+  }>({videoId, items: []});
   const [showClipCreator, setShowClipCreator] = useState(false);
+  const currentTime = playbackClock.videoId === videoId ? playbackClock.time : 0;
+  const chapters = chapterState.videoId === videoId ? chapterState.items : [];
+  const endScreens = endScreenState.videoId === videoId ? endScreenState.items : [];
 
-  // Load chapters and end screens
+  // Load and validate untrusted chapter/end-screen documents. Keying the data
+  // by video ID makes stale state invisible immediately without effect resets.
   useEffect(() => {
     if (!videoId || videoId === '_fallback') return;
     let cancelled = false;
@@ -88,11 +138,15 @@ export default function VideoPlayerWithChapters({
           query(collection(db, 'videos', videoId, 'chapters'), orderBy('startTime', 'asc'))
         );
         if (!cancelled) {
-          setChapters(snap.docs.map((d) => ({
-            id: d.id,
-            title: d.data().title ?? '',
-            startTime: d.data().startTime ?? 0,
-          })));
+          const sanitized = snap.docs
+            .map((chapterDoc) => sanitizeChapter(
+              chapterDoc.id,
+              chapterDoc.data() as Record<string, unknown>,
+              duration,
+            ))
+            .filter((chapter): chapter is Chapter => chapter !== null)
+            .sort((left, right) => left.startTime - right.startTime);
+          setChapterState({videoId, items: sanitized});
         }
       } catch { /* non-fatal */ }
     };
@@ -103,27 +157,27 @@ export default function VideoPlayerWithChapters({
           collection(db, 'endScreens', videoId, 'elements')
         );
         if (!cancelled) {
-          setEndScreens(snap.docs.map((d) => ({ id: d.id, ...d.data() } as EndScreenElement)));
+          const sanitized = snap.docs
+            .map((elementDoc) => sanitizeEndScreen(
+              elementDoc.id,
+              elementDoc.data() as Record<string, unknown>,
+              duration,
+            ))
+            .filter((element): element is EndScreenElement => element !== null);
+          setEndScreenState({videoId, items: sanitized});
         }
       } catch { /* non-fatal */ }
     };
 
-    loadChapters();
-    loadEndScreens();
+    void loadChapters();
+    void loadEndScreens();
     return () => { cancelled = true; };
-  }, [videoId]);
+  }, [videoId, duration]);
 
-  // Track active chapter and end screen visibility
-  useEffect(() => {
-    if (chapters.length >= 3) {
-      const active = [...chapters].reverse().find((c) => currentTime >= c.startTime);
-      setActiveChapter(active ?? null);
-    }
-    if (duration > 0) {
-      setShowEndScreens(currentTime >= duration - 20 && currentTime < duration);
-    }
-  }, [currentTime, chapters, duration]);
-
+  const activeChapter = chapters.length >= 2
+    ? [...chapters].reverse().find((chapter) => currentTime >= chapter.startTime) ?? null
+    : null;
+  const showEndScreens = duration > 0 && currentTime >= duration - 20 && currentTime < duration;
   const visibleEndScreens = showEndScreens
     ? endScreens.filter((el) => currentTime >= el.startTime && currentTime <= el.startTime + el.duration)
     : [];
@@ -149,22 +203,31 @@ export default function VideoPlayerWithChapters({
         enableShortcuts
         startTime={startTime}
         resumeKey={videoId}
-        onTimeUpdate={(t) => { setCurrentTime(t); onTimeUpdate?.(t); }}
+        onTimeUpdate={(time) => {
+          setPlaybackClock({videoId, time});
+          onTimeUpdate?.(time);
+        }}
+        onPlay={onPlay}
+        onPause={onPause}
         onEnded={onEnded}
       />
 
       {/* Active chapter name overlay */}
       {activeChapter && (
-        <div className="absolute top-3 left-3 px-2.5 py-1 bg-black/70 text-white text-[12px] font-semibold rounded-full pointer-events-none select-none">
+        <div
+          role="status"
+          aria-live="polite"
+          className="absolute top-3 left-3 px-2.5 py-1 bg-black/70 text-white text-[12px] font-semibold rounded-full pointer-events-none select-none"
+        >
           {activeChapter.title}
         </div>
       )}
 
       {/* Chapter markers on progress bar */}
       {chapters.length >= 3 && duration > 0 && (
-        <div className="absolute bottom-[44px] left-0 right-0 px-[8px] pointer-events-none">
+        <div aria-hidden="true" className="absolute bottom-[44px] left-0 right-0 px-[8px] pointer-events-none">
           <div className="relative w-full h-0">
-            {chapters.map((chapter, i) => {
+            {chapters.map((chapter) => {
               if (chapter.startTime === 0) return null; // skip first
               const pct = (chapter.startTime / duration) * 100;
               return (
@@ -182,7 +245,12 @@ export default function VideoPlayerWithChapters({
 
       {/* End screen elements overlay */}
       {visibleEndScreens.map((el) => (
-        <EndScreenCard key={el.id} element={el} creatorName={creatorName} />
+        <EndScreenCard
+          key={el.id}
+          element={el}
+          creatorId={creatorId}
+          creatorName={creatorName}
+        />
       ))}
 
       {/* Super Thanks button */}
@@ -222,39 +290,52 @@ export default function VideoPlayerWithChapters({
   );
 }
 
-function EndScreenCard({ element, creatorName }: { element: EndScreenElement; creatorName: string }) {
+function EndScreenCard({
+  element,
+  creatorId,
+  creatorName,
+}: {
+  element: EndScreenElement;
+  creatorId: string;
+  creatorName: string;
+}) {
   const posStyle: React.CSSProperties = {
     position: 'absolute',
     left: `${Math.max(2, Math.min(80, element.posX * 100))}%`,
     top: `${Math.max(5, Math.min(70, element.posY * 100))}%`,
     animation: 'fadeInScale 0.3s ease',
   };
-
-  const baseClass = 'flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white border border-white/30 backdrop-blur-sm shadow-lg cursor-pointer hover:scale-105 transition-transform';
+  const baseClass = 'flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white border border-white/30 backdrop-blur-sm shadow-lg hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white transition-transform';
+  const validTargetId = typeof element.targetVideoId === 'string' &&
+    /^[A-Za-z0-9_-]{1,128}$/.test(element.targetVideoId)
+    ? element.targetVideoId
+    : null;
 
   switch (element.type) {
     case 'subscribe':
-      return (
-        <div style={posStyle} className={`${baseClass} bg-red-600/90`}>
+      return /^[A-Za-z0-9_-]{1,128}$/.test(creatorId) ? (
+        <a href={`/profile/${encodeURIComponent(creatorId)}`} style={posStyle} className={`${baseClass} bg-red-600/90`}>
           <Users size={13} />
           Subscribe to {creatorName}
-        </div>
-      );
+        </a>
+      ) : null;
     case 'video':
     case 'playlist':
-      return (
-        <a href={element.targetVideoId ? `/watch/${element.targetVideoId}` : '#'} style={posStyle} className={`${baseClass} bg-black/80`}>
+      return validTargetId ? (
+        <a href={`/watch/${encodeURIComponent(validTargetId)}`} style={posStyle} className={`${baseClass} bg-black/80`}>
           <PlayCircle size={13} />
           Watch next
         </a>
-      );
-    case 'link':
-      return (
-        <a href={element.linkURL ?? '#'} target="_blank" rel="noopener noreferrer" style={posStyle} className={`${baseClass} bg-black/80`}>
+      ) : null;
+    case 'link': {
+      const safeLink = safeExternalUrl(element.linkURL);
+      return safeLink ? (
+        <a href={safeLink} target="_blank" rel="noopener noreferrer" style={posStyle} className={`${baseClass} bg-black/80`}>
           <ExternalLink size={13} />
           {element.linkTitle || 'Visit link'}
         </a>
-      );
+      ) : null;
+    }
     default:
       return null;
   }

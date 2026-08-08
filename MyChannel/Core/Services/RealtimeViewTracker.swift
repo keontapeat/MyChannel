@@ -71,13 +71,17 @@ class RealtimeViewTracker: ObservableObject {
     private var viewedVideosInSession: [String: Date] = [:]
     private let debounceWindow: TimeInterval = 5.0 // 5 seconds debounce window
     
-    /// Start tracking a video view
-    func startViewSession(videoId: String, userId: String?) async {
-        // 🔥 DEBOUNCE: Don't count same video twice within 5 seconds
+    /// Start tracking a video view and return the authoritative session ID.
+    @discardableResult
+    func startViewSession(videoId: String, userId: String?) async -> String? {
+        // Return the live session instead of creating a second view for the same video.
+        if let existing = activeViewSessions.values.first(where: { $0.videoId == videoId }) {
+            return existing.id
+        }
         if let lastView = viewedVideosInSession[videoId],
            Date().timeIntervalSince(lastView) < debounceWindow {
-            print("⚠️ [ViewTracker] Video \(videoId) viewed recently - debouncing (waiting \(String(format: "%.1f", debounceWindow - Date().timeIntervalSince(lastView)))s)")
-            return
+            print("⚠️ [ViewTracker] Video \(videoId) viewed recently - debouncing")
+            return nil
         }
         
         let sessionId = UUID().uuidString
@@ -97,8 +101,13 @@ class RealtimeViewTracker: ObservableObject {
         viewedVideosInSession[videoId] = Date() // Mark as viewed with timestamp
         updateLiveViewerCount()
         
-        // Increment view count in Firestore (with retry logic)
-        await incrementViewCount(videoId: videoId, userId: userId, creatorId: creatorId)
+        // Submit the same stable session ID used by heartbeat/end tracking.
+        await incrementViewCount(
+            videoId: videoId,
+            userId: userId,
+            sessionId: sessionId,
+            creatorId: creatorId
+        )
 
         // 🔴 LIVE PRESENCE: register this viewer so the creator's "watching now"
         // counter is a real, global concurrent-viewer number (not a hardcoded 0).
@@ -119,6 +128,7 @@ class RealtimeViewTracker: ObservableObject {
         
         print("👁️ [ViewTracker] ✅ Started view session: \(videoId)")
         print("📊 [ViewTracker] View count will update in Firestore")
+        return sessionId
     }
     
     /// Update view session heartbeat (call every 10 seconds during playback)
@@ -149,8 +159,12 @@ class RealtimeViewTracker: ObservableObject {
         
         let watchDuration = Date().timeIntervalSince(session.startTime)
         
-        // Update watch time in Firestore
-        await updateWatchTime(videoId: session.videoId, duration: watchDuration)
+        // Update watch time using the same session that emitted the view fact.
+        await updateWatchTime(
+            videoId: session.videoId,
+            duration: watchDuration,
+            sessionId: session.id
+        )
         
         // Remove session
         activeViewSessions.removeValue(forKey: sessionId)
@@ -200,116 +214,48 @@ class RealtimeViewTracker: ObservableObject {
     
     // MARK: - Firestore Integration
     
-    private func incrementViewCount(videoId: String, userId: String?, creatorId: String? = nil) async {
+    private func incrementViewCount(
+        videoId: String,
+        userId: String?,
+        sessionId: String,
+        creatorId: String? = nil
+    ) async {
         #if canImport(FirebaseFirestore)
         guard let db = db else { return }
+        guard let userId, !userId.isEmpty else {
+            print("ℹ️ [ViewTracker] Anonymous view kept local until authentication")
+            return
+        }
+
         do {
-            print("🔥🔥🔥 [ViewTracker] ⚡ INCREMENTING VIEW COUNT for: \(videoId)")
-            print("🔥 [ViewTracker] User ID: \(userId ?? "anonymous")")
-            print("🔥 [ViewTracker] Timestamp: \(Date())")
-            
-            // 🔥 FIX: Always track views, even for own videos
-            // No filtering - all views count, including self-views
-            
-            // Log view event with timestamp
-            let viewRef = db.collection("video_analytics")
+            try await db.collection("videos")
                 .document(videoId)
-                .collection("views")
-                .document()
-            
-            // Get creator ID first (reuse if caller already resolved it)
-            let resolvedCreatorId: String?
-            if let creatorId {
-                resolvedCreatorId = creatorId
-            } else {
-                resolvedCreatorId = await getVideoCreatorId(videoId: videoId)
-            }
-            let isSelfView = userId != nil && userId == resolvedCreatorId
-            
-            try await viewRef.setData([
-                "userId": userId ?? "anonymous",
-                "timestamp": FieldValue.serverTimestamp(),
-                "deviceType": "iOS",
-                "sessionId": UUID().uuidString,
-                "isSelfView": isSelfView,
-                "watchDuration": 0
-            ])
+                .collection("events")
+                .document("view_\(sessionId)")
+                .setData([
+                    "userId": userId,
+                    "type": "view",
+                    "sessionId": sessionId,
+                    "createdAt": FieldValue.serverTimestamp()
+                ])
 
-            // 🔥 RANKING FIX: Actually increment the video's viewCount AND roll the
-            // view up to the creator's users/{uid}.totalViews. This is the metric
-            // TopRankMLService reads, so watching a video now genuinely moves its
-            // creator up the Top shelves in real time. (Previously this method only
-            // logged an analytics event and read the count back — the count never grew.)
-            //
-            // Self-views are logged for analytics above but EXCLUDED from the
-            // ranking/view rollup so creators can't inflate placement by rewatching.
+            // The Cloud Function owns the aggregate counter. Keep the UI
+            // responsive while its transactional update reaches the listener,
+            // but never write an aggregate from the client.
+            let isSelfView = creatorId == userId
             if !isSelfView {
-                let videoRef = db.collection("videos").document(videoId)
-                try await videoRef.setData([
-                    "viewCount": FieldValue.increment(Int64(1))
-                ], merge: true)
-
-                if let resolvedCreatorId, !resolvedCreatorId.isEmpty {
-                    // Best-effort roll-up to users/{uid}.totalViews. This may be denied
-                    // by security rules for non-owner views; that's fine — it's wrapped
-                    // so it never aborts the authoritative daily rollup below.
-                    do {
-                        try await db.collection("users").document(resolvedCreatorId).setData([
-                            "totalViews": FieldValue.increment(Int64(1))
-                        ], merge: true)
-                        print("📈 [ViewTracker] Rolled view up to creator \(resolvedCreatorId).totalViews")
-                    } catch {
-                        print("ℹ️ [ViewTracker] totalViews roll-up skipped: \(error.localizedDescription)")
-                    }
-
-                    // 📊 ACCURATE DASHBOARD: write a per-day rollup so the Studio dashboard
-                    // chart + "views today" reflect REAL traffic instead of random data.
-                    await incrementDailyViews(creatorId: resolvedCreatorId)
-                }
-            } else {
-                print("🙈 [ViewTracker] Self-view — logged but excluded from view rollup")
-            }
-
-            // 🔥 FIX: Fetch ACTUAL count from Firestore after incrementing (not just local cache)
-            // This ensures we have the real persisted count
-            print("📡 [ViewTracker] Fetching updated view count from Firestore...")
-            let updatedDoc = try await db.collection("videos").document(videoId).getDocument()
-            if let data = updatedDoc.data(),
-               let actualCount = data["viewCount"] as? Int {
-                viewCountsByVideo[videoId] = actualCount
-                
-                // Post notification to update UI with actual count
+                let optimisticCount = (viewCountsByVideo[videoId] ?? 0) + 1
+                viewCountsByVideo[videoId] = optimisticCount
                 NotificationCenter.default.post(
                     name: NSNotification.Name("VideoViewCountUpdated"),
                     object: nil,
-                    userInfo: ["videoId": videoId, "viewCount": actualCount]
+                    userInfo: ["videoId": videoId, "viewCount": optimisticCount]
                 )
-                
-                print("✅✅✅ [ViewTracker] VIEW COUNT SUCCESSFULLY UPDATED: \(videoId) → \(actualCount) views (from Firestore)")
-                print("📢 [ViewTracker] Notification posted to UI with count: \(actualCount)")
-            } else {
-                // Fallback: increment local cache
-                let currentCount = viewCountsByVideo[videoId] ?? 0
-                let newCount = currentCount + 1
-                viewCountsByVideo[videoId] = newCount
-                
-                NotificationCenter.default.post(
-                    name: NSNotification.Name("VideoViewCountUpdated"),
-                    object: nil,
-                    userInfo: ["videoId": videoId, "viewCount": newCount]
-                )
-                
-                print("⚠️ [ViewTracker] Using fallback count: \(videoId) → \(newCount) views")
             }
-            
+
+            print("✅ [ViewTracker] Submitted server-authoritative view event: \(videoId)")
         } catch {
-            print("❌ [ViewTracker] ❌ Failed to increment view count: \(error.localizedDescription)")
-            print("❌ [ViewTracker] Error details: \(error)")
-            print("❌ [ViewTracker] Error type: \(type(of: error))")
-            if let nsError = error as NSError? {
-                print("❌ [ViewTracker] Error domain: \(nsError.domain), code: \(nsError.code)")
-                print("❌ [ViewTracker] Error userInfo: \(nsError.userInfo)")
-            }
+            print("❌ [ViewTracker] Failed to submit view event: \(error.localizedDescription)")
             aiMonitoring.alert(
                 severity: .error,
                 message: "Failed to track video view",
@@ -410,27 +356,32 @@ class RealtimeViewTracker: ObservableObject {
         #endif
     }
     
-    private func updateWatchTime(videoId: String, duration: TimeInterval) async {
+    private func updateWatchTime(
+        videoId: String,
+        duration: TimeInterval,
+        sessionId: String
+    ) async {
         #if canImport(FirebaseFirestore)
-        guard let db = db else { return }
+        guard let db = db,
+              let userId = AuthenticationManager.shared.currentUser?.id,
+              !userId.isEmpty else { return }
         do {
-            try await db.collection("video_analytics")
+            let clampedDuration = max(0, min(86_400, Int(duration.rounded())))
+            guard clampedDuration > 0 else { return }
+            try await db.collection("videos")
                 .document(videoId)
-                .collection("views")
-                .document()
+                .collection("events")
+                .document("watch_\(sessionId)")
                 .setData([
-                    "userId": AuthenticationManager.shared.currentUser?.id ?? "anonymous",
-                    "timestamp": FieldValue.serverTimestamp(),
-                    "deviceType": "iOS",
-                    "sessionId": UUID().uuidString,
-                    "watchDuration": Int(duration),
-                    "eventType": "watch_time"
+                    "userId": userId,
+                    "type": "watch_time",
+                    "sessionId": sessionId,
+                    "watchTime": clampedDuration,
+                    "createdAt": FieldValue.serverTimestamp()
                 ])
-            
-            print("✅ [ViewTracker] Updated watch time: \(videoId) +\(String(format: "%.0f", duration))s")
-            
+            print("✅ [ViewTracker] Submitted watch-time event: \(videoId) +\(clampedDuration)s")
         } catch {
-            print("❌ [ViewTracker] Failed to update watch time: \(error)")
+            print("❌ [ViewTracker] Failed to submit watch time: \(error)")
         }
         #endif
     }
@@ -686,11 +637,9 @@ class RealtimeViewTracker: ObservableObject {
                         print("📊 [ViewTracker] Loaded view count from Firestore (Int64): \(videoId) → \(viewCount) views")
                         return viewCount
                     }
-                    // Field doesn't exist - initialize it
-                    print("⚠️ [ViewTracker] viewCount field missing for \(videoId), initializing to 0")
-                    try? await db.collection("videos").document(videoId).updateData([
-                        "viewCount": 0
-                    ])
+                    // Missing aggregate fields are initialized by the backend
+                    // pipeline; clients never create or repair counters.
+                    print("ℹ️ [ViewTracker] viewCount is not initialized yet for \(videoId)")
                     viewCountsByVideo[videoId] = 0
                     return 0
                 }

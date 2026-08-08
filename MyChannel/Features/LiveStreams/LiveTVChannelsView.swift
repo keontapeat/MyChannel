@@ -34,7 +34,7 @@ struct LiveTVChannelsView: View {
 
     private var allChannels: [LiveTVChannel] {
         let managerChannels = LiveTVManager.shared.channels
-        return managerChannels.isEmpty ? LiveTVChannel.sampleChannels : managerChannels
+        return managerChannels.isEmpty ? LiveTVChannel.appStoreSafeChannels : managerChannels
     }
 
     private var savedChannels: [LiveTVChannel] {

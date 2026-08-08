@@ -382,7 +382,16 @@ struct LiveChannelThumbnailView: View {
                 liveBadge
             }
         }
-        .clipped()
+        // 🔒 PERMANENT THUMBNAIL FIX: clip the ENTIRE stack (poster image, cached
+        // snapshot, and player) to the rounded shape at the source instead of a plain
+        // rectangular `.clipped()`. Previously the square-cornered `.scaledToFill`
+        // poster/snapshot bled past the card's rounded corners whenever a parent
+        // forgot to add its own `.clipShape` (or the native player layer flashed a
+        // square frame before its own rounding applied). RoundedRectangle(cornerRadius: 0)
+        // is identical to `.clipped()` for the plain-rectangle call sites, so this is
+        // safe everywhere and self-contained — the corners can never break again.
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .onAppear {
             hasAppeared = true
             

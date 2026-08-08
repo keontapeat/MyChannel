@@ -140,12 +140,16 @@ struct GamingEsportsView: View {
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
                     
-                    Text("Compete. Win Money. Rise to the Top.")
+                    Text(AppConfig.Features.enableCreatorMonetization
+                         ? "Compete. Win Money. Rise to the Top."
+                         : "Compete. Climb the ranks. Rise to the Top.")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Esports Arena. Compete, Win Money, Rise to the Top.")
+                .accessibilityLabel(AppConfig.Features.enableCreatorMonetization
+                                    ? "Esports Arena. Compete, Win Money, Rise to the Top."
+                                    : "Esports Arena. Compete, Climb the ranks, Rise to the Top.")
                 
                 Spacer()
                 

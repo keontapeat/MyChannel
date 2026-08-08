@@ -306,6 +306,79 @@ private fun MainNavigation() {
             composable("settings/geo_blocks") {
                 GeoBlockManagerScreen(navController = navController)
             }
+
+            // Ads & Monetization Dashboard
+            composable(ADS_MONETIZATION_ROUTE) {
+                AdsMonetizationScreen(navController = navController)
+            }
+
+            // Rights / DMCA Management
+            composable(RIGHTS_ROUTE) {
+                RightsScreen(navController = navController)
+            }
+
+            // Collaboration
+            composable(COLLABORATION_ROUTE) {
+                CollaborationScreen(navController = navController)
+            }
+
+            // Admin / Trust & Safety
+            composable(ADMIN_ROUTE) {
+                AdminScreen(navController = navController)
+            }
+
+            // Thumbnail A/B Testing
+            composable(THUMBNAIL_TESTING_ROUTE) {
+                ThumbnailTestingScreen(navController = navController)
+            }
+
+            // Shopping / Commerce
+            composable(SHOPPING_ROUTE) {
+                ShoppingScreen(navController = navController)
+            }
+
+            // Translation & Dubbing
+            composable(TRANSLATION_ROUTE) {
+                TranslationScreen(navController = navController)
+            }
+
+            // Creator Marketplace
+            composable(MARKETPLACE_ROUTE) {
+                MarketplaceScreen(navController = navController)
+            }
+
+            // Chat / Direct Messages
+            composable(CHAT_ROUTE) {
+                ChatScreen(navController = navController)
+            }
+
+            // Referrals / Growth
+            composable(REFERRALS_ROUTE) {
+                ReferralsScreen(navController = navController)
+            }
+
+            // University / Education
+            composable(UNIVERSITY_ROUTE) {
+                UniversityScreen(navController = navController)
+            }
+
+            // Wallet
+            composable(WALLET_ROUTE) {
+                WalletScreen(navController = navController)
+            }
+
+            // Premium Subscription
+            composable(PREMIUM_ROUTE) {
+                PremiumScreen(navController = navController)
+            }
+            // Account Switcher
+            composable("account_switcher") {
+                AccountSwitcherScreen(navController = navController)
+            }
+            // Kids Mode
+            composable("kids_mode") {
+                KidsModeScreen(navController = navController)
+            }
         }
     }
 }
@@ -335,6 +408,19 @@ const val CLIPS_ROUTE = "clips"
 const val DOWNLOADS_ROUTE = "downloads"
 const val COMMUNITY_ROUTE = "community"
 const val PREMIERES_ROUTE = "premieres"
+const val ADS_MONETIZATION_ROUTE = "ads_monetization"
+const val RIGHTS_ROUTE = "rights"
+const val COLLABORATION_ROUTE = "collaboration"
+const val ADMIN_ROUTE = "admin"
+const val THUMBNAIL_TESTING_ROUTE = "thumbnail_testing"
+const val SHOPPING_ROUTE = "shopping"
+const val TRANSLATION_ROUTE = "translation"
+const val MARKETPLACE_ROUTE = "marketplace"
+const val CHAT_ROUTE = "chat"
+const val REFERRALS_ROUTE = "referrals"
+const val UNIVERSITY_ROUTE = "university"
+const val WALLET_ROUTE = "wallet"
+const val PREMIUM_ROUTE = "premium"
 
 val bottomNavItems = listOf(
     Screen.Home,

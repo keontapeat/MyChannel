@@ -1,41 +1,38 @@
 import SwiftUI
+import UIKit
 
 /// In-app YouTube trailer player for movie detail.
 /// SwiftUI `View` struct — value type; no `[weak self]` needed (unlike class-based coordinators).
 struct TrailerPlayerView: View {
     let trailerURLString: String
     let onClose: () -> Void
-    
+
+    @State private var playbackFailed = false
+
     private var videoID: String? {
         Self.youtubeID(from: trailerURLString)
     }
-    
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             Color.black.ignoresSafeArea()
-            
-            if let id = videoID {
+
+            if let id = videoID, !playbackFailed {
                 VStack(spacing: 0) {
                     YouTubePlayerView(
                         videoID: id,
                         autoplay: true,
                         startTime: 0,
                         muted: true,
-                        showControls: true
+                        showControls: true,
+                        onError: { _ in playbackFailed = true }
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
-                VStack(spacing: 16) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 44))
-                        .foregroundColor(.yellow)
-                    Text("Trailer unavailable")
-                        .foregroundColor(.white)
-                        .font(.headline)
-                }
+                unavailableState
             }
-            
+
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .bold))
@@ -48,7 +45,49 @@ struct TrailerPlayerView: View {
         }
         .statusBarHidden(true)
     }
-    
+
+    /// Graceful fallback shown when the trailer can't be parsed OR when YouTube
+    /// refuses embedded playback (embedding disabled / removed / restricted).
+    /// The "Open in YouTube" button always works because direct playback on
+    /// youtube.com is not subject to the embed restriction.
+    private var unavailableState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 44))
+                .foregroundColor(.yellow)
+            Text("Trailer unavailable")
+                .foregroundColor(.white)
+                .font(.headline)
+            Text("This trailer can't be played here.")
+                .foregroundColor(.white.opacity(0.6))
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+
+            if let url = watchURL {
+                Button {
+                    UIApplication.shared.open(url)
+                } label: {
+                    Label("Open in YouTube", systemImage: "play.rectangle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 20)
+                        .frame(height: 46)
+                        .background(Color.white, in: Capsule())
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(32)
+    }
+
+    /// A direct (non-embedded) YouTube watch URL for the escape-hatch button.
+    private var watchURL: URL? {
+        if let id = videoID {
+            return URL(string: "https://www.youtube.com/watch?v=\(id)")
+        }
+        return URL(string: trailerURLString)
+    }
+
     static func youtubeID(from urlString: String) -> String? {
         guard let url = URL(string: urlString) else { return nil }
         if let host = url.host, host.contains("youtu.be") {

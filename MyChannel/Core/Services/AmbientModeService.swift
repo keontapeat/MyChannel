@@ -36,15 +36,49 @@ final class AmbientModeService: ObservableObject {
 
     private var extractionTimer: Timer?
     private var lastExtractedImage: UIImage?
+    private var videoOutput: AVPlayerItemVideoOutput?
+    private weak var extractionPlayer: AVPlayer?
 
     func toggle() {
         guard AppConfig.Features.enableAmbientMode else { return }
         isEnabled.toggle()
         if isEnabled {
-            startExtraction()
+            if let player = extractionPlayer {
+                startLiveExtraction(for: player)
+            } else {
+                startExtraction()
+            }
         } else {
             stopExtraction()
             currentPalette = AmbientPalette(dominant: .black, secondary: .darkGray, accent: .gray, luminance: 0)
+        }
+    }
+
+    /// Wire to a live AVPlayer to sample real video frames for palette extraction.
+    func startLiveExtraction(for player: AVPlayer) {
+        guard AppConfig.Features.enableAmbientMode else { return }
+        stopExtraction()
+        extractionPlayer = player
+
+        let pixelAttrs: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)
+        ]
+        let output = AVPlayerItemVideoOutput(pixelBufferAttributes: pixelAttrs)
+        player.currentItem?.add(output)
+        videoOutput = output
+
+        extractionTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self, weak player, weak output] _ in
+            Task { @MainActor [weak self, weak player, weak output] in
+                guard let self, let player, let output, self.isEnabled else { return }
+                let time = player.currentTime()
+                if output.hasNewPixelBuffer(forItemTime: time),
+                   let pixelBuffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil) {
+                    let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+                    if let cgImage = CIContext().createCGImage(ciImage, from: ciImage.extent) {
+                        self.extractFromFrame(UIImage(cgImage: cgImage))
+                    }
+                }
+            }
         }
     }
 
@@ -61,6 +95,10 @@ final class AmbientModeService: ObservableObject {
     func stopExtraction() {
         extractionTimer?.invalidate()
         extractionTimer = nil
+        if let output = videoOutput {
+            extractionPlayer?.currentItem?.remove(output)
+        }
+        videoOutput = nil
     }
 
     func extractFromFrame(_ image: UIImage) {

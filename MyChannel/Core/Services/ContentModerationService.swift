@@ -74,8 +74,12 @@ class ContentModerationService: ObservableObject {
             }
         }
         
-        // 3. TODO: Integrate Google Cloud Vision API for video frame analysis
-        // For now, basic text-based moderation is active
+        // 3. Video-frame analysis (Cloud Vision SafeSearch) runs server-side in
+        // extract_thumbnails_on_ready (functions/main.py) once real transcoded
+        // frames exist — client-side frame decoding can't be trusted as a
+        // moderation gate. That path writes to the same contentFlags/
+        // strikeCases collections this service's text scan feeds, so both
+        // surfaces land in the same admin review queue (StrikeReviewView).
         
         let hasHighSeverity = violations.contains { $0.severity == .high }
         let hasMediumOrHigh = violations.contains { $0.severity == .medium || $0.severity == .high }

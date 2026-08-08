@@ -46,6 +46,7 @@ struct VideoMoreOptionsSheet: View {
     @State private var showCastSheet = false
     @State private var showEndScreenEditor = false
     @State private var showMyFeatureSlots = false
+    @State private var showRequestFeature = false
     @State private var selectedReportReason: VideoReportReason = .spam
     @State private var showReportReasonPicker = false
     @State private var isPinnedLocal: Bool = false

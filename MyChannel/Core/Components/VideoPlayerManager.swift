@@ -17,6 +17,15 @@ import UIKit
 @MainActor
 class VideoPlayerManager: ObservableObject {
     @Published var player: AVPlayer?
+
+    /// When true, this manager registers its player with
+    /// `GlobalVideoPlayerManager` for native PiP as soon as the AVPlayer is
+    /// actually created. Set by the full-screen detail player. Because
+    /// `setupPlayer` builds the player asynchronously, call sites that read
+    /// `player` synchronously would otherwise register a `nil` player and miss
+    /// PiP setup — this flag closes that race at the single point the player
+    /// becomes available.
+    var registersForGlobalPiP = false
     @Published var isPlaying = false
     @Published var isLoading = false
     @Published var currentProgress: Double = 0.0
@@ -355,6 +364,13 @@ class VideoPlayerManager: ObservableObject {
             }
         }
         
+        // 🔴 Native PiP: register the real AVPlayer the moment it exists so the
+        // leave-the-app mini player is armed (the async player-creation race
+        // previously handed GlobalVideoPlayerManager a nil player).
+        if registersForGlobalPiP, let video = currentVideo {
+            GlobalVideoPlayerManager.shared.registerLocalPlayer(video: video, player: player)
+        }
+
         if let playerItem = player.currentItem {
             setupObservers(for: playerItem)
             
@@ -912,19 +928,14 @@ class VideoPlayerManager: ObservableObject {
     // MARK: - Audio Session / Now Playing
     private func configureAudioSession() {
         guard !AppConfig.isPreview else { return }
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay, .allowBluetooth, .allowBluetoothA2DP])
-            // 🔥 Phase 21: Spatial Audio / Dolby Atmos configuration
-            // HDR / Dolby path: no-op safe — only set policy when OS supports it;
-            // never force extended dynamic range on SDR assets (see docs/player-hdr-carplay-stub.md).
-            if #available(iOS 15.0, *) {
-                // Tells the system this is a media app supporting spatial audio
-                player?.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
-            }
-            try session.setActive(true)
-        } catch {
-            print("AudioSession error: \(error)")
+        // Single owner handles category/options/activation idempotently — no
+        // more per-setup setCategory/setActive churn (was the source of the
+        // repeated "AudioSession error ... -50" during playback).
+        PlaybackAudioSession.shared.activate()
+        // 🔥 Phase 21: Spatial Audio / Dolby Atmos — safe no-op on SDR assets;
+        // only sets policy when the OS supports it.
+        if #available(iOS 15.0, *) {
+            player?.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
         }
     }
 

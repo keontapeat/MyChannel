@@ -25,5 +25,14 @@ interface AuthRepository {
     suspend fun sendPasswordReset(email: String): Result<Unit>
     suspend fun fetchIdToken(forceRefresh: Boolean = false): Result<String>
     suspend fun updateProfile(username: String, bio: String, avatarUrl: String): Result<User>
-    fun signOut()
+    suspend fun signOut()
+
+    /**
+     * Permanently deletes the current user's account and all associated data
+     * (mandatory for App Store / Google Play). Routes through the server
+     * `delete_account` function, which removes the Firestore user document
+     * (triggering GDPR/CCPA cleanup) and the Firebase Auth user, then clears the
+     * local session.
+     */
+    suspend fun deleteAccount(): Result<Unit>
 }

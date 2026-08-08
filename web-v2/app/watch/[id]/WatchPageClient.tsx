@@ -6,9 +6,21 @@ import Link from 'next/link';
 import { CheckCircle, X, MoreVertical, Clock, Share2, RectangleHorizontal, Repeat, ListPlus, ListVideo, Trash2, Activity } from 'lucide-react';
 import {
   doc, getDoc, collection, query, where, orderBy, limit, getDocs,
-  updateDoc, increment, setDoc, serverTimestamp,
+  setDoc, serverTimestamp,
 } from 'firebase/firestore';
-import { db, auth } from '@/lib/firebase/config';
+import { db, auth, getAppCheckHeaders } from '@/lib/firebase/config';
+import {
+  flushWatchTimeKeepalive,
+  recordSessionWatchTime,
+} from '@/lib/firebase/video-engagement';
+import {requestPlaybackSession, playbackDenialMessage, type PlaybackSession} from '@/lib/playback-session';
+import {
+  isRecommendationEligible,
+  safeImageUrl,
+  safeJsonLd,
+  type PolicyVideo,
+  type RecommendationViewerPolicy,
+} from '@/lib/video-detail-security';
 import VideoPlayerWithChapters from '@/components/video/VideoPlayerWithChapters';
 import SuperThanksModal from '@/components/video/SuperThanksModal';
 import SubscribeButton from '@/components/video/SubscribeButton';
@@ -66,6 +78,32 @@ function rankByRelevance(pool: Video[], current: Video): Video[] {
   return [...pool].sort((a, b) => score(b) - score(a));
 }
 
+function normalizeRecommendationRegion(value: unknown): string | null {
+  const region = typeof value === 'string' ? value.trim().toUpperCase() : '';
+  return /^[A-Z]{2}(?:-[A-Z0-9]{1,3})?$/.test(region) ? region : null;
+}
+
+async function loadRecommendationViewerPolicy(): Promise<RecommendationViewerPolicy> {
+  await auth.authStateReady();
+  const uid = auth.currentUser?.uid;
+  if (!uid) return {isAdult: false, region: null};
+  try {
+    const profileSnap = await getDoc(doc(db, 'users', uid));
+    const profile = profileSnap.data() ?? {};
+    const explicitAge = Number(profile.age);
+    const isAdult = (profile.isAgeVerified === true || profile.ageVerified === true) &&
+      (!Number.isFinite(explicitAge) || explicitAge >= 18);
+    return {
+      isAdult,
+      region: normalizeRecommendationRegion(
+        profile.region || profile.countryCode || profile.country,
+      ),
+    };
+  } catch {
+    return {isAdult: false, region: null};
+  }
+}
+
 // Skeleton while video loads
 function PlayerSkeleton() {
   return (
@@ -95,7 +133,9 @@ function SuggestedVideoRow({
   }, [menuOpen]);
 
   const channelName = channelInfo?.displayName ?? (v as any).creator?.displayName ?? (v as any).channelName ?? 'Creator';
-  const channelAvatar = channelInfo?.profileImageURL || (v as any).creator?.profileImageURL || `https://i.pravatar.cc/150?u=${v.creatorId}`;
+  const channelAvatar = safeImageUrl(
+    channelInfo?.profileImageURL || (v as any).creator?.profileImageURL,
+  );
   const dur = v.duration ?? 0;
 
   const saveWatchLater = async () => {
@@ -134,7 +174,7 @@ function SuggestedVideoRow({
       <Link href={`/watch/${v.id}`} className="relative w-[168px] h-[94px] rounded-xl overflow-hidden bg-[rgb(var(--color-surface))] flex-shrink-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={v.thumbnailURL}
+          src={safeImageUrl(v.thumbnailURL)}
           alt={v.title}
           loading="lazy"
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
@@ -170,7 +210,7 @@ function SuggestedVideoRow({
         <button
           onClick={() => setMenuOpen((o) => !o)}
           aria-label="More actions"
-          className="p-1 rounded-full text-[rgb(var(--color-text-secondary))] opacity-0 group-hover:opacity-100 hover:bg-[rgb(var(--color-surface-hover))] transition-opacity"
+          className="p-1 rounded-full text-[rgb(var(--color-text-secondary))] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--color-primary))] hover:bg-[rgb(var(--color-surface-hover))] transition-opacity"
         >
           <MoreVertical size={16} />
         </button>
@@ -198,10 +238,24 @@ function SuggestedVideoRow({
   );
 }
 
-export default function WatchPageClient({ videoId }: WatchPageClientProps) {
+export default function WatchPageClient({ videoId: initialVideoId }: WatchPageClientProps) {
+  const [videoId, setVideoId] = useState(initialVideoId);
   const router = useRouter();
+
+  useEffect(() => {
+    let nextVideoId = initialVideoId;
+    if (initialVideoId === '_fallback') {
+      const segments = window.location.pathname.split('/').filter(Boolean);
+      const watchIndex = segments.indexOf('watch');
+      nextVideoId = watchIndex >= 0 ? decodeURIComponent(segments[watchIndex + 1] ?? '') : '';
+    }
+    if (nextVideoId && nextVideoId !== '_fallback') setVideoId(nextVideoId);
+  }, [initialVideoId]);
   const { queue, remove: removeFromQueue, clear: clearQueue, nextAfter } = useQueue();
   const [video, setVideo] = useState<Video | null>(null);
+  const [playbackManifestUrl, setPlaybackManifestUrl] = useState('');
+  const [playbackSession, setPlaybackSession] = useState<PlaybackSession | null>(null);
+  const [playbackNotice, setPlaybackNotice] = useState('Video not found');
   const [loading, setLoading] = useState(true);
   const [suggested, setSuggested] = useState<Video[]>([]);
   const [channel, setChannel] = useState<{
@@ -224,6 +278,13 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
   const [theater, setTheater] = useState(false);
   const [loop, setLoop] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const viewRecordedRef = useRef(false);
+  const playbackSessionIdRef = useRef('');
+  const engagementHeadersRef = useRef<Record<string, string>>({});
+  const lastPlaybackTickMsRef = useRef(0);
+  const currentPlaybackTimeRef = useRef(0);
+  const accumulatedWatchSecondsRef = useRef(0);
+  const lastReportedWatchSecondsRef = useRef(0);
 
   // Restore theater preference
   useEffect(() => {
@@ -291,32 +352,20 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
     });
   };
 
-  // Record watch history + increment view count (once per mount)
+  // Reset playback accounting when client-side navigation changes videos.
+  // Session IDs are intentionally per playback session rather than persisted in
+  // sessionStorage, so a legitimate later view is not rejected as a replay.
   useEffect(() => {
-    if (!videoId || videoId === '_fallback') return;
-
-    const recordView = async () => {
-      try {
-        await updateDoc(doc(db, 'videos', videoId), {
-          viewCount: increment(1),
-        });
-
-        const uid = auth?.currentUser?.uid;
-        if (uid) {
-          await setDoc(doc(db, 'users', uid, 'watchHistory', videoId), {
-            videoId,
-            watchedAt: serverTimestamp(),
-          });
-        }
-      } catch {
-        // non-fatal
-      }
-    };
-
-    recordView();
+    viewRecordedRef.current = false;
+    playbackSessionIdRef.current = crypto.randomUUID();
+    engagementHeadersRef.current = {};
+    lastPlaybackTickMsRef.current = 0;
+    currentPlaybackTimeRef.current = 0;
+    accumulatedWatchSecondsRef.current = 0;
+    lastReportedWatchSecondsRef.current = 0;
   }, [videoId]);
 
-  // Fetch video doc
+  // Load metadata and require a server-authorized manifest before mounting a player.
   useEffect(() => {
     if (!videoId || videoId === '_fallback') {
       setLoading(false);
@@ -324,35 +373,97 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
     }
 
     let cancelled = false;
+    setLoading(true);
+    setVideo(null);
+    setPlaybackManifestUrl('');
+    setPlaybackSession(null);
+    setSuggested([]);
+    setChannel(null);
+    setChannelMap({});
+    setNextUp(null);
+    setDockDismissed(false);
+    setAgeGate(false);
+    setPlaybackNotice('Video not found');
+
     const load = async () => {
       try {
-        const snap = await getDoc(doc(db, 'videos', videoId));
+        const [snap, session] = await Promise.all([
+          getDoc(doc(db, 'videos', videoId)),
+          requestPlaybackSession(videoId),
+        ]);
         if (cancelled) return;
-        if (snap.exists()) {
-          const data = snap.data();
-          const vid = {
-            id: snap.id,
-            ...data,
-            createdAt: data.createdAt?.toDate?.() ?? new Date(),
-            updatedAt: data.updatedAt?.toDate?.() ?? new Date(),
-          } as Video;
-
-          // Age restriction gate — signed-out users cannot see 18+ content
-          if ((data.ageRestricted === true) && !auth?.currentUser) {
-            setAgeGate(true);
-            setLoading(false);
-            return;
-          }
-
-          setVideo(vid);
+        if (!snap.exists()) {
+          setPlaybackNotice('Video not found');
+          return;
         }
+        if (!session.canPlay || !session.playbackManifestUrl) {
+          setAgeGate(session.denialReason === 'age_verification_required');
+          setPlaybackNotice(playbackDenialMessage(session.denialReason));
+          return;
+        }
+
+        const data = snap.data();
+        const vid = {
+          id: snap.id,
+          ...data,
+          createdAt: data.createdAt?.toDate?.() ?? new Date(),
+          updatedAt: data.updatedAt?.toDate?.() ?? new Date(),
+        } as Video;
+        const engagementHeaders = await getAppCheckHeaders();
+        const authUser = auth.currentUser;
+        if (authUser) {
+          engagementHeaders.Authorization = `Bearer ${await authUser.getIdToken()}`;
+        }
+        engagementHeadersRef.current = engagementHeaders;
+        playbackSessionIdRef.current = session.sessionId;
+        setPlaybackSession(session);
+        setPlaybackManifestUrl(session.playbackManifestUrl);
+        setVideo(vid);
+      } catch {
+        if (!cancelled) setPlaybackNotice('Video unavailable');
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
-    load();
+    void load();
     return () => { cancelled = true; };
   }, [videoId]);
+
+  // Renew expiring authorization before the signed manifest becomes unusable.
+  // A failed renewal unmounts the player immediately rather than retrying an
+  // expired URL or continuing with stale capabilities.
+  useEffect(() => {
+    if (!playbackSession?.expiresAt) return;
+    const expiresAtMs = Date.parse(playbackSession.expiresAt);
+    if (!Number.isFinite(expiresAtMs)) return;
+    const delayMs = Math.max(1_000, expiresAtMs - Date.now() - 60_000);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void requestPlaybackSession(videoId).then(async (renewed) => {
+        if (cancelled) return;
+        if (!renewed.canPlay || !renewed.playbackManifestUrl) {
+          setPlaybackManifestUrl('');
+          setPlaybackSession(null);
+          setPlaybackNotice(playbackDenialMessage(renewed.denialReason));
+          return;
+        }
+        const engagementHeaders = await getAppCheckHeaders();
+        const authUser = auth.currentUser;
+        if (authUser) {
+          engagementHeaders.Authorization = `Bearer ${await authUser.getIdToken()}`;
+        }
+        if (cancelled) return;
+        engagementHeadersRef.current = engagementHeaders;
+        playbackSessionIdRef.current = renewed.sessionId;
+        setPlaybackSession(renewed);
+        setPlaybackManifestUrl(renewed.playbackManifestUrl);
+      });
+    }, delayMs);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [playbackSession, videoId]);
 
   // Fetch the creator's channel doc for accurate subscriber count / avatar / verified
   useEffect(() => {
@@ -374,60 +485,108 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
     return () => { cancelled = true; };
   }, [video?.creatorId]);
 
-  // Load suggested videos and rank by relevance to the current video
+  // Load service-ranked suggestions, with the local Firestore ranker as a
+  // resilient fallback while the serving index catches up with new uploads.
   useEffect(() => {
     if (!video) return;
+    let cancelled = false;
+
     const loadSuggested = async () => {
+      let ranked: Video[] = [];
+      const viewerPolicy = await loadRecommendationViewerPolicy();
       try {
-        // Pull a popularity pool, then re-rank client-side (no extra composite index)
-        const q = query(
-          collection(db, 'videos'),
-          where('isPublic', '==', true),
-          orderBy('viewCount', 'desc'),
-          limit(40)
-        );
-        const snap = await getDocs(q);
-        const pool = snap.docs
-          .map((d) => {
-            const data = d.data();
-            return {
-              id: d.id,
-              ...data,
-              createdAt: data.createdAt?.toDate?.() ?? new Date(),
-              updatedAt: data.updatedAt?.toDate?.() ?? new Date(),
-            } as Video;
-          })
-          .filter((v) => v.id !== videoId);
-
-        const ranked = rankByRelevance(pool, video).slice(0, 30);
-        setSuggested(ranked);
-
-        // Batch-fetch channel docs for accurate avatars / verified badges on rows
-        const creatorIds = Array.from(new Set(ranked.map((v) => v.creatorId).filter(Boolean))).slice(0, 20);
-        const entries = await Promise.all(
-          creatorIds.map(async (cid) => {
-            try {
-              const cs = await getDoc(doc(db, 'users', cid));
-              if (!cs.exists()) return null;
-              const cd = cs.data();
-              return [cid, {
-                displayName: cd.displayName ?? cd.username ?? 'Creator',
-                profileImageURL: cd.profileImageURL ?? '',
-                isVerified: cd.isVerified === true,
-              }] as const;
-            } catch {
-              return null;
-            }
-          })
-        );
-        const map: Record<string, { displayName: string; profileImageURL: string; isVerified: boolean }> = {};
-        for (const e of entries) if (e) map[e[0]] = e[1];
-        setChannelMap(map);
+        const {fetchSimilarRecommendations} = await import('@/lib/recommendations');
+        ranked = await fetchSimilarRecommendations(videoId, 24, viewerPolicy);
       } catch {
-        // non-fatal
+        // Fall through to the canonical Firestore pool.
       }
+
+      if (ranked.length === 0) {
+        try {
+          const hiddenVideoIds = new Set<string>();
+          const hiddenCreatorIds = new Set<string>();
+          const historyIds = new Set<string>();
+          const uid = auth.currentUser?.uid;
+          if (uid) {
+            const userRef = doc(db, 'users', uid);
+            const [feedbackSnap, historySnap] = await Promise.all([
+              getDocs(query(collection(userRef, 'notInterested'), limit(500))),
+              getDocs(query(collection(userRef, 'watchHistory'), limit(500))),
+            ]);
+            feedbackSnap.docs.forEach((feedbackDoc) => {
+              const signal = feedbackDoc.data();
+              if (typeof signal.videoId === 'string') hiddenVideoIds.add(signal.videoId);
+              const creatorId = signal.channelId || signal.creatorId;
+              if (typeof creatorId === 'string') hiddenCreatorIds.add(creatorId);
+            });
+            historySnap.docs.forEach((historyDoc) => historyIds.add(historyDoc.id));
+          }
+
+          const q = query(
+            collection(db, 'videos'),
+            where('isPublic', '==', true),
+            orderBy('viewCount', 'desc'),
+            limit(40)
+          );
+          const snap = await getDocs(q);
+          const pool = snap.docs
+            .map((videoDoc) => {
+              const data = videoDoc.data();
+              return {
+                id: videoDoc.id,
+                ...data,
+                createdAt: data.createdAt?.toDate?.() ?? new Date(),
+                updatedAt: data.updatedAt?.toDate?.() ?? new Date(),
+              } as PolicyVideo;
+            })
+            .filter((candidate) => {
+              if (candidate.id === videoId || hiddenVideoIds.has(candidate.id) || historyIds.has(candidate.id)) {
+                return false;
+              }
+              if (hiddenCreatorIds.has(candidate.creatorId)) return false;
+              return isRecommendationEligible(candidate, viewerPolicy);
+            });
+          ranked = rankByRelevance(pool, video).slice(0, 30);
+        } catch {
+          ranked = [];
+        }
+      }
+
+      if (cancelled) return;
+      setSuggested(ranked);
+
+      const creatorIds = Array.from(new Set(ranked.map((item) => item.creatorId).filter(Boolean))).slice(0, 20);
+      const entries = await Promise.all(
+        creatorIds.map(async (creatorId) => {
+          const embedded = ranked.find((item) => item.creatorId === creatorId)?.creator;
+          try {
+            const creatorSnap = await getDoc(doc(db, 'users', creatorId));
+            if (creatorSnap.exists()) {
+              const creator = creatorSnap.data();
+              return [creatorId, {
+                displayName: creator.displayName ?? creator.username ?? embedded?.displayName ?? 'Creator',
+                profileImageURL: creator.profileImageURL ?? embedded?.profileImageURL ?? '',
+                isVerified: creator.isVerified === true,
+              }] as const;
+            }
+          } catch {
+            // Replicated recommendation rows remain usable during Firestore errors.
+          }
+          return embedded ? [creatorId, {
+            displayName: embedded.displayName,
+            profileImageURL: embedded.profileImageURL,
+            isVerified: embedded.isVerified,
+          }] as const : null;
+        })
+      );
+      if (cancelled) return;
+      const map: Record<string, { displayName: string; profileImageURL: string; isVerified: boolean }> = {};
+      for (const entry of entries) if (entry) map[entry[0]] = entry[1];
+      setChannelMap(map);
     };
-    loadSuggested();
+
+    void loadSuggested();
+    return () => { cancelled = true; };
   }, [video, videoId]);
 
   // Load the user's watched video IDs (for the "Unwatched" filter)
@@ -466,7 +625,84 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
     return list.slice(0, 15);
   }, [suggested, sideFilter, video?.creatorId, watchedIds]);
 
+  const reportWatchTime = (currentTime: number, force = false) => {
+    if (!viewRecordedRef.current || !auth.currentUser || !videoId || videoId === '_fallback') return;
+    const sessionId = playbackSessionIdRef.current;
+    const headers = engagementHeadersRef.current;
+    if (!sessionId || Object.keys(headers).length === 0) return;
+    const watchedSeconds = Math.floor(accumulatedWatchSecondsRef.current);
+    if (watchedSeconds <= lastReportedWatchSecondsRef.current) return;
+    if (!force && watchedSeconds - lastReportedWatchSecondsRef.current < 15) return;
+
+    const previousReported = lastReportedWatchSecondsRef.current;
+    lastReportedWatchSecondsRef.current = watchedSeconds;
+    const duration = Math.max(0, Number(video?.duration ?? 0));
+    const completionRate = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : undefined;
+    void recordSessionWatchTime(
+      videoId,
+      sessionId,
+      watchedSeconds,
+      completionRate,
+      headers,
+    ).catch(() => {
+      lastReportedWatchSecondsRef.current = Math.min(
+        lastReportedWatchSecondsRef.current,
+        previousReported,
+      );
+    });
+  };
+
+  const handleQualifiedPlayback = async (currentTime: number) => {
+    if (!videoId || videoId === '_fallback') return;
+    currentPlaybackTimeRef.current = Math.max(0, currentTime);
+
+    const now = Date.now();
+    const previousTick = lastPlaybackTickMsRef.current;
+    lastPlaybackTickMsRef.current = now;
+    if (previousTick > 0) {
+      // Timeupdate fires only while playback advances. Cap a single gap so a
+      // backgrounded tab cannot claim minutes of watch time on resume.
+      accumulatedWatchSecondsRef.current += Math.min(5, Math.max(0, (now - previousTick) / 1000));
+    }
+
+    const watchedSeconds = Math.floor(accumulatedWatchSecondsRef.current);
+    if (!viewRecordedRef.current && watchedSeconds >= 5) {
+      const uid = auth.currentUser?.uid;
+      const sessionId = playbackSessionIdRef.current;
+      const headers = engagementHeadersRef.current;
+      if (!uid || !sessionId || Object.keys(headers).length === 0) return;
+
+      const duration = Math.max(0, Number(video?.duration ?? 0));
+      const completionRate = duration > 0
+        ? Math.min(1, Math.max(0, currentTime / duration))
+        : undefined;
+      try {
+        await Promise.all([
+          recordSessionWatchTime(
+            videoId,
+            sessionId,
+            watchedSeconds,
+            completionRate,
+            headers,
+            true,
+          ),
+          setDoc(doc(db, 'users', uid, 'watchHistory', videoId), {
+            videoId,
+            watchedAt: serverTimestamp(),
+          }),
+        ]);
+        viewRecordedRef.current = true;
+        lastReportedWatchSecondsRef.current = watchedSeconds;
+      } catch {
+        return;
+      }
+    }
+
+    reportWatchTime(currentTime);
+  };
+
   const handleVideoEnded = () => {
+    reportWatchTime(Number(video?.duration ?? 0), true);
     // Queue takes priority over recommendations for autoplay
     const queuedNextId = nextAfter(videoId);
     if (queuedNextId) {
@@ -480,6 +716,36 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
     }
   };
 
+  // Flush the final cumulative sample with fetch keepalive. The server binds
+  // this monotonic sample to the authenticated playback session, making retries
+  // idempotent and safe during page teardown.
+  useEffect(() => {
+    const flush = () => {
+      const currentTime = currentPlaybackTimeRef.current;
+      reportWatchTime(currentTime, true);
+      const watchedSeconds = Math.floor(accumulatedWatchSecondsRef.current);
+      const sessionId = playbackSessionIdRef.current;
+      const headers = engagementHeadersRef.current;
+      if (watchedSeconds < 1 || !sessionId || Object.keys(headers).length === 0) return;
+      const duration = Math.max(0, Number(video?.duration ?? 0));
+      const completionRate = duration > 0
+        ? Math.min(1, Math.max(0, currentTime / duration))
+        : undefined;
+      void flushWatchTimeKeepalive(
+        videoId,
+        sessionId,
+        watchedSeconds,
+        completionRate,
+        headers,
+      )?.catch(() => undefined);
+    };
+    window.addEventListener('pagehide', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      flush();
+    };
+  }, [videoId, video?.duration]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Autoplay countdown → navigate to the next video unless cancelled
   useEffect(() => {
     if (!nextUp) return;
@@ -492,7 +758,9 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
   }, [nextUp, countdown, router]);
 
   const creatorName = channel?.displayName ?? (video as any)?.creator?.displayName ?? (video as any)?.channelName ?? 'Creator';
-  const creatorAvatar = channel?.profileImageURL || (video as any)?.creator?.profileImageURL || `https://i.pravatar.cc/150?u=${video?.creatorId}`;
+  const creatorAvatar = safeImageUrl(
+    channel?.profileImageURL || (video as any)?.creator?.profileImageURL,
+  );
   const subscriberCount = channel?.subscriberCount ?? (video as any)?.creator?.subscriberCount ?? 0;
   const creatorVerified = channel?.isVerified ?? (video as any)?.creator?.isVerified ?? false;
 
@@ -511,15 +779,14 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: safeJsonLd({
               '@context': 'https://schema.org',
               '@type': 'VideoObject',
               name: video.title,
               description: video.description || video.title,
-              thumbnailUrl: [video.thumbnailURL],
+              thumbnailUrl: [safeImageUrl(video.thumbnailURL)],
               uploadDate: new Date(video.createdAt).toISOString(),
               duration: isoDuration(video.duration ?? 0),
-              contentUrl: video.videoURL,
               embedUrl: `https://www.mychannel.live/watch/${video.id}`,
               interactionStatistic: {
                 '@type': 'InteractionCounter',
@@ -630,7 +897,7 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
               {video && !showDocked && (
                 <div aria-hidden className="absolute -inset-x-10 -top-10 bottom-0 -z-10 overflow-hidden pointer-events-none">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={video.thumbnailURL} alt="" className="w-full h-full object-cover blur-3xl scale-110 opacity-30 saturate-150" />
+                  <img src={safeImageUrl(video.thumbnailURL)} alt="" className="w-full h-full object-cover blur-3xl scale-110 opacity-30 saturate-150" />
                 </div>
               )}
               {loading ? (
@@ -658,16 +925,27 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
                   <div className="aspect-video w-full bg-black rounded-xl overflow-hidden">
                     <VideoPlayerWithChapters
                       videoId={videoId}
-                      src={video.videoURL}
-                      poster={video.thumbnailURL}
+                      src={playbackManifestUrl}
+                      poster={safeImageUrl(video.thumbnailURL)}
                       duration={video.duration ?? 0}
                       creatorId={video.creatorId}
                       creatorName={creatorName}
                       videoTitle={video.title}
                       subtitles={video.subtitles}
                       startTime={startTime}
+                      onTimeUpdate={handleQualifiedPlayback}
+                      onPlay={() => {
+                        lastPlaybackTickMsRef.current = Date.now();
+                      }}
+                      onPause={() => {
+                        lastPlaybackTickMsRef.current = 0;
+                        reportWatchTime(currentPlaybackTimeRef.current, true);
+                      }}
                       onSuperThanks={() => setShowSuperThanks(true)}
-                      onEnded={handleVideoEnded}
+                      onEnded={() => {
+                        lastPlaybackTickMsRef.current = 0;
+                        handleVideoEnded();
+                      }}
                     />
                   </div>
 
@@ -727,7 +1005,7 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
                 </div>
               ) : (
                 <div className="aspect-video w-full bg-[rgb(var(--color-surface))] rounded-xl flex items-center justify-center">
-                  <p className="text-[rgb(var(--color-text-secondary))] text-sm">Video not found</p>
+                  <p className="text-[rgb(var(--color-text-secondary))] text-sm">{playbackNotice}</p>
                 </div>
               )}
             </div>
@@ -757,7 +1035,7 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
               {loading ? (
                 <span className="block h-6 w-3/4 bg-[rgb(var(--color-surface))] rounded animate-pulse" />
               ) : (
-                video?.title ?? 'Video not found'
+                video?.title ?? playbackNotice
               )}
             </h1>
 
@@ -825,8 +1103,8 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
               />
             )}
 
-            {/* Comments */}
-            {video && (
+            {/* Comments are disabled by creator policy and for child-directed content. */}
+            {video && video.commentsEnabled !== false && video.madeForKids !== true && (
               <CommentSection videoId={videoId} commentCount={video.commentCount ?? 0} creatorId={video.creatorId} />
             )}
           </div>
@@ -857,7 +1135,7 @@ export default function WatchPageClient({ videoId }: WatchPageClientProps) {
                         <Link href={`/watch/${q.id}`} className="flex gap-2 items-center flex-1 min-w-0">
                           <div className="relative w-[80px] h-[46px] rounded-lg overflow-hidden bg-[rgb(var(--color-surface))] flex-shrink-0">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={q.thumbnailURL} alt={q.title} loading="lazy" className="w-full h-full object-cover" />
+                            <img src={safeImageUrl(q.thumbnailURL)} alt={q.title} loading="lazy" className="w-full h-full object-cover" />
                             {isCurrent && (
                               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                                 <span className="text-white text-[9px] font-bold uppercase tracking-wide">Now playing</span>

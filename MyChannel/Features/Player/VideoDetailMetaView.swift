@@ -13,6 +13,7 @@ import Combine
 struct VideoDetailMetaView: View {
     // MARK: - Properties
     let video: Video
+    var supportsOfflineDownload: Bool = false
     @Binding var isSubscribed: Bool
     @Binding var isWatchLater: Bool
     @Binding var isLiked: Bool
@@ -35,6 +36,7 @@ struct VideoDetailMetaView: View {
     
     // MARK: - Services for Firestore persistence
     @StateObject private var appState = AppState.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     // MARK: - Animation States
     @State private var likeAnimationScale: CGFloat = 1.0
@@ -87,8 +89,10 @@ struct VideoDetailMetaView: View {
                     }
                     
                     // MARK: - Comments Preview
-                    commentsPreviewSection
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    if video.commentsAllowed {
+                        commentsPreviewSection
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                     
                     // 🔥 YOUTUBE PARITY: Related videos vertical rail
                     if !relatedVideos.isEmpty {
@@ -109,7 +113,7 @@ struct VideoDetailMetaView: View {
             isLiked = appState.likedVideos.contains(video.id)
             isSubscribed = appState.subscriptions.contains(video.creator.id)
             isWatchLater = appState.watchLaterVideos.contains(video.id)
-            if commentsListener == nil {
+            if video.commentsAllowed, commentsListener == nil {
                 commentsListener = CommentsFirestoreService.shared.listen(videoId: video.id) { comments in
                     Task { @MainActor in
                         self.previewComments = Array(
@@ -247,11 +251,12 @@ struct VideoDetailMetaView: View {
                     performShareAction()
                 }
                 
-                // Download Button (Premium Feature)
-                DownloadButtonView(video: video) {
-                    performDownloadAction()
+                if supportsOfflineDownload {
+                    DownloadButtonView(video: video) {
+                        performDownloadAction()
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
                 
                 // 🔥 YOUTUBE EXACT: Stop ads Button (Shows Premium upsell)
                 // 🔥 FIX 2.1(b): Hide when IAPs not submitted
@@ -392,9 +397,9 @@ struct VideoDetailMetaView: View {
             RichTextDescriptionView(
                 description: displayText,
                 onLinkTap: { url in
-                    if UIApplication.shared.canOpenURL(url) {
-                        UIApplication.shared.open(url)
-                    }
+                    guard let approvedURL = SafePlaybackURL.external(url.absoluteString),
+                          UIApplication.shared.canOpenURL(approvedURL) else { return }
+                    UIApplication.shared.open(approvedURL)
                 },
                 onTimestampTap: { time in
                     NotificationCenter.default.post(
@@ -416,7 +421,7 @@ struct VideoDetailMetaView: View {
             
             if shouldShowMore {
                 Button(action: {
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)) {
                         expandedDescription.toggle()
                     }
                     let selectionFeedback = UISelectionFeedbackGenerator()
@@ -670,16 +675,20 @@ struct VideoDetailMetaView: View {
     
     // MARK: - Action Methods (Firestore-backed)
     private func performLikeAction() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.5)) {
             likeAnimationScale = 1.4
             isLiked.toggle()
             if isLiked { isDisliked = false }
         }
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 150_000_000)
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) { likeAnimationScale = 0.9 }
+            withAnimation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.6)) {
+                likeAnimationScale = 0.9
+            }
             try? await Task.sleep(nanoseconds: 100_000_000)
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { likeAnimationScale = 1.0 }
+            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) {
+                likeAnimationScale = 1.0
+            }
         }
         // Persist to Firestore via AppState
         appState.toggleLike(for: video.id)
@@ -691,7 +700,7 @@ struct VideoDetailMetaView: View {
     }
     
     private func performDislikeAction() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) {
             isDisliked.toggle()
             if isDisliked {
                 isLiked = false
@@ -711,7 +720,7 @@ struct VideoDetailMetaView: View {
     }
     
     private func performSaveAction() {
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.7)) {
             isWatchLater.toggle()
         }
         impactFeedback.impactOccurred(intensity: 0.7)
@@ -728,6 +737,7 @@ struct VideoDetailMetaView: View {
     @State private var showingDownloadQualitySheet: Bool = false
     
     private func performDownloadAction() {
+        guard supportsOfflineDownload else { return }
         // 🔥 YOUTUBE PARITY: Check if premium user - show upsell if not
         // 🔥 FIX 2.1(b): Only gate behind premium when IAPs are submitted
         if AppConfig.Features.enableSubscriptions && !premiumService.isPremium {
@@ -765,13 +775,13 @@ struct VideoDetailMetaView: View {
     }
     
     private func performSubscribeAction() {
-        withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.5)) {
             subscribeButtonScale = isSubscribed ? 0.9 : 1.15
             isSubscribed.toggle()
         }
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 150_000_000)
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.65)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.65)) {
                 subscribeButtonScale = 1.0
             }
         }

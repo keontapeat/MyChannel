@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import admin from 'firebase-admin';
 
 // Real lexical/relevance search over the `videos` collection, plus channel
@@ -19,6 +20,29 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+const REQUIRE_APP_CHECK = process.env.REQUIRE_APP_CHECK !== 'false';
+
+function parseInteger(value: unknown, fallback: number, minimum: number, maximum: number): number {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error('Invalid numeric filter');
+  }
+  return parsed;
+}
+
+function parseDateFilter(value: unknown): Date | null {
+  if (value === undefined || value === null || value === '') return null;
+  const date = new Date(String(value));
+  if (!Number.isFinite(date.getTime())) throw new Error('Invalid date filter');
+  return date;
+}
+
+function parseQuery(value: unknown): string {
+  const queryText = String(value || '').trim();
+  if (queryText.length > 200) throw new Error('Search query is too long');
+  return queryText;
+}
 
 function extractStringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -142,27 +166,59 @@ async function loadUsersMap(userIds: string[]): Promise<Record<string, Record<st
 }
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'https://mychannel.live',
+  methods: ['GET', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'X-Firebase-AppCheck'],
+}));
+app.use('/v1', rateLimit({
+  windowMs: 60_000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
+app.use('/v1', async (req, res, next) => {
+  if (!REQUIRE_APP_CHECK) return next();
+  const token = req.header('x-firebase-appcheck');
+  if (!token) return res.status(401).json({error: 'App Check required'});
+  try {
+    await admin.appCheck().verifyToken(token);
+    return next();
+  } catch {
+    return res.status(401).json({error: 'Invalid App Check token'});
+  }
+});
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 // GET /v1/search?q=term
 app.get('/v1/search', async (req, res) => {
   try {
-    const q = String(req.query.q || '').trim();
+    const q = parseQuery(req.query.q);
     const normalizedQuery = normalizeSearchText(q);
     const queryTokens = tokenizeQuery(q);
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const page = parseInteger(req.query.page, 1, 1, 10);
+    const limit = parseInteger(req.query.limit, 20, 1, 50);
     const offset = (page - 1) * limit;
 
-    const category = (req.query.category as string) || null;
-    const durationMin = parseInt(req.query.durationMin as string) || null;
-    const durationMax = parseInt(req.query.durationMax as string) || null;
-    const dateAfter = (req.query.dateAfter as string) || null;
-    const dateBefore = (req.query.dateBefore as string) || null;
-    const sortBy = (req.query.sortBy as string) || 'relevance';
+    const category = req.query.category ? String(req.query.category).trim() : null;
+    if (category && !/^[A-Za-z0-9 _-]{1,64}$/.test(category)) throw new Error('Invalid category filter');
+    const durationMin = req.query.durationMin === undefined
+      ? null
+      : parseInteger(req.query.durationMin, 0, 0, 86400);
+    const durationMax = req.query.durationMax === undefined
+      ? null
+      : parseInteger(req.query.durationMax, 86400, 0, 86400);
+    if (durationMin !== null && durationMax !== null && durationMin > durationMax) {
+      throw new Error('Invalid duration range');
+    }
+    const dateAfter = parseDateFilter(req.query.dateAfter);
+    const dateBefore = parseDateFilter(req.query.dateBefore);
+    if (dateAfter && dateBefore && dateAfter > dateBefore) throw new Error('Invalid date range');
+    const sortBy = String(req.query.sortBy || 'relevance');
+    if (!['relevance', 'views', 'likes', 'date'].includes(sortBy)) {
+      throw new Error('Invalid sort option');
+    }
 
     let firestoreQuery: any = db.collection('videos').where('isPublic', '==', true);
 
@@ -179,14 +235,14 @@ app.get('/v1/search', async (req, res) => {
       firestoreQuery = firestoreQuery.where(
         'createdAt',
         '>=',
-        admin.firestore.Timestamp.fromDate(new Date(dateAfter))
+        admin.firestore.Timestamp.fromDate(dateAfter)
       );
     }
     if (dateBefore) {
       firestoreQuery = firestoreQuery.where(
         'createdAt',
         '<=',
-        admin.firestore.Timestamp.fromDate(new Date(dateBefore))
+        admin.firestore.Timestamp.fromDate(dateBefore)
       );
     }
 
@@ -292,18 +348,23 @@ app.get('/v1/search', async (req, res) => {
         hasMore: rankedDocs.length > offset + items.length,
       },
     });
-  } catch (e: any) {
-    return res.status(500).json({ error: e?.message || 'internal' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Search failed';
+    if (message.startsWith('Invalid') || message.includes('too long')) {
+      return res.status(400).json({error: message});
+    }
+    console.error('Video search failed:', message);
+    return res.status(500).json({error: 'Search failed'});
   }
 });
 
 // GET /v1/search/channels?q=term
 app.get('/v1/search/channels', async (req, res) => {
   try {
-    const q = String(req.query.q || '').trim();
+    const q = parseQuery(req.query.q);
     const normalizedQuery = normalizeSearchText(q);
     const queryTokens = tokenizeQuery(q);
-    const limitCount = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const limitCount = parseInteger(req.query.limit, 20, 1, 50);
 
     if (!normalizedQuery) {
       return res.json({ items: [] });
@@ -346,16 +407,21 @@ app.get('/v1/search/channels', async (req, res) => {
       }));
 
     return res.json({ items: ranked });
-  } catch (e: any) {
-    return res.status(500).json({ error: e?.message || 'internal' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Channel search failed';
+    if (message.startsWith('Invalid') || message.includes('too long')) {
+      return res.status(400).json({error: message});
+    }
+    console.error('Channel search failed:', message);
+    return res.status(500).json({error: 'Channel search failed'});
   }
 });
 
 // GET /v1/suggest?q=te
 app.get('/v1/suggest', async (req, res) => {
   try {
-    const q = String(req.query.q || '').trim();
-    const limitCount = Math.min(parseInt(req.query.limit as string) || 8, 20);
+    const q = parseQuery(req.query.q);
+    const limitCount = parseInteger(req.query.limit, 8, 1, 20);
     const qLower = normalizeSearchText(q);
     const queryTokens = tokenizeQuery(q);
     if (!qLower) {
@@ -390,8 +456,13 @@ app.get('/v1/suggest', async (req, res) => {
     }
 
     return res.json({ suggestions: Array.from(suggestions).slice(0, limitCount) });
-  } catch (e: any) {
-    return res.status(500).json({ error: e?.message || 'internal' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Suggestions failed';
+    if (message.startsWith('Invalid') || message.includes('too long')) {
+      return res.status(400).json({error: message});
+    }
+    console.error('Suggestions failed:', message);
+    return res.status(500).json({error: 'Suggestions failed'});
   }
 });
 

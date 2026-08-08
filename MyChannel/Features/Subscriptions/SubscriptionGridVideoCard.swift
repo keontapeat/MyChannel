@@ -42,11 +42,13 @@ struct SubscriptionGridVideoCard: View {
 
     // MARK: - Thumbnail
     private var thumbnailView: some View {
+        // Container must use .fit — .fill inside ScrollView/LazyVGrid gets an
+        // unbounded height proposal and expands into a full-screen dark blob.
         ZStack(alignment: .bottom) {
             CachedAsyncImage(url: URL(string: video.thumbnailURL)) { image in
                 image
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .scaledToFill()
             } placeholder: {
                 Rectangle()
                     .fill(AppTheme.Colors.surface)
@@ -56,53 +58,55 @@ struct SubscriptionGridVideoCard: View {
                             .foregroundColor(AppTheme.Colors.textTertiary)
                     )
             }
-            .aspectRatio(16 / 9, contentMode: .fill)
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 10))
 
             // NEW badge top-left
             if isNew && !video.isLiveStream {
-                VStack {
-                    HStack {
-                        Text("NEW")
-                            .font(.system(size: 9, weight: .heavy))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(AppTheme.Colors.primary))
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .padding(6)
+                Text("NEW")
+                    .font(.system(size: 9, weight: .heavy))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(AppTheme.Colors.primary))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(6)
+            }
+
+            // Members-only lock badge
+            if video.isMembersOnly == true && AppConfig.Features.enableMembershipPerks {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(5)
+                    .background(Circle().fill(Color.black.opacity(0.75)))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(6)
             }
 
             // Duration / LIVE badge bottom-right
-            HStack {
-                Spacer()
-                Group {
-                    if video.isLiveStream {
-                        HStack(spacing: 3) {
-                            Circle().fill(Color.white).frame(width: 5, height: 5)
-                            Text("LIVE")
-                                .font(.system(size: 9, weight: .heavy))
-                        }
+            Group {
+                if video.isLiveStream {
+                    HStack(spacing: 3) {
+                        Circle().fill(Color.white).frame(width: 5, height: 5)
+                        Text("LIVE")
+                            .font(.system(size: 9, weight: .heavy))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.red))
+                } else if video.duration > 0 {
+                    Text(formatDuration(video.duration))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.red))
-                    } else if video.duration > 0 {
-                        Text(formatDuration(video.duration))
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(RoundedRectangle(cornerRadius: 4).fill(Color.black.opacity(0.82)))
-                    }
+                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.black.opacity(0.82)))
                 }
             }
-            .padding(6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .padding(6)
 
             // Continue-watching progress bar
             if progress > 0.01 {
@@ -120,6 +124,9 @@ struct SubscriptionGridVideoCard: View {
                 .padding(.bottom, 3)
             }
         }
+        .aspectRatio(16 / 9, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Info Stack

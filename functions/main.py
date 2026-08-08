@@ -1,6 +1,7 @@
 # Simple Firebase Functions for MyChannel
 from firebase_functions import firestore_fn, https_fn, scheduler_fn, options
-from firebase_admin import initialize_app, firestore, auth as admin_auth, messaging
+from firebase_admin import initialize_app, firestore, auth as admin_auth, app_check as admin_app_check, messaging
+import hashlib
 import logging
 from datetime import datetime, timezone, timedelta
 import os
@@ -28,44 +29,98 @@ def cache_headers_no_store() -> Dict[str, str]:
         "Vary": "Accept-Encoding",
         "Access-Control-Allow-Origin": "*",
     }
-# --- HTTPS: Report content (callable-like via POST) ---
+
+_REPORT_ALLOWED_ORIGINS = {
+    "https://mychannel.live",
+    "https://www.mychannel.live",
+    "http://localhost:3000",
+}
+
+def _report_headers(req: https_fn.Request) -> Dict[str, str]:
+    origin = (req.headers.get("Origin") or req.headers.get("origin") or "").rstrip("/")
+    headers = {"Cache-Control": "no-store", "Vary": "Origin"}
+    if origin in _REPORT_ALLOWED_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = origin
+    return headers
+
+# --- HTTPS: Report content (legacy authenticated endpoint) ---
 @https_fn.on_request(region="us-east1")
 def report_content(req: https_fn.Request) -> https_fn.Response:
-    """Report a video or user. Body: {type: 'video'|'user', id: string, reason: string}."""
+    """Create a deduplicated canonical video, Flick, or user report."""
+    headers = _report_headers(req)
     try:
-        if req.method == 'OPTIONS':
-            return https_fn.Response('', status=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization"})
-        # Verify Firebase Auth ID token from Authorization: Bearer <token>
-        auth_header = req.headers.get('Authorization') or req.headers.get('authorization') or ''
-        if not auth_header.lower().startswith('bearer '):
-            return https_fn.Response({'error': 'unauthorized'}, status=401, headers=cache_headers_no_store())
-        id_token = auth_header.split(' ', 1)[1].strip()
+        origin = (req.headers.get("Origin") or req.headers.get("origin") or "").rstrip("/")
+        if origin and origin not in _REPORT_ALLOWED_ORIGINS:
+            return https_fn.Response({"error": "origin_forbidden"}, status=403, headers=headers)
+        if req.method == "OPTIONS":
+            headers.update({
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Firebase-AppCheck",
+            })
+            return https_fn.Response("", status=204, headers=headers)
+        if req.method != "POST":
+            return https_fn.Response({"error": "method_not_allowed"}, status=405, headers=headers)
+
+        auth_header = req.headers.get("Authorization") or req.headers.get("authorization") or ""
+        if not auth_header.lower().startswith("bearer "):
+            return https_fn.Response({"error": "unauthorized"}, status=401, headers=headers)
         try:
-            decoded = admin_auth.verify_id_token(id_token)
-            reporter_uid = decoded.get('uid')
-            if not reporter_uid:
-                return https_fn.Response({'error': 'unauthorized'}, status=401, headers=cache_headers_no_store())
+            decoded = admin_auth.verify_id_token(auth_header.split(" ", 1)[1].strip())
+            reporter_uid = decoded.get("uid")
+            app_check_token = (
+                req.headers.get("X-Firebase-AppCheck")
+                or req.headers.get("x-firebase-appcheck")
+                or ""
+            )
+            if not reporter_uid or not app_check_token:
+                raise ValueError("missing attestation")
+            admin_app_check.verify_token(app_check_token)
         except Exception:
-            return https_fn.Response({'error': 'unauthorized'}, status=401, headers=cache_headers_no_store())
+            return https_fn.Response({"error": "unauthorized"}, status=401, headers=headers)
+
         data = req.get_json(silent=True) or {}
-        item_type = (data.get('type') or '').strip()
-        item_id = (data.get('id') or '').strip()
-        reason = (data.get('reason') or '').strip()
-        if not item_type or not item_id or not reason:
-            return https_fn.Response({'error': 'missing_fields'}, status=400, headers=cache_headers_no_store())
-        # Write to Firestore collection for moderation triage
-        doc = firestore.client().collection('reports').document()
-        doc.set({
-            'type': item_type,
-            'itemId': item_id,
-            'reason': reason,
-            'reporterUid': reporter_uid,
-            'createdAt': firestore.SERVER_TIMESTAMP,
+        item_type = str(data.get("type") or "").strip()
+        item_id = str(data.get("id") or "").strip()
+        reason = str(data.get("reason") or "").strip()
+        if item_type not in {"video", "flick", "user"}:
+            return https_fn.Response({"error": "invalid_type"}, status=400, headers=headers)
+        if not item_id or len(item_id) > 256 or not reason or len(reason) > 200:
+            return https_fn.Response({"error": "invalid_fields"}, status=400, headers=headers)
+
+        db = firestore.client()
+        target_collection = {
+            "video": "videos",
+            "flick": "flicks",
+            "user": "users",
+        }[item_type]
+        target = db.collection(target_collection).document(item_id).get()
+        if not target.exists:
+            return https_fn.Response({"error": "not_found"}, status=404, headers=headers)
+        target_data = target.to_dict() or {}
+        creator_id = (
+            target_data.get("creatorId") or target_data.get("userId") or item_id
+        )
+        report_id = hashlib.sha256(
+            f"{reporter_uid}\x1f{item_type}\x1f{item_id}".encode("utf-8")
+        ).hexdigest()
+        report_ref = db.collection("content_reports").document(report_id)
+        if report_ref.get().exists:
+            return https_fn.Response({"ok": True, "status": "existing"}, status=200, headers=headers)
+
+        report_ref.set({
+            "type": item_type,
+            "contentId": item_id,
+            "contentCreatorId": creator_id,
+            "reporterId": reporter_uid,
+            "reason": reason,
+            "status": "pending",
+            "reviewed": False,
+            "createdAt": firestore.SERVER_TIMESTAMP,
         })
-        return https_fn.Response({'ok': True}, status=200, headers={"Access-Control-Allow-Origin": "*"})
-    except Exception as e:
-        logging.exception('report_content error')
-        return https_fn.Response({'error': str(e)}, status=500, headers=cache_headers_no_store())
+        return https_fn.Response({"ok": True, "status": "created"}, status=201, headers=headers)
+    except Exception:
+        logging.exception("report_content error")
+        return https_fn.Response({"error": "internal"}, status=500, headers=headers)
 
 # --- HTTPS Proxies ---
 @https_fn.on_request(region="us-east1")
@@ -201,31 +256,10 @@ def on_video_view_created(event: firestore_fn.Event[firestore_fn.DocumentSnapsho
 @firestore_fn.on_document_created(document="flicks/{shortId}/events/{eventId}",
     region="us-east1")
 def on_short_event_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
-    try:
-        short_id = event.params["shortId"]
-        snap = event.data
-        data = snap.to_dict() if snap else {}
-        event_type = data.get("type") or data.get("eventType")
-        update_data = {"updatedAt": firestore.SERVER_TIMESTAMP}
-        if event_type == "view":
-            update_data["viewCount"] = firestore.Increment(1)
-            update_data["lastViewed"] = firestore.SERVER_TIMESTAMP
-            watch_time = int(data.get("watchTime") or data.get("watchDuration") or 0)
-            if watch_time > 0:
-                update_data["totalWatchTime"] = firestore.Increment(watch_time)
-        elif event_type == "like":
-            update_data["likeCount"] = firestore.Increment(1)
-        elif event_type == "unlike":
-            update_data["likeCount"] = firestore.Increment(-1)
-        elif event_type == "comment":
-            update_data["commentCount"] = firestore.Increment(1)
-        elif event_type == "share":
-            update_data["shareCount"] = firestore.Increment(1)
-        else:
-            return
-        db.collection('flicks').document(short_id).set(update_data, merge=True)
-    except Exception:
-        logging.exception('on_short_event_created')
+    """Compatibility no-op; story-functions owns semantic Flick aggregation."""
+    logging.info(
+        "on_short_event_created ignored; canonical trigger is story-functions"
+    )
 
 @firestore_fn.on_document_created(document="stories/{storyId}/events/{eventId}",
     region="us-east1")
@@ -259,20 +293,14 @@ def on_story_event_created(event: firestore_fn.Event[firestore_fn.DocumentSnapsh
 @firestore_fn.on_document_created(document="users/{creatorId}/subscribers/{uid}",
     region="us-east1")
 def on_subscribe_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
-    try:
-        creator = event.params['creatorId']
-        db.collection('users').document(creator).update({ 'subscribersCount': firestore.Increment(1) })
-    except Exception:
-        logging.exception('on_subscribe_created')
+    """Compatibility no-op; story-functions owns canonical subscription aggregation."""
+    logging.info('on_subscribe_created ignored; canonical trigger is story-functions')
 
 @firestore_fn.on_document_deleted(document="users/{creatorId}/subscribers/{uid}",
     region="us-east1")
 def on_subscribe_deleted(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
-    try:
-        creator = event.params['creatorId']
-        db.collection('users').document(creator).update({ 'subscribersCount': firestore.Increment(-1) })
-    except Exception:
-        logging.exception('on_subscribe_deleted')
+    """Compatibility no-op; story-functions owns canonical subscription aggregation."""
+    logging.info('on_subscribe_deleted ignored; canonical trigger is story-functions')
 
 
 # Toggle triggers to avoid first‑time Eventarc/Run propagation delays
@@ -646,43 +674,116 @@ def events_view(req: https_fn.Request) -> https_fn.Response:
 @firestore_fn.on_document_created(document="uploads/{uploadId}",
     region="us-east1")
 def on_upload_created_trigger(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) -> None:
-    """Start a transcode job when an upload record is created.
-    Expects uploads/{uploadId}: { videoId, ownerUid, sourcePath }
-    """
+    """Validate an upload marker and enqueue one authenticated transcode job."""
+    snap = event.data
+    data = snap.to_dict() or {}
+    upload_id = str(event.params.get("uploadId") or "").strip()
+    video_id = str(data.get("videoId") or "").strip()
+    owner_uid = str(data.get("ownerUid") or "").strip()
+    source_path = str(data.get("sourcePath") or "").strip()
+
+    def valid_id(value: str) -> bool:
+        return (0 < len(value) <= 128 and
+                all(char.isalnum() or char in {"_", "-"} for char in value))
+
+    if (upload_id != video_id or not valid_id(video_id) or not valid_id(owner_uid)):
+        logging.error("[transcode] rejected malformed upload marker %s", upload_id)
+        return
+
+    ingest_bucket = (os.environ.get("VIDEO_INGEST_BUCKET") or
+                     "mychannel-ca26d.firebasestorage.app").strip()
+    expected_source = (f"gs://{ingest_bucket}/temp_uploads/{owner_uid}/"
+                       f"{video_id}/source.mp4")
+    if source_path != expected_source:
+        logging.error("[transcode] rejected non-canonical source for %s", video_id)
+        return
+
+    db = firestore.client()
+    video_ref = db.collection("videos").document(video_id)
+    video = video_ref.get()
+    video_data = video.to_dict() or {}
+    canonical_owner = video_data.get("creatorId") or video_data.get("userId")
+    if (not video.exists or canonical_owner != owner_uid or
+            video_data.get("sourcePath") != source_path):
+        logging.error("[transcode] rejected marker without owned video %s", video_id)
+        return
+
+    # The marker is written only after Storage succeeds, so a missing or invalid
+    # object is terminal state corruption, not a dispatchable transcode job.
+    from firebase_admin import storage as admin_storage
+    source_object = f"temp_uploads/{owner_uid}/{video_id}/source.mp4"
+    source_blob = admin_storage.bucket(ingest_bucket).blob(source_object)
     try:
-        snap = event.data
-        data = snap.to_dict() or {}
-        video_id = data.get("videoId")
-        owner_uid = data.get("ownerUid")
-        source_path = data.get("sourcePath")
-        if not (video_id and owner_uid and source_path):
-            logging.warning("on_upload_created missing required fields")
+        if not source_blob.exists():
+            snap.reference.set({
+                "status": "rejected",
+                "failureReason": "missing_source_object",
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            }, merge=True)
+            logging.error("[transcode] missing source object for %s", video_id)
             return
-        # Mark video processing lifecycle status.
-        # NOTE: uses `processingStatus`, NOT `status` — `status` on this
-        # collection is owned by clients as a VISIBILITY value
-        # ('public'/'unlisted'/'private'/'scheduled'; see web-v2/app/upload).
-        # `processingStatus` is the transcode-pipeline lifecycle
-        # ('processing'/'ready'/'transcode_failed'/'duplicate'), a distinct
-        # field so neither producer stomps the other.
-        firestore.client().collection('videos').document(video_id).set({
-            'processingStatus': 'processing',
-            'updatedAt': firestore.SERVER_TIMESTAMP
-        }, merge=True)
-        # Integrate Transcoder API job creation
-        transcoder_url = os.environ.get('VIDEO_TRANSCODER_URL')
-        if transcoder_url:
-            try:
-                requests.post(
-                    f"{transcoder_url.rstrip('/')}/transcode",
-                    json={'videoId': video_id, 'sourcePath': source_path, 'ownerUid': owner_uid},
-                    timeout=10
-                )
-            except Exception:
-                logging.exception('[transcode] transcoder API call failed')
-        logging.info(f"[transcode] queued for {video_id} from {source_path}")
+        source_blob.reload()
     except Exception:
-        logging.exception('on_upload_created')
+        logging.exception("[transcode] could not validate source object for %s", video_id)
+        raise
+
+    source_size = int(source_blob.size or 0)
+    source_type = str(source_blob.content_type or "")
+    if (source_size <= 0 or source_size >= 2 * 1024 * 1024 * 1024 or
+            not source_type.startswith("video/")):
+        snap.reference.set({
+            "status": "rejected",
+            "failureReason": "invalid_source_object",
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+        logging.error("[transcode] invalid source metadata for %s", video_id)
+        return
+
+    transcoder_url = (os.environ.get("VIDEO_TRANSCODER_URL") or "").rstrip("/")
+    if not transcoder_url:
+        raise RuntimeError("VIDEO_TRANSCODER_URL is not configured")
+
+    try:
+        import google.auth.transport.requests as google_requests
+        from google.oauth2 import id_token as google_id_token
+
+        oidc_token = google_id_token.fetch_id_token(
+            google_requests.Request(), transcoder_url
+        )
+        response = requests.post(
+            f"{transcoder_url}/v1/transcode/start",
+            headers={
+                "Authorization": f"Bearer {oidc_token}",
+                "Content-Type": "application/json",
+                "X-Idempotency-Key": upload_id,
+            },
+            json={
+                "videoId": video_id,
+                "inputPath": source_path,
+                "qualities": ["360p", "720p", "1080p"],
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        response_data = response.json()
+        dispatch_status = str(response_data.get("status") or "queued")
+        if dispatch_status not in {"queued", "processing", "ready"}:
+            dispatch_status = "queued"
+
+        # The transcode service exclusively owns the video lifecycle. Updating
+        # only the marker prevents an Eventarc retry from regressing ready state.
+        snap.reference.set({
+            "status": dispatch_status,
+            "dispatchedAt": firestore.SERVER_TIMESTAMP,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+        logging.info("[transcode] accepted video %s in %s state", video_id,
+                     dispatch_status)
+    except Exception:
+        # Raising is intentional: Eventarc can retry transient auth/network/service
+        # failures, while the stable idempotency key prevents duplicate jobs.
+        logging.exception("[transcode] failed to queue video %s", video_id)
+        raise
 
 
 @firestore_fn.on_document_updated(document="videos/{videoId}",
@@ -725,30 +826,9 @@ def on_video_ready(event: firestore_fn.Event[firestore_fn.Change[firestore_fn.Do
             messaging.send(message)
         except Exception:
             logging.exception('[video_ready] fcm fanout')
-        # Fanout to subscribers' feeds collection: feeds/{uid}/items
-        try:
-            subs_ref = db.collection('users').document(owner_uid).collection('subscribers')
-            subs = subs_ref.limit(500).stream()
-            batch = db.batch()
-            count = 0
-            for sub in subs:
-                sub_uid = sub.id
-                feed_item = {
-                    'videoId': vid,
-                    'ownerUid': owner_uid,
-                    'title': video_after.get('title') or '',
-                    'thumb': (video_after.get('thumbnails', {}) or {}).get('default') or video_after.get('thumbnailURL', ''),
-                    'createdAt': firestore.SERVER_TIMESTAMP
-                }
-                feed_doc = db.collection('feeds').document(sub_uid).collection('items').document(vid)
-                batch.set(feed_doc, feed_item, merge=True)
-                count += 1
-                if count % 400 == 0:
-                    batch.commit(); batch = db.batch()
-            batch.commit()
-            logging.info(f"[video_ready] feed fanout items: {count}")
-        except Exception:
-            logging.exception('[video_ready] feed fanout')
+        # Subscriber feed delivery is owned by the durable paginated
+        # _notificationFanoutJobs worker in story-functions. Keeping a second
+        # capped writer here would race canonical fanout and truncate large channels.
         # Enqueue captions AI job via Pub/Sub if configured, else log
         try:
             pubsub_topic = os.environ.get('CAPTIONS_PUBSUB_TOPIC')
@@ -1196,150 +1276,72 @@ def _db():
 def deliver_push_on_notification_created(
     event: firestore_fn.Event[firestore_fn.DocumentSnapshot],
 ) -> None:
-    """Send a real FCM/APNs push whenever a notification doc is created."""
-    try:
-        snap = event.data
-        if not snap:
-            return
-        data = snap.to_dict() or {}
-
-        user_id: str = data.get("userId") or ""
-        title: str = data.get("title") or ""
-        body: str = data.get("message") or data.get("body") or ""
-        notif_type: str = data.get("type") or "general"
-        deep_link: str = data.get("deepLink") or ""
-        thumbnail_url: str = data.get("thumbnailURL") or ""
-
-        if not user_id or not title:
-            return
-
-        # Fetch FCM tokens stored in users/{uid}/fcmTokens/{token}
-        tokens_snap = (
-            _db()
-            .collection("users")
-            .document(user_id)
-            .collection("fcmTokens")
-            .stream()
-        )
-        tokens = [t.id for t in tokens_snap if t.id]
-        if not tokens:
-            return
-
-        # Build the multicast message
-        android_config = messaging.AndroidConfig(
-            priority="high",
-            notification=messaging.AndroidNotification(
-                title=title,
-                body=body,
-                image=thumbnail_url or None,
-                click_action="FLUTTER_NOTIFICATION_CLICK",
-                default_vibrate_timings=True,
-                default_sound=True,
-            ),
-            data={
-                "type": notif_type,
-                "deepLink": deep_link,
-                "notificationId": snap.id,
-            },
-        )
-        apns_config = messaging.APNSConfig(
-            payload=messaging.APNSPayload(
-                aps=messaging.Aps(
-                    alert=messaging.ApsAlert(title=title, body=body),
-                    badge=1,
-                    sound="default",
-                    content_available=True,
-                    mutable_content=True,
-                )
-            ),
-            headers={"apns-priority": "10"},
-        )
-
-        msg = messaging.MulticastMessage(
-            tokens=tokens[:500],  # FCM limit per call
-            notification=messaging.Notification(title=title, body=body),
-            android=android_config,
-            apns=apns_config,
-            data={
-                "type": notif_type,
-                "deepLink": deep_link,
-                "notificationId": snap.id,
-                "thumbnailURL": thumbnail_url,
-            },
-        )
-
-        response = messaging.send_each_for_multicast(msg)
-        logging.info(
-            f"[push] {response.success_count}/{len(tokens)} sent for user {user_id}"
-        )
-
-        # Clean up stale tokens (404 = unregistered device)
-        bad_tokens = []
-        for idx, r in enumerate(response.responses):
-            if not r.success and r.exception:
-                code = getattr(r.exception, "code", "")
-                if "registration-token-not-registered" in str(code).lower() or \
-                   "invalid-registration-token" in str(code).lower():
-                    bad_tokens.append(tokens[idx])
-
-        for bad in bad_tokens:
-            try:
-                _db().collection("users").document(user_id) \
-                     .collection("fcmTokens").document(bad).delete()
-            except Exception:
-                pass
-
-    except Exception:
-        logging.exception("deliver_push_on_notification_created")
+    """Compatibility no-op; story-functions owns durable push delivery jobs."""
+    logging.info(
+        "deliver_push_on_notification_created ignored; canonical worker is story-functions"
+    )
 
 
 @https_fn.on_request(region="us-east1")
 def register_fcm_token(req: https_fn.Request) -> https_fn.Response:
-    """
-    iOS/Android/Web call this after obtaining an FCM token.
-    Body: { token: string, platform: 'ios'|'android'|'web', deviceId?: string }
-    Auth: Bearer <Firebase ID token>
-    """
+    """Register one attested, authenticated device token in the canonical schema."""
+    headers = _report_headers(req)
     try:
+        origin = (req.headers.get("Origin") or req.headers.get("origin") or "").rstrip("/")
+        if origin and origin not in _REPORT_ALLOWED_ORIGINS:
+            return https_fn.Response({"error": "origin_forbidden"}, status=403, headers=headers)
         if req.method == "OPTIONS":
-            return https_fn.Response(
-                "", status=204,
-                headers={"Access-Control-Allow-Origin": "*",
-                         "Access-Control-Allow-Methods": "POST,OPTIONS",
-                         "Access-Control-Allow-Headers": "Content-Type,Authorization"},
-            )
+            headers.update({
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": (
+                    "Content-Type, Authorization, X-Firebase-AppCheck"
+                ),
+            })
+            return https_fn.Response("", status=204, headers=headers)
+        if req.method != "POST":
+            return https_fn.Response({"error": "method_not_allowed"}, status=405, headers=headers)
+
         auth_header = (req.headers.get("Authorization") or "").strip()
-        if not auth_header.lower().startswith("bearer "):
-            return https_fn.Response({"error": "unauthorized"}, status=401,
-                                     headers={"Access-Control-Allow-Origin": "*"})
-        id_token = auth_header.split(" ", 1)[1].strip()
-        decoded = admin_auth.verify_id_token(id_token)
-        uid = decoded["uid"]
+        app_check_token = (
+            req.headers.get("X-Firebase-AppCheck")
+            or req.headers.get("x-firebase-appcheck")
+            or ""
+        )
+        if not auth_header.lower().startswith("bearer ") or not app_check_token:
+            return https_fn.Response({"error": "unauthorized"}, status=401, headers=headers)
+        try:
+            decoded = admin_auth.verify_id_token(auth_header.split(" ", 1)[1].strip())
+            admin_app_check.verify_token(app_check_token)
+            uid = str(decoded.get("uid") or "")
+        except Exception:
+            return https_fn.Response({"error": "unauthorized"}, status=401, headers=headers)
+        if not uid:
+            return https_fn.Response({"error": "unauthorized"}, status=401, headers=headers)
 
         body = req.get_json(silent=True) or {}
-        token: str = (body.get("token") or "").strip()
-        platform: str = (body.get("platform") or "unknown").strip()
-        device_id: str = (body.get("deviceId") or token[:32]).strip()
+        token = str(body.get("token") or "").strip()
+        platform = str(body.get("platform") or "unknown").strip().lower()
+        if (
+            not token
+            or len(token) > 1500
+            or "/" in token
+            or platform not in {"ios", "android", "web", "unknown"}
+        ):
+            return https_fn.Response({"error": "invalid_fields"}, status=400, headers=headers)
 
-        if not token:
-            return https_fn.Response({"error": "missing token"}, status=400,
-                                     headers={"Access-Control-Allow-Origin": "*"})
-
-        # Store token — doc id IS the token (auto-deduplicates)
         _db().collection("users").document(uid) \
              .collection("fcmTokens").document(token).set({
                  "token": token,
                  "platform": platform,
-                 "deviceId": device_id,
+                 "active": True,
+                 "registeredAt": firestore.SERVER_TIMESTAMP,
                  "updatedAt": firestore.SERVER_TIMESTAMP,
-             }, merge=True)
+             })
 
-        return https_fn.Response({"ok": True}, status=200,
-                                 headers={"Access-Control-Allow-Origin": "*"})
-    except Exception as e:
+        return https_fn.Response({"ok": True}, status=200, headers=headers)
+    except Exception:
         logging.exception("register_fcm_token")
-        return https_fn.Response({"error": str(e)}, status=500,
-                                 headers={"Access-Control-Allow-Origin": "*"})
+        return https_fn.Response({"error": "internal"}, status=500, headers=headers)
 
 
 # =============================================================================
@@ -2144,6 +2146,41 @@ def extract_thumbnails_on_ready(
         db.collection("videos").document(video_id).set(update, merge=True)
         logging.info(f"[thumbnails] set {len(candidates)} candidates for {video_id}")
 
+        # 🔒 Frame moderation — this is the first point real decoded frames
+        # exist (sprite candidates from the Transcoder), so it runs here
+        # rather than at upload-creation time. Fails soft (see
+        # _classify_video_frames); never blocks thumbnail assignment above.
+        try:
+            frame_result = _classify_video_frames(candidates)
+            frame_score = frame_result["score"]
+            frame_violation = frame_result["violation_type"]
+            if frame_score >= _MOD_AUTO_FLAG_THRESHOLD and frame_violation:
+                creator_id = str(current.get("creatorId") or "")
+                title = str(current.get("title") or "")
+                creator_snap = (
+                    db.collection("users").document(creator_id).get()
+                    if creator_id else None
+                )
+                creator_name = (
+                    (creator_snap.to_dict() or {}).get("displayName")
+                    if creator_snap and creator_snap.exists else "Unknown"
+                )
+                _mod_write_content_flag(
+                    db, video_id, title, creator_id, creator_name or "Unknown",
+                    frame_violation, frame_score, candidates[0],
+                )
+                confidence = int(round(frame_score * 100))
+                if frame_score >= _MOD_AUTO_STRIKE_THRESHOLD and creator_id:
+                    _mod_auto_queue_strike(
+                        db, creator_id, title, frame_violation, confidence, candidates[0],
+                    )
+                logging.info(
+                    f"[moderation] video {video_id} frame-flagged: {frame_violation} "
+                    f"(score={frame_score}, confidence={confidence}%) — {frame_result['detail']}"
+                )
+        except Exception:
+            logging.exception("extract_thumbnails_on_ready frame moderation")
+
     except Exception:
         logging.exception("extract_thumbnails_on_ready")
 
@@ -2403,10 +2440,10 @@ def reset_daily_wager_limits(event: scheduler_fn.ScheduledEvent) -> None:
 
 
 # =============================================================================
-# L. SUBSCRIPTION FEED FANOUT
-# When a creator uploads, push to feeds/{subscriberId}/items/{videoId}.
-# This powers the "Subscriptions" tab with O(1) reads per user.
-# Handles up to 10K subscribers via batched writes.
+# L. SUBSCRIPTION FEED FANOUT (COMPATIBILITY TRIGGER)
+# Durable subscriber pagination is owned by story-functions through
+# _notificationFanoutJobs. This export remains temporarily so deployed Python
+# trigger names stay stable while old revisions drain.
 # =============================================================================
 
 @firestore_fn.on_document_updated(document="videos/{videoId}",
@@ -2414,83 +2451,22 @@ def reset_daily_wager_limits(event: scheduler_fn.ScheduledEvent) -> None:
 def fanout_to_subscription_feeds(
     event: firestore_fn.Event[firestore_fn.Change[firestore_fn.DocumentSnapshot]],
 ) -> None:
-    """
-    On video processingStatus → 'ready', push to all subscriber feeds.
-    Also removes from feeds when a video is made private.
-    """
-    try:
-        before = event.data.before.to_dict() or {}
-        after = event.data.after.to_dict() or {}
-        video_id = event.params["videoId"]
-
-        before_status = before.get("processingStatus")
-        after_status = after.get("processingStatus")
-        before_public = before.get("isPublic", True)
-        after_public = after.get("isPublic", True)
-
-        db = _db()
-
-        # Case 1: video just became ready → fanout to feeds
-        if before_status != "ready" and after_status == "ready" and after_public:
-            creator_id: str = after.get("creatorId") or ""
-            if not creator_id:
-                return
-
-            subs_snap = (
-                db.collection("users").document(creator_id)
-                  .collection("subscribers")
-                  .limit(10000)
-                  .stream()
-            )
-
-            feed_item = {
-                "videoId": video_id,
-                "creatorId": creator_id,
-                "title": after.get("title") or "",
-                "thumbnailURL": after.get("thumbnailURL") or "",
-                "duration": after.get("duration") or 0,
-                "createdAt": after.get("createdAt") or firestore.SERVER_TIMESTAMP,
-                "addedAt": firestore.SERVER_TIMESTAMP,
-            }
-
-            batch = db.batch()
-            n = 0
-            for sub_doc in subs_snap:
-                feed_ref = (
-                    db.collection("feeds")
-                      .document(sub_doc.id)
-                      .collection("items")
-                      .document(video_id)
-                )
-                batch.set(feed_ref, feed_item, merge=True)
-                n += 1
-                if n % 499 == 0:
-                    batch.commit()
-                    batch = db.batch()
-            batch.commit()
-            logging.info(f"[feed_fanout] pushed {video_id} to {n} feeds")
-
-        # Case 2: video made private → remove from all feeds
-        elif before_public and not after_public:
-            feeds_snap = (
-                db.collection_group("items")
-                  .where("videoId", "==", video_id)
-                  .limit(10000)
-                  .stream()
-            )
-            batch = db.batch()
-            n = 0
-            for feed_item_doc in feeds_snap:
-                batch.delete(feed_item_doc.reference)
-                n += 1
-                if n % 499 == 0:
-                    batch.commit()
-                    batch = db.batch()
-            batch.commit()
-            logging.info(f"[feed_fanout] removed private {video_id} from {n} feeds")
-
-    except Exception:
-        logging.exception("fanout_to_subscription_feeds")
+    """Compatibility no-op; canonical fanout runs in story-functions."""
+    before = event.data.before.to_dict() or {}
+    after = event.data.after.to_dict() or {}
+    became_ready = (
+        before.get("processingStatus") != "ready"
+        and after.get("processingStatus") == "ready"
+    )
+    became_private = (
+        before.get("isPublic", True)
+        and not after.get("isPublic", True)
+    )
+    if became_ready or became_private:
+        logging.info(
+            "[feed_fanout] delegated %s to story-functions",
+            event.params["videoId"],
+        )
 
 
 # =============================================================================
@@ -2977,6 +2953,86 @@ _MOD_HATE_IS_CRITICAL = True       # Any hate-speech hit is always critical
 def _mod_count_hits(text: str, terms: list) -> int:
     lower = text.lower()
     return sum(1 for term in terms if term in lower)
+
+
+def _mod_vision_likelihood_score(likelihood_name: str) -> float:
+    """Map a Cloud Vision Likelihood enum name to a 0.0–1.0 score."""
+    scale = {
+        "UNKNOWN": 0.0,
+        "VERY_UNLIKELY": 0.0,
+        "UNLIKELY": 0.15,
+        "POSSIBLE": 0.5,
+        "LIKELY": 0.8,
+        "VERY_LIKELY": 1.0,
+    }
+    return scale.get(str(likelihood_name), 0.0)
+
+
+def _classify_video_frames(thumbnail_urls: list) -> dict:
+    """Cloud Vision SafeSearch pass over up to 3 extracted video frames
+    (thumbnail sprite candidates). Mirrors the shape of _classify_video_text
+    so both feed the same contentFlags/strikeCases pipeline.
+
+    Uses SafeSearch `adult` + `violence` + `racy` likelihoods (Vision has no
+    direct hate-speech signal — that stays text-only). Fails soft: any
+    per-image or client-init error is logged and skipped, never raised, so a
+    Vision outage never blocks the upload pipeline."""
+    if not thumbnail_urls:
+        return {"score": 0.0, "violation_type": None, "detail": ""}
+
+    try:
+        from google.cloud import vision
+    except Exception:
+        logging.warning("[moderation] google-cloud-vision not installed, skipping frame scan")
+        return {"score": 0.0, "violation_type": None, "detail": ""}
+
+    try:
+        client = vision.ImageAnnotatorClient()
+    except Exception:
+        logging.exception("[moderation] Vision client init failed, skipping frame scan")
+        return {"score": 0.0, "violation_type": None, "detail": ""}
+
+    max_adult = 0.0
+    max_violence = 0.0
+    max_racy = 0.0
+    scanned = 0
+
+    for url in thumbnail_urls[:3]:
+        try:
+            image = vision.Image()
+            image.source.image_uri = url
+            response = client.safe_search_detection(image=image)
+            if response.error.message:
+                logging.warning(f"[moderation] Vision error for {url}: {response.error.message}")
+                continue
+            annotation = response.safe_search_annotation
+            max_adult = max(max_adult, _mod_vision_likelihood_score(annotation.adult.name))
+            max_violence = max(max_violence, _mod_vision_likelihood_score(annotation.violence.name))
+            max_racy = max(max_racy, _mod_vision_likelihood_score(annotation.racy.name))
+            scanned += 1
+        except Exception:
+            logging.exception(f"[moderation] Vision frame scan failed for {url}")
+            continue
+
+    if scanned == 0:
+        return {"score": 0.0, "violation_type": None, "detail": ""}
+
+    # Weighted same as the text classifier's severity ordering: violence > adult > racy.
+    score = min(max_violence * 0.9 + max_adult * 0.7 + max_racy * 0.35, 1.0)
+
+    violation_type = None
+    detail = ""
+    if max_violence >= 0.5:
+        violation_type = "graphic_violence"
+        detail = f"Vision SafeSearch violence likelihood score {max_violence:.2f}"
+    elif max_adult >= 0.5:
+        violation_type = "adult_content"
+        detail = f"Vision SafeSearch adult likelihood score {max_adult:.2f}"
+    elif max_racy >= 0.8:
+        violation_type = "adult_content"
+        detail = f"Vision SafeSearch racy likelihood score {max_racy:.2f}"
+
+    return {"score": round(score, 2), "violation_type": violation_type, "detail": detail}
 
 
 def _classify_video_text(title: str, description: str) -> dict:
@@ -3691,15 +3747,8 @@ def on_clip_created(event: firestore_fn.Event[firestore_fn.DocumentSnapshot]) ->
 def on_subscription_created(
     event: firestore_fn.Event[firestore_fn.DocumentSnapshot]
 ) -> None:
-    """Increment subscriberCount on the channel being subscribed to."""
-    try:
-        channel_id = event.params["channelId"]
-        firestore.client().collection('users').document(channel_id).set(
-            {'subscriberCount': firestore.Increment(1), 'updatedAt': firestore.SERVER_TIMESTAMP},
-            merge=True
-        )
-    except Exception:
-        logging.exception('on_subscription_created')
+    """Compatibility no-op; story-functions owns canonical subscription aggregation."""
+    logging.info('on_subscription_created ignored; canonical trigger is story-functions')
 
 
 @firestore_fn.on_document_deleted(
@@ -3709,15 +3758,8 @@ def on_subscription_created(
 def on_subscription_deleted(
     event: firestore_fn.Event[firestore_fn.DocumentSnapshot]
 ) -> None:
-    """Decrement subscriberCount on the channel being unsubscribed from."""
-    try:
-        channel_id = event.params["channelId"]
-        firestore.client().collection('users').document(channel_id).set(
-            {'subscriberCount': firestore.Increment(-1), 'updatedAt': firestore.SERVER_TIMESTAMP},
-            merge=True
-        )
-    except Exception:
-        logging.exception('on_subscription_deleted')
+    """Compatibility no-op; story-functions owns canonical subscription aggregation."""
+    logging.info('on_subscription_deleted ignored; canonical trigger is story-functions')
 
 
 # =============================================================================

@@ -3,52 +3,46 @@
 //  MyChannel
 //
 //  Artist earnings dashboard + Stripe Connect onboarding.
-//  Drop in STRIPE_CONNECT_CLIENT_ID when Stripe setup is complete.
 //
 
 import SwiftUI
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
-#if canImport(FirebaseAuth)
-import FirebaseAuth
-#endif
-
-// Stripe Connect onboarding is now handled server-side via the
-// createConnectOnboardingLink Cloud Function (no client secret needed).
-private let STRIPE_PAYOUT_RATE: Double = 0.004 // $0.004 per stream
 
 struct ArtistEarningsView: View {
     let artistId: String
     let artistName: String
 
-    @State private var streamStats: StreamStats? = nil
+    @State private var balance: MusicAvailableBalance?
+    @State private var streamsAllTime = 0
+    @State private var lifetimePaidCents = 0
     @State private var payoutHistory: [PayoutRecord] = []
     @State private var isLoading = true
-    @State private var stripeConnected = false
-    @State private var showStripeOnboarding = false
     @State private var showWithdrawSheet = false
-
-    struct StreamStats {
-        let streamsThisMonth: Int
-        let streamsAllTime: Int
-        let estimatedMonthlyPayout: Double
-        let lifetimeEarnings: Double
-        let pendingPayout: Double
-    }
+    @State private var errorMessage: String?
+    @State private var onboardingError: String?
 
     struct PayoutRecord: Identifiable {
         let id: String
-        let amount: Double
+        let amountCents: Int
+        let totalGrossCents: Int
         let streams: Int
         let periodLabel: String
-        let paidAt: Date
-        let status: String
+        let occurredAt: Date
+        let status: MusicPayoutStatus
     }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
+                }
                 earningsSummaryCard
                 streamBreakdownCard
                 payoutSetupCard
@@ -64,8 +58,11 @@ struct ArtistEarningsView: View {
         .sheet(isPresented: $showWithdrawSheet) {
             WithdrawSheet(
                 artistId: artistId,
-                pendingAmount: streamStats?.pendingPayout ?? 0,
-                stripeConnected: stripeConnected
+                amountCents: balance?.amountCents ?? 0,
+                minimumPayoutCents: balance?.minimumPayoutCents ?? 0,
+                isReadyForPayout: balance?.isReadyForPayout ?? false,
+                payoutAccountReady: balance?.payoutAccountReady ?? false,
+                standardDelivery: balance?.standardDelivery ?? ""
             )
         }
     }
@@ -83,31 +80,31 @@ struct ArtistEarningsView: View {
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Estimated Earnings")
+                    Text("Available Earnings")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.white.opacity(0.8))
 
                     if isLoading {
                         ProgressView().tint(.white)
                     } else {
-                        Text(formatCurrency(streamStats?.lifetimeEarnings ?? 0))
+                        Text(formatUSDCents(balance?.amountCents ?? 0))
                             .font(.system(size: 38, weight: .bold))
                             .foregroundColor(.white)
 
                         HStack(spacing: 20) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("This Month")
+                                Text("Gross Pending")
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundColor(.white.opacity(0.7))
-                                Text(formatCurrency(streamStats?.estimatedMonthlyPayout ?? 0))
+                                Text(formatUSDCents(balance?.totalGrossCents ?? 0))
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundColor(.white)
                             }
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Pending")
+                                Text("Lifetime Paid")
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundColor(.white.opacity(0.7))
-                                Text(formatCurrency(streamStats?.pendingPayout ?? 0))
+                                Text(formatUSDCents(lifetimePaidCents))
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundColor(.white)
                             }
@@ -120,7 +117,7 @@ struct ArtistEarningsView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.down.circle.fill")
-                            Text(stripeConnected ? "Withdraw" : "Set Up Payouts")
+                            Text(balance?.payoutAccountReady == true ? "Withdraw" : "Set Up Payouts")
                                 .font(.system(size: 14, weight: .semibold))
                         }
                         .foregroundColor(AppTheme.Colors.primary)
@@ -146,14 +143,14 @@ struct ArtistEarningsView: View {
             HStack(spacing: 12) {
                 streamStatTile(
                     icon: "waveform",
-                    label: "This Month",
-                    value: formatNumber(streamStats?.streamsThisMonth ?? 0),
+                    label: "Unpaid",
+                    value: formatNumber(balance?.ownerStreams ?? 0),
                     color: AppTheme.Colors.primary
                 )
                 streamStatTile(
                     icon: "chart.bar.fill",
                     label: "All Time",
-                    value: formatNumber(streamStats?.streamsAllTime ?? 0),
+                    value: formatNumber(streamsAllTime),
                     color: .green
                 )
             }
@@ -162,7 +159,7 @@ struct ArtistEarningsView: View {
                 Image(systemName: "info.circle")
                     .font(.system(size: 12))
                     .foregroundColor(AppTheme.Colors.textSecondary)
-                Text("Rate: $\(String(format: "%.4f", STRIPE_PAYOUT_RATE)) per stream. Paid monthly via Stripe.")
+                Text("Qualified plays, collaborator splits, and payout amounts are calculated by the backend.")
                     .font(.system(size: 12))
                     .foregroundColor(AppTheme.Colors.textSecondary)
             }
@@ -174,17 +171,18 @@ struct ArtistEarningsView: View {
     }
 
     private var payoutSetupCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let payoutAccountReady = balance?.payoutAccountReady == true
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: stripeConnected ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                Image(systemName: payoutAccountReady ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
                     .font(.system(size: 18))
-                    .foregroundColor(stripeConnected ? .green : .orange)
-                Text(stripeConnected ? "Stripe Connected" : "Connect Stripe to Get Paid")
+                    .foregroundColor(payoutAccountReady ? .green : .orange)
+                Text(payoutAccountReady ? "Stripe Ready for Payouts" : "Connect Stripe to Get Paid")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(AppTheme.Colors.textPrimary)
             }
 
-            if !stripeConnected {
+            if !payoutAccountReady {
                 Text("Connect your Stripe account to receive monthly payouts directly to your bank account. Takes 2 minutes.")
                     .font(.system(size: 13))
                     .foregroundColor(AppTheme.Colors.textSecondary)
@@ -206,12 +204,19 @@ struct ArtistEarningsView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 
+                if let onboardingError {
+                    Text(onboardingError)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+
                 Text("Powered by Stripe Connect — bank-level security")
                     .font(.system(size: 11))
                     .foregroundColor(AppTheme.Colors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .center)
             } else {
-                Text("Payouts are sent automatically to your linked bank on the 1st of each month.")
+                Text("Your account is fully connected with charges and payouts enabled.")
                     .font(.system(size: 13))
                     .foregroundColor(AppTheme.Colors.textSecondary)
             }
@@ -237,7 +242,7 @@ struct ArtistEarningsView: View {
                     Text("No payouts yet")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(AppTheme.Colors.textSecondary)
-                    Text("Your first payout will appear here once you hit the minimum threshold of $10.")
+                    Text("Your first payout will appear after the available balance reaches \(formatUSDCents(balance?.minimumPayoutCents ?? 0)).")
                         .font(.system(size: 13))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                         .multilineTextAlignment(.center)
@@ -252,8 +257,8 @@ struct ArtistEarningsView: View {
                             .fill(AppTheme.Colors.surface)
                             .frame(width: 44, height: 44)
                             .overlay(
-                                Image(systemName: payout.status == "paid" ? "checkmark.circle.fill" : "clock.fill")
-                                    .foregroundColor(payout.status == "paid" ? .green : .orange)
+                                Image(systemName: payout.status == .paid ? "checkmark.circle.fill" : "clock.fill")
+                                    .foregroundColor(payout.status == .paid ? .green : .orange)
                             )
                         VStack(alignment: .leading, spacing: 2) {
                             Text(payout.periodLabel)
@@ -265,12 +270,12 @@ struct ArtistEarningsView: View {
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(formatCurrency(payout.amount))
+                            Text(formatUSDCents(payout.amountCents))
                                 .font(.system(size: 15, weight: .bold))
                                 .foregroundColor(AppTheme.Colors.primary)
-                            Text(payout.status.capitalized)
+                            Text(payoutStatusLabel(payout.status))
                                 .font(.system(size: 11))
-                                .foregroundColor(payout.status == "paid" ? .green : .orange)
+                                .foregroundColor(payout.status == .paid ? .green : .orange)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -327,45 +332,41 @@ struct ArtistEarningsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func formatCurrency(_ amount: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+    private func formatNumber(_ number: Int) -> String {
+        if number >= 1_000_000 { return String(format: "%.1fM", Double(number) / 1_000_000) }
+        if number >= 1_000 { return String(format: "%.1fK", Double(number) / 1_000) }
+        return "\(number)"
     }
 
-    private func formatNumber(_ n: Int) -> String {
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
-        if n >= 1_000 { return String(format: "%.1fK", Double(n) / 1_000) }
-        return "\(n)"
+    private func payoutStatusLabel(_ status: MusicPayoutStatus) -> String {
+        switch status {
+        case .paid: return "Paid"
+        case .partiallyPaid: return "Partially Paid"
+        case .owed: return "Owed"
+        }
     }
 
     private func openStripeOnboarding() {
-        // Ask the backend to create (or reuse) an Express account and return a
-        // hosted onboarding link. No client secret or client_id lives in the app.
+        onboardingError = nil
+        guard let refreshURL = URL(string: "https://mychannel.live/stripe/refresh"),
+              let returnURL = URL(string: "https://mychannel.live/stripe/return") else {
+            onboardingError = "Payout onboarding is temporarily unavailable."
+            return
+        }
+
         Task {
-            guard let url = URL(string: "\(AppConfig.API.musicPayoutsBaseURL)/createConnectOnboardingLink") else { return }
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            // 🔐 Authenticated request — backend verifies the caller owns this artistId.
-            guard let token = try? await AuthTokenProvider.idToken() else { return }
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            let body: [String: Any] = [
-                "artistId": artistId,
-                "returnUrl": "mychannel://stripe-connect/return",
-                "refreshUrl": "mychannel://stripe-connect/refresh"
-            ]
-            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
             do {
-                let (data, _) = try await URLSession.shared.data(for: request)
-                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let link = json["url"] as? String,
-                   let onboardURL = URL(string: link) {
-                    await MainActor.run { UIApplication.shared.open(onboardURL) }
+                let link = try await MusicAPIClient.shared.createConnectOnboardingLink(
+                    artistId: artistId,
+                    email: nil,
+                    refreshURL: refreshURL,
+                    returnURL: returnURL
+                )
+                await MainActor.run {
+                    UIApplication.shared.open(link.url)
                 }
             } catch {
-                // Surface nothing destructive; the card stays in "connect" state.
+                onboardingError = error.localizedDescription
             }
         }
     }
@@ -374,66 +375,78 @@ struct ArtistEarningsView: View {
 
     private func loadEarnings() async {
         isLoading = true
-        #if canImport(FirebaseFirestore) && canImport(FirebaseAuth)
-        let db = Firestore.firestore()
-        let uid = Auth.auth().currentUser?.uid ?? artistId
+        errorMessage = nil
+        defer { isLoading = false }
 
         do {
-            let snapshot = try await db.collection("music_tracks")
-                .whereField("artistId", isEqualTo: uid)
+            balance = try await MusicAPIClient.shared.getAvailableBalance(artistId: artistId)
+        } catch {
+            balance = nil
+            errorMessage = error.localizedDescription
+        }
+
+        #if canImport(FirebaseFirestore)
+        do {
+            let database = Firestore.firestore()
+            let tracks = try await database.collection("music_tracks")
+                .whereField("artistId", isEqualTo: artistId)
                 .getDocuments()
-
-            let allTime = snapshot.documents.reduce(0) { $0 + ((($1.data()["streamCount"] as? Int) ?? 0)) }
-            let thisMonth = Int(Double(allTime) * 0.15) // approximate monthly share
-
-            let payoutDocs = try await db.collection("artist_payouts")
-                .whereField("artistId", isEqualTo: uid)
-                .order(by: "paidAt", descending: true)
-                .limit(to: 20)
-                .getDocuments()
-
-            let records = payoutDocs.documents.compactMap { doc -> PayoutRecord? in
-                let d = doc.data()
-                guard let amount = d["amount"] as? Double,
-                      let streams = d["streams"] as? Int,
-                      let period = d["periodLabel"] as? String,
-                      let status = d["status"] as? String,
-                      let ts = d["paidAt"] as? Timestamp else { return nil }
-                return PayoutRecord(id: doc.documentID, amount: amount, streams: streams,
-                                    periodLabel: period, paidAt: ts.dateValue(), status: status)
+            streamsAllTime = tracks.documents.reduce(0) { partial, document in
+                partial + (nonNegativeInteger(document.data()["streamCount"]) ?? 0)
             }
 
-            let paidTotal = records.filter { $0.status == "paid" }.reduce(0.0) { $0 + $1.amount }
-            let pending = Double(thisMonth) * STRIPE_PAYOUT_RATE
-
-            let stripeDoc = try? await db.collection("artist_stripe").document(uid).getDocument()
-            let connected = stripeDoc?.data()?["connected"] as? Bool ?? false
-
-            await MainActor.run {
-                streamStats = StreamStats(
-                    streamsThisMonth: thisMonth,
-                    streamsAllTime: allTime,
-                    estimatedMonthlyPayout: Double(thisMonth) * STRIPE_PAYOUT_RATE,
-                    lifetimeEarnings: paidTotal,
-                    pendingPayout: pending
+            let payoutDocuments = try await database.collection("artist_payouts")
+                .whereField("artistId", isEqualTo: artistId)
+                .limit(to: 50)
+                .getDocuments()
+            let records: [PayoutRecord] = payoutDocuments.documents.compactMap { document in
+                let data = document.data()
+                guard let amountCents = nonNegativeInteger(data["amountCents"]),
+                      let totalGrossCents = nonNegativeInteger(data["totalGrossCents"]),
+                      totalGrossCents >= amountCents,
+                      let statusValue = data["status"] as? String,
+                      let status = MusicPayoutStatus(rawValue: statusValue),
+                      let timestamp = (data["paidAt"] as? Timestamp)
+                        ?? (data["updatedAt"] as? Timestamp)
+                        ?? (data["createdAt"] as? Timestamp) else { return nil }
+                return PayoutRecord(
+                    id: document.documentID,
+                    amountCents: amountCents,
+                    totalGrossCents: totalGrossCents,
+                    streams: nonNegativeInteger(data["streams"]) ?? 0,
+                    periodLabel: data["periodLabel"] as? String ?? "Music payout",
+                    occurredAt: timestamp.dateValue(),
+                    status: status
                 )
-                payoutHistory = records
-                stripeConnected = connected
-                isLoading = false
+            }
+            payoutHistory = records.sorted { $0.occurredAt > $1.occurredAt }.prefix(20).map { $0 }
+            lifetimePaidCents = payoutHistory.reduce(0) { total, record in
+                switch record.status {
+                case .paid, .partiallyPaid: return total + record.amountCents
+                case .owed: return total
+                }
             }
         } catch {
-            await MainActor.run {
-                streamStats = StreamStats(streamsThisMonth: 0, streamsAllTime: 0,
-                                          estimatedMonthlyPayout: 0, lifetimeEarnings: 0, pendingPayout: 0)
-                isLoading = false
-            }
+            payoutHistory = []
+            streamsAllTime = 0
+            lifetimePaidCents = 0
+            errorMessage = error.localizedDescription
         }
         #else
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        streamStats = StreamStats(streamsThisMonth: 2_340, streamsAllTime: 18_450,
-                                  estimatedMonthlyPayout: 9.36, lifetimeEarnings: 73.80, pendingPayout: 9.36)
-        isLoading = false
+        payoutHistory = []
+        streamsAllTime = 0
+        lifetimePaidCents = 0
         #endif
+    }
+
+    private func nonNegativeInteger(_ value: Any?) -> Int? {
+        if let integer = value as? Int, integer >= 0 { return integer }
+        if let integer = value as? Int64,
+           integer >= 0,
+           integer <= Int64(Int.max) {
+            return Int(integer)
+        }
+        return nil
     }
 }
 
@@ -441,69 +454,34 @@ struct ArtistEarningsView: View {
 
 private struct WithdrawSheet: View {
     let artistId: String
-    let pendingAmount: Double
-    let stripeConnected: Bool
+    let amountCents: Int
+    let minimumPayoutCents: Int
+    let isReadyForPayout: Bool
+    let payoutAccountReady: Bool
+    let standardDelivery: String
+
     @Environment(\.dismiss) private var dismiss
     @State private var isRequesting = false
     @State private var resultMessage: String?
-    @State private var didSucceed = false
+    @State private var resultStatus: MusicPayoutStatus?
+    @State private var didComplete = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                Image(systemName: stripeConnected ? "banknote.fill" : "exclamationmark.triangle.fill")
+                Image(systemName: payoutAccountReady ? "banknote.fill" : "exclamationmark.triangle.fill")
                     .font(.system(size: 48))
-                    .foregroundColor(stripeConnected ? AppTheme.Colors.primary : .orange)
+                    .foregroundColor(payoutAccountReady ? AppTheme.Colors.primary : .orange)
                     .padding(.top, 32)
 
-                if stripeConnected {
-                    Text("Withdraw \(formatCurrency(pendingAmount))")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-
-                    Text("Funds will be sent to your connected bank account within 2–3 business days. Collaborator splits are paid out automatically.")
-                        .font(.system(size: 14))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-
-                    if let resultMessage {
-                        Text(resultMessage)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(didSucceed ? .green : .red)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
-                    }
-
-                    Button {
-                        HapticManager.shared.impact(style: .medium)
-                        Task { await requestPayout() }
-                    } label: {
-                        HStack {
-                            if isRequesting { ProgressView().tint(.white) }
-                            Text(didSucceed ? "Payout Requested" : "Request Payout")
-                                .font(.system(size: 16, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(pendingAmount >= 10 && !didSucceed ? AppTheme.Colors.primary : Color.gray)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .disabled(pendingAmount < 10 || isRequesting || didSucceed)
-                    .padding(.horizontal, 24)
-
-                    if pendingAmount < 10 {
-                        Text("Minimum withdrawal is $10.00")
-                            .font(.system(size: 12))
-                            .foregroundColor(.orange)
-                    }
+                if payoutAccountReady {
+                    payoutContent
                 } else {
                     Text("Connect Stripe First")
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(AppTheme.Colors.textPrimary)
 
-                    Text("You need to connect a Stripe account before you can withdraw earnings.")
+                    Text("Stripe must be fully connected with charges and payouts enabled before withdrawing.")
                         .font(.system(size: 14))
                         .foregroundColor(AppTheme.Colors.textSecondary)
                         .multilineTextAlignment(.center)
@@ -523,46 +501,114 @@ private struct WithdrawSheet: View {
         }
     }
 
+    private var payoutContent: some View {
+        Group {
+            Text("Withdraw \(formatUSDCents(amountCents))")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+
+            Text("The backend will settle the owner share and collaborator splits. \(standardDelivery)")
+                .font(.system(size: 14))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            if let resultMessage {
+                Text(resultMessage)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(resultColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
+
+            Button {
+                HapticManager.shared.impact(style: .medium)
+                Task { await requestPayout() }
+            } label: {
+                HStack {
+                    if isRequesting { ProgressView().tint(.white) }
+                    Text(didComplete ? "Payout Processed" : "Request Payout")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    isReadyForPayout && !didComplete ? AppTheme.Colors.primary : Color.gray
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .disabled(!isReadyForPayout || isRequesting || didComplete)
+            .padding(.horizontal, 24)
+
+            if !isReadyForPayout {
+                Text(minimumMessage)
+                    .font(.system(size: 12))
+                    .foregroundColor(.orange)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
+    private var minimumMessage: String {
+        guard minimumPayoutCents > 0 else {
+            return "Payout readiness is unavailable. Close and refresh earnings."
+        }
+        return "Minimum withdrawal is \(formatUSDCents(minimumPayoutCents))."
+    }
+
+    private var resultColor: Color {
+        switch resultStatus {
+        case .paid: return .green
+        case .partiallyPaid, .owed: return .orange
+        case nil: return .red
+        }
+    }
+
     private func requestPayout() async {
-        guard !isRequesting else { return }
+        guard !isRequesting, isReadyForPayout else { return }
         isRequesting = true
         resultMessage = nil
+        resultStatus = nil
         defer { isRequesting = false }
 
-        guard let url = URL(string: "\(AppConfig.API.musicPayoutsBaseURL)/requestPayout") else { return }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // 🔐 Authenticated request — backend verifies the caller owns this artistId.
-        guard let token = try? await AuthTokenProvider.idToken() else {
-            resultMessage = "Please sign in again to request a payout."
-            return
-        }
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "artistId": artistId,
-            "payoutType": "standard"
-        ])
-
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            if let success = json?["success"] as? Bool, success {
-                didSucceed = true
-                resultMessage = "Payout on the way. Splits sent to all collaborators."
+            let result = try await MusicAPIClient.shared.requestPayout(
+                artistId: artistId,
+                payoutType: "standard"
+            )
+            resultStatus = result.status
+            switch result.status {
+            case .paid:
+                didComplete = true
+                resultMessage = "Payout sent successfully."
                 HapticManager.shared.notification(type: .success)
-            } else {
-                resultMessage = (json?["message"] as? String) ?? (json?["error"] as? String) ?? "Payout could not be processed."
+            case .partiallyPaid:
+                didComplete = true
+                let owedCents = result.splits?
+                    .filter { $0.status == .owed }
+                    .reduce(0) { $0 + $1.amountCents } ?? 0
+                resultMessage = "Your payout was sent. \(formatUSDCents(owedCents)) in collaborator shares remains owed until those accounts are ready."
+                HapticManager.shared.notification(type: .success)
+            case .owed:
+                didComplete = true
+                let owedCents = result.splits?
+                    .filter { $0.status == .owed }
+                    .reduce(0) { $0 + $1.amountCents } ?? 0
+                resultMessage = "No transfer was sent; \(formatUSDCents(owedCents)) was recorded as owed."
+            case nil:
+                resultMessage = result.message ?? "Payout could not be processed."
             }
         } catch {
-            resultMessage = "Network error. Please try again."
+            resultMessage = error.localizedDescription
         }
     }
+}
 
-    private func formatCurrency(_ amount: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
-    }
+private func formatUSDCents(_ cents: Int) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .currency
+    formatter.currencyCode = "USD"
+    let amount = Decimal(cents) / Decimal(100)
+    return formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "USD \(cents)¢"
 }

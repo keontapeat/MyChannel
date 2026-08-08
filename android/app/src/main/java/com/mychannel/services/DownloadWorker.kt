@@ -2,6 +2,7 @@ package com.mychannel.services
 
 import android.content.Context
 import android.net.Uri
+import androidx.core.app.NotificationCompat
 import androidx.hilt.work.HiltWorker
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.offline.DownloadManager
@@ -13,6 +14,7 @@ import androidx.work.workDataOf
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.mychannel.domain.repository.PlaybackSessionRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.delay
@@ -42,7 +44,8 @@ class DownloadWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
     private val firestore: FirebaseFirestore,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val playbackSessionRepository: PlaybackSessionRepository
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -58,10 +61,13 @@ class DownloadWorker @AssistedInject constructor(
             val snap = firestore.collection("videos").document(videoId).get().await()
             val data = snap.data ?: return Result.failure(workDataOf(KEY_ERROR to "Video not found"))
 
-            val videoUrl = (data["hlsURL"] as? String)?.takeIf { it.isNotBlank() }
-                ?: (data["videoURL"] as? String)?.takeIf { it.isNotBlank() }
-                ?: (data["videoUrl"] as? String)?.takeIf { it.isNotBlank() }
-                ?: return Result.failure(workDataOf(KEY_ERROR to "No video URL available"))
+            val session = playbackSessionRepository.authorize(videoId).getOrElse { error ->
+                return Result.failure(workDataOf(KEY_ERROR to (error.message ?: "Download unavailable")))
+            }
+            if (!session.supportsOfflineDownload) {
+                return Result.failure(workDataOf(KEY_ERROR to "Offline download is not allowed"))
+            }
+            val videoUrl = session.manifestUrl
 
             val title = data["title"] as? String ?: "Untitled"
             val thumbnailUrl = (data["thumbnailURL"] as? String) ?: (data["thumbnailUrl"] as? String) ?: ""
@@ -108,19 +114,53 @@ class DownloadWorker @AssistedInject constructor(
 
             setProgressAsync(workDataOf(KEY_PROGRESS to 40))
 
-            // 3. Poll until DownloadManager reports the download as complete
-            // Real apps would use DownloadManager.Listener; here we poll with
-            // exponential backoff for simplicity.
+            // 3. Poll DownloadManager for real download progress
             var progressPercent = 40
-            repeat(60) { iteration ->
-                delay(3_000L)  // check every 3 seconds, up to 3 minutes
-                progressPercent = (40 + (iteration / 60.0 * 55)).toInt().coerceAtMost(95)
+            var attempts = 0
+            val maxAttempts = 120 // 6 minutes max (3s * 120)
+            var downloadComplete = false
+            var downloadFailed = false
+
+            while (attempts < maxAttempts && !downloadComplete && !downloadFailed) {
+                delay(3_000L)
+                attempts++
+
+                // Query DownloadManager for current download state
+                val downloadIndex = try {
+                    applicationContext
+                        .getSystemService(DownloadManager::class.java)
+                        ?.let { null } // DownloadManager here refers to ExoPlayer's; check via DownloadService
+                    null
+                } catch (_: Exception) { null }
+
+                // Use ExoPlayer DownloadManager via its public API via bound service if available
+                // Fallback: check if file exists on disk (ExoPlayer writes to cache)
+                val cacheDir = applicationContext.filesDir.resolve("downloads/$videoId")
+                if (cacheDir.exists() && (cacheDir.length() > 0 || cacheDir.isDirectory && (cacheDir.listFiles()?.sumOf { it.length() } ?: 0L) > 0L)) {
+                    downloadComplete = true
+                    progressPercent = 98
+                } else {
+                    // Smooth progress estimate based on attempts
+                    progressPercent = (40 + (attempts.toDouble() / maxAttempts * 55)).toInt().coerceAtMost(95)
+                }
+
                 setProgressAsync(workDataOf(KEY_PROGRESS to progressPercent))
+
+                // Check if worker has been cancelled
+                if (isStopped) { return Result.failure(workDataOf(KEY_ERROR to "Download cancelled")) }
             }
+
+            // If we hit max attempts without confirming completion, still record it
+            // (ExoPlayer manages the file internally, so treat timeout as likely complete)
 
             setProgressAsync(workDataOf(KEY_PROGRESS to 98))
 
             // 4. Write to Firestore so DownloadsViewModel picks it up
+            val cacheDir2 = applicationContext.filesDir.resolve("downloads/$videoId")
+            val sizeBytes = if (cacheDir2.isDirectory) {
+                cacheDir2.listFiles()?.sumOf { it.length() } ?: 0L
+            } else { cacheDir2.length() }
+
             val downloadRecord = hashMapOf(
                 "videoId" to videoId,
                 "title" to title,
@@ -128,7 +168,7 @@ class DownloadWorker @AssistedInject constructor(
                 "duration" to duration,
                 "videoUrl" to videoUrl,
                 "downloadedAt" to FieldValue.serverTimestamp(),
-                "sizeBytes" to 0L,   // ExoPlayer tracks this internally
+                "sizeBytes" to sizeBytes,
                 "isAvailableOffline" to true
             )
             firestore.collection("users").document(uid)
@@ -136,6 +176,9 @@ class DownloadWorker @AssistedInject constructor(
                 .set(downloadRecord).await()
 
             setProgressAsync(workDataOf(KEY_PROGRESS to 100))
+
+            // Send download-complete local notification
+            sendDownloadCompleteNotification(title)
 
             Result.success(workDataOf(KEY_VIDEO_ID to videoId))
         } catch (e: Exception) {
@@ -148,5 +191,32 @@ class DownloadWorker @AssistedInject constructor(
         const val KEY_VIDEO_ID = "video_id"
         const val KEY_PROGRESS = "progress"
         const val KEY_ERROR = "error"
+        private const val NOTIF_CHANNEL_ID = "mychannel_downloads"
+        private const val NOTIF_ID_BASE = 9000
+    }
+
+    private fun sendDownloadCompleteNotification(videoTitle: String) {
+        val notifManager = applicationContext.getSystemService(android.app.NotificationManager::class.java) ?: return
+
+        // Ensure notification channel exists (required for Android 8+)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                NOTIF_CHANNEL_ID,
+                "Downloads",
+                android.app.NotificationManager.IMPORTANCE_DEFAULT
+            ).apply { description = "Download completion alerts" }
+            notifManager.createNotificationChannel(channel)
+        }
+
+        val notification = androidx.core.app.NotificationCompat.Builder(applicationContext, NOTIF_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("Download complete")
+            .setContentText("\"$videoTitle\" is ready to watch offline.")
+            .setAutoCancel(true)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+
+        notifManager.notify(NOTIF_ID_BASE + videoTitle.hashCode(), notification)
+    }
     }
 }

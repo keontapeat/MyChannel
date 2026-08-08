@@ -14,11 +14,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { ThumbsUp, Reply, ChevronDown, MoreVertical, Heart, Loader2, Check } from 'lucide-react';
 import {
-  collection, addDoc, query, orderBy, onSnapshot, serverTimestamp,
-  doc, getDoc, setDoc, deleteDoc, updateDoc, increment, where, getDocs,
-  limit, startAfter, type QueryDocumentSnapshot, type DocumentData,
+  collection, query, orderBy, onSnapshot, serverTimestamp,
+  doc, getDoc, where, getDocs,
+  limit, startAfter, writeBatch, type QueryDocumentSnapshot, type DocumentData,
 } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase/config';
+import { appendVideoEngagement, recordVideoEngagement } from '@/lib/firebase/video-engagement';
 import { formatViewCount } from '@/lib/utils/format';
 
 interface CommentSectionProps {
@@ -125,22 +126,26 @@ function CommentRow({
     return () => { cancelled = true; };
   }, [uid, comment.id]);
 
-  const commentRef = doc(db, 'videos', videoId, 'comments', comment.id);
-
   const handleLike = async () => {
     const next = !liked;
     setLiked(next);
-    setLocalLikes((n) => n + (next ? 1 : -1));
+    setLocalLikes((count) => Math.max(0, count + (next ? 1 : -1)));
     try {
-      if (uid) {
-        const ref = doc(db, 'users', uid, 'commentLikes', comment.id);
-        if (next) await setDoc(ref, { value: 'like', videoId, createdAt: serverTimestamp() });
-        else await deleteDoc(ref);
+      if (!uid) throw new Error('Authentication required');
+      const markerRef = doc(db, 'users', uid, 'commentLikes', comment.id);
+      const batch = writeBatch(db);
+      if (next) {
+        batch.set(markerRef, { value: 'like', videoId, createdAt: serverTimestamp() });
+      } else {
+        batch.delete(markerRef);
       }
-      await updateDoc(commentRef, { likeCount: increment(next ? 1 : -1) });
+      appendVideoEngagement(batch, videoId, next ? 'comment_like' : 'comment_unlike', {
+        sessionId: comment.id,
+      });
+      await batch.commit();
     } catch {
       setLiked(!next);
-      setLocalLikes((n) => n + (next ? -1 : 1));
+      setLocalLikes((count) => Math.max(0, count + (next ? -1 : 1)));
     }
   };
 
@@ -149,7 +154,9 @@ function CommentRow({
     const next = !hearted;
     setHearted(next);
     try {
-      await updateDoc(commentRef, { creatorHearted: next });
+      await recordVideoEngagement(videoId, next ? 'comment_heart' : 'comment_unheart', {
+        sessionId: comment.id,
+      });
     } catch {
       setHearted(!next);
     }
@@ -339,16 +346,19 @@ const CommentSection = ({ videoId, commentCount: initialCount, creatorId }: Comm
 
     setSubmitting(true);
     try {
+      if (!currentUser) throw new Error('Authentication required');
       const colRef = collection(db, 'videos', videoId, 'comments');
-      await addDoc(colRef, {
+      const commentRef = doc(colRef);
+      const batch = writeBatch(db);
+      batch.set(commentRef, {
         userId, displayName, avatarURL, text,
         createdAt: serverTimestamp(),
         likeCount: 0, replyCount: 0, isPinned: false, creatorHearted: false,
         parentCommentId: parentId,
       });
-      await updateDoc(doc(db, 'videos', videoId), { commentCount: increment(1) });
+      appendVideoEngagement(batch, videoId, 'comment', { sessionId: commentRef.id });
+      await batch.commit();
       if (parentId) {
-        await updateDoc(doc(db, 'videos', videoId, 'comments', parentId), { replyCount: increment(1) });
         window.dispatchEvent(new CustomEvent('mychannel:comment-thread-refresh', { detail: { parentId } }));
       }
       setCommentText('');

@@ -15,169 +15,287 @@ struct RevenueSplitsSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var splits: [SplitEntry] = []
+    @State private var revision = 0
+    @State private var isLoadingSplits = true
     @State private var isSavingSplits = false
     @State private var splitsError: String?
 
     struct SplitEntry: Identifiable {
         let id = UUID()
+        var artistId: String
         var name: String
-        var email: String
         var role: String
-        var percentage: Double
+        var basisPoints: Int
     }
+
+    private let supportedRoles = [
+        ("Primary Artist", "primary_artist"),
+        ("Featured Artist", "featured_artist"),
+        ("Producer", "producer"),
+        ("Songwriter", "songwriter"),
+        ("Composer", "composer"),
+        ("Performer", "performer"),
+        ("Label", "label"),
+        ("Publisher", "publisher")
+    ]
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("Split royalties for \"\(trackTitle)\" with collaborators.")
-                        .font(.system(size: 14)).foregroundColor(.secondary)
-
-                    ForEach(splits.indices, id: \.self) { i in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("Collaborator \(i + 1)").font(.system(size: 16, weight: .semibold))
-                                Spacer()
-                                if splits.count > 1 {
-                                    Button { splits.remove(at: i) } label: {
-                                        Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                            TextField("Name", text: $splits[i].name)
-                                .padding(14)
-                                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            TextField("Email", text: $splits[i].email)
-                                .textInputAutocapitalization(.never)
-                                .keyboardType(.emailAddress)
-                                .padding(14)
-                                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            HStack {
-                                Picker("Role", selection: $splits[i].role) {
-                                    Text("Artist").tag("artist")
-                                    Text("Producer").tag("producer")
-                                    Text("Songwriter").tag("songwriter")
-                                    Text("Featured").tag("featured")
-                                }
-                                .pickerStyle(.menu)
-                                Spacer()
-                                HStack(spacing: 4) {
-                                    TextField("0", value: $splits[i].percentage, format: .number)
-                                        .keyboardType(.decimalPad)
-                                        .frame(width: 60)
-                                        .multilineTextAlignment(.trailing)
-                                        .padding(10)
-                                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                    Text("%").font(.system(size: 15, weight: .semibold)).foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        .padding(14)
-                        .background(Color(.secondarySystemBackground).opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-
-                    Button {
-                        splits.append(SplitEntry(name: "", email: "", role: "artist", percentage: 0))
-                    } label: {
-                        HStack {
-                            Image(systemName: "plus.circle.fill")
-                            Text("Add Collaborator").font(.system(size: 15, weight: .medium))
-                        }
-                        .foregroundColor(AppTheme.Colors.primary)
-                    }
-
-                    let totalPct = splits.reduce(0) { $0 + $1.percentage }
-                    HStack {
-                        Text("Total Split").font(.system(size: 15, weight: .semibold))
-                        Spacer()
-                        Text("\(String(format: "%.1f", totalPct))%")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(abs(totalPct - 100) < 0.01 ? .green : .red)
-                    }
-                    .padding(14)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                    if abs(totalPct - 100) > 0.01 {
-                        Text("Splits must total exactly 100%").font(.system(size: 13)).foregroundColor(.red)
-                    }
-                    if let splitsError {
-                        Text(splitsError).font(.system(size: 13)).foregroundColor(.red)
-                    }
-
-                    Button {
-                        Task { await commitSplitsSave() }
-                    } label: {
-                        Group {
-                            if isSavingSplits { ProgressView().tint(.white) }
-                            else { Text("Save Splits").font(.system(size: 16, weight: .semibold)) }
-                        }
+                if isLoadingSplits {
+                    ProgressView()
                         .frame(maxWidth: .infinity)
-                        .foregroundColor(.white)
-                        .padding(.vertical, 14)
-                        .background(splitsCanSave ? AppTheme.Colors.primary : Color.gray, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .disabled(!splitsCanSave || isSavingSplits)
+                        .padding(.top, 60)
+                } else {
+                    splitsForm
                 }
-                .padding(20)
             }
             .navigationTitle("Revenue Splits")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
         }
         .task { await loadExistingSplits() }
     }
 
+    private var splitsForm: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("Split royalties for \"\(trackTitle)\" using linked MyChannel user IDs.")
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+
+            if revision > 0 {
+                Text("Revision \(revision)")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+
+            ForEach(splits.indices, id: \.self) { index in
+                splitEditor(at: index)
+            }
+
+            Button {
+                splits.append(
+                    SplitEntry(
+                        artistId: "",
+                        name: "",
+                        role: "featured_artist",
+                        basisPoints: 0
+                    )
+                )
+            } label: {
+                Label("Add Collaborator", systemImage: "plus.circle.fill")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.primary)
+            }
+            .disabled(splits.count >= 20)
+
+            totalSection
+
+            if let splitsError {
+                Text(splitsError)
+                    .font(.system(size: 13))
+                    .foregroundColor(.red)
+            }
+
+            Button {
+                Task { await commitSplitsSave() }
+            } label: {
+                Group {
+                    if isSavingSplits {
+                        ProgressView().tint(.white)
+                    } else {
+                        Text("Save Splits")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .foregroundColor(.white)
+                .padding(.vertical, 14)
+                .background(
+                    splitsCanSave ? AppTheme.Colors.primary : Color.gray,
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
+            }
+            .disabled(!splitsCanSave || isSavingSplits)
+        }
+        .padding(20)
+    }
+
+    private func splitEditor(at index: Int) -> some View {
+        let isOwner = splits[index].artistId == artistId
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(isOwner ? "Track Owner" : "Collaborator \(index + 1)")
+                    .font(.system(size: 16, weight: .semibold))
+                Spacer()
+                if !isOwner {
+                    Button { splits.remove(at: index) } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            TextField("Display name", text: $splits[index].name)
+                .padding(14)
+                .background(fieldBackground)
+
+            if isOwner {
+                Text(artistId)
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(fieldBackground)
+            } else {
+                TextField("Linked MyChannel user ID", text: $splits[index].artistId)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(14)
+                    .background(fieldBackground)
+            }
+
+            HStack {
+                Picker("Role", selection: $splits[index].role) {
+                    ForEach(supportedRoles, id: \.1) { role in
+                        Text(role.0).tag(role.1)
+                    }
+                }
+                .pickerStyle(.menu)
+                .disabled(isOwner)
+
+                Spacer()
+
+                TextField("0", value: $splits[index].basisPoints, format: .number)
+                    .keyboardType(.numberPad)
+                    .frame(width: 80)
+                    .multilineTextAlignment(.trailing)
+                    .padding(10)
+                    .background(fieldBackground)
+                Text("bp")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(14)
+        .background(
+            Color(.secondarySystemBackground).opacity(0.5),
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+    }
+
+    private var fieldBackground: some ShapeStyle {
+        Color(.secondarySystemBackground)
+    }
+
+    private var totalSection: some View {
+        let totalBasisPoints = splits.reduce(0) { $0 + $1.basisPoints }
+        return HStack {
+            Text("Total Split")
+                .font(.system(size: 15, weight: .semibold))
+            Spacer()
+            Text("\(totalBasisPoints) / 10,000 bp")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(totalBasisPoints == 10_000 ? .green : .red)
+        }
+        .padding(14)
+        .background(fieldBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
     private var splitsCanSave: Bool {
-        let t = splits.reduce(0) { $0 + $1.percentage }
-        return abs(t - 100) < 0.01 && splits.allSatisfy { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard (1...20).contains(splits.count),
+              splits.reduce(0, { $0 + $1.basisPoints }) == 10_000,
+              splits.contains(where: {
+                  $0.artistId == artistId && $0.role == "primary_artist"
+              }) else { return false }
+
+        let identifiers = splits.map(\.artistId)
+        return Set(identifiers).count == identifiers.count && splits.allSatisfy { split in
+            isSafeIdentifier(split.artistId) &&
+                !split.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                (1...10_000).contains(split.basisPoints) &&
+                supportedRoles.contains(where: { $0.1 == split.role })
+        }
     }
 
     private func loadExistingSplits() async {
-        #if canImport(FirebaseFirestore)
         do {
-            let docs = try await Firestore.firestore().collection("music_tracks").document(trackId)
-                .collection("splits").getDocuments()
-            let loaded = docs.documents.compactMap { doc -> SplitEntry? in
-                let d = doc.data()
-                return SplitEntry(name: d["name"] as? String ?? "", email: d["email"] as? String ?? "",
-                                  role: d["role"] as? String ?? "artist", percentage: d["percentage"] as? Double ?? 0)
+            let response = try await MusicAPIClient.shared.getCollaborators(trackId: trackId)
+            var loaded = response.collaborators.map {
+                SplitEntry(
+                    artistId: $0.artistId,
+                    name: $0.name,
+                    role: $0.role,
+                    basisPoints: $0.basisPoints
+                )
             }
-            await MainActor.run {
-                splits = loaded.isEmpty ? [SplitEntry(name: "", email: "", role: "artist", percentage: 100)] : loaded
+            if loaded.isEmpty {
+                loaded = [ownerEntry(basisPoints: 10_000)]
+            } else if let ownerIndex = loaded.firstIndex(where: { $0.artistId == artistId }) {
+                loaded[ownerIndex].role = "primary_artist"
+                let owner = loaded.remove(at: ownerIndex)
+                loaded.insert(owner, at: 0)
+            } else {
+                loaded.insert(ownerEntry(basisPoints: 0), at: 0)
             }
+            splits = loaded
+            revision = response.revision
+            splitsError = nil
         } catch {
-            await MainActor.run { splits = [SplitEntry(name: "", email: "", role: "artist", percentage: 100)] }
+            splits = [ownerEntry(basisPoints: 10_000)]
+            splitsError = error.localizedDescription
         }
-        #else
-        splits = [SplitEntry(name: "", email: "", role: "artist", percentage: 100)]
-        #endif
+        isLoadingSplits = false
     }
 
     private func commitSplitsSave() async {
-        guard splitsCanSave else { return }
-        isSavingSplits = true; splitsError = nil
-        #if canImport(FirebaseFirestore)
+        guard splitsCanSave else {
+            splitsError = "Use unique linked user IDs and integer basis points totaling exactly 10,000."
+            return
+        }
+        isSavingSplits = true
+        splitsError = nil
+        defer { isSavingSplits = false }
+
         do {
-            let db = Firestore.firestore()
-            let ref = db.collection("music_tracks").document(trackId).collection("splits")
-            for doc in try await ref.getDocuments().documents { try await ref.document(doc.documentID).delete() }
-            for split in splits {
-                try await ref.document().setData([
-                    "name": split.name.trimmingCharacters(in: .whitespaces),
-                    "email": split.email.trimmingCharacters(in: .whitespaces),
-                    "role": split.role, "percentage": split.percentage,
-                    "trackId": trackId, "artistId": artistId,
-                    "createdAt": FieldValue.serverTimestamp()
-                ])
+            let collaborators = splits.map {
+                MusicCollaboratorInput(
+                    artistId: $0.artistId,
+                    name: $0.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                    role: $0.role,
+                    basisPoints: $0.basisPoints
+                )
             }
-            try await db.collection("music_tracks").document(trackId).updateData([
-                "hasSplits": true, "splitCount": splits.count
-            ])
-            await MainActor.run { isSavingSplits = false; onSaved(); dismiss() }
-        } catch { await MainActor.run { isSavingSplits = false; splitsError = error.localizedDescription } }
-        #else
-        isSavingSplits = false; splitsError = "Firestore unavailable."
-        #endif
+            let response = try await MusicAPIClient.shared.replaceCollaborators(
+                trackId: trackId,
+                collaborators: collaborators
+            )
+            revision = response.revision
+            onSaved()
+            dismiss()
+        } catch {
+            splitsError = error.localizedDescription
+        }
+    }
+
+    private func ownerEntry(basisPoints: Int) -> SplitEntry {
+        SplitEntry(
+            artistId: artistId,
+            name: "Primary Artist",
+            role: "primary_artist",
+            basisPoints: basisPoints
+        )
+    }
+
+    private func isSafeIdentifier(_ value: String) -> Bool {
+        value.range(
+            of: #"^[A-Za-z0-9_-]{1,128}$"#,
+            options: .regularExpression
+        ) != nil
     }
 }
 

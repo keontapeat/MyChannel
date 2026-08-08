@@ -1,0 +1,27 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "8KPXZ859S7.com.keontapeat.MyChannelApp",
+        "paths": [
+          "/r/*",
+          "/watch/*",
+          "/channel/*",
+          "/playlist/*",
+          "/shorts/*",
+          "/@*",
+          "/video/*",
+          "/live/*",
+          "*"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["8KPXZ859S7.com.keontapeat.MyChannelApp"]
+  },
+  "activitycontinuation": {
+    "apps": ["8KPXZ859S7.com.keontapeat.MyChannelApp"]
+  }
+}

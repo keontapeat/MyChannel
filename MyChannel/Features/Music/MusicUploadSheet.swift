@@ -10,15 +10,6 @@ import SwiftUI
 import PhotosUI
 import AVFoundation
 import UniformTypeIdentifiers
-#if canImport(FirebaseFirestore)
-import FirebaseFirestore
-#endif
-#if canImport(FirebaseStorage)
-import FirebaseStorage
-#endif
-#if canImport(FirebaseAuth)
-import FirebaseAuth
-#endif
 
 struct MusicUploadSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -56,8 +47,10 @@ struct MusicUploadSheet: View {
 
     @State private var uploadState: UploadState = .idle
     @State private var uploadProgress: Double = 0
+    @State private var uploadTask: Task<Void, Never>?
     @State private var errorMessage: String?
     @State private var showSuccess = false
+    @State private var successMessage = "Your track is private while transcoding and review finish. It will not appear publicly until server approval and publishing complete."
 
     private let genres = [
         "Hip-Hop", "R&B", "Pop", "Rock", "Electronic", "Country",
@@ -212,28 +205,21 @@ struct MusicUploadSheet: View {
                         .buttonStyle(.plain)
                     }
 
-                    // Scheduling card
+                    // Scheduling is unavailable until the trusted backend supports it.
                     uploadCard {
                         uploadSectionLabel("RELEASE SCHEDULE")
-                        Toggle(isOn: $scheduleRelease) {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "calendar.badge.exclamationmark")
+                                .foregroundColor(.secondary)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Schedule release")
-                                    .font(.system(size: 15))
-                                    .foregroundColor(.primary)
-                                Text("Set a future release date for this track")
+                                Text("Scheduled releases are coming soon")
+                                    .font(.system(size: 15, weight: .medium))
+                                Text("Uploads remain private while processing and review complete. Scheduling will be enabled when server-side release controls are available.")
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
                             }
                         }
-                        .tint(Color(red: 0.88, green: 0.15, blue: 0.25))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        if scheduleRelease {
-                            Divider().padding(.leading, 16)
-                            DatePicker("Release date", selection: $releaseDate, in: Date()..., displayedComponents: [.date])
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                        }
+                        .padding(16)
                     }
 
                     // Audio file card
@@ -316,7 +302,8 @@ struct MusicUploadSheet: View {
 
                     // Upload button
                     Button {
-                        Task { await uploadTrack() }
+                        uploadTask?.cancel()
+                        uploadTask = Task { await uploadTrack() }
                     } label: {
                         HStack(spacing: 10) {
                             if uploadState == .uploading {
@@ -359,16 +346,18 @@ struct MusicUploadSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
+                        uploadTask?.cancel()
+                        uploadTask = nil
                         HapticManager.shared.impact(style: .light)
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.88, green: 0.15, blue: 0.25))
                 }
             }
-            .alert("Track Uploaded! 🎵", isPresented: $showSuccess) {
+            .alert("Upload Complete", isPresented: $showSuccess) {
                 Button("Done") { dismiss() }
             } message: {
-                Text("Your track is live on MyChannel Music. Streams will start counting toward your earnings.")
+                Text(successMessage)
             }
         }
         .sheet(isPresented: $showLyricsEditor) {
@@ -537,125 +526,52 @@ struct MusicUploadSheet: View {
         selectedAudioURL != nil
     }
 
-    private func generateISRC() -> String {
-        let year = Calendar.current.component(.year, from: Date()) % 100
-        let designation = Int.random(in: 10000...99999)
-        return "US-MCH-\(String(format: "%02d", year))-\(designation)"
-    }
-
     // MARK: - Upload
 
     private func uploadTrack() async {
-        guard canUpload else { return }
+        guard canUpload, let audioURL = selectedAudioURL else { return }
         uploadState = .uploading
         uploadProgress = 0
         errorMessage = nil
 
-        #if canImport(FirebaseAuth) && canImport(FirebaseStorage) && canImport(FirebaseFirestore)
-        let artistId = Auth.auth().currentUser?.uid ?? UUID().uuidString
-        let trackId = UUID().uuidString
-        let storage = Storage.storage()
-        let db = Firestore.firestore()
+        let metadata = MusicUploadMetadata(
+            title: trackTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+            artistName: artistName.trimmingCharacters(in: .whitespacesAndNewlines),
+            albumName: albumName.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            genre: selectedGenre,
+            isExplicit: isExplicit,
+            duration: capturedDuration > 0 ? capturedDuration : nil
+        )
+        let artworkData = artworkImage?.jpegData(compressionQuality: 0.85)
 
         do {
-            var artworkURLString: String? = nil
-
-            // 1. Upload artwork if selected
-            if let artwork = artworkImage,
-               let jpegData = artwork.jpegData(compressionQuality: 0.85) {
-                let artRef = storage.reference().child("music/\(artistId)/artwork/\(trackId).jpg")
-                uploadProgress = 0.1
-                _ = try await artRef.putDataAsync(jpegData)
-                artworkURLString = try await artRef.downloadURL().absoluteString
-                uploadProgress = 0.4
-            } else {
-                uploadProgress = 0.2
+            let result = try await MusicAPIClient.shared.upload(
+                fileURL: audioURL,
+                metadata: metadata,
+                artworkData: artworkData,
+                artworkMimeType: artworkData == nil ? nil : "image/jpeg"
+            ) { progress in
+                await MainActor.run { uploadProgress = progress }
             }
-
-            // 2. Upload audio file
-            guard let audioURL = selectedAudioURL else { return }
-            let audioData = try Data(contentsOf: audioURL)
-            let ext = audioURL.pathExtension.lowercased()
-            let contentType = ext == "mp3" ? "audio/mpeg" : (ext == "wav" ? "audio/wav" : "audio/m4a")
-            let audioRef = storage.reference().child("music/\(artistId)/tracks/\(trackId).\(ext)")
-            let meta = StorageMetadata()
-            meta.contentType = contentType
-
-            uploadProgress = 0.45
-            _ = try await audioRef.putDataAsync(audioData, metadata: meta)
-            uploadProgress = 0.85
-            let audioDownloadURL = try await audioRef.downloadURL().absoluteString
-            uploadProgress = 0.9
-
-            let isrc = generateISRC()
-
-            // 3. Save metadata to Firestore FIRST — the Content ID backend looks
-            // up this doc to verify ownership (artistId == caller), so it must
-            // exist before registerMusicTrack is called below.
-            let trackData: [String: Any] = [
-                "id": trackId,
-                "title": trackTitle.trimmingCharacters(in: .whitespaces),
-                "artistId": artistId,
-                "artistName": artistName.trimmingCharacters(in: .whitespaces),
-                "featuredArtists": featuredArtists.trimmingCharacters(in: .whitespaces),
-                "album": albumName.trimmingCharacters(in: .whitespaces),
-                "albumName": albumName.trimmingCharacters(in: .whitespaces),
-                "releaseType": releaseType,
-                "genre": selectedGenre,
-                "language": trackLanguage,
-                "isExplicit": isExplicit,
-                "artworkURL": artworkURLString as Any,
-                "audioURL": audioDownloadURL,
-                "streamURL": audioDownloadURL,
-                "duration": capturedDuration,
-                "isrc": isrc,
-                "songwriter": songwriter.trimmingCharacters(in: .whitespaces),
-                "producer": producer.trimmingCharacters(in: .whitespaces),
-                "recordLabel": recordLabel.trimmingCharacters(in: .whitespaces),
-                "copyrightOwner": copyrightOwner.isEmpty ? artistName.trimmingCharacters(in: .whitespaces) : copyrightOwner.trimmingCharacters(in: .whitespaces),
-                "copyrightYear": copyrightYear,
-                "lyrics": lyrics,
-                "streamCount": 0,
-                "likeCount": 0,
-                "uploadedAt": FieldValue.serverTimestamp(),
-                "createdAt": FieldValue.serverTimestamp(),
-                "isPublished": !scheduleRelease,
-                "status": scheduleRelease ? "scheduled" : "published",
-                "scheduledRelease": scheduleRelease,
-                "releaseDate": scheduleRelease ? Timestamp(date: releaseDate) : FieldValue.serverTimestamp(),
-                "contentIdProtected": protectWithContentID,
-                "contentIdPolicy": selectedContentPolicy.rawValue
-            ]
-            try await db.collection("music_tracks").document(trackId).setData(trackData)
-
-            if protectWithContentID {
-                let contentIDReferenceId = await ContentIDService.shared.registerMusicTrack(
-                    trackId: trackId,
-                    audioURL: audioDownloadURL,
-                    policy: selectedContentPolicy
-                )
-                if let contentIDReferenceId {
-                    try await db.collection("music_tracks").document(trackId).updateData([
-                        "contentIdReferenceId": contentIDReferenceId
-                    ])
-                }
-            }
-            uploadProgress = 1.0
+            try Task.checkCancellation()
+            successMessage = result.isAwaitingHandoff
+                ? "Upload complete and private. Processing is queued for retry because the transcoder is not currently available."
+                : "Upload complete. Your track remains private until transcoding and moderation approval finish."
+            uploadProgress = 1
             uploadState = .done
+            uploadTask = nil
             showSuccess = true
-
+        } catch is CancellationError {
+            uploadState = .idle
+            uploadTask = nil
         } catch {
             uploadState = .error
+            uploadTask = nil
             errorMessage = "Upload failed: \(error.localizedDescription)"
         }
-        #else
-        // Simulate upload in dev builds without Firebase
-        for i in 1...10 {
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            uploadProgress = Double(i) / 10.0
-        }
-        uploadState = .done
-        showSuccess = true
-        #endif
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

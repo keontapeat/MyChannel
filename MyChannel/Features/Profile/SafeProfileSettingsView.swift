@@ -90,8 +90,10 @@ struct ProfileSettingsView: View {
         }
         .confirmationDialog("Sign Out", isPresented: $showingSignOutConfirmation) {
             Button("Sign Out", role: .destructive) {
-                try? AuthenticationManager.shared.signOut()
-                dismiss()
+                Task {
+                    try? await AuthenticationManager.shared.signOut()
+                    dismiss()
+                }
             }
             Button("Cancel", role: .cancel) { }
         } message: {

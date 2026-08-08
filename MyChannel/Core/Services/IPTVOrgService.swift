@@ -51,7 +51,10 @@ final class IPTVOrgService {
             let streamMap = Dictionary(grouping: streams.filter { s in
                 guard s.channel != nil else { return false }
                 let u = s.url.lowercased()
-                return u.hasPrefix("http") && (u.contains(".m3u8") || u.contains("m3u8?"))
+                // HTTPS only: iOS App Transport Security blocks cleartext http://
+                // streams (NSURLErrorDomain -1022), so they can never play and
+                // would just waste health-probe time. Require an HLS manifest too.
+                return u.hasPrefix("https://") && (u.contains(".m3u8") || u.contains("m3u8?"))
             }) { $0.channel ?? "" }
 
             var mapped: [LiveTVChannel] = []

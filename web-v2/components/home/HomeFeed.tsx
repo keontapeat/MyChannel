@@ -31,15 +31,20 @@ export default function HomeFeed() {
   return (
     <MainLayout>
       {/* Sticky category chips — flush under the fixed TopNav */}
-      <div className="sticky top-0 z-20 bg-[rgb(var(--color-background))]/95 backdrop-blur border-b border-[rgb(var(--color-border))]">
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide px-4 py-2.5">
+      <div className="sticky top-0 z-20 border-b border-[rgb(var(--color-border))] bg-[rgb(var(--color-background))]/95 backdrop-blur">
+        <div
+          className="scrollbar-hide flex snap-x gap-2 overflow-x-auto px-3 py-2.5 sm:px-4"
+          role="toolbar"
+          aria-label="Filter videos by category"
+        >
           {CHIPS.map((chip, i) => {
             const isActive = i === active;
             return (
               <button
                 key={chip.label}
                 onClick={() => setActive(i)}
-                className={`flex-shrink-0 rounded-lg px-3 py-[7px] text-[13px] font-medium transition-colors ${
+                aria-pressed={isActive}
+                className={`min-h-9 flex-shrink-0 snap-start rounded-lg px-3 text-[13px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
                   isActive
                     ? 'bg-[rgb(var(--color-text-primary))] text-[rgb(var(--color-background))]'
                     : 'bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text-primary))] hover:bg-[rgb(var(--color-surface-hover))]'
@@ -53,7 +58,7 @@ export default function HomeFeed() {
       </div>
 
       {/* Grid */}
-      <div className="px-4 py-5">
+      <div className="px-0 py-3 sm:px-4 sm:py-5">
         <VideoFeed
           key={selected.category}
           category={selected.category}

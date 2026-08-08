@@ -11,8 +11,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import {
-  collection, query, orderBy, limit, getDocs, addDoc, updateDoc,
-  deleteDoc, doc, serverTimestamp, increment, onSnapshot,
+  collection, query, orderBy, limit, getDoc, getDocs, addDoc, setDoc,
+  deleteDoc, doc, serverTimestamp, onSnapshot,
   startAfter, type QueryDocumentSnapshot, type DocumentData,
 } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase/config';
@@ -53,6 +53,31 @@ function timeAgo(date: Date): string {
   if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
   if (secs < 604800) return `${Math.floor(secs / 86400)}d ago`;
   return date.toLocaleDateString();
+}
+
+async function hydrateCommunityState(
+  items: CommunityPost[],
+  userId: string | undefined,
+): Promise<CommunityPost[]> {
+  if (!userId) return items;
+  return Promise.all(items.map(async (post) => {
+    try {
+      const [like, vote] = await Promise.all([
+        getDoc(doc(db, 'communityPosts', post.id, 'likes', userId)),
+        post.poll
+          ? getDoc(doc(db, 'communityPosts', post.id, 'votes', userId))
+          : Promise.resolve(null),
+      ]);
+      const optionIndex = vote?.data()?.optionIndex;
+      return {
+        ...post,
+        isLiked: like.exists(),
+        userVoteIndex: Number.isInteger(optionIndex) ? optionIndex : undefined,
+      };
+    } catch {
+      return post;
+    }
+  }));
 }
 
 function PollWidget({
@@ -489,20 +514,27 @@ export default function CommunityPageClient() {
   });
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
     const q = query(
       collection(db, 'communityPosts'),
       orderBy('createdAt', 'desc'),
       limit(PAGE_SIZE)
     );
-    const unsub = onSnapshot(q, (snap) => {
-      setPosts(snap.docs.map((d) => toPost(d.data(), d.id)));
+    const unsub = onSnapshot(q, async (snap) => {
+      const mapped = snap.docs.map((d) => toPost(d.data(), d.id));
+      const hydrated = await hydrateCommunityState(mapped, uid);
+      if (!active) return;
+      setPosts(hydrated);
       setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
       setHasMore(snap.docs.length === PAGE_SIZE);
       setLoading(false);
     });
-    return () => unsub();
-  }, [refresh]);
+    return () => {
+      active = false;
+      unsub();
+    };
+  }, [refresh, uid]);
 
   const loadMore = async () => {
     if (!lastDoc || loadingMore) return;
@@ -515,7 +547,9 @@ export default function CommunityPageClient() {
         limit(PAGE_SIZE)
       );
       const snap = await getDocs(q);
-      setPosts((prev) => [...prev, ...snap.docs.map((d) => toPost(d.data(), d.id))]);
+      const mapped = snap.docs.map((d) => toPost(d.data(), d.id));
+      const hydrated = await hydrateCommunityState(mapped, uid);
+      setPosts((prev) => [...prev, ...hydrated]);
       setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
       setHasMore(snap.docs.length === PAGE_SIZE);
     } finally {
@@ -525,40 +559,72 @@ export default function CommunityPageClient() {
 
   const handleLike = async (postId: string) => {
     if (!uid) return;
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? { ...p, isLiked: !p.isLiked, likeCount: p.likeCount + (p.isLiked ? -1 : 1) }
-          : p
-      )
-    );
+    const current = posts.find((post) => post.id === postId);
+    if (!current) return;
+    const nextLiked = !current.isLiked;
+
+    setPosts((prev) => prev.map((post) =>
+      post.id === postId
+        ? {
+            ...post,
+            isLiked: nextLiked,
+            likeCount: Math.max(0, post.likeCount + (nextLiked ? 1 : -1)),
+          }
+        : post
+    ));
+
+    const likeRef = doc(db, 'communityPosts', postId, 'likes', uid);
     try {
-      await updateDoc(doc(db, 'communityPosts', postId), {
-        likeCount: increment(posts.find((p) => p.id === postId)?.isLiked ? -1 : 1),
-      });
-    } catch { /* optimistic — ignore */ }
+      if (nextLiked) {
+        await setDoc(likeRef, {userId: uid, likedAt: serverTimestamp()});
+      } else {
+        await deleteDoc(likeRef);
+      }
+    } catch {
+      setPosts((prev) => prev.map((post) =>
+        post.id === postId
+          ? {
+              ...post,
+              isLiked: !nextLiked,
+              likeCount: Math.max(0, post.likeCount + (nextLiked ? -1 : 1)),
+            }
+          : post
+      ));
+    }
   };
 
   const handleVote = async (postId: string, optionIndex: number) => {
     if (!uid) return;
+    const current = posts.find((post) => post.id === postId);
+    if (!current?.poll || current.userVoteIndex !== undefined ||
+        optionIndex < 0 || optionIndex >= current.poll.length) return;
+
     setPosts((prev) =>
-      prev.map((p) => {
-        if (p.id !== postId || !p.poll) return p;
-        const poll = p.poll.map((o, i) => ({
-          ...o,
-          votes: i === optionIndex ? o.votes + 1 : o.votes,
+      prev.map((post) => {
+        if (post.id !== postId || !post.poll || post.userVoteIndex !== undefined) return post;
+        const poll = post.poll.map((option, index) => ({
+          ...option,
+          votes: index === optionIndex ? option.votes + 1 : option.votes,
         }));
-        return { ...p, poll, userVoteIndex: optionIndex };
+        return {...post, poll, userVoteIndex: optionIndex};
       })
     );
+
     try {
-      const post = posts.find((p) => p.id === postId);
-      if (!post?.poll) return;
-      const field = `poll.${optionIndex}.votes`;
-      await updateDoc(doc(db, 'communityPosts', postId), {
-        [field]: increment(1),
+      await setDoc(doc(db, 'communityPosts', postId, 'votes', uid), {
+        optionIndex,
+        votedAt: serverTimestamp(),
       });
-    } catch { /* optimistic */ }
+    } catch {
+      setPosts((prev) => prev.map((post) => {
+        if (post.id !== postId || !post.poll || post.userVoteIndex !== optionIndex) return post;
+        const poll = post.poll.map((option, index) => ({
+          ...option,
+          votes: index === optionIndex ? Math.max(0, option.votes - 1) : option.votes,
+        }));
+        return {...post, poll, userVoteIndex: undefined};
+      }));
+    }
   };
 
   const handleDelete = async (postId: string) => {

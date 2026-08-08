@@ -7,6 +7,7 @@ import {
   limit as firestoreLimit,
 } from 'firebase/firestore';
 import { FirestoreService } from '../firestore';
+import { recordVideoEngagement } from '../video-engagement';
 import type { Video, VideoCategory, SearchFilters } from '@/types';
 
 export class VideoFirestoreService {
@@ -205,89 +206,26 @@ export class VideoFirestoreService {
     }
   }
 
-  // Increment view count
+  // Legacy compatibility methods now submit immutable facts. Aggregate fields are
+  // server-owned and folded by onVideoEngagementEvent.
   async incrementViewCount(videoId: string): Promise<void> {
-    try {
-      await FirestoreService.incrementField(
-        VideoFirestoreService.COLLECTION,
-        videoId,
-        'viewCount',
-        1
-      );
-
-      console.log('✅ View count incremented:', videoId);
-    } catch (error) {
-      console.error('🚨 Increment view count error:', error);
-      throw error;
-    }
+    await recordVideoEngagement(videoId, 'view');
   }
 
-  // Increment like count
   async incrementLikeCount(videoId: string): Promise<void> {
-    try {
-      await FirestoreService.incrementField(
-        VideoFirestoreService.COLLECTION,
-        videoId,
-        'likeCount',
-        1
-      );
-
-      console.log('✅ Like count incremented:', videoId);
-    } catch (error) {
-      console.error('🚨 Increment like count error:', error);
-      throw error;
-    }
+    await recordVideoEngagement(videoId, 'like');
   }
 
-  // Decrement like count
   async decrementLikeCount(videoId: string): Promise<void> {
-    try {
-      await FirestoreService.incrementField(
-        VideoFirestoreService.COLLECTION,
-        videoId,
-        'likeCount',
-        -1
-      );
-
-      console.log('✅ Like count decremented:', videoId);
-    } catch (error) {
-      console.error('🚨 Decrement like count error:', error);
-      throw error;
-    }
+    await recordVideoEngagement(videoId, 'unlike');
   }
 
-  // Increment comment count
-  async incrementCommentCount(videoId: string): Promise<void> {
-    try {
-      await FirestoreService.incrementField(
-        VideoFirestoreService.COLLECTION,
-        videoId,
-        'commentCount',
-        1
-      );
-
-      console.log('✅ Comment count incremented:', videoId);
-    } catch (error) {
-      console.error('🚨 Increment comment count error:', error);
-      throw error;
-    }
+  async incrementCommentCount(videoId: string, commentId: string): Promise<void> {
+    await recordVideoEngagement(videoId, 'comment', {sessionId: commentId});
   }
 
-  // Increment share count
   async incrementShareCount(videoId: string): Promise<void> {
-    try {
-      await FirestoreService.incrementField(
-        VideoFirestoreService.COLLECTION,
-        videoId,
-        'shareCount',
-        1
-      );
-
-      console.log('✅ Share count incremented:', videoId);
-    } catch (error) {
-      console.error('🚨 Increment share count error:', error);
-      throw error;
-    }
+    await recordVideoEngagement(videoId, 'share');
   }
 
   // Delete video

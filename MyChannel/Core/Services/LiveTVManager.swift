@@ -78,7 +78,7 @@ final class LiveTVManager: ObservableObject {
         //    curated HLS URLs with Pluto URLs that only ever fell back to a demo
         //    clip. Curated sample data (or the Firestore catalog above) is the
         //    source of truth.
-        let curated = LiveTVChannel.sampleChannels
+        let curated = LiveTVChannel.appStoreSafeChannels
         channels = curated
         lastRefresh = Date()
         cache.save(channels: curated, lastRefresh: Date())
@@ -104,7 +104,7 @@ final class LiveTVManager: ObservableObject {
             print("📦 [LiveTVManager] Loaded \(cached.channels.count) cached channels")
         } else {
             // Use static channels as initial data
-            channels = LiveTVChannel.sampleChannels
+            channels = LiveTVChannel.appStoreSafeChannels
             print("📦 [LiveTVManager] Using \(channels.count) static channels")
         }
     }

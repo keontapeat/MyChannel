@@ -21,7 +21,7 @@ struct ProfessionalShareSheet: View {
 
     private func recordShare() {
         Task {
-            try? await ShortsFirestoreService.shared.incrementShareCount(flickId: video.id)
+            try? await ShortsFirestoreService.shared.recordShare(flickId: video.id)
         }
     }
 }

@@ -74,6 +74,7 @@ class HomeViewModel @Inject constructor(
 
     init {
         loadFeed()
+        loadPersonalizedRecommendations()
     }
 
     /** Subscribes to the real-time Home sections (trending, live, stories). */
@@ -82,6 +83,24 @@ class HomeViewModel @Inject constructor(
         observeTrending()
         observeLiveStreams()
         observeStories()
+    }
+
+    /**
+     * Loads personalized recommendations from the recommendation service
+     * (hybrid: content-based 70% + collaborative filtering 30%).
+     * Falls back to trending on failure. Replaces the generic trending feed
+     * in recommendedVideos once loaded.
+     */
+    private fun loadPersonalizedRecommendations() {
+        viewModelScope.launch {
+            videoRepository.fetchPersonalizedRecommendations(limit = 24)
+                .onSuccess { personalized ->
+                    if (personalized.isNotEmpty()) {
+                        _uiState.update { it.copy(recommendedVideos = personalized) }
+                    }
+                }
+            // On failure: recommendedVideos stays as trending (already populated by observeTrending)
+        }
     }
 
     private fun observeTrending() {

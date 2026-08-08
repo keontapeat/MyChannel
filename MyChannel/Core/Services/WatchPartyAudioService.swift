@@ -53,6 +53,10 @@ final class WatchPartyAudioService: ObservableObject {
         } catch {
             print("🎙️ [WatchParty] Error leaving audio room: \(error)")
         }
+
+        // The room used `.playAndRecord`; restore the canonical playback session
+        // so video/background audio + PiP resume cleanly.
+        PlaybackAudioSession.shared.reactivate()
     }
     
     private func simulateNetworkSpeaker() {

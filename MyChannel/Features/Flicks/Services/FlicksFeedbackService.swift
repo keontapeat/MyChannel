@@ -33,30 +33,30 @@ final class FlicksFeedbackService: ObservableObject {
         var id: String { rawValue }
     }
 
-    /// Files a content report against a flick.
-    func report(flickId: String, reason: ReportReason, details: String? = nil) async {
-        #if canImport(FirebaseFirestore)
-        let userId = AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id ?? "anonymous"
+    /// Files a deduplicated canonical content report against a flick.
+    func report(
+        flickId: String,
+        creatorId: String,
+        reason: ReportReason,
+        details: String? = nil
+    ) async {
+        guard let userId = AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id else {
+            return
+        }
         do {
-            try await db.collection("flickReports").document().setData([
-                "flickId": flickId,
-                "userId": userId,
-                "reason": reason.rawValue,
-                "details": details as Any?,
-                "status": "pending",
-                "createdAt": FieldValue.serverTimestamp(),
-                "platform": "iOS"
-            ].compactMapValues { $0 })
-
-            // Increment a per-flick report counter for fast moderation triage.
-            try await db.collection("flicks").document(flickId).setData([
-                "reportCount": FieldValue.increment(Int64(1))
-            ], merge: true)
+            _ = try await ContentReportService.submit(
+                type: .flick,
+                contentId: flickId,
+                contentCreatorId: creatorId,
+                reporterId: userId,
+                reason: reason.rawValue,
+                reasonTitle: reason.rawValue,
+                details: details
+            )
             print("🚨 [FlicksFeedback] Reported \(flickId) for \(reason.rawValue)")
         } catch {
             print("⚠️ [FlicksFeedback] Failed to file report: \(error)")
         }
-        #endif
     }
 
     /// Records a "not interested" signal used to down-rank similar content.

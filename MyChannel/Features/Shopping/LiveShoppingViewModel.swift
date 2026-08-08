@@ -199,7 +199,7 @@ class LiveShoppingViewModel: ObservableObject {
                 price: 199.99, originalPrice: 299, discount: 33, imageURL: "",
                 category: .tech, creatorId: "c1", creatorCommission: 15.0,
                 rating: 4.8, reviews: 1234, hasARTryOn: true, stockRemaining: 45, brand: "SoundPro",
-                storefrontURL: nil
+                storefrontURL: "https://mychannel.app/shop/soundpro-headphones"
             ),
             ShoppingProduct(
                 id: "sample-2",
@@ -208,7 +208,7 @@ class LiveShoppingViewModel: ObservableObject {
                 price: 149.99, originalPrice: 200, discount: 25, imageURL: "",
                 category: .fashion, creatorId: "c1", creatorCommission: 20.0,
                 rating: 4.9, reviews: 567, hasARTryOn: true, stockRemaining: 12, brand: "StepUp",
-                storefrontURL: nil
+                storefrontURL: "https://mychannel.app/shop/stepup-sneakers"
             )
         ]
     }
@@ -218,7 +218,8 @@ class LiveShoppingViewModel: ObservableObject {
             CreatorShop(
                 id: "sample-1",
                 creator: LiveShoppingShow.ShowCreator(id: "c1", name: "Tech Guru", avatarURL: ""),
-                productCount: 45, totalSales: 12500, rating: 4.9, storefrontURL: nil
+                productCount: 45, totalSales: 12500, rating: 4.9,
+                storefrontURL: "https://mychannel.app/shop/tech-guru"
             )
         ]
     }

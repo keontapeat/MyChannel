@@ -32,22 +32,25 @@ class PerformanceMonitoringManager {
     
     func configure() {
         #if canImport(FirebasePerformance)
+        guard FirebaseManager.shared.isConfigured else { return }
         Performance.sharedInstance().isDataCollectionEnabled = isEnabled
         Performance.sharedInstance().isInstrumentationEnabled = true
         #endif
     }
-    
+
     func setEnabled(_ enabled: Bool) {
         isEnabled = enabled
         #if canImport(FirebasePerformance)
+        guard FirebaseManager.shared.isConfigured else { return }
         Performance.sharedInstance().isDataCollectionEnabled = enabled
         #endif
     }
-    
+
     // MARK: - Custom Traces
-    
+
     func startTrace(name: String, attributes: [String: String] = [:]) {
         #if canImport(FirebasePerformance)
+        guard FirebaseManager.shared.isConfigured else { return }
         let trace = Performance.startTrace(name: name)
         
         // Add custom attributes

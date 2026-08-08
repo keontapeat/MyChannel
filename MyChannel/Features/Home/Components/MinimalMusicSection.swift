@@ -97,7 +97,10 @@ struct MinimalMusicSection: View {
     private var allArtists: [(name: String, avatar: String, views: Int, city: String?)] {
         // 🎵 LOCAL ARTISTS WITH ASSETS - Using local images for fast loading!
         let localArtists: [(String,String,Int,String?)] = [
-            ("Lil Donny", "LilDonnyAvatar", 290_000, nil),
+            ("Ysr Gramz", "YsrGramzAvatar", 290_000, nil),
+            ("Krispylife Kidd", "KrispylifeKiddAvatar", 288_000, nil),
+            ("Kleanup Man", "KleanupManAvatar", 287_000, "Detroit, MI"),
+            ("Lil Donny", "LilDonnyAvatar", 286_000, nil),
             ("Big Mgr Fat Dee", "BigMgrFatDeeAvatar", 285_000, nil),
             ("Bk Dumpp", "BkDumppAvatar", 285_000, nil),
             ("Super Shoddy", "SuperShoddyAvatar", 285_000, nil),
@@ -111,8 +114,6 @@ struct MinimalMusicSection: View {
             ("Don Perrion", "DonPerrionAvatar", 285_000, nil),
             ("Way P", "WayPAvatar", 285_000, nil),
             ("Ysr Driveway", "YsrDrivewayAvatar", 285_000, nil),
-            ("Ysr Gramz", "YsrGramzAvatar", 285_000, nil),
-            ("Krispylife Kidd", "KrispylifeKiddAvatar", 285_000, nil),
             ("Babii Moe", "BabiiMoeAvatar", 285_000, nil),
             ("Rich Dior", "RichDiorAvatar", 285_000, nil),
             ("MBK BO Demon", "MBKBODemonAvatar", 285_000, nil),
@@ -135,7 +136,6 @@ struct MinimalMusicSection: View {
             ("Bae Shanicee", "BaeShaniceeAvatar", 200_000, nil),
             ("Báby Ju", "BabyJuAvatar", 210_000, nil),
             ("HTG Nook", "HTGNookAvatar", 215_600, "Flint, MI"),
-            ("Kleanup Man", "KleanupManAvatar", 200_800, "Detroit, MI"),
             ("Scatz Ripky", "ScatzAvatar", 346_300, "Flint, MI"),
             ("Faneto Rich", "FanetoRichAvatar", 250_000, "Buc Town"),
             ("Cashpaid Jay", "CashpaidJayAvatar", 225_000, nil),

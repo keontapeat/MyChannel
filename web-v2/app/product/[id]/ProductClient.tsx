@@ -7,12 +7,22 @@ interface ProductClientProps {
   productId: string;
 }
 
-export default function ProductClient({ productId }: ProductClientProps) {
+export default function ProductClient({ productId: initialProductId }: ProductClientProps) {
+  const [productId, setProductId] = useState(initialProductId === '_fallback' ? '' : initialProductId);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (initialProductId !== '_fallback') return;
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const productIndex = segments.indexOf('product');
+    const pathId = productIndex >= 0 ? segments[productIndex + 1] : '';
+    if (pathId && pathId !== '_fallback') setProductId(decodeURIComponent(pathId));
+  }, [initialProductId]);
+
+  useEffect(() => {
+    if (!productId) return;
     setLoading(false);
-  }, []);
+  }, [productId]);
 
   return (
     <div className="min-h-screen bg-white dark:bg-black">

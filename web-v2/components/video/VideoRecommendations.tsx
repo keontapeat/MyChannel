@@ -1,53 +1,36 @@
 'use client';
 
+import {useEffect, useState} from 'react';
 import Link from 'next/link';
-import { CheckCircle } from 'lucide-react';
-import { formatViewCount, formatTimeAgo, formatDuration } from '@/lib/utils/format';
-import type { Video } from '@/types';
+import {CheckCircle} from 'lucide-react';
+import {formatViewCount, formatTimeAgo, formatDuration} from '@/lib/utils/format';
+import {fetchSimilarRecommendations} from '@/lib/recommendations';
+import type {Video} from '@/types';
 
 interface VideoRecommendationsProps {
   currentVideoId: string;
 }
 
-const VideoRecommendations = ({ currentVideoId }: VideoRecommendationsProps) => {
-  // Mock data - replace with actual recommendations
-  const recommendations: Video[] = Array.from({ length: 10 }, (_, i) => ({
-    id: `rec-${i + 1}`,
-    title: `Recommended Video ${i + 1} - Interesting Content`,
-    description: '',
-    videoURL: '',
-    thumbnailURL: `https://picsum.photos/seed/rec${i}/168/94`,
-    duration: Math.floor(Math.random() * 1800) + 60,
-    viewCount: Math.floor(Math.random() * 500000),
-    likeCount: 0,
-    dislikeCount: 0,
-    commentCount: 0,
-    shareCount: 0,
-    createdAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
-    updatedAt: new Date(),
-    creatorId: 'user-1',
-    creator: {
-      id: 'user-1',
-      username: 'creator',
-      displayName: 'Creator Name',
-      email: '',
-      profileImageURL: `https://i.pravatar.cc/150?img=${i + 3}`,
-      bannerImageURL: '',
-      subscriberCount: 0,
-      videoCount: 0,
-      createdAt: new Date(),
-      isVerified: Math.random() > 0.5,
-      isAdmin: false,
-    },
-    category: { id: '', name: '', slug: '' },
-    tags: [],
-    isPublic: true,
-    ageRestricted: false,
-    madeForKids: false,
-    commentsEnabled: true,
-    likesEnabled: true,
-    downloadsEnabled: true,
-  }));
+const VideoRecommendations = ({currentVideoId}: VideoRecommendationsProps) => {
+  const [result, setResult] = useState<{videoId: string; videos: Video[]} | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchSimilarRecommendations(currentVideoId, 10)
+      .then((videos) => { if (!cancelled) setResult({videoId: currentVideoId, videos}); })
+      .catch(() => { if (!cancelled) setResult({videoId: currentVideoId, videos: []}); });
+    return () => { cancelled = true; };
+  }, [currentVideoId]);
+
+  const isLoading = result?.videoId !== currentVideoId;
+  const recommendations = isLoading ? [] : result.videos;
+  if (isLoading) {
+    return <div className="h-40 animate-pulse rounded-xl bg-[rgb(var(--color-surface))]" aria-label="Loading recommendations" />;
+  }
+
+  if (recommendations.length === 0) {
+    return <p className="py-8 text-center text-sm text-[rgb(var(--color-text-secondary))]">No recommendations yet.</p>;
+  }
 
   return (
     <div className="space-y-2">

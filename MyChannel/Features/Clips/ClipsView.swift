@@ -23,7 +23,11 @@ struct ClipsView: View {
     
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: ClipsViewModel
-    
+    @StateObject private var smartService = SmartClippingService.shared
+
+    @State private var clipsMode: ClipsMode = .smart
+    enum ClipsMode { case manual, smart }
+
     @State private var clipTitle: String = ""
     @State private var startTime: TimeInterval
     @State private var endTime: TimeInterval
@@ -63,20 +67,24 @@ struct ClipsView: View {
                 
                 ScrollView {
                     VStack(spacing: 24) {
-                        // Video Preview
-                        clipPreviewSection
-                        
-                        // Timeline Editor
-                        timelineEditorSection
-                        
-                        // Clip Title
-                        clipTitleSection
-                        
-                        // Clip Info
-                        clipInfoSection
-                        
-                        // Create Button
-                        createButtonSection
+                        if clipsMode == .smart {
+                            smartClipsSection
+                        } else {
+                            // Video Preview
+                            clipPreviewSection
+
+                            // Timeline Editor
+                            timelineEditorSection
+
+                            // Clip Title
+                            clipTitleSection
+
+                            // Clip Info
+                            clipInfoSection
+
+                            // Create Button
+                            createButtonSection
+                        }
                     }
                     .padding(20)
                 }
@@ -90,6 +98,24 @@ struct ClipsView: View {
                     }
                     .foregroundColor(AppTheme.Colors.textSecondary)
                 }
+                ToolbarItem(placement: .principal) {
+                    Picker("Mode", selection: $clipsMode) {
+                        Text("✨ Smart").tag(ClipsMode.smart)
+                        Text("Manual").tag(ClipsMode.manual)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 180)
+                }
+            }
+            .task {
+                if AppConfig.Features.enableSmartClipping, clipsMode == .smart {
+                    _ = try? await smartService.detect(videoId: video.id)
+                }
+            }
+            .onChange(of: clipsMode) { mode in
+                if mode == .smart && smartService.candidates.isEmpty {
+                    Task { _ = try? await smartService.detect(videoId: video.id) }
+                }
             }
             .sheet(isPresented: $showShareSheet) {
                 if let clip = createdClip {
@@ -99,6 +125,69 @@ struct ClipsView: View {
         }
     }
     
+    // MARK: - Smart Clips Section
+    @ViewBuilder
+    private var smartClipsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "sparkles")
+                    .foregroundColor(AppTheme.Colors.primary)
+                Text("AI-Detected Highlights")
+                    .font(.headline)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                Spacer()
+                if smartService.isScanning {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                }
+            }
+            .padding(.horizontal, 20)
+
+            if smartService.isScanning && smartService.candidates.isEmpty {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Analyzing video for highlights…")
+                        .font(.subheadline)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else if smartService.candidates.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.largeTitle)
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                    Text("No highlights detected yet")
+                        .font(.subheadline)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    Button("Scan Video") {
+                        Task { _ = try? await smartService.detect(videoId: video.id) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else {
+                LazyVStack(spacing: 12) {
+                    ForEach(smartService.candidates) { candidate in
+                        SmartClipCandidateCard(
+                            candidate: candidate,
+                            video: video,
+                            onSelect: {
+                                // Jump to manual editor pre-filled with this candidate's range
+                                startTime = candidate.startSeconds
+                                endTime = candidate.endSeconds
+                                clipTitle = candidate.suggestedCaption
+                                clipsMode = .manual
+                            }
+                        )
+                        .padding(.horizontal, 20)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Preview Section
     private var clipPreviewSection: some View {
         VStack(spacing: 12) {
@@ -781,5 +870,79 @@ class ClipsFirestoreService {
 // MARK: - Preview
 #Preview {
     ClipsView(video: Video.sampleVideos[0], currentTime: 30)
+}
+
+// MARK: - Smart Clip Candidate Card
+struct SmartClipCandidateCard: View {
+    let candidate: SmartClip
+    let video: Video
+    let onSelect: () -> Void
+
+    private func formatSeconds(_ s: Double) -> String {
+        let mins = Int(s) / 60
+        let secs = Int(s) % 60
+        return String(format: "%d:%02d", mins, secs)
+    }
+
+    var viralPercent: Int { Int(candidate.score * 100) }
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 12) {
+                // Thumbnail with time range overlay
+                ZStack(alignment: .bottom) {
+                    AsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                        image.resizable().aspectRatio(16/9, contentMode: .fill)
+                    } placeholder: {
+                        Rectangle().fill(AppTheme.Colors.surface)
+                    }
+                    .frame(width: 100, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                    HStack(spacing: 2) {
+                        Text(formatSeconds(candidate.startSeconds))
+                        Text("–")
+                        Text(formatSeconds(candidate.endSeconds))
+                    }
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.black.opacity(0.75))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .padding(4)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(candidate.suggestedCaption)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineLimit(2)
+
+                    HStack(spacing: 6) {
+                        Label(candidate.reason.replacingOccurrences(of: "_", with: " ").capitalized,
+                              systemImage: "waveform")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+
+                        Spacer()
+
+                        Text("\(viralPercent)% viral")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(viralPercent >= 70 ? .green : AppTheme.Colors.textSecondary)
+                    }
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.Colors.textTertiary)
+            }
+            .padding(12)
+            .background(AppTheme.Colors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: AppTheme.Colors.textPrimary.opacity(0.06), radius: 4, x: 0, y: 2)
+        }
+        .buttonStyle(.plain)
+    }
 }
 

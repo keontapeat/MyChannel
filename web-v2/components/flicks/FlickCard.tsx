@@ -3,12 +3,12 @@
 // FlickCard Component - Individual Flick with Video Player and Interactions
 
 import { useRef, useEffect, useState } from 'react';
-import { Heart, MessageCircle, Share2, Music, CheckCircle, MoreVertical, Check } from 'lucide-react';
+import { Heart, MessageCircle, Send, Music, CheckCircle, MoreHorizontal, Check, Bookmark, Smile } from 'lucide-react';
 import { formatViewCount } from '@/lib/utils/format';
 import type { Flick } from '@/types/flick';
 import VideoPlayer from '@/components/video/VideoPlayer';
 import {
-  collection, addDoc, doc, getDoc, setDoc, deleteDoc, updateDoc, increment, serverTimestamp,
+  collection, addDoc, doc, getDoc, setDoc, deleteDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase/config';
 
@@ -25,17 +25,21 @@ const FlickCard = ({ flick, isActive, isVisible }: FlickCardProps) => {
   const [isFollowing, setIsFollowing] = useState(false);
   const [shareFeedback, setShareFeedback] = useState(false);
   const viewedRef = useRef(false);
+  const sessionIdRef = useRef('');
 
   const isSeed = flick.id.startsWith('seed-');
 
-  // Log a flick event (view/like/unlike/share) — the on_short_event_created
-  // trigger increments the flick's aggregate counters server-side.
-  const logEvent = async (type: 'view' | 'like' | 'unlike' | 'share') => {
+  // Log an immutable semantic event; trusted Functions own aggregate counters.
+  const logEvent = async (type: 'view' | 'share') => {
     const uid = auth?.currentUser?.uid;
     if (!uid || isSeed) return;
+    if (!sessionIdRef.current) sessionIdRef.current = crypto.randomUUID();
     try {
       await addDoc(collection(db, 'flicks', flick.id, 'events'), {
-        userId: uid, type, createdAt: serverTimestamp(),
+        userId: uid,
+        type,
+        sessionId: sessionIdRef.current,
+        createdAt: serverTimestamp(),
       });
     } catch { /* non-fatal */ }
   };
@@ -72,7 +76,6 @@ const FlickCard = ({ flick, isActive, isVisible }: FlickCardProps) => {
       const ref = doc(db, 'users', uid, 'flickLikes', flick.id);
       if (next) await setDoc(ref, { flickId: flick.id, createdAt: serverTimestamp() });
       else await deleteDoc(ref);
-      await logEvent(next ? 'like' : 'unlike');
     } catch {
       setIsLiked(!next);
       setLocalLikeCount((n) => n + (next ? -1 : 1));
@@ -108,10 +111,8 @@ const FlickCard = ({ flick, isActive, isVisible }: FlickCardProps) => {
       const ref = doc(db, 'users', uid, 'subscriptions', creatorId);
       if (next) {
         await setDoc(ref, { channelId: creatorId, subscribedAt: serverTimestamp() });
-        await updateDoc(doc(db, 'users', creatorId), { subscriberCount: increment(1) });
       } else {
         await deleteDoc(ref);
-        await updateDoc(doc(db, 'users', creatorId), { subscriberCount: increment(-1) });
       }
     } catch {
       setIsFollowing(!next);
@@ -119,8 +120,7 @@ const FlickCard = ({ flick, isActive, isVisible }: FlickCardProps) => {
   };
 
   return (
-    <div className="relative w-full h-screen bg-black">
-      {/* Video Player */}
+    <article className="relative h-dvh w-full overflow-hidden bg-black" aria-label={flick.title}>
       {isVisible && (
         <div className="absolute inset-0">
           <VideoPlayer
@@ -128,150 +128,115 @@ const FlickCard = ({ flick, isActive, isVisible }: FlickCardProps) => {
             poster={flick.thumbnailURL}
             autoplay={isActive}
             controls={false}
+            fullBleed
           />
         </div>
       )}
 
-      {/* Gradient Overlays */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/35 via-transparent via-55% to-black/85" />
 
-      {/* Top Info */}
-      <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10">
-        <div className="flex items-center gap-3">
-          <img
-            src={flick.creator.profileImageURL}
-            alt={flick.creator.displayName}
-            className="w-10 h-10 rounded-full border-2 border-white"
-          />
-          <div>
-            <div className="flex items-center gap-1">
-              <span className="text-white font-semibold text-sm">
-                {flick.creator.displayName}
-              </span>
-              {flick.creator.isVerified && (
-                <CheckCircle size={14} className="text-blue-500" />
-              )}
-            </div>
-            <span className="text-white/80 text-xs">
-              @{flick.creator.username}
-            </span>
+      <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-4 right-[5.6rem] z-10 space-y-2.5 sm:left-6 sm:right-28 sm:max-w-xl">
+        <div className="flex items-center gap-2.5">
+          <button type="button" className="shrink-0" aria-label={`Open ${flick.creator.displayName}`}>
+            <img
+              src={flick.creator.profileImageURL}
+              alt=""
+              className="h-10 w-10 rounded-full border-2 border-white object-cover shadow-lg"
+            />
+          </button>
+          <div className="flex min-w-0 items-center gap-1 text-white">
+            <span className="truncate text-[15px] font-bold">{flick.creator.username}</span>
+            {flick.creator.isVerified && <CheckCircle size={14} className="fill-white text-black" />}
           </div>
           <button
+            type="button"
             onClick={handleFollow}
-            className={`ml-2 px-4 py-1.5 rounded-full text-white text-sm font-semibold transition-colors ${
-              isFollowing ? 'bg-white/25 hover:bg-white/30' : 'bg-red-600 hover:bg-red-700'
-            }`}
+            className="h-8 rounded-full border border-white/75 bg-black/25 px-4 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-white/15"
           >
             {isFollowing ? 'Following' : 'Follow'}
           </button>
         </div>
 
-        <button className="text-white hover:bg-white/20 p-2 rounded-full transition-colors">
-          <MoreVertical size={20} />
-        </button>
-      </div>
-
-      {/* Bottom Info */}
-      <div className="absolute bottom-0 left-0 right-20 p-4 z-10">
-        <div className="space-y-2">
-          <h3 className="text-white font-semibold text-lg">
-            {flick.title}
-          </h3>
-
-          <div
-            onClick={() => setShowDescription(!showDescription)}
-            className="cursor-pointer"
-          >
-            <p className={`text-white/90 text-sm ${showDescription ? '' : 'line-clamp-2'}`}>
+        <button
+          type="button"
+          onClick={() => setShowDescription(!showDescription)}
+          className="block max-w-full text-left"
+          aria-expanded={showDescription}
+        >
+          <h2 className="line-clamp-1 text-[15px] font-semibold text-white">{flick.title}</h2>
+          {flick.description && (
+            <p className={`mt-1 text-sm leading-5 text-white/90 ${showDescription ? '' : 'line-clamp-2'}`}>
               {flick.description}
             </p>
-            {flick.description.length > 100 && (
-              <span className="text-white/70 text-xs">
-                {showDescription ? 'Show less' : 'Show more'}
-              </span>
-            )}
-          </div>
-
-          {/* Tags */}
-          <div className="flex flex-wrap gap-2">
-            {flick.tags.map((tag) => (
-              <span
-                key={tag}
-                className="text-white/90 text-sm font-medium"
-              >
-                #{tag}
-              </span>
-            ))}
-          </div>
-
-          {/* Music Track */}
-          {flick.musicTrack && (
-            <div className="flex items-center gap-2 text-white/90 text-sm">
-              <Music size={16} />
-              <span>
-                {flick.musicTrack.title} • {flick.musicTrack.artist}
-              </span>
-            </div>
           )}
-        </div>
-      </div>
-
-      {/* Right Side Actions */}
-      <div className="absolute right-4 bottom-20 flex flex-col items-center gap-6 z-10">
-        {/* Like Button */}
-        <button
-          onClick={handleLike}
-          className="flex flex-col items-center gap-1 group"
-        >
-          <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur flex items-center justify-center group-hover:bg-white/20 transition-colors">
-            <Heart
-              size={24}
-              className={`${isLiked ? 'fill-red-500 text-red-500' : 'text-white'} transition-colors`}
-            />
-          </div>
-          <span className="text-white text-xs font-medium">
-            {formatViewCount(localLikeCount)}
-          </span>
         </button>
 
-        {/* Comment Button */}
-        <button
-          onClick={handleComment}
-          className="flex flex-col items-center gap-1 group"
-        >
-          <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur flex items-center justify-center group-hover:bg-white/20 transition-colors">
-            <MessageCircle size={24} className="text-white" />
-          </div>
-          <span className="text-white text-xs font-medium">
-            {formatViewCount(flick.commentCount)}
-          </span>
-        </button>
+        {flick.tags.length > 0 && (
+          <p className="line-clamp-1 text-sm font-semibold text-white/90">
+            {flick.tags.slice(0, 3).map((tag) => `#${tag}`).join('  ')}
+          </p>
+        )}
 
-        {/* Share Button */}
-        <button
-          onClick={handleShare}
-          className="flex flex-col items-center gap-1 group"
-        >
-          <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur flex items-center justify-center group-hover:bg-white/20 transition-colors">
-            {shareFeedback ? <Check size={24} className="text-green-400" /> : <Share2 size={24} className="text-white" />}
-          </div>
-          <span className="text-white text-xs font-medium">{shareFeedback ? 'Copied' : 'Share'}</span>
-        </button>
-
-        {/* Music Album Art (spinning) */}
         {flick.musicTrack && (
-          <div className="w-12 h-12 rounded-full overflow-hidden animate-spin-slow">
-            <img
-              src={flick.musicTrack.albumArt}
-              alt={flick.musicTrack.title}
-              className="w-full h-full object-cover"
-            />
+          <div className="flex items-center gap-2 text-xs font-medium text-white/85">
+            <Music size={14} />
+            <span className="truncate">{flick.musicTrack.title} · {flick.musicTrack.artist}</span>
           </div>
         )}
+
+        <button
+          type="button"
+          onClick={handleComment}
+          className="flex h-12 w-full items-center rounded-full border border-white/10 bg-[#17191e]/90 px-5 text-left text-[15px] text-white/65 shadow-xl backdrop-blur-xl"
+        >
+          <span>Add a comment…</span>
+          <Smile size={18} className="ml-auto" />
+        </button>
       </div>
-    </div>
+
+      <nav className="absolute bottom-[calc(env(safe-area-inset-bottom)+8.5rem)] right-3 z-10 flex flex-col items-center gap-4 sm:right-5" aria-label="Flick actions">
+        <ActionButton onClick={handleLike} label={formatViewCount(localLikeCount)} ariaLabel="Like">
+          <Heart size={28} className={isLiked ? 'fill-red-500 text-red-500' : 'text-white'} />
+        </ActionButton>
+        <ActionButton onClick={handleComment} label={formatViewCount(flick.commentCount)} ariaLabel="Comments">
+          <MessageCircle size={28} className="text-white" />
+        </ActionButton>
+        <ActionButton onClick={handleShare} label={shareFeedback ? 'Copied' : formatViewCount(flick.shareCount)} ariaLabel="Share">
+          {shareFeedback ? <Check size={27} className="text-green-400" /> : <Send size={27} className="text-white" />}
+        </ActionButton>
+        <ActionButton onClick={() => {}} label="Save" ariaLabel="Save">
+          <Bookmark size={27} className="text-white" />
+        </ActionButton>
+        <ActionButton onClick={() => {}} label="" ariaLabel="More options">
+          <MoreHorizontal size={28} className="text-white" />
+        </ActionButton>
+        {flick.musicTrack && (
+          <img
+            src={flick.musicTrack.albumArt}
+            alt={flick.musicTrack.title}
+            className="h-11 w-11 animate-spin-slow rounded-xl border border-white/70 object-cover"
+          />
+        )}
+      </nav>
+    </article>
   );
 };
+
+interface ActionButtonProps {
+  onClick: () => void;
+  label: string;
+  ariaLabel: string;
+  children: React.ReactNode;
+}
+
+const ActionButton = ({ onClick, label, ariaLabel, children }: ActionButtonProps) => (
+  <button type="button" onClick={onClick} className="group flex min-h-12 min-w-12 flex-col items-center justify-center gap-0.5" aria-label={ariaLabel}>
+    <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/30 shadow-lg backdrop-blur-md transition group-hover:bg-black/45">
+      {children}
+    </span>
+    {label && <span className="max-w-14 truncate text-[11px] font-semibold text-white drop-shadow">{label}</span>}
+  </button>
+);
 
 export default FlickCard;
 

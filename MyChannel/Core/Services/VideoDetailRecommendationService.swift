@@ -15,18 +15,22 @@ final class VideoDetailRecommendationService: ObservableObject {
         let cacheKey = "video-detail-recs:\(video.id):\(userId ?? "anon")"
 
         if let inMemory = cachedRecommendations[cacheKey], !inMemory.isEmpty {
-            return Array(inMemory.prefix(limit))
+            return Array(inMemory.filter(isRecommendationEligible).prefix(limit))
         }
 
         if let cached: [Video] = await redisCache.get(cacheKey, type: [Video].self), !cached.isEmpty {
-            cachedRecommendations[cacheKey] = cached
-            return Array(cached.prefix(limit))
+            let eligible = cached.filter(isRecommendationEligible)
+            cachedRecommendations[cacheKey] = eligible
+            return Array(eligible.prefix(limit))
         }
 
-        if let serverRanked = try? await serverRecommendations(for: video, userId: userId, limit: limit), !serverRanked.isEmpty {
-            cachedRecommendations[cacheKey] = serverRanked
-            await redisCache.set(cacheKey, value: serverRanked, ttl: 300)
-            return serverRanked
+        if let serverRanked = try? await serverRecommendations(for: video, userId: userId, limit: limit),
+           !serverRanked.isEmpty {
+            let eligible = serverRanked.filter(isRecommendationEligible)
+            guard !eligible.isEmpty else { return [] }
+            cachedRecommendations[cacheKey] = eligible
+            await redisCache.set(cacheKey, value: eligible, ttl: 300)
+            return eligible
         }
 
         let pool = await VideoFirestoreService.shared.fetchAllPublicVideos(limit: 80)
@@ -37,7 +41,7 @@ final class VideoDetailRecommendationService: ObservableObject {
         let sourceTags = Set(video.tags.map { $0.lowercased() })
 
         let ranked = pool
-            .filter { $0.id != video.id && $0.visibility == .public }
+            .filter { $0.id != video.id && isRecommendationEligible($0) }
             .map { candidate in
                 (candidate, score(candidate, source: video, watchedCreatorIds: watchedCreatorIds, watchedCategoryIds: watchedCategoryIds, sourceTags: sourceTags))
             }
@@ -56,11 +60,9 @@ final class VideoDetailRecommendationService: ObservableObject {
     }
 
     func prefetchNextPlayerItem(from videos: [Video]) {
-        guard !videos.isEmpty else { return }
-        let next = videos[0]
-        VideoPlayerManager.prewarm(urlString: next.videoURL)
-
-        let thumbnailURLs = videos.prefix(6).compactMap { URL(string: $0.thumbnailURL) }
+        // Playback URLs are never prewarmed from recommendation metadata. Each
+        // selected video receives a fresh authenticated playback session first.
+        let thumbnailURLs = videos.prefix(6).compactMap(approvedThumbnailURL)
         ImagePrefetcher.shared.prefetch(urls: thumbnailURLs)
     }
 
@@ -123,9 +125,19 @@ final class VideoDetailRecommendationService: ObservableObject {
             let category: String?
             let tags: [String]?
             let isLiveStream: Bool?
+            let isPublic: Bool?
+            let visibility: String?
+            let processingStatus: String?
+            let moderationStatus: String?
+            let ageRestricted: Bool?
+            let isPremium: Bool?
+            let allowedRegions: [String]?
+            let blockedRegions: [String]?
 
             private enum CodingKeys: String, CodingKey {
                 case id, title, description, duration, viewCount, likeCount, commentCount, category, tags, isLiveStream
+                case isPublic, visibility, processingStatus, moderationStatus, ageRestricted, isPremium
+                case allowedRegions, blockedRegions
                 case thumbnailURL, thumbnailUrl, videoURL, videoUrl
                 case createdAt, creatorId, creatorUsername, creatorDisplayName
                 case creatorProfileImageURL, creatorProfileImageUrl, creatorSubscriberCount, creatorVerified
@@ -154,6 +166,14 @@ final class VideoDetailRecommendationService: ObservableObject {
                 category = try container.decodeIfPresent(String.self, forKey: .category)
                 tags = try container.decodeIfPresent([String].self, forKey: .tags)
                 isLiveStream = try container.decodeIfPresent(Bool.self, forKey: .isLiveStream)
+                isPublic = try container.decodeIfPresent(Bool.self, forKey: .isPublic)
+                visibility = try container.decodeIfPresent(String.self, forKey: .visibility)
+                processingStatus = try container.decodeIfPresent(String.self, forKey: .processingStatus)
+                moderationStatus = try container.decodeIfPresent(String.self, forKey: .moderationStatus)
+                ageRestricted = try container.decodeIfPresent(Bool.self, forKey: .ageRestricted)
+                isPremium = try container.decodeIfPresent(Bool.self, forKey: .isPremium)
+                allowedRegions = try container.decodeIfPresent([String].self, forKey: .allowedRegions)
+                blockedRegions = try container.decodeIfPresent([String].self, forKey: .blockedRegions)
 
                 createdAt = try? container.decode(Date.self, forKey: .createdAt)
                 createdAtISO = try? container.decode(String.self, forKey: .createdAt)
@@ -224,9 +244,47 @@ final class VideoDetailRecommendationService: ObservableObject {
                 creator: creator,
                 category: VideoCategory(rawValue: raw.category ?? "") ?? .entertainment,
                 tags: raw.tags ?? [],
-                isLiveStream: raw.isLiveStream ?? false
+                isPublic: raw.isPublic ?? false,
+                visibility: Video.VisibilityStatus(rawValue: raw.visibility?.lowercased() ?? ""),
+                isLiveStream: raw.isLiveStream ?? false,
+                ageRestricted: raw.ageRestricted,
+                processingStatus: raw.processingStatus,
+                moderationStatus: raw.moderationStatus,
+                allowedRegions: raw.allowedRegions,
+                blockedRegions: raw.blockedRegions,
+                isPremium: raw.isPremium
             )
         }
+    }
+
+    private func isRecommendationEligible(_ candidate: Video) -> Bool {
+        guard candidate.isPublic,
+              candidate.visibility == .public,
+              candidate.processingStatus?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "ready",
+              candidate.moderationStatus?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "approved",
+              candidate.ageRestricted != true,
+              candidate.isPremium != true,
+              candidate.allowedRegions?.isEmpty != false,
+              candidate.blockedRegions?.isEmpty != false,
+              approvedThumbnailURL(candidate) != nil else {
+            return false
+        }
+        return true
+    }
+
+    private func approvedThumbnailURL(_ video: Video) -> URL? {
+        let approvedHosts = [
+            "firebasestorage.googleapis.com", "storage.googleapis.com", "ytimg.com",
+            "imgur.com", "cloudinary.com", "googleusercontent.com", "akamaized.net",
+            "cloudfront.net", "pluto.tv", "image.tmdb.org", "m.media-amazon.com"
+        ]
+        guard let url = URL(string: video.thumbnailURL),
+              url.scheme?.lowercased() == "https",
+              let host = url.host?.lowercased(),
+              approvedHosts.contains(where: { host == $0 || host.hasSuffix(".\($0)") }) else {
+            return nil
+        }
+        return url
     }
 
     private func score(_ candidate: Video, source: Video, watchedCreatorIds: Set<String>, watchedCategoryIds: Set<String>, sourceTags: Set<String>) -> Double {

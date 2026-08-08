@@ -23,8 +23,12 @@ import { useSwipeable } from 'react-swipeable';
 import { Heart, MessageCircle, Share2, Music, CheckCircle, MoreVertical, Volume2, VolumeX } from 'lucide-react';
 import type { Flick } from '@/types/flick';
 import { formatViewCount } from '@/lib/utils/format';
-import { collection, query, orderBy, limit, getDocs, startAfter, doc, updateDoc, increment } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import {
+  addDoc, collection, query, orderBy, limit, getDocs, startAfter, where, documentId,
+  serverTimestamp, doc, setDoc, deleteDoc,
+} from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, db } from '@/lib/firebase/config';
 
 const NuclearFlicksPage = () => {
   // State management
@@ -36,6 +40,7 @@ const NuclearFlicksPage = () => {
   
   // Interaction state
   const [likedFlickIds, setLikedFlickIds] = useState<Set<string>>(new Set());
+  const [authUserId, setAuthUserId] = useState<string | null | undefined>(undefined);
   const [followedCreatorIds, setFollowedCreatorIds] = useState<Set<string>>(new Set());
   const [showUI, setShowUI] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
@@ -55,6 +60,9 @@ const NuclearFlicksPage = () => {
   const lastDocRef = useRef<any>(null);
   const watchStartTimeRef = useRef<Date | null>(null);
   const watchTimeByFlickRef = useRef<Map<string, number>>(new Map());
+  const engagementSessionIdRef = useRef('');
+  const hydratedLikeIdsRef = useRef<Set<string>>(new Set());
+  const hydrationUserIdRef = useRef<string | null>(null);
   
   // Album art rotation
   const [albumArtRotation, setAlbumArtRotation] = useState(0);
@@ -70,6 +78,58 @@ const NuclearFlicksPage = () => {
     
     return () => clearInterval(rotationInterval);
   }, []);
+
+  useEffect(() => {
+    if (!auth) {
+      setAuthUserId(null);
+      return;
+    }
+    return onAuthStateChanged(auth, (user) => {
+      setAuthUserId(user?.uid ?? null);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (authUserId === undefined) return;
+    if (hydrationUserIdRef.current !== authUserId) {
+      hydrationUserIdRef.current = authUserId;
+      hydratedLikeIdsRef.current.clear();
+      setLikedFlickIds(new Set());
+    }
+    if (!authUserId) return;
+
+    const pendingIds = flicks
+      .map((flick) => flick.id)
+      .filter((id) => !id.startsWith('seed-') && !hydratedLikeIdsRef.current.has(id));
+    if (pendingIds.length === 0) return;
+
+    let cancelled = false;
+    const hydrate = async () => {
+      const chunks: string[][] = [];
+      for (let index = 0; index < pendingIds.length; index += 30) {
+        chunks.push(pendingIds.slice(index, index + 30));
+      }
+      try {
+        const snapshots = await Promise.all(chunks.map((ids) => getDocs(query(
+          collection(db, 'users', authUserId, 'flickLikes'),
+          where(documentId(), 'in', ids),
+        ))));
+        if (cancelled || hydrationUserIdRef.current !== authUserId) return;
+        const likedIds = new Set(snapshots.flatMap((snapshot) => snapshot.docs.map((item) => item.id)));
+        pendingIds.forEach((id) => hydratedLikeIdsRef.current.add(id));
+        setLikedFlickIds((previous) => {
+          const next = new Set(previous);
+          pendingIds.forEach((id) => next.delete(id));
+          likedIds.forEach((id) => next.add(id));
+          return next;
+        });
+      } catch (error) {
+        console.error('Failed to hydrate Flick likes:', error);
+      }
+    };
+    void hydrate();
+    return () => { cancelled = true; };
+  }, [authUserId, flicks]);
   
   // MARK: - Intersection Observer (Performance)
   useEffect(() => {
@@ -354,33 +414,55 @@ const NuclearFlicksPage = () => {
   });
   
   // MARK: - Actions
-  const handleLike = useCallback((flick: Flick) => {
-    if (likedFlickIds.has(flick.id)) {
-      setLikedFlickIds(prev => {
-        const next = new Set(prev);
-        next.delete(flick.id);
+  const handleLike = (flick: Flick, forceLiked?: boolean) => {
+    const userId = auth.currentUser?.uid;
+    if (!userId || flick.id.startsWith('demo-')) return;
+
+    const wasLiked = likedFlickIds.has(flick.id);
+    const nextLiked = forceLiked ?? !wasLiked;
+    if (wasLiked === nextLiked) return;
+
+    setLikedFlickIds((previous) => {
+      const next = new Set(previous);
+      if (nextLiked) next.add(flick.id);
+      else next.delete(flick.id);
+      return next;
+    });
+    setFlicks((previous) => previous.map((item) =>
+      item.id === flick.id
+        ? {...item, likeCount: Math.max(0, item.likeCount + (nextLiked ? 1 : -1))}
+        : item
+    ));
+
+    void persistFlickLikeState(flick.id, userId, nextLiked).then((succeeded) => {
+      if (succeeded) return;
+      setLikedFlickIds((previous) => {
+        if (previous.has(flick.id) !== nextLiked) return previous;
+        const next = new Set(previous);
+        if (wasLiked) next.add(flick.id);
+        else next.delete(flick.id);
         return next;
       });
-    } else {
-      setLikedFlickIds(prev => new Set(prev).add(flick.id));
-      
-      // Track like
-      trackLike(flick.id);
-    }
-  }, [likedFlickIds]);
-  
-  const handleDoubleTap = useCallback((flick: Flick) => {
-    // Like
-    handleLike(flick);
-    
+      setFlicks((previous) => previous.map((item) =>
+        item.id === flick.id
+          ? {...item, likeCount: Math.max(0, item.likeCount + (nextLiked ? -1 : 1))}
+          : item
+      ));
+    });
+  };
+
+  const handleDoubleTap = (flick: Flick) => {
+    // Double-tap is idempotent "like", never an accidental unlike.
+    handleLike(flick, true);
+
     // Show heart animation
     setDoubleTapHeartKey(prev => prev + 1);
     setShowDoubleTapHeart(true);
-    
+
     setTimeout(() => {
       setShowDoubleTapHeart(false);
     }, 800);
-  }, [handleLike]);
+  };
   
   const toggleFollow = useCallback((creatorId: string) => {
     if (followedCreatorIds.has(creatorId)) {
@@ -409,35 +491,61 @@ const NuclearFlicksPage = () => {
   }, [currentIndex, flicks]);
   
   // MARK: - Analytics
+  function currentEngagementSessionId(): string {
+    if (!engagementSessionIdRef.current) {
+      engagementSessionIdRef.current = crypto.randomUUID();
+    }
+    return engagementSessionIdRef.current;
+  }
+
+  async function recordFlickEvent(
+    flickId: string,
+    type: 'view' | 'watch_time',
+    watchTime?: number,
+  ) {
+    const userId = auth.currentUser?.uid;
+    if (!userId || !flickId || flickId.length > 128) return;
+    try {
+      await addDoc(collection(db, 'flicks', flickId, 'events'), {
+        userId,
+        type,
+        sessionId: currentEngagementSessionId(),
+        createdAt: serverTimestamp(),
+        ...(watchTime !== undefined && {
+          watchTime: Math.max(1, Math.min(86400, Math.round(watchTime))),
+        }),
+      });
+    } catch (err) {
+      console.error(`Error tracking Flick ${type}:`, err);
+    }
+  }
+
   async function trackView(flickId: string) {
+    await recordFlickEvent(flickId, 'view');
+  }
+
+  async function persistFlickLikeState(
+    flickId: string,
+    userId: string,
+    liked: boolean,
+  ): Promise<boolean> {
     try {
-      const flickRef = doc(db, 'shorts', flickId);
-      await updateDoc(flickRef, {
-        viewCount: increment(1),
-      });
+      const marker = doc(db, 'users', userId, 'flickLikes', flickId);
+      if (liked) {
+        await setDoc(marker, {flickId, createdAt: serverTimestamp()});
+      } else {
+        await deleteDoc(marker);
+      }
+      return true;
     } catch (err) {
-      console.error('Error tracking view:', err);
+      console.error('Error updating Flick reaction:', err);
+      return false;
     }
   }
-  
-  async function trackLike(flickId: string) {
-    try {
-      const flickRef = doc(db, 'shorts', flickId);
-      await updateDoc(flickRef, {
-        likeCount: increment(1),
-      });
-    } catch (err) {
-      console.error('Error tracking like:', err);
-    }
-  }
-  
+
   async function trackWatchTime(flickId: string, duration: number) {
-    try {
-      // Send to analytics backend
-      console.log(`Tracked ${duration}s watch time for flick ${flickId}`);
-    } catch (err) {
-      console.error('Error tracking watch time:', err);
-    }
+    if (duration <= 0) return;
+    await recordFlickEvent(flickId, 'watch_time', duration);
   }
   
   // MARK: - Render
@@ -726,7 +834,7 @@ const FlickCard = ({
             {/* Like */}
             <ActionButton
               icon={<Heart size={28} className={isLiked ? 'fill-red-500 text-red-500' : 'text-white'} />}
-              count={formatViewCount(flick.likeCount + (isLiked ? 1 : 0))}
+              count={formatViewCount(flick.likeCount)}
               onClick={() => onLike(flick)}
               active={isLiked}
             />

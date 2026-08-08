@@ -8,13 +8,13 @@
         ".read": true,
         "messages": {
           "$messageId": {
-            ".write": "auth != null",
-            ".validate": "newData.hasChildren(['text','userId','displayName','timestamp']) && newData.child('userId').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length <= 500 && newData.child('timestamp').val() <= now + 5000"
+            ".write": "auth != null && ((!data.exists() && newData.child('userId').val() === auth.uid) || (data.exists() && data.child('userId').val() === auth.uid && (!newData.exists() || newData.child('userId').val() === auth.uid)))",
+            ".validate": "newData.hasChildren(['text','userId','displayName','timestamp']) && newData.child('userId').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 500 && newData.child('timestamp').isNumber() && newData.child('timestamp').val() <= now + 5000 && (!data.exists() || newData.child('timestamp').val() === data.child('timestamp').val())"
           }
         },
         "pinnedMessage": {
           ".read": true,
-          ".write": "auth != null"
+          ".write": "auth != null && (auth.token.admin === true || root.child('live_streams').child($streamId).child('creatorId').val() === auth.uid || root.child('live_streams').child($streamId).child('userId').val() === auth.uid)"
         }
       }
     },
@@ -24,13 +24,15 @@
         ".read": true,
         "viewers": {
           "$userId": {
-            ".write": "auth != null && auth.uid === $userId",
-            ".validate": "newData.hasChildren(['joinedAt','displayName']) && newData.child('joinedAt').isNumber()"
+            "$connectionId": {
+              ".write": "auth != null && auth.uid === $userId",
+              ".validate": "newData.hasChildren(['joinedAt','displayName']) && newData.child('joinedAt').isNumber() && newData.child('joinedAt').val() <= now + 5000 && newData.child('displayName').isString() && newData.child('displayName').val().length <= 100"
+            }
           }
         },
         "viewerCount": {
           ".read": true,
-          ".write": "auth != null"
+          ".write": false
         }
       }
     },
@@ -39,24 +41,24 @@
       "$streamId": {
         ".read": true,
         "lastHeartbeat": {
-          ".write": "auth != null",
-          ".validate": "newData.isNumber()"
+          ".write": "auth != null && (auth.token.ingest === true || auth.token.admin === true || root.child('live_streams').child($streamId).child('creatorId').val() === auth.uid || root.child('live_streams').child($streamId).child('userId').val() === auth.uid)",
+          ".validate": "newData.isNumber() && newData.val() <= now + 5000"
         },
         "bitrate": {
-          ".write": "auth != null",
-          ".validate": "newData.isNumber()"
+          ".write": "auth != null && (auth.token.ingest === true || auth.token.admin === true || root.child('live_streams').child($streamId).child('creatorId').val() === auth.uid || root.child('live_streams').child($streamId).child('userId').val() === auth.uid)",
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000"
         },
         "fps": {
-          ".write": "auth != null",
-          ".validate": "newData.isNumber()"
+          ".write": "auth != null && (auth.token.ingest === true || auth.token.admin === true || root.child('live_streams').child($streamId).child('creatorId').val() === auth.uid || root.child('live_streams').child($streamId).child('userId').val() === auth.uid)",
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 240"
         },
         "droppedFrames": {
-          ".write": "auth != null",
-          ".validate": "newData.isNumber()"
+          ".write": "auth != null && (auth.token.ingest === true || auth.token.admin === true || root.child('live_streams').child($streamId).child('creatorId').val() === auth.uid || root.child('live_streams').child($streamId).child('userId').val() === auth.uid)",
+          ".validate": "newData.isNumber() && newData.val() >= 0"
         },
         "latencyMs": {
-          ".write": "auth != null",
-          ".validate": "newData.isNumber()"
+          ".write": "auth != null && (auth.token.ingest === true || auth.token.admin === true || root.child('live_streams').child($streamId).child('creatorId').val() === auth.uid || root.child('live_streams').child($streamId).child('userId').val() === auth.uid)",
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 300000"
         }
       }
     },
@@ -65,7 +67,7 @@
       "$userId": {
         ".read": true,
         ".write": "auth != null && auth.uid === $userId",
-        ".validate": "newData.hasChildren(['status','lastSeen']) && newData.child('status').val() === 'online' || newData.child('status').val() === 'away' || newData.child('status').val() === 'offline'"
+        ".validate": "newData.hasChildren(['status','lastSeen']) && (newData.child('status').val() === 'online' || newData.child('status').val() === 'away' || newData.child('status').val() === 'offline') && newData.child('lastSeen').isNumber() && newData.child('lastSeen').val() <= now + 5000"
       }
     },
 
@@ -83,12 +85,13 @@
       "$videoId": {
         ".read": true,
         "count": {
-          ".write": "auth != null",
+          ".write": false,
           ".validate": "newData.isNumber() && newData.val() >= 0"
         },
         "viewers": {
           "$userId": {
-            ".write": "auth != null && auth.uid === $userId"
+            ".write": "auth != null && auth.uid === $userId",
+            ".validate": "newData.val() === true || !newData.exists()"
           }
         }
       }
@@ -117,13 +120,13 @@
           ".read": true,
           "votes": {
             "$userId": {
-              ".write": "auth != null && auth.uid === $userId",
-              ".validate": "newData.isString()"
+              ".write": "auth != null && auth.uid === $userId && !data.exists() && newData.exists()",
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128"
             }
           },
           "counts": {
             "$option": {
-              ".write": "auth != null",
+              ".write": false,
               ".validate": "newData.isNumber() && newData.val() >= 0"
             }
           }
@@ -133,11 +136,17 @@
 
     "direct_messages": {
       "$threadId": {
-        ".read": "auth != null && ($threadId.contains(auth.uid))",
+        ".read": "auth != null && data.child('members').child(auth.uid).val() === true",
+        "members": {
+          "$userId": {
+            ".write": false,
+            ".validate": "newData.isBoolean()"
+          }
+        },
         "messages": {
           "$messageId": {
-            ".write": "auth != null && ($threadId.contains(auth.uid))",
-            ".validate": "newData.hasChildren(['text','senderId','timestamp']) && newData.child('senderId').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length <= 2000 && newData.child('timestamp').val() <= now + 5000"
+            ".write": "auth != null && root.child('direct_messages').child($threadId).child('members').child(auth.uid).val() === true && ((!data.exists() && newData.child('senderId').val() === auth.uid) || (data.exists() && data.child('senderId').val() === auth.uid && (!newData.exists() || newData.child('senderId').val() === auth.uid)))",
+            ".validate": "newData.hasChildren(['text','senderId','timestamp']) && newData.child('senderId').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 2000 && newData.child('timestamp').isNumber() && newData.child('timestamp').val() <= now + 5000 && (!data.exists() || newData.child('timestamp').val() === data.child('timestamp').val())"
           }
         }
       }

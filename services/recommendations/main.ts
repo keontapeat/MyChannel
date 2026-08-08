@@ -1,28 +1,333 @@
-import express from 'express';
+import express, {type Request, type Response} from 'express';
 import cors from 'cors';
-import { createClient } from '@supabase/supabase-js';
+import {createClient} from '@supabase/supabase-js';
 import rateLimit from 'express-rate-limit';
+import admin from 'firebase-admin';
+import jwt, {type JwtPayload} from 'jsonwebtoken';
+
+if (!admin.apps.length) admin.initializeApp();
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY');
+}
 
 const app = express();
 const supabase = createClient(
-  process.env.SUPABASE_URL || 'your-supabase-url',
-  process.env.SUPABASE_SERVICE_KEY || 'your-supabase-service-key'
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY,
 );
+const JWT_SECRET = process.env.JWT_SECRET || '';
+const REQUIRE_APP_CHECK = process.env.REQUIRE_APP_CHECK !== 'false';
+
+type AuthenticatedUser = {userId: string};
+type CreatorRow = {
+  id: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  verified: boolean;
+  subscriber_count: number;
+};
+type VideoRow = {
+  id: string;
+  title: string;
+  description: string;
+  thumbnail_url: string;
+  duration: number;
+  view_count: number;
+  like_count: number;
+  comment_count: number;
+  created_at: string;
+  published_at: string | null;
+  category?: string;
+  tags?: string[];
+  users: CreatorRow;
+};
+
+type ViewerPolicyContext = {
+  userId: string | null;
+  isAdult: boolean;
+  region: string | null;
+  hiddenVideoIds: Set<string>;
+  hiddenCreatorIds: Set<string>;
+  watchedVideoIds: Set<string>;
+};
+
+type OptionalAuthentication = {
+  accepted: boolean;
+  user: AuthenticatedUser | null;
+};
+
+const POLICY_READ_BATCH_SIZE = 100;
+const MAX_USER_POLICY_SIGNALS = 500;
+const PUBLICATION_STATES = new Set(['public', 'published', 'ready']);
+const READY_PROCESSING_STATES = new Set(['ready', 'complete', 'completed', 'published']);
+const PUBLISHABLE_MODERATION_STATES = new Set(['approved', 'cleared', 'ready', 'published']);
+
+function normalizedString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeRegion(value: unknown): string | null {
+  const region = normalizedString(value).toUpperCase();
+  return /^[A-Z0-9-]{2,16}$/.test(region) ? region : null;
+}
+
+function normalizedRegionList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(normalizeRegion)
+    .filter((region): region is string => region !== null)
+    .slice(0, 250);
+}
+
+function regionListContains(regions: string[], viewerRegion: string): boolean {
+  const country = viewerRegion.split('-', 1)[0];
+  return regions.includes(viewerRegion) || regions.includes(country);
+}
+
+async function loadViewerPolicy(user: AuthenticatedUser | null): Promise<ViewerPolicyContext> {
+  const emptyContext: ViewerPolicyContext = {
+    userId: null,
+    isAdult: false,
+    region: null,
+    hiddenVideoIds: new Set(),
+    hiddenCreatorIds: new Set(),
+    watchedVideoIds: new Set(),
+  };
+  if (!user) return emptyContext;
+
+  const userRef = admin.firestore().collection('users').doc(user.userId);
+  const [profileSnapshot, feedbackSnapshot, historySnapshot] = await Promise.all([
+    userRef.get(),
+    userRef.collection('notInterested').limit(MAX_USER_POLICY_SIGNALS).get(),
+    userRef.collection('watchHistory').limit(MAX_USER_POLICY_SIGNALS).get(),
+  ]);
+  const profile = profileSnapshot.data() ?? {};
+  const explicitAge = Number(profile.age);
+  const ageIsValid = !Number.isFinite(explicitAge) || explicitAge >= 18;
+  const hiddenVideoIds = new Set<string>();
+  const hiddenCreatorIds = new Set<string>();
+  const watchedVideoIds = new Set<string>();
+
+  for (const document of feedbackSnapshot.docs) {
+    const signal = document.data();
+    const videoId = normalizedString(signal.videoId);
+    const creatorId = normalizedString(signal.channelId || signal.creatorId);
+    if (videoId) hiddenVideoIds.add(videoId);
+    if (creatorId) hiddenCreatorIds.add(creatorId);
+  }
+  for (const document of historySnapshot.docs) {
+    const videoId = normalizedString(document.data().videoId) || document.id;
+    if (videoId) watchedVideoIds.add(videoId);
+  }
+
+  return {
+    userId: user.userId,
+    isAdult: (profile.isAgeVerified === true || profile.ageVerified === true) && ageIsValid,
+    region: normalizeRegion(profile.region || profile.countryCode || profile.country),
+    hiddenVideoIds,
+    hiddenCreatorIds,
+    watchedVideoIds,
+  };
+}
+
+async function loadVideoPolicies(
+  videoIds: string[],
+): Promise<Map<string, admin.firestore.DocumentData>> {
+  const validIds = Array.from(new Set(videoIds.filter(
+    videoId => /^[A-Za-z0-9_-]{1,128}$/.test(videoId),
+  )));
+  const policies = new Map<string, admin.firestore.DocumentData>();
+  const database = admin.firestore();
+
+  for (let index = 0; index < validIds.length; index += POLICY_READ_BATCH_SIZE) {
+    const batchIds = validIds.slice(index, index + POLICY_READ_BATCH_SIZE);
+    const references = batchIds.map(videoId => database.collection('videos').doc(videoId));
+    const snapshots = await database.getAll(...references);
+    for (const snapshot of snapshots) {
+      if (snapshot.exists) policies.set(snapshot.id, snapshot.data() ?? {});
+    }
+  }
+  return policies;
+}
+
+function isVideoPolicyEligible(
+  videoId: string,
+  servingCreatorId: string,
+  policy: admin.firestore.DocumentData | undefined,
+  viewer: ViewerPolicyContext,
+  excludeWatched: boolean,
+): boolean {
+  // Firestore is canonical. A stale Supabase row without a canonical document
+  // cannot be served because its visibility and safety state cannot be proven.
+  if (!policy) return false;
+
+  const canonicalCreatorId = normalizedString(
+    policy.creatorId || policy.userId || policy.channelId,
+  );
+  if (viewer.hiddenVideoIds.has(videoId)) return false;
+  if (excludeWatched && viewer.watchedVideoIds.has(videoId)) return false;
+  if (viewer.hiddenCreatorIds.has(servingCreatorId) ||
+      (canonicalCreatorId && viewer.hiddenCreatorIds.has(canonicalCreatorId))) {
+    return false;
+  }
+
+  const publicationState = normalizedString(policy.visibility || policy.status).toLowerCase();
+  if (policy.isPublic === false ||
+      (policy.isPublic !== true && !PUBLICATION_STATES.has(publicationState)) ||
+      (publicationState && !PUBLICATION_STATES.has(publicationState))) {
+    return false;
+  }
+
+  const processingState = normalizedString(policy.processingStatus).toLowerCase();
+  if (processingState && !READY_PROCESSING_STATES.has(processingState)) return false;
+
+  const moderationState = normalizedString(policy.moderationStatus).toLowerCase();
+  if (moderationState && !PUBLISHABLE_MODERATION_STATES.has(moderationState)) return false;
+  if (policy.ageRestricted === true && !viewer.isAdult) return false;
+
+  const blockedRegions = normalizedRegionList(policy.blockedRegions);
+  if (blockedRegions.length > 0 &&
+      (!viewer.region || regionListContains(blockedRegions, viewer.region))) {
+    return false;
+  }
+  const allowedRegions = normalizedRegionList(policy.allowedRegions);
+  if (allowedRegions.length > 0 &&
+      (!viewer.region || !regionListContains(allowedRegions, viewer.region))) {
+    return false;
+  }
+
+  return true;
+}
+
+async function filterRecommendationCandidates(
+  videos: VideoRow[],
+  viewer: ViewerPolicyContext,
+  excludeWatched: boolean,
+): Promise<VideoRow[]> {
+  const uniqueVideos = videos.filter((video, index, all) =>
+    index === all.findIndex(candidate => candidate.id === video.id),
+  );
+  const policies = await loadVideoPolicies(uniqueVideos.map(video => video.id));
+  return uniqueVideos.filter(video => isVideoPolicyEligible(
+    video.id,
+    normalizedString(video.users?.id),
+    policies.get(video.id),
+    viewer,
+    excludeWatched,
+  ));
+}
+
+async function optionalAuthenticatedUser(
+  req: Request,
+  res: Response,
+): Promise<OptionalAuthentication> {
+  if (!req.headers.authorization) return {accepted: true, user: null};
+  const user = await authenticate(req.headers.authorization);
+  if (!user) {
+    res.status(401).json({error: 'Unauthorized'});
+    return {accepted: false, user: null};
+  }
+  return {accepted: true, user};
+}
+
+function normalizeVideo(value: unknown): VideoRow {
+  const row = value as Omit<VideoRow, 'users'> & {users: CreatorRow | CreatorRow[]};
+  return {...row, users: Array.isArray(row.users) ? row.users[0] : row.users};
+}
+
+async function authenticate(header: string | undefined): Promise<AuthenticatedUser | null> {
+  if (!header?.startsWith('Bearer ')) return null;
+  const token = header.slice(7).trim();
+  if (!token) return null;
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    return {userId: decoded.uid};
+  } catch {}
+  if (!JWT_SECRET) return null;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const userId = String(decoded.uid || decoded.userId || decoded.sub || '').trim();
+    return userId ? {userId} : null;
+  } catch {
+    return null;
+  }
+}
+
+async function requireUser(req: Request, res: Response): Promise<AuthenticatedUser | null> {
+  const user = await authenticate(req.headers.authorization);
+  if (!user) res.status(401).json({error: 'Unauthorized'});
+  return user;
+}
+
+function parseLimit(value: unknown, fallback: number, maximum: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
+}
+
+function cleanVideoId(value: unknown): string {
+  const videoId = String(value || '');
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(videoId)) throw new Error('Invalid video ID');
+  return videoId;
+}
+
+function diversifyCreators(videos: VideoRow[], limit: number): VideoRow[] {
+  const buckets = new Map<string, VideoRow[]>();
+  for (const video of videos) {
+    const creatorId = video.users?.id || `unknown:${video.id}`;
+    const bucket = buckets.get(creatorId) ?? [];
+    if (bucket.length < 3) bucket.push(video);
+    buckets.set(creatorId, bucket);
+  }
+
+  const result: VideoRow[] = [];
+  while (result.length < limit) {
+    let added = false;
+    for (const bucket of buckets.values()) {
+      const video = bucket.shift();
+      if (!video) continue;
+      result.push(video);
+      added = true;
+      if (result.length === limit) break;
+    }
+    if (!added) break;
+  }
+  return result;
+}
 
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: process.env.CORS_ORIGIN || 'https://mychannel.live',
+  methods: ['GET', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Firebase-AppCheck'],
 }));
-app.use(express.json());
-
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // limit each IP to 1000 requests per windowMs
-  message: { error: 'Too many requests, please try again later' }
+app.use(express.json({limit: '16kb'}));
+app.use(rateLimit({
+  windowMs: 60_000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {error: 'Too many requests, please try again later'},
+}));
+app.use('/v1/recommendations', async (req, res, next) => {
+  if (!REQUIRE_APP_CHECK) return next();
+  const bearer = req.headers.authorization?.startsWith('Bearer ')
+    ? req.headers.authorization.slice(7).trim()
+    : '';
+  if (bearer && JWT_SECRET) {
+    try {
+      jwt.verify(bearer, JWT_SECRET);
+      return next();
+    } catch {}
+  }
+  const appCheckToken = req.header('x-firebase-appcheck');
+  if (!appCheckToken) return res.status(401).json({error: 'App Check required'});
+  try {
+    await admin.appCheck().verifyToken(appCheckToken);
+    return next();
+  } catch {
+    return res.status(401).json({error: 'Invalid App Check token'});
+  }
 });
-app.use(limiter);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -57,28 +362,27 @@ async function getContentBasedRecommendations(userId: string, limit: number = 10
     const creatorPreferences = new Map<string, number>();
 
     userHistory.forEach(item => {
-      const video = item.videos;
-      
-      // Category preferences
+      const relation = item.videos;
+      const video = Array.isArray(relation) ? relation[0] : relation;
+      if (!video) return;
+
       if (video.category) {
         categoryPreferences.set(
-          video.category, 
-          (categoryPreferences.get(video.category) || 0) + 1
+          video.category,
+          (categoryPreferences.get(video.category) || 0) + 1,
         );
       }
-      
-      // Tag preferences
-      if (video.tags && Array.isArray(video.tags)) {
-        video.tags.forEach(tag => {
+
+      if (Array.isArray(video.tags)) {
+        video.tags.forEach((tag: string) => {
           tagPreferences.set(tag, (tagPreferences.get(tag) || 0) + 1);
         });
       }
-      
-      // Creator preferences
+
       if (video.creator) {
         creatorPreferences.set(
-          video.creator, 
-          (creatorPreferences.get(video.creator) || 0) + 1
+          video.creator,
+          (creatorPreferences.get(video.creator) || 0) + 1,
         );
       }
     });
@@ -117,14 +421,13 @@ async function getContentBasedRecommendations(userId: string, limit: number = 10
       .order('view_count', { ascending: false })
       .limit(limit * 3); // Get more to filter and rank
 
-    const { data: candidateVideos } = await query;
+    const {data: candidateVideos, error: candidateError} = await query;
+    if (candidateError) throw candidateError;
 
-    if (!candidateVideos) {
-      return [];
-    }
+    const normalizedCandidates = (candidateVideos ?? []).map(normalizeVideo);
 
     // Score videos based on user preferences
-    const scoredVideos = candidateVideos.map(video => {
+    const scoredVideos = normalizedCandidates.map(video => {
       let score = 0;
       
       // Category match
@@ -234,7 +537,10 @@ async function getCollaborativeRecommendations(userId: string, limit: number = 1
       .order('videos.view_count', { ascending: false })
       .limit(limit);
 
-    return recommendations?.map(item => item.videos) || [];
+    return (recommendations ?? [])
+      .map(item => Array.isArray(item.videos) ? item.videos[0] : item.videos)
+      .filter(Boolean)
+      .map(normalizeVideo);
 
   } catch (error) {
     console.error('Collaborative filtering error:', error);
@@ -243,8 +549,8 @@ async function getCollaborativeRecommendations(userId: string, limit: number = 1
 }
 
 // Get popular videos as fallback
-async function getPopularVideos(limit: number = 10) {
-  const { data: videos } = await supabase
+async function getPopularVideos(limit: number = 10): Promise<VideoRow[]> {
+  const {data: videos, error} = await supabase
     .from('videos')
     .select(`
       id, title, description, thumbnail_url, duration, view_count, 
@@ -258,11 +564,15 @@ async function getPopularVideos(limit: number = 10) {
     .order('view_count', { ascending: false })
     .limit(limit);
 
-  return videos || [];
+  if (error) throw error;
+  return (videos ?? []).map(normalizeVideo);
 }
 
 // Get trending videos with time decay
-async function getTrendingVideos(limit: number = 10, timeframe: string = 'week') {
+async function getTrendingVideos(
+  limit: number = 10,
+  timeframe: 'day' | 'week' | 'month' = 'week',
+): Promise<VideoRow[]> {
   let timeFilter = '';
   const now = new Date();
   
@@ -296,151 +606,166 @@ async function getTrendingVideos(limit: number = 10, timeframe: string = 'week')
     query = query.gte('published_at', timeFilter);
   }
 
-  const { data: videos } = await query
+  const {data: videos, error} = await query
     .order('view_count', { ascending: false })
     .order('like_count', { ascending: false })
     .limit(limit);
 
-  return videos || [];
+  if (error) throw error;
+  return (videos ?? []).map(normalizeVideo);
 }
 
 // MARK: - API Endpoints
 
+function formatVideos(videos: VideoRow[]) {
+  return videos.map(video => ({
+    id: video.id,
+    title: video.title,
+    description: video.description,
+    thumbnailUrl: video.thumbnail_url,
+    duration: video.duration,
+    viewCount: video.view_count,
+    likeCount: video.like_count,
+    commentCount: video.comment_count,
+    publishedAt: video.published_at,
+    createdAt: video.created_at,
+    creator: {
+      id: video.users.id,
+      username: video.users.username,
+      displayName: video.users.display_name,
+      avatarUrl: video.users.avatar_url,
+      verified: video.users.verified,
+      subscriberCount: video.users.subscriber_count,
+    },
+  }));
+}
+
 // Get personalized recommendations for authenticated user
 app.get('/v1/recommendations/personal', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string; // From auth middleware
-    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
-    const algorithm = req.query.algorithm as string || 'hybrid';
-
-    if (!userId) {
-      // Return popular videos for anonymous users
-      const videos = await getPopularVideos(limit);
-      return res.json({ videos, algorithm: 'popular' });
+    const user = await requireUser(req, res);
+    if (!user) return;
+    const userId = user.userId;
+    const limit = parseLimit(req.query.limit, 20, 50);
+    const candidateLimit = limit * 3;
+    const algorithm = String(req.query.algorithm || 'hybrid');
+    if (!['content', 'collaborative', 'hybrid'].includes(algorithm)) {
+      return res.status(400).json({error: 'Invalid algorithm'});
     }
 
-    let recommendations = [];
-
+    let recommendations: VideoRow[] = [];
     switch (algorithm) {
       case 'content':
-        recommendations = await getContentBasedRecommendations(userId, limit);
+        recommendations = await getContentBasedRecommendations(userId, candidateLimit);
         break;
       case 'collaborative':
-        recommendations = await getCollaborativeRecommendations(userId, limit);
+        recommendations = await getCollaborativeRecommendations(userId, candidateLimit);
         break;
       case 'hybrid':
-      default:
-        // Mix of content-based and collaborative
-        const contentRecs = await getContentBasedRecommendations(userId, Math.ceil(limit * 0.7));
-        const collabRecs = await getCollaborativeRecommendations(userId, Math.ceil(limit * 0.3));
-        
-        // Combine and deduplicate
-        const combined = [...contentRecs, ...collabRecs];
-        const uniqueVideos = combined.filter((video, index, self) => 
-          index === self.findIndex(v => v.id === video.id)
+      default: {
+        const contentRecs = await getContentBasedRecommendations(
+          userId,
+          Math.ceil(candidateLimit * 0.7),
         );
-        
-        recommendations = uniqueVideos.slice(0, limit);
+        const collaborativeRecs = await getCollaborativeRecommendations(
+          userId,
+          Math.ceil(candidateLimit * 0.3),
+        );
+        recommendations = [...contentRecs, ...collaborativeRecs];
         break;
+      }
     }
 
-    // Format response
-    const formattedVideos = recommendations.map(video => ({
-      id: video.id,
-      title: video.title,
-      description: video.description,
-      thumbnailUrl: video.thumbnail_url,
-      duration: video.duration,
-      viewCount: video.view_count,
-      likeCount: video.like_count,
-      commentCount: video.comment_count,
-      publishedAt: video.published_at,
-      createdAt: video.created_at,
-      creator: {
-        id: video.users.id,
-        username: video.users.username,
-        displayName: video.users.display_name,
-        avatarUrl: video.users.avatar_url,
-        verified: video.users.verified,
-        subscriberCount: video.users.subscriber_count
-      }
-    }));
+    const viewer = await loadViewerPolicy(user);
+    recommendations = diversifyCreators(
+      await filterRecommendationCandidates(recommendations, viewer, true),
+      limit,
+    );
 
     res.json({
-      videos: formattedVideos,
+      videos: formatVideos(recommendations),
       algorithm,
-      userId: userId || 'anonymous'
+      userId,
     });
-
   } catch (error) {
     console.error('Personal recommendations error:', error);
-    res.status(500).json({ error: 'Failed to get recommendations' });
+    res.status(500).json({error: 'Failed to get recommendations'});
   }
 });
 
 // Get trending videos
 app.get('/v1/recommendations/trending', async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
-    const timeframe = req.query.timeframe as string || 'week';
+    const authentication = await optionalAuthenticatedUser(req, res);
+    if (!authentication.accepted) return;
+    const limit = parseLimit(req.query.limit, 20, 50);
+    const timeframe = String(req.query.timeframe || 'week');
+    if (!['day', 'week', 'month'].includes(timeframe)) {
+      return res.status(400).json({error: 'Invalid timeframe'});
+    }
 
-    const videos = await getTrendingVideos(limit, timeframe);
-
-    const formattedVideos = videos.map(video => ({
-      id: video.id,
-      title: video.title,
-      description: video.description,
-      thumbnailUrl: video.thumbnail_url,
-      duration: video.duration,
-      viewCount: video.view_count,
-      likeCount: video.like_count,
-      commentCount: video.comment_count,
-      publishedAt: video.published_at,
-      createdAt: video.created_at,
-      creator: {
-        id: video.users.id,
-        username: video.users.username,
-        displayName: video.users.display_name,
-        avatarUrl: video.users.avatar_url,
-        verified: video.users.verified,
-        subscriberCount: video.users.subscriber_count
-      }
-    }));
+    const viewer = await loadViewerPolicy(authentication.user);
+    const candidates = await getTrendingVideos(
+      limit * 3,
+      timeframe as 'day' | 'week' | 'month',
+    );
+    const videos = diversifyCreators(
+      await filterRecommendationCandidates(candidates, viewer, false),
+      limit,
+    );
 
     res.json({
-      videos: formattedVideos,
+      videos: formatVideos(videos),
       timeframe,
-      algorithm: 'trending'
+      algorithm: 'trending',
     });
-
   } catch (error) {
     console.error('Trending recommendations error:', error);
-    res.status(500).json({ error: 'Failed to get trending videos' });
+    res.status(500).json({error: 'Failed to get trending videos'});
   }
 });
 
 // Get similar videos for a specific video
 app.get('/v1/recommendations/similar/:videoId', async (req, res) => {
   try {
-    const { videoId } = req.params;
-    const limit = Math.min(parseInt(req.query.limit as string) || 12, 24);
+    const authentication = await optionalAuthenticatedUser(req, res);
+    if (!authentication.accepted) return;
+    const videoId = cleanVideoId(req.params.videoId);
+    const limit = parseLimit(req.query.limit, 12, 24);
+    const viewer = await loadViewerPolicy(authentication.user);
 
-    // Get the current video details
-    const { data: currentVideo } = await supabase
+    const {data: currentVideo, error: currentVideoError} = await supabase
       .from('videos')
       .select('category, tags, user_id')
       .eq('id', videoId)
       .single();
 
-    if (!currentVideo) {
-      return res.status(404).json({ error: 'Video not found' });
+    if (currentVideoError || !currentVideo) {
+      return res.status(404).json({error: 'Video not found'});
     }
 
-    // Find similar videos
-    const { data: similarVideos } = await supabase
+    const category = String(currentVideo.category || '');
+    const creatorId = String(currentVideo.user_id || '');
+    if (!/^[A-Za-z0-9 _-]{1,64}$/.test(category) ||
+        !/^[A-Za-z0-9_-]{1,128}$/.test(creatorId)) {
+      return res.status(422).json({error: 'Video recommendation metadata is invalid'});
+    }
+
+    const currentPolicy = await loadVideoPolicies([videoId]);
+    if (!isVideoPolicyEligible(
+      videoId,
+      creatorId,
+      currentPolicy.get(videoId),
+      viewer,
+      false,
+    )) {
+      return res.status(404).json({error: 'Video not found'});
+    }
+
+    const {data: similarVideos, error: similarError} = await supabase
       .from('videos')
       .select(`
-        id, title, description, thumbnail_url, duration, view_count, 
+        id, title, description, thumbnail_url, duration, view_count,
         like_count, comment_count, created_at, published_at,
         users!inner(
           id, username, display_name, avatar_url, verified, subscriber_count
@@ -449,40 +774,29 @@ app.get('/v1/recommendations/similar/:videoId', async (req, res) => {
       .eq('status', 'ready')
       .eq('visibility', 'public')
       .neq('id', videoId)
-      .or(`category.eq.${currentVideo.category},user_id.eq.${currentVideo.user_id}`)
-      .order('view_count', { ascending: false })
-      .limit(limit);
+      .or(`category.eq.${category},user_id.eq.${creatorId}`)
+      .order('view_count', {ascending: false})
+      .limit(limit * 3);
 
-    const formattedVideos = similarVideos?.map(video => ({
-      id: video.id,
-      title: video.title,
-      description: video.description,
-      thumbnailUrl: video.thumbnail_url,
-      duration: video.duration,
-      viewCount: video.view_count,
-      likeCount: video.like_count,
-      commentCount: video.comment_count,
-      publishedAt: video.published_at,
-      createdAt: video.created_at,
-      creator: {
-        id: video.users.id,
-        username: video.users.username,
-        displayName: video.users.display_name,
-        avatarUrl: video.users.avatar_url,
-        verified: video.users.verified,
-        subscriberCount: video.users.subscriber_count
-      }
-    })) || [];
+    if (similarError) throw similarError;
+    const candidates = (similarVideos ?? []).map(normalizeVideo);
+    const recommendations = diversifyCreators(
+      await filterRecommendationCandidates(
+        candidates,
+        viewer,
+        authentication.user !== null,
+      ),
+      limit,
+    );
 
     res.json({
-      videos: formattedVideos,
+      videos: formatVideos(recommendations),
       baseVideoId: videoId,
-      algorithm: 'similar'
+      algorithm: 'similar',
     });
-
   } catch (error) {
     console.error('Similar videos error:', error);
-    res.status(500).json({ error: 'Failed to get similar videos' });
+    res.status(500).json({error: 'Failed to get similar videos'});
   }
 });
 

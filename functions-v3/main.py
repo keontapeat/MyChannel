@@ -2670,11 +2670,13 @@ def recalculate_creator_standing(event: scheduler_fn.ScheduledEvent) -> None:
                 score -= min(60, len(strikes) * 20)
 
                 # Reports on their videos in last 90 days
-                report_count = sum(1 for _ in
+                report_count = sum(
+                    1 for report in
                     db.collection("content_reports")
-                    .where("creatorId", "==", creator_id)
+                    .where("contentCreatorId", "==", creator_id)
                     .where("createdAt", ">=", cutoff_90d)
                     .limit(100).stream()
+                    if (report.to_dict() or {}).get("type") == "video"
                 )
                 score -= min(20, report_count * 2)
 

@@ -30,6 +30,10 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   // Close the mobile drawer whenever the route changes
   useEffect(() => { setMobileOpen(false); }, [pathname]);
 
+  if (pathname.startsWith('/flicks')) {
+    return <main className="fixed inset-0 overflow-hidden bg-black">{children}</main>;
+  }
+
   return (
     <div className="min-h-screen bg-[rgb(var(--color-background))]">
       {/* Top Navigation */}
@@ -47,14 +51,16 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         />
       )}
 
-      {/* Main Content — padded by the rail only on lg+, with room for the mobile tab bar */}
+      {/* Main Content — safe-area aware offsets for the fixed mobile chrome */}
       <main
         className={`
-          pt-14 pb-[56px] lg:pb-0 transition-[padding] duration-200 ease-in-out
+          pt-[calc(3.5rem+env(safe-area-inset-top))]
+          pb-[calc(3.5rem+env(safe-area-inset-bottom))]
+          transition-[padding] duration-200 ease-in-out lg:pb-0
           ${isSidebarCollapsed ? 'lg:pl-[74px]' : 'lg:pl-60'}
         `}
       >
-        <div className="min-h-[calc(100vh-3.5rem)]">
+        <div className="min-h-[calc(100dvh-3.5rem-env(safe-area-inset-top))]">
           {children}
         </div>
       </main>

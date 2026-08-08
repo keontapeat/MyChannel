@@ -2,7 +2,7 @@
 
 // Create VS Match - Challenge a Competitor
 
-import { Trophy, DollarSign, Users, Gamepad2, Eye, Heart, MessageCircle, Wallet, Palette, ChefHat, Music, Sparkles, Trophy as SportsIcon } from 'lucide-react';
+import { Trophy, DollarSign, Users, Gamepad2, Eye, Heart, MessageCircle, Wallet, Palette, ChefHat, Music, Star, Trophy as SportsIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import {
@@ -50,7 +50,7 @@ export default function CreateMatchPage() {
     { value: VSMatchCategory.CREATIVE, label: 'Creative', icon: '🎨', LucideIcon: Palette },
     { value: VSMatchCategory.COOKING, label: 'Cooking', icon: '🍳', LucideIcon: ChefHat },
     { value: VSMatchCategory.MUSIC, label: 'Music', icon: '🎵', LucideIcon: Music },
-    { value: VSMatchCategory.DANCE, label: 'Dance', icon: '💃', LucideIcon: Sparkles },
+    { value: VSMatchCategory.DANCE, label: 'Dance', icon: '💃', LucideIcon: Star },
     { value: VSMatchCategory.SPORTS, label: 'Sports', icon: '⚽', LucideIcon: SportsIcon },
   ];
 

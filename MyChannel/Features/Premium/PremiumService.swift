@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Combine
+import Foundation
 
 @MainActor
 class PremiumService: ObservableObject {
@@ -48,22 +49,25 @@ class PremiumService: ObservableObject {
     
     // MARK: - Premium Actions
     func subscribe(to tier: PremiumTier) async throws {
-        // Simulate subscription process
-        try await Task.sleep(nanoseconds: 2_000_000_000)
-        
+        guard tier != .none else { return }
+
+        // Map tier to StoreKit subscription plan: .ultimate → annual, others → monthly
+        let plan: SubscriptionPlan = (tier == .ultimate) ? .annual : .monthly
+        let skit = StoreKitService.shared
+        if skit.products.isEmpty { await skit.loadProducts() }
+
+        let success = try await skit.purchase(plan: plan)
+        guard success else { throw PremiumError.purchaseFailed }
+
+        // Mirror state for legacy callers; StoreKitService owns the source of truth
         premiumTier = tier
         isPremium = true
         subscriptionStatus = .active
-        
-        // Save to persistent storage
         UserDefaults.standard.set(true, forKey: "isPremium")
         UserDefaults.standard.set(tier.rawValue, forKey: "premiumTier")
-        
         updatePremiumFeatures()
-        
-        // Add haptic feedback
-        let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
-        impactFeedback.impactOccurred()
+
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
     }
     
     func cancelSubscription() async throws {
@@ -95,24 +99,62 @@ class PremiumService: ObservableObject {
             throw PremiumError.downloadLimitReached
         }
         
-        // Simulate download progress
+        // Real URLSession download to app's Documents/Downloads directory
         let progressID = video.id
         downloadProgress[progressID] = 0.0
-        
-        for i in 1...10 {
-            try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
-            let progress = Double(i) / 10.0
+
+        guard let videoURLString = video.videoURL.isEmpty ? nil : video.videoURL,
+              let sourceURL = URL(string: videoURLString) else {
+            throw PremiumError.featureNotAvailable
+        }
+
+        let downloadsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Downloads", isDirectory: true)
+        try? FileManager.default.createDirectory(at: downloadsDir, withIntermediateDirectories: true)
+        let destURL = downloadsDir.appendingPathComponent("\(video.id)_\(quality.rawValue).mp4")
+
+        // Skip if file already exists from a previous session
+        if FileManager.default.fileExists(atPath: destURL.path) {
+            let downloadedVideo = PremiumDownloadedVideo(
+                video: video,
+                quality: quality,
+                downloadDate: Date(),
+                filePath: destURL.path
+            )
             await MainActor.run {
-                downloadProgress[progressID] = progress
+                downloadedVideos.append(downloadedVideo)
+                downloadProgress[progressID] = nil
+            }
+            saveDownloadedVideos()
+            return
+        }
+
+        // Stream download with progress reporting
+        let (asyncBytes, response) = try await URLSession.shared.bytes(from: sourceURL)
+        let expectedLength = (response as? HTTPURLResponse)?
+            .value(forHTTPHeaderField: "Content-Length")
+            .flatMap(Int.init) ?? 0
+
+        var data = Data()
+        if expectedLength > 0 { data.reserveCapacity(expectedLength) }
+
+        var downloaded = 0
+        for try await byte in asyncBytes {
+            data.append(byte)
+            downloaded += 1
+            if downloaded % 65536 == 0 {
+                let progress = expectedLength > 0 ? Double(downloaded) / Double(expectedLength) : 0.5
+                await MainActor.run { downloadProgress[progressID] = min(progress, 0.99) }
             }
         }
-        
-        // Create downloaded video
+
+        try data.write(to: destURL, options: .atomic)
+
         let downloadedVideo = PremiumDownloadedVideo(
             video: video,
             quality: quality,
             downloadDate: Date(),
-            filePath: "downloads/\(video.id).mp4" // Simulated file path
+            filePath: destURL.path
         )
         
         await MainActor.run {
@@ -127,8 +169,11 @@ class PremiumService: ObservableObject {
     func deleteDownload(_ downloadedVideo: PremiumDownloadedVideo) {
         downloadedVideos.removeAll { $0.id == downloadedVideo.id }
         downloadProgress[downloadedVideo.video.id] = nil
-        
-        // Save to persistent storage
+
+        // Remove file from disk if it exists
+        if let path = downloadedVideo.filePath {
+            try? FileManager.default.removeItem(atPath: path)
+        }
         saveDownloadedVideos()
     }
     
@@ -371,7 +416,8 @@ enum PremiumError: LocalizedError {
     case subscriptionRequired
     case downloadLimitReached
     case alreadyDownloaded
-    
+    case purchaseFailed
+
     var errorDescription: String? {
         switch self {
         case .featureNotAvailable:
@@ -382,6 +428,8 @@ enum PremiumError: LocalizedError {
             return "Download limit reached for your tier"
         case .alreadyDownloaded:
             return "This video is already downloaded"
+        case .purchaseFailed:
+            return "Purchase was not completed. Please try again."
         }
     }
 }

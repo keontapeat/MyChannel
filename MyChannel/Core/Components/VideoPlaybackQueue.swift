@@ -77,7 +77,7 @@ struct VideoPlaybackQueue: Equatable {
 @MainActor
 final class VideoAssetPreloader {
     private(set) var preloadedAssets: [String: AVURLAsset] = [:]
-    private var preloadTasks: [String: Task<Void, Never>] = {}
+    private var preloadTasks: [String: Task<Void, Never>] = [:]
     static let maxPreloadCount = 2
 
     func cancel() {

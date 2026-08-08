@@ -32,7 +32,7 @@ struct FlicksActionRail: View {
     let onSound: (FlickMusicTrack) -> Void
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 17) {
             railButton(
                 icon: isLiked ? "heart.fill" : "heart",
                 count: likeCountLabel,
@@ -44,40 +44,27 @@ struct FlicksActionRail: View {
                 onLike()
             }
 
-            railButton(icon: "bubble.right.fill", count: commentCountLabel, color: .white, label: "Comments") {
+            railButton(icon: "bubble.right", count: commentCountLabel, color: .white, label: "Comments") {
                 HapticManager.shared.impact(style: .light)
                 onComment()
             }
 
-            railButton(icon: "arrowshape.turn.up.right.fill", count: shareCountLabel, color: .white, label: "Share") {
+            railButton(icon: "paperplane", count: shareCountLabel, color: .white, label: "Share") {
                 HapticManager.shared.impact(style: .light)
                 onShare()
             }
 
-            railButton(icon: "arrow.triangle.2.circlepath", count: "Remix", color: .white, label: "Remix") {
-                HapticManager.shared.impact(style: .light)
-                onRemix()
-            }
-
-            railButton(
-                icon: "gauge.with.dots.needle.67percent",
-                count: playbackSpeedLabel,
-                color: .white,
-                label: "Playback speed"
-            ) {
-                HapticManager.shared.impact(style: .light)
-                onSpeed()
-            }
-
-            railButton(icon: "gearshape.fill", count: qualityLabel, color: .white, label: "Video quality") {
-                HapticManager.shared.impact(style: .light)
-                onQuality()
+            if AppConfig.Features.enableSocialClipsDuets {
+                railButton(icon: "rectangle.split.2x1", count: "Remix", color: .white, label: "Remix") {
+                    HapticManager.shared.impact(style: .light)
+                    onRemix()
+                }
             }
 
             railButton(
                 icon: isSaved ? "bookmark.fill" : "bookmark",
-                count: "Save",
-                color: isSaved ? .yellow : .white,
+                count: isSaved ? "Saved" : "Save",
+                color: .white,
                 label: isSaved ? "Saved" : "Save"
             ) {
                 HapticManager.shared.impact(style: .medium)
@@ -96,16 +83,12 @@ struct FlicksActionRail: View {
                 } label: {
                     AppAsyncImage(
                         url: URL(string: musicTrack.albumArt),
-                        content: { image in
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        },
-                        placeholder: {
-                            Circle().fill(Color.white.opacity(0.3))
-                        }
+                        content: { $0.resizable().aspectRatio(contentMode: .fill) },
+                        placeholder: { Circle().fill(Color.white.opacity(0.3)) }
                     )
-                    .frame(width: 48, height: 48)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.8), lineWidth: 1.5))
                     .rotationEffect(.degrees(reduceMotion ? 0 : albumArtRotation))
                 }
                 .buttonStyle(ScaleButtonStyle())
@@ -128,8 +111,9 @@ struct FlicksActionRail: View {
             VStack(spacing: 6) {
                 ZStack {
                     Circle()
-                        .fill(Color.black.opacity(0.55))
-                        .frame(width: 52, height: 52)
+                        .fill(Color.black.opacity(0.36))
+                        .frame(width: 48, height: 48)
+                        .overlay(Circle().stroke(Color.white.opacity(0.08), lineWidth: 1))
 
                     Image(systemName: icon)
                         .font(.system(size: 24, weight: .medium))

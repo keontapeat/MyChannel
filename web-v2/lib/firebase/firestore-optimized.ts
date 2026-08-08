@@ -17,6 +17,7 @@ import {
   getDocsFromServer
 } from 'firebase/firestore';
 import { db } from './config';
+import { appendVideoEngagement } from './video-engagement';
 import { performanceMonitor } from '../performance/PerformanceMonitor';
 
 export class FirestoreOptimized {
@@ -107,17 +108,15 @@ export class FirestoreOptimized {
   }
 
   /**
-   * 🔥 THERMONUCLEAR: Batch increment view counts
+   * Batch immutable view facts. The server applies identity, session and cooldown
+   * semantics before changing public counters.
    */
   static async incrementViewCounts(videoIds: string[]): Promise<void> {
-    const operations = videoIds.map(id => ({
-      collection: 'videos',
-      id,
-      data: { viewCount: (doc: any) => doc.viewCount + 1 },
-      operation: 'update' as const
-    }));
-    
-    await this.batchWrite(operations);
+    const batch = writeBatch(db);
+    [...new Set(videoIds)].slice(0, 250).forEach(videoId => {
+      appendVideoEngagement(batch, videoId, 'view');
+    });
+    await batch.commit();
   }
 
   /**

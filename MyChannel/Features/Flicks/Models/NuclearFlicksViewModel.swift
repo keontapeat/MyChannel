@@ -41,6 +41,9 @@ class NuclearFlicksViewModel: ObservableObject {
     private var rotationTimer: Timer?
     private var recommendationsEnabled = false
     private var servedRecommendationIDs: Set<String> = []
+    private var engagementSessionIDs: [String: String] = [:]
+    private var hydratedFlickLikeIDs: Set<String> = []
+    private var hydratedLikesUserId: String?
     private var validatedURLs: Set<String> = []
     private var invalidURLs: Set<String> = []
     private let blacklistKey = "NuclearFlicks_DeadURLBlacklist"
@@ -55,7 +58,8 @@ class NuclearFlicksViewModel: ObservableObject {
         invalidURLs = persistentBlacklist
         // Seed per-user state from the app's persisted collections so likes,
         // follows, and saves survive relaunch and sync across devices instead of
-        // resetting to empty every time Flicks opens.
+        // resetting to empty every time Flicks opens. Remote marker state is
+        // hydrated only for loaded pages, never by scanning lifetime likes.
         likedFlickIds = AppState.shared.likedVideos
         followedCreatorIds = AppState.shared.subscriptions
         savedFlickIds = AppState.shared.watchLaterVideos
@@ -139,6 +143,8 @@ class NuclearFlicksViewModel: ObservableObject {
         flicks = makeDemoFlicks()
         print("📺 [NuclearFlicks] Firebase not available. Showing \(flicks.count) demo Flicks.")
         #endif
+
+        await hydrateFlickLikeState(for: flicks.map(\.id))
     }
     
     private func loadRecommendedFeedIfAvailable(limit: Int) async -> Bool {
@@ -157,6 +163,7 @@ class NuclearFlicksViewModel: ObservableObject {
             servedRecommendationIDs.formUnion(flickResults.map { $0.id })
             recommendationsEnabled = true
             lastDocument = nil
+            await hydrateFlickLikeState(for: flickResults.map(\.id))
             return true
         } catch {
             print("⚠️ [NuclearFlicks] Recommendation load failed: \(error)")
@@ -205,25 +212,81 @@ class NuclearFlicksViewModel: ObservableObject {
         } catch {
             print("🚨 [NuclearFlicks] Error loading more: \(error)")
         }
+        await hydrateFlickLikeState(for: flicks.map(\.id))
         #endif
     }
     
     // MARK: - Actions
+
+    private func hydrateFlickLikeState(for flickIds: [String]) async {
+        #if canImport(FirebaseFirestore)
+        guard let userId = AppState.shared.currentUser?.id else { return }
+
+        if hydratedLikesUserId != userId {
+            hydratedLikesUserId = userId
+            hydratedFlickLikeIDs.removeAll()
+            likedFlickIds = AppState.shared.likedVideos
+        }
+
+        let normalizedIds: Set<String> = Set(flickIds.compactMap { flickId in
+            let baseId = flickId.components(separatedBy: "_loop_").first ?? flickId
+            guard !baseId.isEmpty, baseId.count <= 1_500, !baseId.contains("/") else { return nil }
+            return baseId
+        })
+        let pendingIds: [String] = normalizedIds
+            .subtracting(hydratedFlickLikeIDs)
+            .sorted()
+        guard !pendingIds.isEmpty else { return }
+
+        let markers = Firestore.firestore()
+            .collection("users").document(userId)
+            .collection("flickLikes")
+
+        for startIndex in stride(from: 0, to: pendingIds.count, by: 10) {
+            let endIndex = min(startIndex + 10, pendingIds.count)
+            let chunk = Array(pendingIds[startIndex..<endIndex])
+            do {
+                let snapshot = try await markers
+                    .whereField(FieldPath.documentID(), in: chunk)
+                    .getDocuments()
+                let likedIds = Set(snapshot.documents.map(\.documentID))
+                let unlikedIds = Set(chunk).subtracting(likedIds)
+
+                likedFlickIds.formUnion(likedIds)
+                likedFlickIds.subtract(unlikedIds)
+                AppState.shared.likedVideos.formUnion(likedIds)
+                AppState.shared.likedVideos.subtract(unlikedIds)
+                hydratedFlickLikeIDs.formUnion(chunk)
+            } catch {
+                print("⚠️ [NuclearFlicks] Failed to hydrate Flick likes: \(error.localizedDescription)")
+            }
+        }
+        #endif
+    }
     
     func toggleLike(flick: NuclearFlick) {
+        guard AppState.shared.requireAuthentication(
+            hint: "Sign in to like Flicks and sync them across devices."
+        ), let userId = AppState.shared.currentUser?.id else { return }
+
         let baseId = flick.id.components(separatedBy: "_loop_").first ?? flick.id
         let wasLiked = likedFlickIds.contains(baseId)
-        if wasLiked {
-            likedFlickIds.remove(baseId)
-            AppState.shared.likedVideos.remove(baseId)
-        } else {
+        let nextLiked = !wasLiked
+        if nextLiked {
             likedFlickIds.insert(baseId)
             AppState.shared.likedVideos.insert(baseId)
+        } else {
+            likedFlickIds.remove(baseId)
+            AppState.shared.likedVideos.remove(baseId)
         }
+
         Task { [weak self] in
-            let ok = await self?.recordFlickEvent(flickId: baseId, type: wasLiked ? "unlike" : "like") ?? false
-            guard let self, !ok else { return }
-            // Roll back optimistic UI on network failure
+            let succeeded = await self?.persistFlickLikeState(
+                flickId: baseId,
+                userId: userId,
+                isLiked: nextLiked
+            ) ?? false
+            guard let self, !succeeded, self.likedFlickIds.contains(baseId) == nextLiked else { return }
             if wasLiked {
                 self.likedFlickIds.insert(baseId)
                 AppState.shared.likedVideos.insert(baseId)
@@ -232,6 +295,34 @@ class NuclearFlicksViewModel: ObservableObject {
                 AppState.shared.likedVideos.remove(baseId)
             }
         }
+    }
+
+    private func persistFlickLikeState(
+        flickId: String,
+        userId: String,
+        isLiked: Bool
+    ) async -> Bool {
+        #if canImport(FirebaseFirestore)
+        let marker = Firestore.firestore()
+            .collection("users").document(userId)
+            .collection("flickLikes").document(flickId)
+        do {
+            if isLiked {
+                try await marker.setData([
+                    "flickId": flickId,
+                    "createdAt": FieldValue.serverTimestamp()
+                ])
+            } else {
+                try await marker.delete()
+            }
+            return true
+        } catch {
+            print("🚨 [NuclearFlicks] Failed to update Flick like: \(error.localizedDescription)")
+            return false
+        }
+        #else
+        return true
+        #endif
     }
     
     func isLiked(flickId: String) -> Bool {
@@ -252,16 +343,10 @@ class NuclearFlicksViewModel: ObservableObject {
 
     func toggleSave(flick: NuclearFlick) {
         let baseId = flick.id.components(separatedBy: "_loop_").first ?? flick.id
-        let wasSaved = savedFlickIds.contains(baseId)
+        // Watch Later is already a deterministic users/{uid}/watchLater/{flickId}
+        // marker. It is canonical save state and does not belong in engagement events.
         AppState.shared.toggleWatchLater(for: baseId)
         savedFlickIds = AppState.shared.watchLaterVideos
-        Task { [weak self] in
-            let ok = await self?.recordFlickEvent(flickId: baseId, type: wasSaved ? "unsave" : "save") ?? false
-            guard let self, !ok else { return }
-            // Roll back optimistic save on failure
-            AppState.shared.toggleWatchLater(for: baseId)
-            self.savedFlickIds = AppState.shared.watchLaterVideos
-        }
     }
 
     func isSaved(flickId: String) -> Bool {
@@ -380,9 +465,12 @@ class NuclearFlicksViewModel: ObservableObject {
         guard let userId = AppState.shared.currentUser?.id else { return true }
         // Duplicate/looped feed entries share one backing doc — strip the suffix.
         let baseId = flickId.components(separatedBy: "_loop_").first ?? flickId
+        let sessionId = engagementSessionIDs[baseId] ?? UUID().uuidString
+        engagementSessionIDs[baseId] = sessionId
         var payload: [String: Any] = [
             "userId": userId,
             "type": type,
+            "sessionId": sessionId,
             "createdAt": FieldValue.serverTimestamp()
         ]
         payload.merge(extra) { _, new in new }
@@ -543,6 +631,7 @@ class NuclearFlicksViewModel: ObservableObject {
             guard !flickResults.isEmpty else { return false }
             flicks.append(contentsOf: flickResults)
             servedRecommendationIDs.formUnion(flickResults.map { $0.id })
+            await hydrateFlickLikeState(for: flickResults.map(\.id))
             return true
         } catch {
             print("⚠️ [NuclearFlicks] Failed to append recommendations: \(error)")

@@ -29,5 +29,23 @@ data class Video(
     val category: String = "",
     val isLive: Boolean = false,
     val isShort: Boolean = false,
-    val privacyStatus: String = "public" // "public" | "unlisted" | "private"
+    val ageRestricted: Boolean = false,
+    val madeForKids: Boolean = false,
+    val commentsEnabled: Boolean = true,
+    val processingStatus: String = "",
+    val moderationStatus: String = "",
+    val allowedRegions: List<String> = emptyList(),
+    val blockedRegions: List<String> = emptyList(),
+    val isPremium: Boolean = false,
+    val privacyStatus: String = "public", // "public" | "unlisted" | "private"
+    val chapters: List<VideoChapter> = emptyList()
+)
+
+/**
+ * A single chapter bookmark in a video, matching the iOS `VideoChapter` model.
+ * Firestore field: `chapters` array with `{title, startSec}` maps.
+ */
+data class VideoChapter(
+    val title: String = "",
+    val startSec: Long = 0L
 )

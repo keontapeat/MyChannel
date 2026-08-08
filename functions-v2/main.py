@@ -2597,52 +2597,82 @@ def cleanup_expired_memberships(event: scheduler_fn.ScheduledEvent) -> None:
 def auto_action_on_video_report(
     event: firestore_fn.Event[firestore_fn.DocumentSnapshot],
 ) -> None:
-    """Auto-hide videos that reach report thresholds."""
+    """Escalate videos using unique reporters; never punish solely on raw document count."""
     try:
         snap = event.data
-        if not snap: return
-        data     = snap.to_dict() or {}
-        video_id = data.get("videoId") or data.get("contentId") or ""
-        if not video_id: return
+        if not snap:
+            return
+        data = snap.to_dict() or {}
+        if data.get("type") != "video":
+            return
+        video_id = data.get("contentId") or data.get("videoId") or ""
+        if not video_id:
+            return
 
         db = _db()
+        video_ref = db.collection("videos").document(video_id)
+        video_snap = video_ref.get()
+        if not video_snap.exists:
+            return
+        video_data = video_snap.to_dict() or {}
+        creator_id = video_data.get("creatorId") or video_data.get("userId") or ""
 
-        # Count reports for this video
-        report_count = len(list(
-            db.collection("content_reports")
-            .where("videoId", "==", video_id)
-            .limit(25)
-            .stream()
-        ))
+        reports_by_id = {}
+        for field in ("contentId", "videoId"):
+            reports = (
+                db.collection("content_reports")
+                .where(field, "==", video_id)
+                .limit(100)
+                .stream()
+            )
+            for report in reports:
+                reports_by_id[report.id] = report.to_dict() or {}
 
+        unique_reporters = {
+            report.get("reporterId") or report.get("reporterUid")
+            for report in reports_by_id.values()
+            if report.get("type") == "video"
+            and (report.get("contentId") or report.get("videoId")) == video_id
+            and (report.get("reporterId") or report.get("reporterUid"))
+            and (report.get("reporterId") or report.get("reporterUid")) != creator_id
+        }
+        report_count = len(unique_reporters)
         now = firestore.SERVER_TIMESTAMP
+        current_status = video_data.get("moderationStatus") or ""
 
         if report_count >= 20:
-            # Auto-suspend
-            db.collection("videos").document(video_id).update({
-                "isPublic":       False,
-                "status":         "suspended",
-                "suspendedAt":    now,
-                "suspendReason":  "report_threshold_20",
-                "updatedAt":      now,
-            })
-            # Notify admin
-            db.collection("admin_alerts").add({
-                "type":       "video_suspended",
-                "videoId":    video_id,
+            if current_status != "escalated_review":
+                video_ref.update({
+                    "moderationStatus": "escalated_review",
+                    "moderationPriority": "critical",
+                    "reportCount": report_count,
+                    "moderationUpdatedAt": now,
+                })
+            db.collection("admin_alerts").document(
+                f"video-report-threshold-{video_id}"
+            ).set({
+                "type": "video_report_escalation",
+                "videoId": video_id,
                 "reportCount": report_count,
-                "createdAt":  now,
+                "status": "open",
+                "createdAt": now,
+                "updatedAt": now,
+            }, merge=True)
+            logging.warning(
+                f"[auto_action] escalated video {video_id} ({report_count} unique reporters)"
+            )
+        elif report_count >= 5 and current_status not in {
+            "held_for_review", "escalated_review"
+        }:
+            video_ref.update({
+                "moderationStatus": "held_for_review",
+                "moderationPriority": "high",
+                "reportCount": report_count,
+                "moderationUpdatedAt": now,
             })
-            logging.warning(f"[auto_action] suspended video {video_id} ({report_count} reports)")
-
-        elif report_count >= 5:
-            # Auto-hide pending review
-            db.collection("videos").document(video_id).update({
-                "isHeldForReview": True,
-                "heldAt":          now,
-                "updatedAt":       now,
-            })
-            logging.info(f"[auto_action] held video {video_id} for review ({report_count} reports)")
+            logging.info(
+                f"[auto_action] queued video {video_id} ({report_count} unique reporters)"
+            )
 
     except Exception:
         logging.exception("auto_action_on_video_report")

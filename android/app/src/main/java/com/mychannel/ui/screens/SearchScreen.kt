@@ -1,5 +1,10 @@
 package com.mychannel.ui.screens
 
+import android.Manifest
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.CircularProgressIndicator
@@ -48,10 +54,11 @@ import com.mychannel.domain.model.Channel
 import com.mychannel.domain.model.Video
 import com.mychannel.ui.components.VideoCard
 import com.mychannel.viewmodel.SearchViewModel
+import java.util.Locale
 
 /**
  * Search screen with live debounced search, history, trending terms,
- * video results, and channel results (REQ-6.1 – REQ-6.5).
+ * voice search, video results, and channel results (REQ-6.1 – REQ-6.6).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +68,27 @@ fun SearchScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var isActive by remember { mutableStateOf(true) }
+
+    // Voice search — uses Android's built-in speech recognizer
+    val voiceLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val spoken = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull() ?: return@rememberLauncherForActivityResult
+        viewModel.onQueryChange(spoken)
+        viewModel.search(spoken)
+        isActive = false
+    }
+
+    fun launchVoiceSearch() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Search MyChannel…")
+        }
+        voiceLauncher.launch(intent)
+    }
 
     Scaffold { innerPadding ->
         Column(
@@ -92,12 +120,36 @@ fun SearchScreen(
                         IconButton(onClick = { viewModel.onQueryChange("") }) {
                             Icon(Icons.Filled.Close, contentDescription = "Clear")
                         }
+                    } else {
+                        // Microphone for voice search
+                        IconButton(onClick = { launchVoiceSearch() }) {
+                            Icon(
+                                Icons.Filled.Mic,
+                                contentDescription = "Voice search",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Inline suggestions when the bar is active
-                if (uiState.showSuggestions) {
+                if (uiState.showTypeahead) {
+                    // Typeahead dropdown while typing
+                    Column(Modifier.fillMaxWidth()) {
+                        uiState.typeaheadSuggestions.forEach { suggestion ->
+                            androidx.compose.material3.ListItem(
+                                headlineContent = { Text(suggestion) },
+                                leadingContent = {
+                                    Icon(Icons.Filled.Search, contentDescription = null)
+                                },
+                                modifier = Modifier.clickable {
+                                    viewModel.search(suggestion)
+                                    isActive = false
+                                }
+                            )
+                        }
+                    }
+                } else if (uiState.showSuggestions) {
                     SearchSuggestions(
                         history = uiState.searchHistory,
                         trending = uiState.trendingSearches,
@@ -118,7 +170,6 @@ fun SearchScreen(
                 }
             }
 
-            // Results
             if (!isActive) {
                 SearchResults(
                     videos = uiState.videoResults,

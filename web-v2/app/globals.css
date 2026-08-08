@@ -155,6 +155,10 @@ body {
 }
 
 /* Hide Scrollbar Utility */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;

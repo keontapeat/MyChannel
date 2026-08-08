@@ -7,6 +7,9 @@
 
 import SwiftUI
 import Foundation
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
 
 // MARK: - Video Comment Model
 struct VideoComment: Identifiable, Codable {
@@ -103,24 +106,46 @@ class CommentsManager: ObservableObject {
     func loadComments(for videoId: String, sortBy: CommentSortOption = .topComments) async throws -> [VideoComment] {
         isLoading = true
         defer { isLoading = false }
-        
-        // Simulate network delay
-        try await Task.sleep(nanoseconds: 1_500_000_000)
-        
-        var comments = VideoComment.sampleComments
-        
+        #if canImport(FirebaseFirestore)
+        let snap = try await Firestore.firestore()
+            .collection("comments")
+            .whereField("videoId", isEqualTo: videoId)
+            .order(by: sortBy == .newest ? "createdAt" : "likeCount", descending: true)
+            .limit(to: 100)
+            .getDocuments()
+        let fetched = snap.documents.compactMap { try? $0.data(as: VideoComment.self) }
+        await MainActor.run { self.comments = fetched }
+        return fetched
+        #else
+        var result = VideoComment.sampleComments
         switch sortBy {
-        case .topComments:
-            comments.sort { $0.likeCount > $1.likeCount }
-        case .newest:
-            comments.sort { $0.createdAt > $1.createdAt }
+        case .topComments: result.sort { $0.likeCount > $1.likeCount }
+        case .newest:      result.sort { $0.createdAt > $1.createdAt }
         }
-        
-        await MainActor.run {
-            self.comments = comments
-        }
-        
-        return comments
+        await MainActor.run { self.comments = result }
+        return result
+        #endif
+    }
+
+    /// Load all comments made on a creator's videos (for Studio Comments tab).
+    func loadCommentsForCreator(creatorId: String) async throws -> [VideoComment] {
+        isLoading = true
+        defer { isLoading = false }
+        #if canImport(FirebaseFirestore)
+        let snap = try await Firestore.firestore()
+            .collection("comments")
+            .whereField("creatorId", isEqualTo: creatorId)
+            .order(by: "createdAt", descending: true)
+            .limit(to: 200)
+            .getDocuments()
+        let fetched = snap.documents.compactMap { try? $0.data(as: VideoComment.self) }
+        await MainActor.run { self.comments = fetched }
+        return fetched
+        #else
+        let result = VideoComment.sampleComments.sorted { $0.createdAt > $1.createdAt }
+        await MainActor.run { self.comments = result }
+        return result
+        #endif
     }
     
     func addComment(_ comment: VideoComment) {

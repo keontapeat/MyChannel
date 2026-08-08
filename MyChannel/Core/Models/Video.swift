@@ -69,6 +69,7 @@ struct Video: Identifiable, Codable, Hashable {
     // ✅ Additional properties for Vertex AI agents
     var isTrending: Bool?  // For PlacementOptimizationAgent
     var hasCopyrightStrike: Bool?  // For PlacementOptimizationAgent
+    var isMembersOnly: Bool?  // Members-only / early-access content
     
     // MARK: - Custom Coding Keys
     private enum CodingKeys: String, CodingKey {
@@ -82,8 +83,8 @@ struct Video: Identifiable, Codable, Hashable {
         case processingStatus, moderationStatus, allowedRegions, blockedRegions, isPremium
         case filmingLocation, isPremiere, transcript
         case isUniversityContent, universityCareerPaths, universitySkillTags
+        case isTrending, hasCopyrightStrike, isMembersOnly
         case universityDifficultyLevel, universityCertificateEligible
-        case isTrending, hasCopyrightStrike
     }
     
     // MARK: - Custom Decoding
@@ -157,6 +158,7 @@ struct Video: Identifiable, Codable, Hashable {
         )
         isTrending = try container.decodeIfPresent(Bool.self, forKey: .isTrending)
         hasCopyrightStrike = try container.decodeIfPresent(Bool.self, forKey: .hasCopyrightStrike)
+        isMembersOnly = try container.decodeIfPresent(Bool.self, forKey: .isMembersOnly)
     }
     
     // MARK: - Custom Encoding
@@ -214,6 +216,7 @@ struct Video: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(universityCertificateEligible, forKey: .universityCertificateEligible)
         try container.encodeIfPresent(isTrending, forKey: .isTrending)
         try container.encodeIfPresent(hasCopyrightStrike, forKey: .hasCopyrightStrike)
+        try container.encodeIfPresent(isMembersOnly, forKey: .isMembersOnly)
     }
     
     // Computed property for shareable link

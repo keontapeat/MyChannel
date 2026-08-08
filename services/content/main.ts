@@ -4,6 +4,10 @@ import rateLimit from 'express-rate-limit';
 import admin from 'firebase-admin';
 import { Storage } from '@google-cloud/storage';
 import jwt from 'jsonwebtoken';
+import {
+  authorizePlaybackSession,
+  createDeniedPlaybackSession
+} from './playback-session.js';
 
 // Initialize Firebase Admin (Application Default Credentials or service account)
 if (!admin.apps.length) {
@@ -13,6 +17,8 @@ const db = admin.firestore();
 const storage = new Storage();
 const STORIES_BUCKET = process.env.STORIES_BUCKET || 'mychannel-ingest';
 const JWT_SECRET = process.env.JWT_SECRET || '';
+const REQUIRE_APP_CHECK = process.env.REQUIRE_APP_CHECK === 'true' ||
+  process.env.NODE_ENV === 'production';
 
 type AuthenticatedUser = {
   userId: string;
@@ -213,6 +219,16 @@ async function verifyAppToken(authHeader: string | undefined): Promise<Authentic
   }
 }
 
+async function verifyAppCheckToken(token: string | undefined): Promise<boolean> {
+  if (!token?.trim()) return !REQUIRE_APP_CHECK;
+  try {
+    await admin.appCheck().verifyToken(token.trim());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function requireUser(req: any, res: any): Promise<AuthenticatedUser | null> {
   const user = await verifyAppToken(req.headers.authorization);
   if (!user) {
@@ -284,10 +300,21 @@ function successMessage(message: string) {
 
 const app = express();
 
+const corsOrigins = new Set([
+  'https://mychannel.live',
+  'https://www.mychannel.live',
+  ...(process.env.CORS_ORIGIN || '').split(',').map(origin => origin.trim()).filter(Boolean)
+]);
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: (origin, callback) => {
+    if (!origin || corsOrigins.has(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('Origin not allowed'));
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Firebase-AppCheck']
 }));
 app.use(express.json({ limit: '50mb' }));
 
@@ -336,6 +363,159 @@ app.get('/v1/feed/home', async (req, res) => {
   } catch (error) {
     console.error('Home feed error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create an authenticated, fail-closed playback authorization session.
+app.post('/v1/videos/:id/playback-session', async (req, res) => {
+  const videoId = String(req.params.id || '').trim();
+  const sessionId = crypto.randomUUID();
+  res.set('Cache-Control', 'private, no-store');
+
+  try {
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(videoId)) {
+      return res.status(400).json(
+        createDeniedPlaybackSession(sessionId, videoId.slice(0, 128), 'invalid_video_id')
+      );
+    }
+
+    const viewer = await verifyAppToken(req.headers.authorization);
+    if (!viewer) {
+      return res.status(401).json(
+        createDeniedPlaybackSession(sessionId, videoId, 'authentication_required')
+      );
+    }
+    const appCheckValid = await verifyAppCheckToken(req.get('X-Firebase-AppCheck'));
+    if (!appCheckValid) {
+      return res.status(401).json(
+        createDeniedPlaybackSession(sessionId, videoId, 'app_check_required')
+      );
+    }
+
+    const [videoDocument, viewerDocument] = await Promise.all([
+      db.collection('videos').doc(videoId).get(),
+      db.collection('users').doc(viewer.userId).get()
+    ]);
+    if (!videoDocument.exists) {
+      return res.status(404).json(
+        createDeniedPlaybackSession(sessionId, videoId, 'video_not_found')
+      );
+    }
+
+    const session = authorizePlaybackSession({
+      sessionId,
+      videoId,
+      viewerId: viewer.userId,
+      video: videoDocument.data() || {},
+      viewer: viewerDocument.exists ? viewerDocument.data() || {} : null
+    });
+    if (session.canPlay) {
+      const parsedExpiry = session.expiresAt ? new Date(session.expiresAt) : null;
+      const effectiveExpiryDate = parsedExpiry && Number.isFinite(parsedExpiry.getTime())
+        ? parsedExpiry
+        : new Date(Date.now() + 2 * 60 * 60 * 1000);
+      session.expiresAt = effectiveExpiryDate.toISOString();
+      const expiresAt = admin.firestore.Timestamp.fromDate(effectiveExpiryDate);
+      await db.collection('playback-sessions').doc(sessionId).set({
+        sessionId,
+        videoId,
+        viewerId: viewer.userId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt,
+        lastWatchTime: 0,
+        maxCompletionRate: 0
+      });
+    }
+    return res.status(session.canPlay ? 200 : 403).json(session);
+  } catch (error) {
+    console.error('Playback session error:', error);
+    return res.status(500).json(
+      createDeniedPlaybackSession(sessionId, videoId.slice(0, 128), 'internal_error')
+    );
+  }
+});
+
+// Keepalive-safe, idempotent final watch-time sample bound to an issued session.
+app.post('/v1/videos/:id/engagement/watch-time', async (req, res) => {
+  const videoId = String(req.params.id || '').trim();
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(videoId)) {
+      return res.status(400).json({ error: 'Invalid video id' });
+    }
+    const viewer = await verifyAppToken(req.headers.authorization);
+    if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
+    if (!await verifyAppCheckToken(req.get('X-Firebase-AppCheck'))) {
+      return res.status(401).json({ error: 'Device verification required' });
+    }
+
+    const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId.trim() : '';
+    const watchTime = Number(req.body?.watchTime);
+    const qualifiedView = req.body?.qualifiedView === true;
+    const completionRate = req.body?.completionRate === undefined
+      ? null
+      : Number(req.body.completionRate);
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(sessionId) ||
+        !Number.isInteger(watchTime) || watchTime < 1 || watchTime > 86_400 ||
+        (req.body?.qualifiedView !== undefined && typeof req.body.qualifiedView !== 'boolean') ||
+        (qualifiedView && watchTime < 5) ||
+        (completionRate !== null &&
+          (!Number.isFinite(completionRate) || completionRate < 0 || completionRate > 1))) {
+      return res.status(400).json({ error: 'Invalid engagement sample' });
+    }
+
+    const sessionRef = db.collection('playback-sessions').doc(sessionId);
+    const eventRef = db.collection('videos').doc(videoId)
+      .collection('events').doc(`${sessionId}_watch_time`);
+    const qualifiedViewRef = db.collection('videos').doc(videoId)
+      .collection('events').doc(`${sessionId}_view`);
+    await db.runTransaction(async transaction => {
+      const sessionSnapshot = await transaction.get(sessionRef);
+      const session = sessionSnapshot.data();
+      const expiresAt = session?.expiresAt;
+      if (!sessionSnapshot.exists || session?.viewerId !== viewer.userId ||
+          session?.videoId !== videoId || typeof expiresAt?.toMillis !== 'function' ||
+          expiresAt.toMillis() <= Date.now()) {
+        throw new Error('INVALID_PLAYBACK_SESSION');
+      }
+      const previousWatchTime = Number(session.lastWatchTime || 0);
+      const previousCompletionRate = Number(session.maxCompletionRate || 0);
+      const monotonicWatchTime = Math.max(previousWatchTime, watchTime);
+      const monotonicCompletionRate = completionRate === null
+        ? previousCompletionRate
+        : Math.max(previousCompletionRate, completionRate);
+      transaction.set(sessionRef, {
+        lastWatchTime: monotonicWatchTime,
+        maxCompletionRate: monotonicCompletionRate,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      transaction.set(eventRef, {
+        userId: viewer.userId,
+        videoId,
+        sessionId,
+        type: 'watch_time',
+        watchTime: monotonicWatchTime,
+        completionRate: monotonicCompletionRate,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      if (qualifiedView) {
+        transaction.set(qualifiedViewRef, {
+          userId: viewer.userId,
+          videoId,
+          sessionId,
+          type: 'view',
+          qualifiedWatchTime: monotonicWatchTime,
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+    });
+    return res.status(202).json({ accepted: true });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'INVALID_PLAYBACK_SESSION') {
+      return res.status(403).json({ error: 'Invalid playback session' });
+    }
+    console.error('Watch-time engagement error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -640,10 +820,15 @@ app.post('/v1/creator/videos', async (req, res) => {
       duration: typeof body.duration === 'number' ? body.duration : (body.duration ? Number(body.duration) : null),
       fileSize: typeof body.fileSize === 'number' ? body.fileSize : (body.fileSize ? Number(body.fileSize) : null),
       status,
+      processingStatus: videoUrl ? 'queued' : 'draft',
+      moderationStatus: 'pending',
+      visibility,
+      isPublic: visibility === 'public',
+      allowedRegions: [],
+      blockedRegions: [],
       qualityVariants: Array.isArray(body.qualityVariants) ? body.qualityVariants : [],
       captions: Array.isArray(body.captions) ? body.captions : [],
       chapters: Array.isArray(body.chapters) ? body.chapters : [],
-      visibility,
       isLive: false,
       isPremium: !!body.isPremium,
       views: 0,
@@ -655,7 +840,8 @@ app.post('/v1/creator/videos', async (req, res) => {
       tags,
       searchText: [title, description || '', category || '', language, ...tags].join(' ').trim().toLowerCase(),
       language,
-      ageRestriction: typeof body.ageRestriction === 'number' ? body.ageRestriction : Number(body.ageRestriction || 0),
+      ageRestriction: Number(body.ageRestriction) >= 18 ? 18 : 0,
+      ageRestricted: Number(body.ageRestriction) >= 18,
       publishedAt: videoUrl ? now : null,
       createdAt: now,
       updatedAt: now
@@ -1839,23 +2025,12 @@ app.post('/v1/users/:userId/subscribe', async (req, res) => {
 
     const now = admin.firestore.Timestamp.now();
     await subscriptionRef.set({
-      targetUserId,
+      channelId: targetUserId,
       subscribedAt: now
     });
 
-    await db.runTransaction(async tx => {
-      const subscriberRef = db.collection('users').doc(targetUserId).collection('subscribers').doc(user.userId);
-      tx.set(subscriberRef, { userId: user.userId, subscribedAt: now });
-
-      const targetSnap = await tx.get(targetUserRef);
-      const data = targetSnap.data() || {};
-      const currentCount = Number(data.subscriberCount || data.subscriber_count || 0);
-      tx.update(targetUserRef, {
-        subscriberCount: currentCount + 1,
-        updatedAt: now
-      });
-    });
-
+    // Canonical reverse-edge fanout and subscriberCount are maintained by the
+    // idempotent story-functions trigger for this forward edge.
     res.status(201).json(successMessage('Subscribed'));
   } catch (error) {
     console.error('Subscribe error:', error);
@@ -1878,24 +2053,10 @@ app.delete('/v1/users/:userId/subscribe', async (req, res) => {
       return res.json({ message: 'Not subscribed' });
     }
 
-    const targetUserRef = db.collection('users').doc(targetUserId);
-    const now = admin.firestore.Timestamp.now();
-
     await subscriptionRef.delete();
 
-    await db.runTransaction(async tx => {
-      const subscriberRef = db.collection('users').doc(targetUserId).collection('subscribers').doc(user.userId);
-      tx.delete(subscriberRef);
-
-      const targetSnap = await tx.get(targetUserRef);
-      const data = targetSnap.data() || {};
-      const currentCount = Number(data.subscriberCount || data.subscriber_count || 0);
-      tx.update(targetUserRef, {
-        subscriberCount: Math.max(0, currentCount - 1),
-        updatedAt: now
-      });
-    });
-
+    // Canonical reverse-edge cleanup and subscriberCount are maintained by the
+    // idempotent story-functions trigger for this forward edge.
     res.json(successMessage('Unsubscribed'));
   } catch (error) {
     console.error('Unsubscribe error:', error);
@@ -2451,6 +2612,7 @@ app.get('/v1/notifications/preferences', async (req, res) => {
 
     const defaultPreferences = {
       newVideos: true,
+      newStories: true,
       comments: true,
       replies: true,
       likes: false,
@@ -2475,13 +2637,17 @@ app.put('/v1/notifications/preferences', async (req, res) => {
     const user = await requireUser(req, res);
     if (!user) return;
 
-    const { newVideos, comments, replies, likes, subscriptions, mentions, emailNotifications, pushNotifications } = req.body || {};
+    const {
+      newVideos, newStories, comments, replies, likes, subscriptions,
+      mentions, emailNotifications, pushNotifications,
+    } = req.body || {};
 
     const patch: Record<string, any> = {
       updatedAt: admin.firestore.Timestamp.now()
     };
 
     if (newVideos !== undefined) patch.newVideos = !!newVideos;
+    if (newStories !== undefined) patch.newStories = !!newStories;
     if (comments !== undefined) patch.comments = !!comments;
     if (replies !== undefined) patch.replies = !!replies;
     if (likes !== undefined) patch.likes = !!likes;

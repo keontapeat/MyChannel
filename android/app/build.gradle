@@ -8,6 +8,26 @@ plugins {
     id 'com.google.firebase.crashlytics'
 }
 
+// Load release signing credentials from a gitignored keystore.properties file
+// (or CI environment variables). Never hardcode the keystore password here.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+def hasKeystoreFile = keystorePropertiesFile.exists()
+if (hasKeystoreFile) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+// Resolve each credential from the properties file first, then env vars (for CI).
+def resolveSigningValue = { String propKey, String envKey ->
+    return keystoreProperties.getProperty(propKey) ?: System.getenv(envKey)
+}
+def signingStoreFile = resolveSigningValue("storeFile", "MYCHANNEL_KEYSTORE_FILE")
+def signingStorePassword = resolveSigningValue("storePassword", "MYCHANNEL_KEYSTORE_PASSWORD")
+def signingKeyAlias = resolveSigningValue("keyAlias", "MYCHANNEL_KEY_ALIAS")
+def signingKeyPassword = resolveSigningValue("keyPassword", "MYCHANNEL_KEY_PASSWORD")
+def hasReleaseSigning = signingStoreFile != null && signingStorePassword != null &&
+        signingKeyAlias != null && signingKeyPassword != null
+
 android {
     namespace 'com.mychannel'
     compileSdk 34
@@ -24,9 +44,33 @@ android {
             useSupportLibrary true
         }
         
+        // 🔒 LAUNCH GATE (real-money): OFF for initial Play submission. Gates the
+        // VS Match wager screen/route. Real-money skill wagering requires Google
+        // Play RMG enrollment + state-by-state gaming-law clearance (not complete).
+        // The Android wager flow is also unfinished (calls createVSMatch/acceptVSMatch
+        // callables that don't exist server-side). Keep false until both land.
+        buildConfigField "boolean", "WAGERING_ENABLED", "false"
+
         buildConfigField "String", "API_BASE_URL", "\"https://api.mychannel.live\""
+        buildConfigField "String", "MUSIC_API_BASE_URL", groovy.json.JsonOutput.toJson(
+            project.findProperty("MUSIC_API_BASE_URL") ?: ""
+        )
         buildConfigField "String", "DEEP_LINK_SCHEME", "\"mychannel\""
         buildConfigField "String", "DOMAIN", "\"mychannel.live\""
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(signingStoreFile)
+                storePassword signingStorePassword
+                keyAlias signingKeyAlias
+                keyPassword signingKeyPassword
+                // Google Play upload signing supports both schemes.
+                enableV1Signing true
+                enableV2Signing true
+            }
+        }
     }
 
     buildTypes {
@@ -36,6 +80,12 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             
             buildConfigField "boolean", "DEBUG_MODE", "false"
+
+            // Applied only when keystore.properties (or CI env vars) are present.
+            // Without it, `bundleRelease` produces an unsigned bundle Play will reject.
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
         debug {
             minifyEnabled false
@@ -130,6 +180,8 @@ dependencies {
     // Firebase
     implementation platform('com.google.firebase:firebase-bom:32.7.0')
     implementation 'com.google.firebase:firebase-auth-ktx'
+    implementation 'com.google.firebase:firebase-appcheck-playintegrity'
+    debugImplementation 'com.google.firebase:firebase-appcheck-debug'
     implementation 'com.google.firebase:firebase-firestore-ktx'
     implementation 'com.google.firebase:firebase-storage-ktx'
     implementation 'com.google.firebase:firebase-messaging-ktx'
@@ -158,6 +210,10 @@ dependencies {
     implementation "androidx.media3:media3-ui:$media3Version"
     implementation "androidx.media3:media3-session:$media3Version"
     implementation "androidx.media3:media3-common:$media3Version"
+
+    // Google Cast SDK (Chromecast)
+    implementation 'com.google.android.gms:play-services-cast-framework:21.4.0'
+    implementation 'androidx.mediarouter:mediarouter:1.7.0'
     
     // Room Database
     def roomVersion = '2.6.1'
@@ -183,6 +239,9 @@ dependencies {
     // Paging 3
     implementation 'androidx.paging:paging-runtime-ktx:3.2.1'
     implementation 'androidx.paging:paging-compose:3.2.1'
+
+    // Google Play Billing (in-app purchases + subscriptions)
+    implementation 'com.android.billingclient:billing-ktx:7.0.0'
     
     // Testing
     testImplementation 'junit:junit:4.13.2'

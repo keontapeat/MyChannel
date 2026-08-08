@@ -349,6 +349,17 @@ struct ReportMessageView: View {
         case impersonation = "Impersonation"
         case other = "Other"
         
+        var reasonCode: String {
+            switch self {
+            case .spam: return "spam"
+            case .harassment: return "harassment"
+            case .hateSpeech: return "hate_or_abuse"
+            case .inappropriate: return "inappropriate_content"
+            case .impersonation: return "impersonation"
+            case .other: return "other"
+            }
+        }
+
         var description: String {
             switch self {
             case .spam: return "Repetitive or unwanted messages"
@@ -431,22 +442,29 @@ struct ReportMessageView: View {
     }
     
     private func submitReport() {
-        // Submit report to Firestore via existing report_content path
-        guard let uid = AppState.shared.currentUser?.id else { dismiss(); return }
-        Task {
-            #if canImport(FirebaseFirestore)
-            try? await Firestore.firestore().collection("reports").addDocument(data: [
-                "type": "chat_message",
-                "itemId": message.id,
-                "reason": selectedReason.rawValue,
-                "reporterUid": uid,
-                "targetUid": message.userId,
-                "messageContent": message.content,
-                "createdAt": Timestamp(date: Date()),
-            ])
-            #endif
+        guard let uid = AppState.shared.currentUser?.id else {
+            NotificationManager.shared.showError("Sign in to submit a report.")
+            return
         }
-        dismiss()
+
+        Task {
+            do {
+                _ = try await ContentReportService.submit(
+                    type: .chatMessage,
+                    contentId: message.id,
+                    contentCreatorId: message.userId,
+                    reporterId: uid,
+                    reason: selectedReason.reasonCode,
+                    reasonTitle: selectedReason.rawValue,
+                    details: additionalDetails,
+                    streamId: message.streamId
+                )
+                NotificationManager.shared.showSuccess("Message reported to moderation.")
+                dismiss()
+            } catch {
+                NotificationManager.shared.showError(error.localizedDescription)
+            }
+        }
     }
 }
 

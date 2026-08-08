@@ -717,74 +717,17 @@ final class RealTimeReportHandler: ObservableObject {
     
     private func performAgentTask() async throws {
         #if canImport(FirebaseFirestore)
-        let db = Firestore.firestore()
-        
-        // Get new reports
-        let snapshot = try await db.collection("reports")
+        // Client agents may observe queue depth for diagnostics, but moderation
+        // decisions and content mutations are server-authoritative.
+        let snapshot = try await Firestore.firestore()
+            .collection("content_reports")
             .whereField("status", isEqualTo: "pending")
-            .order(by: "createdAt", descending: true)
             .limit(to: 50)
             .getDocuments()
-        
-        print("📋 [Report Handler] Processing \(snapshot.documents.count) reports")
-        
-        for doc in snapshot.documents {
-            let reportId = doc.documentID
-            let data = doc.data()
-            let contentId = data["contentId"] as? String ?? ""
-            let contentType = data["contentType"] as? String ?? ""
-            let reason = data["reason"] as? String ?? ""
-            let reportCount = data["reportCount"] as? Int ?? 1
-            
-            // Auto-action based on report count and reason
-            if reportCount >= 3 || reason.contains("illegal") || reason.contains("harmful") {
-                // Immediate action needed
-                try await takeImmediateAction(contentId: contentId, contentType: contentType, reason: reason)
-                
-                try await db.collection("reports").document(reportId).updateData([
-                    "status": "actioned",
-                    "actionTaken": "immediate_removal",
-                    "processedAt": FieldValue.serverTimestamp()
-                ])
-            } else {
-                // Queue for human review
-                try await db.collection("reports").document(reportId).updateData([
-                    "status": "review_queue",
-                    "queuedAt": FieldValue.serverTimestamp()
-                ])
-            }
-            
-            metrics.impressions += 1
-        }
-        
+
+        print("📋 [Report Handler] Observed \(snapshot.documents.count) pending reports")
+        metrics.impressions += snapshot.documents.count
         metrics.totalRuns += 1
-        #endif
-    }
-    
-    private func takeImmediateAction(contentId: String, contentType: String, reason: String) async throws {
-        #if canImport(FirebaseFirestore)
-        let db = Firestore.firestore()
-        
-        // Remove content immediately
-        let collection = contentType == "video" ? "videos" : "comments"
-        try await db.collection(collection).document(contentId).updateData([
-            "removed": true,
-            "removeReason": "Multiple reports: \(reason)",
-            "removedAt": FieldValue.serverTimestamp()
-        ])
-        
-        print("🚨 [Report Handler] Removed \(contentType) \(contentId): \(reason)")
-        
-        // Write to admin_alerts Firestore collection
-        try? await Firestore.firestore().collection("admin_alerts").addDocument(data: [
-            "type": "content_removed",
-            "contentType": contentType,
-            "contentId": contentId,
-            "reason": reason,
-            "priority": "high",
-            "resolved": false,
-            "createdAt": FieldValue.serverTimestamp(),
-        ])
         #endif
     }
     

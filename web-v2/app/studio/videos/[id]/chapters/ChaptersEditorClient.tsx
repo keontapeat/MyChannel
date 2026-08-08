@@ -35,7 +35,8 @@ function timestampToSeconds(ts: string): number | null {
   return null;
 }
 
-export default function ChaptersEditorClient({ videoId }: { videoId: string }) {
+export default function ChaptersEditorClient({ videoId: initialVideoId }: { videoId: string }) {
+  const [videoId, setVideoId] = useState(initialVideoId === '_fallback' ? '' : initialVideoId);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -45,7 +46,15 @@ export default function ChaptersEditorClient({ videoId }: { videoId: string }) {
   const [videoTitle, setVideoTitle] = useState('');
 
   useEffect(() => {
-    if (!videoId || videoId === '_fallback') { setLoading(false); return; }
+    if (initialVideoId !== '_fallback') return;
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const videosIndex = segments.indexOf('videos');
+    const pathId = videosIndex >= 0 ? segments[videosIndex + 1] : '';
+    if (pathId && pathId !== '_fallback') setVideoId(decodeURIComponent(pathId));
+  }, [initialVideoId]);
+
+  useEffect(() => {
+    if (!videoId) return;
 
     const load = async () => {
       try {

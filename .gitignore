@@ -35,7 +35,16 @@ web-v2/.env.local
 .ai_api_key
 
 # ADD: local developer-only secrets (never commit)
-LocalSecrets.plist# Ignore vendor and ephemeral dirs
+LocalSecrets.plist
+
+# Android release signing (never commit the keystore or its passwords)
+**/keystore.properties
+*.jks
+*.keystore
+android/app/upload-keystore.jks
+android/keystore.properties
+
+# Ignore vendor and ephemeral dirs
 **/.terraform/**
 **/terraform.tfstate
 **/terraform.tfstate.*

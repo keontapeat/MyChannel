@@ -523,21 +523,27 @@ struct ProfileView: View {
                                 destination: UniversityHomeView()
                             )
                             
-                            // 2. Gaming & Esports
-                            YouTubeStyleFeatureCard(
-                                icon: "gamecontroller.fill",
-                                title: "Gaming & Esports",
-                                subtitle: "Tournaments & competitions",
-                                destination: GamingEsportsView()
-                            )
-                            
-                            // 3. Championship Hub
-                            YouTubeStyleFeatureCard(
-                                icon: "crown.fill",
-                                title: "Championship Hub",
-                                subtitle: "Medals, rankings & VS matches",
-                                destination: ChampionshipHubView()
-                            )
+                            // 2 & 3. Gaming/Esports + Championship Hub — real-money
+                            // VS Match surfaces (wagers, "Win Money", escrow). 🔒 LAUNCH
+                            // GATE: hidden until wagering is licensed/enrolled. See
+                            // AppConfig.Features.enableCreatorMonetization.
+                            if AppConfig.Features.enableCreatorMonetization {
+                                // 2. Gaming & Esports
+                                YouTubeStyleFeatureCard(
+                                    icon: "gamecontroller.fill",
+                                    title: "Gaming & Esports",
+                                    subtitle: "Tournaments & competitions",
+                                    destination: GamingEsportsView()
+                                )
+                                
+                                // 3. Championship Hub
+                                YouTubeStyleFeatureCard(
+                                    icon: "crown.fill",
+                                    title: "Championship Hub",
+                                    subtitle: "Medals, rankings & VS matches",
+                                    destination: ChampionshipHubView()
+                                )
+                            }
                             
                             // 5. Live Shopping
                             YouTubeStyleFeatureCard(

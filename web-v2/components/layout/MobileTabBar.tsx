@@ -1,22 +1,22 @@
 'use client';
 
-// Mobile bottom tab bar — YouTube mobile parity.
-// Visible only on < md screens. Hidden on the watch page (full-screen player takes over).
+// Mobile bottom tab bar — Matches iOS app navigation exactly.
+// 5 tabs: Home, Flicks, Upload (center button), Subscriptions, You
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, Upload, TrendingUp, User } from 'lucide-react';
+import { Home, Clapperboard, Plus, Users, User } from 'lucide-react';
 
 const TABS = [
-  { icon: Home,       label: 'Home',     href: '/' },
-  { icon: Search,     label: 'Search',   href: '/search' },
-  { icon: Upload,     label: 'Upload',   href: '/upload' },
-  { icon: TrendingUp, label: 'Trending', href: '/trending' },
-  { icon: User,       label: 'You',      href: '/profile/me' },
+  { icon: Home,         label: 'Home',          href: '/' },
+  { icon: Clapperboard, label: 'Flicks',        href: '/flicks' },
+  { icon: Plus,         label: 'Upload',        href: '/upload', isCenter: true },
+  { icon: Users,        label: 'Subscriptions', href: '/subscriptions' },
+  { icon: User,         label: 'You',           href: '/profile/me' },
 ] as const;
 
-// Routes where the mobile tab bar is hidden (full-bleed video / Flicks)
-const HIDDEN_ON = ['/watch', '/flicks', '/live'];
+// Routes where the mobile tab bar is hidden (full-bleed video / Flicks / Live)
+const HIDDEN_ON = ['/watch', '/live'];
 
 export default function MobileTabBar() {
   const pathname = usePathname();
@@ -35,12 +35,10 @@ export default function MobileTabBar() {
       "
       aria-label="Mobile navigation"
     >
-      {TABS.map(({ icon: Icon, label, href }) => {
+      {TABS.map(({ icon: Icon, label, href, ...rest }) => {
         const isActive =
           href === '/' ? pathname === '/' : pathname.startsWith(href);
-
-        // Upload tab gets a special center-pill style
-        const isUpload = label === 'Upload';
+        const isCenter = 'isCenter' in rest && rest.isCenter;
 
         return (
           <Link
@@ -48,20 +46,20 @@ export default function MobileTabBar() {
             href={href}
             className={`
               flex flex-1 flex-col items-center justify-center gap-0.5
-              py-2 min-h-[52px]
+              min-h-[56px] py-1.5
               transition-colors
-              ${isUpload ? '' : 'hover:bg-[rgb(var(--color-surface-hover))]'}
+              ${isCenter ? '' : 'hover:bg-[rgb(var(--color-surface-hover))]'}
             `}
             aria-label={label}
             aria-current={isActive ? 'page' : undefined}
           >
-            {isUpload ? (
-              /* Upload gets a filled pill like YouTube */
-              <span className="flex items-center justify-center w-9 h-7 rounded-lg bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]">
+            {isCenter ? (
+              /* Center upload button — red circle like iOS */
+              <span className="flex items-center justify-center w-11 h-11 rounded-full bg-[#EF4444] shadow-lg shadow-red-500/30">
                 <Icon
-                  size={18}
-                  strokeWidth={2}
-                  className="text-[rgb(var(--color-text-primary))]"
+                  size={22}
+                  strokeWidth={2.5}
+                  className="text-white"
                 />
               </span>
             ) : (
@@ -70,20 +68,20 @@ export default function MobileTabBar() {
                 strokeWidth={isActive ? 2.5 : 1.8}
                 className={
                   isActive
-                    ? 'text-[rgb(var(--color-text-primary))]'
+                    ? 'text-[#EF4444]'
                     : 'text-[rgb(var(--color-text-secondary))]'
                 }
-                fill={isActive && label !== 'Search' ? 'currentColor' : 'none'}
+                fill={isActive && label === 'Home' ? 'currentColor' : 'none'}
               />
             )}
             <span
               className={`text-[10px] leading-none ${
                 isActive
-                  ? 'font-semibold text-[rgb(var(--color-text-primary))]'
+                  ? 'font-semibold text-[#EF4444]'
                   : 'text-[rgb(var(--color-text-secondary))]'
-              } ${isUpload ? 'mt-0.5' : ''}`}
+              } ${isCenter ? 'mt-0' : ''}`}
             >
-              {label}
+              {isCenter ? '' : label}
             </span>
           </Link>
         );

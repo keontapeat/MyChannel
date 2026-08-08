@@ -455,8 +455,22 @@ struct MinimalContentSections: View {
         return vids
     }
 
+    /// Titles pinned to the front of the Home "Movies" row, in this exact order,
+    /// so they always occupy the first columns regardless of TMDB blockbusters.
+    private static let pinnedMovieIDs: [String] = [
+        "yt-obsession-2025",
+        "yt-jeepers-creepers-2-2003",
+        "yt-dead-silence-2007"
+    ]
+
+    private var pinnedFeaturedMovies: [FreeMovie] {
+        Self.pinnedMovieIDs.compactMap { id in
+            FreeMovie.sampleMovies.first { $0.id == id }
+        }
+    }
+
     private var homeBlockbusterMovies: [FreeMovie] {
-        let merged = blockbusterMovies + FreeMovie.sampleMovies.sorted { lhs, rhs in
+        let merged = pinnedFeaturedMovies + blockbusterMovies + FreeMovie.sampleMovies.sorted { lhs, rhs in
             if lhs.year != rhs.year { return lhs.year > rhs.year }
             return lhs.imdbRating > rhs.imdbRating
         }

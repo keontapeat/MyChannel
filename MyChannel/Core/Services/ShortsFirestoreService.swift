@@ -199,49 +199,23 @@ final class ShortsFirestoreService: ObservableObject {
         #endif
     }
     
-    // MARK: - Update Engagement
-    
-    /// Increment like count
-    func incrementLikeCount(flickId: String) async throws {
-        #if canImport(FirebaseFirestore)
-        try await writeShortEvent(flickId: flickId, type: "like")
-        #endif
-    }
-    
-    /// Increment view count
-    func incrementViewCount(flickId: String) async throws {
-        #if canImport(FirebaseFirestore)
-        try await writeShortEvent(flickId: flickId, type: "view")
-        #endif
-    }
-    
-    /// Increment comment count
-    func incrementCommentCount(flickId: String) async throws {
-        #if canImport(FirebaseFirestore)
-        try await writeShortEvent(flickId: flickId, type: "comment")
-        #endif
-    }
-    
-    /// Increment share count
-    func incrementShareCount(flickId: String) async throws {
-        #if canImport(FirebaseFirestore)
-        try await writeShortEvent(flickId: flickId, type: "share")
-        #endif
-    }
+    // MARK: - Engagement
 
-    #if canImport(FirebaseFirestore)
-    private func writeShortEvent(flickId: String, type: String) async throws {
+    /// Records a share fact. Views, watch time, reactions, and comments use their
+    /// dedicated canonical paths and must not be represented by arbitrary events.
+    func recordShare(flickId: String) async throws {
+        #if canImport(FirebaseFirestore)
         guard let userId = AuthenticationManager.shared.currentUser?.id else { return }
         try await db.collection("flicks").document(flickId)
             .collection("events").document()
             .setData([
-                "type": type,
+                "type": "share",
                 "userId": userId,
-                "createdAt": FieldValue.serverTimestamp(),
-                "deviceType": "iOS"
+                "sessionId": UUID().uuidString,
+                "createdAt": FieldValue.serverTimestamp()
             ])
+        #endif
     }
-    #endif
     
     // MARK: - Delete Flick
     

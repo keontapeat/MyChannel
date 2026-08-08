@@ -11,9 +11,6 @@ import SwiftUI
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
-#if canImport(FirebaseAuth)
-import FirebaseAuth
-#endif
 
 // MARK: - Uploaded Track Model
 
@@ -24,7 +21,7 @@ struct UploadedTrack: Identifiable {
     let artistName: String
     let genre: String
     let artworkURL: String?
-    let audioURL: String
+    let playbackURL: URL
     let streamCount: Int
     let likeCount: Int
     let uploadedAt: Date
@@ -47,6 +44,7 @@ final class MusicDiscoveryFeedService: ObservableObject {
     @Published var newDrops: [UploadedTrack] = []
     @Published var trendingUploads: [UploadedTrack] = []
     @Published var isLoading: Bool = false
+    @Published var errorMessage: String?
 
     #if canImport(FirebaseFirestore)
     private var newDropsListener: ListenerRegistration?
@@ -68,12 +66,17 @@ final class MusicDiscoveryFeedService: ObservableObject {
         newDropsListener?.remove()
         newDropsListener = db.collection("music_tracks")
             .whereField("isPublished", isEqualTo: true)
+            .whereField("status", isEqualTo: "published")
             .order(by: "uploadedAt", descending: true)
             .limit(to: 20)
-            .addSnapshotListener { [weak self] snapshot, _ in
-                guard let self, let docs = snapshot?.documents else { return }
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self else { return }
                 Task { @MainActor in
-                    self.newDrops = docs.compactMap { Self.track(from: $0) }
+                    if let error {
+                        self.errorMessage = "Could not load new music: \(error.localizedDescription)"
+                        return
+                    }
+                    self.newDrops = snapshot?.documents.compactMap { Self.track(from: $0) } ?? []
                 }
             }
         #endif
@@ -85,51 +88,38 @@ final class MusicDiscoveryFeedService: ObservableObject {
         trendingListener?.remove()
         trendingListener = db.collection("music_tracks")
             .whereField("isPublished", isEqualTo: true)
+            .whereField("status", isEqualTo: "published")
             .order(by: "streamCount", descending: true)
             .limit(to: 20)
-            .addSnapshotListener { [weak self] snapshot, _ in
-                guard let self, let docs = snapshot?.documents else { return }
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self else { return }
                 Task { @MainActor in
-                    self.trendingUploads = docs.compactMap { Self.track(from: $0) }
+                    if let error {
+                        self.errorMessage = "Could not load trending music: \(error.localizedDescription)"
+                        return
+                    }
+                    self.trendingUploads = snapshot?.documents.compactMap { Self.track(from: $0) } ?? []
                 }
             }
-        #endif
-    }
-
-    func incrementStream(trackId: String) {
-        #if canImport(FirebaseFirestore)
-        // 🔐 streamCount is payout-bearing and server-controlled. We log a play
-        // event; the incrementStreamCountOnPlay Cloud Function does the increment.
-        var event: [String: Any] = [
-            "songId": trackId,
-            "playedAt": FieldValue.serverTimestamp(),
-            "source": "discovery_feed"
-        ]
-        #if canImport(FirebaseAuth)
-        if let uid = Auth.auth().currentUser?.uid {
-            event["listenerId"] = uid
-        }
-        #endif
-        Firestore.firestore().collection("music_plays").document().setData(event)
-        #endif
-    }
-
-    func toggleLike(trackId: String, liked: Bool) {
-        #if canImport(FirebaseFirestore)
-        let delta: Int64 = liked ? 1 : -1
-        Firestore.firestore().collection("music_tracks").document(trackId)
-            .updateData(["likeCount": FieldValue.increment(delta)])
         #endif
     }
 
     #if canImport(FirebaseFirestore)
     private static func track(from doc: QueryDocumentSnapshot) -> UploadedTrack? {
         let d = doc.data()
+        let renditions = d["renditions"] as? [String: Any]
+        let playbackURL = MusicAPIClient.publicPlaybackURL(from: [
+            renditions?["hls"] as? String,
+            d["hlsURL"] as? String,
+            d["streamURL"] as? String,
+            renditions?["mp3"] as? String,
+            d["mp3URL"] as? String
+        ])
         guard
             let title = d["title"] as? String,
             let artistId = d["artistId"] as? String,
             let artistName = d["artistName"] as? String,
-            let audioURL = d["audioURL"] as? String
+            let playbackURL
         else { return nil }
 
         let ts = (d["uploadedAt"] as? Timestamp)?.dateValue() ?? Date()
@@ -140,7 +130,7 @@ final class MusicDiscoveryFeedService: ObservableObject {
             artistName: artistName,
             genre: d["genre"] as? String ?? "Music",
             artworkURL: d["artworkURL"] as? String,
-            audioURL: audioURL,
+            playbackURL: playbackURL,
             streamCount: d["streamCount"] as? Int ?? 0,
             likeCount: d["likeCount"] as? Int ?? 0,
             uploadedAt: ts,

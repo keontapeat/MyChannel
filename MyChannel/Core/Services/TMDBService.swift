@@ -247,6 +247,45 @@ final class TMDBService {
         return nil
     }
 
+    // MARK: - People (cast headshots)
+    struct PersonSearchResponse: Decodable {
+        let results: [Person]
+        struct Person: Decodable {
+            let profile_path: String?
+            let popularity: Double?
+        }
+    }
+
+    /// Resolves an actor name to a TMDB profile image URL string, or nil when the
+    /// key is missing / no headshot exists. Picks the most popular matching person.
+    func personProfileURLString(name: String, size: String = "w185") async -> String? {
+        guard !Config.apiKey.isEmpty else { return nil }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        do {
+            let req = try makeRequest(
+                path: "search/person",
+                query: [
+                    URLQueryItem(name: "query", value: trimmed),
+                    URLQueryItem(name: "include_adult", value: "false")
+                ]
+            )
+            let data = try await NetworkOptimizer.shared.optimizedRequest(
+                for: req.url!,
+                priority: .normal,
+                cachePolicy: .returnCacheDataElseLoad
+            )
+            let resp = try JSONDecoder().decode(PersonSearchResponse.self, from: data)
+            let best = resp.results
+                .sorted { ($0.popularity ?? 0) > ($1.popularity ?? 0) }
+                .first { $0.profile_path != nil }
+            guard let path = best?.profile_path else { return nil }
+            return "\(Config.imageBase)/\(size)\(path)"
+        } catch {
+            return nil
+        }
+    }
+
     private func mapProviderNameToSource(_ name: String) -> FreeMovie.StreamingSource {
         switch name.lowercased() {
         case let s where s.contains("tubi"): return .tubi

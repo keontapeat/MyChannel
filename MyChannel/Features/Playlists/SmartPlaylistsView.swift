@@ -574,7 +574,12 @@ struct PlaylistDetailSheet: View {
                         }
                         
                         Button {
-                            // Play all
+                            // Start playback queue with all videos in this playlist
+                            let videos = playlistVideos(for: playlist)
+                            if let first = videos.first {
+                                GlobalVideoPlayerManager.shared.playVideo(first, showFullscreen: true, queue: videos)
+                                HapticManager.shared.impact(style: .medium)
+                            }
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "play.fill")
@@ -590,10 +595,21 @@ struct PlaylistDetailSheet: View {
                             .shadow(color: AppTheme.Colors.primary.opacity(0.3), radius: 12, x: 0, y: 4)
                         }
                     }
-                    
-                    // Video list would go here
-                    Text("Video list coming soon")
-                        .foregroundColor(AppTheme.Colors.textSecondary)
+
+                    // Video list
+                    let videos = playlistVideos(for: playlist)
+                    if videos.isEmpty {
+                        Text("No videos yet")
+                            .font(.subheadline)
+                            .foregroundColor(AppTheme.Colors.textTertiary)
+                            .padding(.top, 8)
+                    } else {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(videos.enumerated()), id: \.element.id) { index, video in
+                                SmartPlaylistVideoRow(video: video, index: index + 1)
+                            }
+                        }
+                    }
                 }
                 .padding(24)
             }
@@ -612,5 +628,72 @@ struct PlaylistDetailSheet: View {
 
 #Preview {
     SmartPlaylistsView()
+}
+
+// MARK: - Helpers
+
+/// Returns a filtered slice of sample videos tailored for a smart playlist's mood/activity tags.
+private func playlistVideos(for playlist: SmartPlaylist) -> [Video] {
+    let all = Video.sampleVideos
+    // Match by mood/activity tag if available, otherwise return a consistent slice
+    if let mood = playlist.mood?.lowercased() {
+        let filtered = all.filter { ($0.description).localizedCaseInsensitiveContains(mood) || $0.tags.contains(where: { $0.lowercased() == mood }) }
+        if !filtered.isEmpty { return filtered }
+    }
+    // Deterministic slice based on playlist id so repeated calls are stable
+    let seed = abs(playlist.id.hashValue) % max(1, all.count)
+    let count = min(playlist.videoCount, all.count)
+    let start = seed % all.count
+    var result: [Video] = []
+    for i in 0..<count {
+        result.append(all[(start + i) % all.count])
+    }
+    return result
+}
+
+// MARK: - Smart Playlist Video Row
+struct SmartPlaylistVideoRow: View {
+    let video: Video
+    let index: Int
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("\(index)")
+                .font(.system(size: 14))
+                .foregroundColor(AppTheme.Colors.textTertiary)
+                .frame(width: 24, alignment: .center)
+
+            AsyncImage(url: URL(string: video.thumbnailURL)) { image in
+                image.resizable().aspectRatio(contentMode: .fill)
+            } placeholder: {
+                Rectangle().fill(AppTheme.Colors.surface)
+            }
+            .frame(width: 80, height: 45)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(video.title)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineLimit(2)
+                Text(video.creator.displayName)
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "ellipsis")
+                .font(.system(size: 16))
+                .foregroundColor(AppTheme.Colors.textTertiary)
+        }
+        .padding(.horizontal, 0)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            GlobalVideoPlayerManager.shared.playVideo(video, showFullscreen: true)
+            HapticManager.shared.impact(style: .light)
+        }
+    }
 }
 

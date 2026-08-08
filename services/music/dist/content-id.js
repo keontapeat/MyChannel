@@ -1,10 +1,47 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const firebase_admin_1 = __importDefault(require("firebase-admin"));
+const storage_1 = require("@google-cloud/storage");
+const fs = __importStar(require("fs"));
+const os = __importStar(require("os"));
+const path = __importStar(require("path"));
 const fingerprint_1 = require("./fingerprint");
 const app = (0, express_1.default)();
 app.use(express_1.default.json({ limit: '10mb' }));
@@ -17,6 +54,20 @@ if (!firebase_admin_1.default.apps.length) {
     });
 }
 const db = firebase_admin_1.default.firestore();
+const storage = new storage_1.Storage();
+const BUCKET = process.env.MUSIC_BUCKET || 'mychannel-ca26d.appspot.com';
+const bucket = storage.bucket(BUCKET);
+/** Convert a public/https storage URL into an in-bucket object path (mirrors transcode.ts). */
+function objectPathFromURL(url) {
+    const marker = `${BUCKET}/`;
+    const idx = url.indexOf(marker);
+    if (idx >= 0)
+        return decodeURIComponent(url.slice(idx + marker.length).split('?')[0]);
+    const oIdx = url.indexOf('/o/');
+    if (oIdx >= 0)
+        return decodeURIComponent(url.slice(oIdx + 3).split('?')[0]);
+    return url;
+}
 // Helper function to verify Firebase Auth token
 async function requireUser(req, res) {
     try {
@@ -97,6 +148,70 @@ app.post('/v1/music/content-id/register', async (req, res) => {
     catch (error) {
         console.error('Content ID registration error:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// POST /v1/music/content-id/register-from-url - Register a track's fingerprint
+// by downloading its already-uploaded audio and running Chromaprint server-side.
+// This is the endpoint iOS calls (it has no client-side fingerprinting) —
+// /v1/music/content-id/register above is for callers that already computed
+// a structured fingerprint themselves.
+app.post('/v1/music/content-id/register-from-url', async (req, res) => {
+    let tempPath = null;
+    try {
+        const user = await requireUser(req, res);
+        if (!user)
+            return;
+        const { trackId, audioURL } = req.body || {};
+        if (!trackId || typeof trackId !== 'string') {
+            return res.status(400).json({ error: 'trackId is required' });
+        }
+        if (!audioURL || typeof audioURL !== 'string') {
+            return res.status(400).json({ error: 'audioURL is required' });
+        }
+        const trackRef = db.collection('music_tracks').doc(trackId);
+        const trackSnap = await trackRef.get();
+        if (!trackSnap.exists) {
+            return res.status(404).json({ error: 'Track not found' });
+        }
+        const trackData = trackSnap.data();
+        if (String(trackData.artistId || '') !== user.userId) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        const objectPath = objectPathFromURL(audioURL);
+        const ext = path.extname(objectPath) || '.m4a';
+        tempPath = path.join(os.tmpdir(), `contentid-${trackId}-${Date.now()}${ext}`);
+        await bucket.file(objectPath).download({ destination: tempPath });
+        const fp = await (0, fingerprint_1.chromaprintFile)(tempPath);
+        if (!fp.duration)
+            fp.duration = trackData.duration || 0;
+        const now = firebase_admin_1.default.firestore.Timestamp.now();
+        await db.collection('music_content_id').doc(trackId).set({
+            trackId,
+            artistId: user.userId,
+            fingerprint: fp,
+            fingerprintHash: (0, fingerprint_1.fingerprintHash)(fp),
+            fingerprintProvider: (0, fingerprint_1.activeFingerprintProvider)(),
+            registeredAt: now,
+            status: 'active',
+            copyrightPolicy: 'strict',
+            revenueSharePercentage: null,
+        }, { merge: true });
+        await trackRef.update({ contentIdRegistered: true, contentIdRegisteredAt: now });
+        res.json({
+            referenceId: trackId,
+            trackId,
+            status: 'registered',
+            copyrightPolicy: 'strict',
+            frameCount: fp.frames.length,
+        });
+    }
+    catch (error) {
+        console.error('Content ID register-from-url error:', error);
+        res.status(500).json({ error: (error === null || error === void 0 ? void 0 : error.message) || 'Internal server error' });
+    }
+    finally {
+        if (tempPath)
+            await fs.promises.rm(tempPath, { force: true }).catch(() => { });
     }
 });
 // PUT /v1/music/tracks/:trackId/copyright-policy - Set artist's copyright policy

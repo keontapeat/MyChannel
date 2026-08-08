@@ -7,6 +7,7 @@ import {
   limit as firestoreLimit,
 } from 'firebase/firestore';
 import { FirestoreService } from '../firestore';
+import { getAppCheckHeaders } from '../config';
 import type { User } from '@/types';
 
 export class UserFirestoreService {
@@ -100,9 +101,10 @@ export class UserFirestoreService {
     const apiUrl = process.env.NEXT_PUBLIC_SEARCH_API_URL;
     if (apiUrl) {
       try {
+        const headers = await getAppCheckHeaders();
         const res = await fetch(
           `${apiUrl}/v1/search/channels?q=${encodeURIComponent(term)}&limit=${limitCount}`,
-          { signal: AbortSignal.timeout(5000) }
+          { headers, signal: AbortSignal.timeout(5000) }
         );
         if (res.ok) {
           const json = await res.json();
@@ -188,40 +190,6 @@ export class UserFirestoreService {
       console.log('✅ User profile updated:', userId);
     } catch (error) {
       console.error('🚨 Update user error:', error);
-      throw error;
-    }
-  }
-
-  // Increment subscriber count
-  async incrementSubscriberCount(userId: string): Promise<void> {
-    try {
-      await FirestoreService.incrementField(
-        UserFirestoreService.COLLECTION,
-        userId,
-        'subscriberCount',
-        1
-      );
-
-      console.log('✅ Subscriber count incremented:', userId);
-    } catch (error) {
-      console.error('🚨 Increment subscriber count error:', error);
-      throw error;
-    }
-  }
-
-  // Decrement subscriber count
-  async decrementSubscriberCount(userId: string): Promise<void> {
-    try {
-      await FirestoreService.incrementField(
-        UserFirestoreService.COLLECTION,
-        userId,
-        'subscriberCount',
-        -1
-      );
-
-      console.log('✅ Subscriber count decremented:', userId);
-    } catch (error) {
-      console.error('🚨 Decrement subscriber count error:', error);
       throw error;
     }
   }

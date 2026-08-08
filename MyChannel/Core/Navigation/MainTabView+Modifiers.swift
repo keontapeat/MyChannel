@@ -114,7 +114,7 @@ struct AccountAndHistoryReceivers: ViewModifier {
             }
             .onReceive(NotificationCenter.default.publisher(for: .openLiveTVFromHistory)) { note in
                 guard let item = note.object as? WatchHistoryItem else { return }
-                let channels = LiveTVManager.shared.channels.isEmpty ? LiveTVChannel.sampleChannels : LiveTVManager.shared.channels
+                let channels = LiveTVManager.shared.channels.isEmpty ? LiveTVChannel.appStoreSafeChannels : LiveTVManager.shared.channels
                 if let channel = channels.first(where: { $0.id == item.contentId }) {
                     historyLiveTVToOpen = channel
                 } else {

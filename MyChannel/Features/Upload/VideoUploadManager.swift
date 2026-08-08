@@ -8,6 +8,9 @@
 import SwiftUI
 import AVFoundation
 import PhotosUI
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
 #if canImport(FirebaseStorage)
 import FirebaseStorage
 #endif
@@ -174,67 +177,31 @@ class VideoUploadManager: ObservableObject {
         }
     }
     
-    // MARK: - Phase 10: Advanced Media Transcoding Engine
-    private func compressVideo(url: URL) async throws -> URL {
-        print("🗜️ [CompressionEngine] Starting on-device transcoding for: \(url.lastPathComponent)")
-        let asset = AVAsset(url: url)
-        
-        // Use HEVC (H.265) for maximum compression, fallback to H.264
-        let preset = AVAssetExportPresetHEVCHighestQuality
-        
-        guard let exportSession = AVAssetExportSession(asset: asset, presetName: preset) else {
-            throw UploadError.exportFailed
-        }
-        
-        let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("compressed_\(UUID().uuidString)")
-            .appendingPathExtension("mp4")
-            
-        exportSession.outputURL = outputURL
-        exportSession.outputFileType = .mp4
-        exportSession.shouldOptimizeForNetworkUse = true
-        
-        await exportSession.export()
-        
-        if exportSession.status == .completed {
-            let originalSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
-            let newSize = (try? FileManager.default.attributesOfItem(atPath: outputURL.path)[.size] as? Int64) ?? 0
-            let savedMB = Double(originalSize - newSize) / 1_000_000.0
-            print("✅ [CompressionEngine] Transcoding complete! Saved \(String(format: "%.1f", savedMB)) MB of bandwidth.")
-            return outputURL
-        } else {
-            print("⚠️ [CompressionEngine] Transcoding failed. Falling back to original.")
-            return url
-        }
-    }
-    
     // MARK: - Upload Process
     func uploadVideo() async {
+        // Prevent double-start from publishing onAppear + nextStep.
+        guard !isUploading else {
+            print("⚠️ [VideoUploadManager] Upload already in progress — ignoring duplicate start")
+            return
+        }
+
         isUploading = true
-        uploadProgress = 0.0
+        uploadProgress = 0.02
         uploadError = nil
         isCancelling = false
-        
-        // 🔥 Phase 10: Run compression before upload starts
-        if let currentURL = videoURL {
-            isCompressing = true
-            do {
-                let compressedURL = try await compressVideo(url: currentURL)
-                self.videoURL = compressedURL
-                self.videoData = try? Data(contentsOf: compressedURL)
-            } catch {
-                print("Compression failed, proceeding with original file")
-            }
-            isCompressing = false
-        }
-        
-        guard let videoData = videoData ?? (videoURL.flatMap { try? Data(contentsOf: $0) }),
-              !title.isEmpty else {
+        isCompressing = false
+
+        guard videoURL != nil || videoData != nil else {
             uploadError = "Please select a video and provide a title"
             isUploading = false
             return
         }
-        
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            uploadError = "Please select a video and provide a title"
+            isUploading = false
+            return
+        }
+
         // 🔥 NUCLEAR FIX #1: Create cancellable upload task
         uploadTask = Task {
             do {
@@ -259,9 +226,9 @@ class VideoUploadManager: ObservableObject {
                     allowEmbedding: allowEmbedding,
                     notifySubscribers: notifySubscribers
                 )
-                
-                let video = try await uploadVideoWithProgress(videoData, metadata: metadata)
-                
+
+                let video = try await uploadVideoWithProgress(metadata: metadata)
+
                 // 🔥 Only set uploadedVideo if not cancelled
                 if !Task.isCancelled {
                     return video
@@ -274,17 +241,17 @@ class VideoUploadManager: ObservableObject {
                 throw error
             }
         }
-        
+
         do {
             uploadedVideo = try await uploadTask?.value
             #if canImport(FirebaseStorage)
             activeStorageUploadTasks.removeAll()
             #endif
             if let uploadedVideo {
-                // 🔥 SAVE TO FIRESTORE: Ensure video is saved to Firestore for profile display
-                // 🔥 FIX: Ensure viewCount is initialized to 0 in Firestore
-                print("💾 [VideoUploadManager] Saving video to Firestore with viewCount: 0")
-                try? await VideoFirestoreService.shared.saveVideo(uploadedVideo)
+                // Video + uploads marker already written by the ingest pipeline.
+                // Do NOT call VideoFirestoreService.saveVideo — that overwrites
+                // trusted processing fields and breaks playback authorization.
+                print("💾 [VideoUploadManager] Ingest reservation complete for \(uploadedVideo.id)")
 
                 // 🧠 SEED TOP-SHELF CATEGORY: a creator's own upload category is the
                 // strongest, cheapest signal for which Top shelf they belong in
@@ -603,183 +570,330 @@ class VideoUploadManager: ObservableObject {
         }
     }
     
-    private func uploadVideoWithProgress(_ data: Data, metadata: VideoUploadMetadata) async throws -> Video {
-        // 🔥 CRITICAL: Require a real signed-in user so uploads are always tied
-        // to an actual creator profile (never the placeholder Default User).
-        guard let creatorUser = AuthenticationManager.shared.currentUser else {
+    private func uploadVideoWithProgress(metadata: VideoUploadMetadata) async throws -> Video {
+        // Require a real Firebase Auth session — Storage + Firestore rules key off request.auth.uid.
+        #if canImport(FirebaseAuth)
+        guard let firebaseUser = Auth.auth().currentUser else {
             throw UploadError.missingAuthenticatedUser
         }
-        #if canImport(FirebaseStorage)
-        // Attempt real upload to Firebase Storage. Falls back to mock if Storage is unavailable.
-        do {
-            let storage = Storage.storage()
-            let rootRef = storage.reference()
-            let videoId = UUID().uuidString
-            let videoRef = rootRef.child("\(AppConfig.Storage.videoPath)/\(creatorUser.id)/\(videoId)/video.mp4")
-            
-            // Prepare metadata (content type)
-            let storageMetadata = StorageMetadata()
-            storageMetadata.contentType = "video/mp4"
-            storageMetadata.customMetadata = [
-                "ownerUid": creatorUser.id,
-                "videoId": videoId
-            ]
-            
-            // Start upload task (OS Background Safe using putFile instead of putData)
-            let uploadTask: StorageUploadTask
-            if let videoURL = self.videoURL {
-                uploadTask = videoRef.putFile(from: videoURL, metadata: storageMetadata)
-            } else {
-                uploadTask = videoRef.putData(data, metadata: storageMetadata)
+        // Ensure Storage sees a fresh auth token (stale tokens surface as permission-denied).
+        _ = try await firebaseUser.getIDToken(forcingRefresh: true)
+        let uid = firebaseUser.uid
+        let authDisplayName = firebaseUser.displayName
+        let authEmail = firebaseUser.email
+        #else
+        throw UploadError.missingAuthenticatedUser
+        #endif
+
+        let creatorUser = AuthenticationManager.shared.currentUser ?? User(
+            id: uid,
+            username: authDisplayName ?? "creator",
+            displayName: authDisplayName ?? "Creator",
+            email: authEmail ?? ""
+        )
+
+        // Prefer the Firebase Auth UID so Storage paths match security rules.
+        let ownerId = uid
+
+        #if canImport(FirebaseStorage) && canImport(FirebaseFirestore)
+        let storage = Storage.storage()
+        let rootRef = storage.reference()
+        let bucket = rootRef.bucket
+        // Lowercase UUID to match web/Android ingest IDs.
+        let videoId = UUID().uuidString.lowercased()
+        let sourceObjectPath = "temp_uploads/\(ownerId)/\(videoId)/source.mp4"
+        let sourcePath = "gs://\(bucket)/temp_uploads/\(ownerId)/\(videoId)/source.mp4"
+        let sourceRef = rootRef.child(sourceObjectPath)
+
+        // Resolve a local file URL for putFile (never load the whole video into memory).
+        let localFileURL: URL
+        if let existing = videoURL, FileManager.default.fileExists(atPath: existing.path) {
+            localFileURL = existing
+        } else if let data = videoData {
+            let temp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("upload_\(videoId)")
+                .appendingPathExtension("mp4")
+            try data.write(to: temp, options: .atomic)
+            localFileURL = temp
+            videoURL = temp
+        } else {
+            throw UploadError.noVideoSelected
+        }
+
+        uploadProgress = 0.05
+
+        let storageMetadata = StorageMetadata()
+        storageMetadata.contentType = "video/mp4"
+        storageMetadata.customMetadata = [
+            "ownerUid": ownerId,
+            "videoId": videoId,
+            "originalFilename": localFileURL.lastPathComponent
+        ]
+
+        let fileUploadTask = sourceRef.putFile(from: localFileURL, metadata: storageMetadata)
+        activeStorageUploadTasks.append(fileUploadTask)
+
+        let progressObserver = fileUploadTask.observe(.progress) { [weak self] snapshot in
+            guard let self else { return }
+            let completed = Double(snapshot.progress?.completedUnitCount ?? 0)
+            let total = Double(snapshot.progress?.totalUnitCount ?? 0)
+            let fraction = total > 0 ? completed / total : 0
+            // Reserve 0.05–0.90 for the Storage transfer.
+            Task { @MainActor in
+                self.uploadProgress = max(0.05, min(0.90, 0.05 + fraction * 0.85))
             }
-            activeStorageUploadTasks.append(uploadTask)
-            
-            // Observe progress
-            let progressObserver = uploadTask.observe(.progress) { [weak self] snapshot in
-                guard let self else { return }
-                let completed = Double(snapshot.progress?.completedUnitCount ?? 0)
-                let total = Double(snapshot.progress?.totalUnitCount ?? 1)
-                Task { @MainActor in
-                    self.uploadProgress = max(0.0, min(1.0, completed / total))
-                }
+        }
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            var resumed = false
+            fileUploadTask.observe(.success) { _ in
+                fileUploadTask.removeObserver(withHandle: progressObserver)
+                guard !resumed else { return }
+                resumed = true
+                continuation.resume()
             }
-            
-            // Await completion
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                uploadTask.observe(.success) { _ in
-                    uploadTask.removeObserver(withHandle: progressObserver)
-                    continuation.resume()
-                }
-                uploadTask.observe(.failure) { snapshot in
-                    uploadTask.removeObserver(withHandle: progressObserver)
-                    let err = snapshot.error ?? UploadError.networkError("Upload failed")
-                    continuation.resume(throwing: err)
-                }
+            fileUploadTask.observe(.failure) { snapshot in
+                fileUploadTask.removeObserver(withHandle: progressObserver)
+                let err = snapshot.error ?? UploadError.networkError("Upload failed")
+                guard !resumed else { return }
+                resumed = true
+                continuation.resume(throwing: err)
             }
-            
-            // Fetch download URL
-            let videoURL = try await videoRef.downloadURL()
-            
-            // Optional: Upload thumbnail if available
-            var thumbnailURLString: String? = nil
-            if let thumbData = metadata.thumbnailData {
-                let thumbRef = rootRef.child("\(AppConfig.Storage.thumbnailPath)/\(creatorUser.id)/\(videoId)/thumb.jpg")
-                let thumbMeta = StorageMetadata()
-                thumbMeta.contentType = "image/jpeg"
-                thumbMeta.customMetadata = [
-                    "ownerUid": creatorUser.id,
-                    "videoId": videoId
-                ]
-                let thumbTask = thumbRef.putData(thumbData, metadata: thumbMeta)
-                activeStorageUploadTasks.append(thumbTask)
+        }
+
+        try Task.checkCancellation()
+        uploadProgress = 0.92
+
+        // Optional thumbnail (public path). Only attach to Firestore when the URL
+        // passes image URL rules (Firebase download hosts / image extensions).
+        var thumbnailURLString = ""
+        if let thumbData = metadata.thumbnailData {
+            let thumbRef = rootRef.child("thumbnails/\(ownerId)/\(videoId)/cover.jpg")
+            let thumbMeta = StorageMetadata()
+            thumbMeta.contentType = "image/jpeg"
+            thumbMeta.customMetadata = ["ownerUid": ownerId, "videoId": videoId]
+            let thumbTask = thumbRef.putData(thumbData, metadata: thumbMeta)
+            activeStorageUploadTasks.append(thumbTask)
+            do {
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    var resumed = false
                     thumbTask.observe(.success) { _ in
+                        guard !resumed else { return }
+                        resumed = true
                         continuation.resume()
                     }
                     thumbTask.observe(.failure) { snapshot in
                         let err = snapshot.error ?? UploadError.networkError("Thumbnail upload failed")
+                        guard !resumed else { return }
+                        resumed = true
                         continuation.resume(throwing: err)
                     }
                 }
-                let thumbURL = try await thumbRef.downloadURL()
-                thumbnailURLString = thumbURL.absoluteString
-            }
-            
-            // Build resulting model tied to the current user so it appears on profile
-            let uploaded = Video(
-                id: videoId,
-                title: metadata.title,
-                description: metadata.description,
-                thumbnailURL: thumbnailURLString ?? "",
-                videoURL: videoURL.absoluteString,
-                duration: max(1, videoDuration),
-                viewCount: 0,  // 🔥 FIX: Always initialize to 0 for new videos
-                likeCount: 0,
-                commentCount: 0,
-                creator: creatorUser,
-                category: metadata.category,
-                tags: metadata.tags,
-                isPublic: metadata.isPublic && !metadata.isUnlisted,
-                visibility: metadata.isUnlisted ? .unlisted : (metadata.isPublic ? .public : .private),
-                scheduledAt: metadata.scheduledDate,
-                language: "en",
-                // 🔥 FIX: Always enable monetization for testing
-                monetization: Video.MonetizationSettings(
-                    isMonetized: true, // Always true for testing
-                    adBreaks: Video.AdBreaks(preRoll: true, midRoll: true, postRoll: false),
-                    adBreakTimestamps: [
-                        Video.MonetizationSettings.AdBreak(timeStamp: 0, duration: 15, type: .preRoll), // Pre-roll
-                        Video.MonetizationSettings.AdBreak(timeStamp: max(1, videoDuration) / 2, duration: 15, type: .midRoll) // Mid-roll
-                    ],
-                    sponsorSegments: [],
-                    donationEnabled: true,
-                    totalRevenue: 0.0
-                ),
-                ageRestricted: metadata.ageRestricted,
-                madeForKids: metadata.madeForKids,
-                allowComments: metadata.allowComments,
-                filmingLocation: metadata.filmingLocation.isEmpty ? nil : metadata.filmingLocation,
-                isPremiere: metadata.isPremiere
-            )
-            
-            // Trigger AI analysis (non-blocking)
-            Task {
-                // Build the canonical GCS URI using the Firebase Storage bucket and known path
-                #if canImport(FirebaseStorage)
-                let gcsUri = "gs://\(rootRef.bucket)/\(AppConfig.Storage.videoPath)/\(creatorUser.id)/\(videoId)/video.mp4"
-                if let result = try? await AIService.shared.analyzeVideo(gcsUri: gcsUri, videoId: videoId, durationSeconds: self.videoDuration) {
-                    // Optionally request virality score
-                    let score = try? await AIService.shared.scoreVirality(
-                        labels: result.labels,
-                        shots: result.shots,
-                        explicit: result.explicit_content,
-                        duration: self.videoDuration,
-                        text: result.text_annotations,
-                        objects: result.object_annotations
-                    )
-                    print("Virality score: \(score ?? 0)")
+                let thumbURL = try await thumbRef.downloadURL().absoluteString
+                if Self.isApprovedThumbnailURL(thumbURL) {
+                    thumbnailURLString = thumbURL
                 }
-                #endif
+            } catch {
+                print("⚠️ [VideoUploadManager] Thumbnail upload skipped: \(error.localizedDescription)")
             }
-
-            // Persist YouTube-parity fields not carried by Video model
-            #if canImport(FirebaseFirestore)
-            try? await Firestore.firestore().collection("videos").document(uploaded.id).updateData([
-                "language": metadata.language,
-                "license": metadata.license.rawValue,
-                "allowEmbedding": metadata.allowEmbedding,
-                "notifySubscribers": metadata.notifySubscribers
-            ])
-            #endif
-
-            // Persist metadata to backend (best-effort, non-blocking)
-            Task {
-                _ = try? await VideoAPIService.shared.createVideo(
-                    title: metadata.title,
-                    description: metadata.description,
-                    category: metadata.category.rawValue,
-                    tags: metadata.tags,
-                    visibility: metadata.isUnlisted ? "unlisted" : (metadata.isPublic ? "public" : "private"),
-                    isPremium: self.monetizationEnabled,
-                    language: metadata.language,
-                    videoUrl: uploaded.videoURL,
-                    thumbnailUrl: uploaded.thumbnailURL,
-                    allowComments: metadata.allowComments,
-                    madeForKids: metadata.madeForKids,
-                    ageRestricted: metadata.ageRestricted,
-                    filmingLocation: metadata.filmingLocation.isEmpty ? nil : metadata.filmingLocation,
-                    isPremiere: metadata.isPremiere,
-                    scheduledAt: metadata.scheduledDate?.ISO8601Format()
-                )
-            }
-            return uploaded
-        } catch {
-            print("🚨 Firebase upload failed: \(error)")
-            throw error
         }
+
+        uploadProgress = 0.95
+
+        let privacy: String
+        if metadata.isUnlisted {
+            privacy = "unlisted"
+        } else if metadata.isPublic {
+            privacy = "public"
+        } else {
+            privacy = "private"
+        }
+        let isScheduled = metadata.isScheduled && metadata.scheduledDate != nil
+        let publicationStatus = isScheduled ? "scheduled" : privacy
+        let isShort = videoDuration > 0 && videoDuration <= 60
+
+        var videoDoc: [String: Any] = [
+            "title": metadata.title,
+            "description": metadata.description,
+            "sourcePath": sourcePath,
+            "creatorId": ownerId,
+            "userId": ownerId,
+            "ownerUid": ownerId,
+            "channelId": ownerId,
+            "channelName": creatorUser.displayName,
+            "channelAvatarUrl": creatorUser.profileImageURL ?? "",
+            "viewCount": 0,
+            "likeCount": 0,
+            "dislikeCount": 0,
+            "commentCount": 0,
+            "shareCount": 0,
+            "totalWatchTime": 0,
+            "duration": max(0, Int(videoDuration.rounded())),
+            "createdAt": FieldValue.serverTimestamp(),
+            "uploadedAt": FieldValue.serverTimestamp(),
+            "updatedAt": FieldValue.serverTimestamp(),
+            "tags": metadata.tags,
+            "category": metadata.category.rawValue,
+            "isLive": false,
+            "isShort": isShort,
+            "privacyStatus": privacy,
+            "visibility": publicationStatus,
+            "isPublic": privacy == "public" && !isScheduled,
+            "ageRestricted": metadata.ageRestricted,
+            "madeForKids": metadata.madeForKids,
+            "commentsEnabled": metadata.allowComments,
+            "allowComments": metadata.allowComments,
+            "likesEnabled": true,
+            "downloadsEnabled": false,
+            "isPremiere": metadata.isPremiere,
+            "status": publicationStatus,
+            "processingStatus": "uploaded",
+            "language": metadata.language,
+            "license": metadata.license.rawValue,
+            "allowEmbedding": metadata.allowEmbedding,
+            "notifySubscribers": metadata.notifySubscribers
+        ]
+        if !thumbnailURLString.isEmpty {
+            videoDoc["thumbnailURL"] = thumbnailURLString
+            videoDoc["thumbnailUrl"] = thumbnailURLString
+        }
+        if isScheduled, let scheduled = metadata.scheduledDate {
+            videoDoc["scheduledAt"] = Timestamp(date: scheduled)
+        }
+        if !metadata.filmingLocation.isEmpty {
+            videoDoc["filmingLocation"] = metadata.filmingLocation
+        }
+
+        let db = Firestore.firestore()
+        let videoRef = db.collection("videos").document(videoId)
+        let uploadRef = db.collection("uploads").document(videoId)
+
+        try await db.runTransaction { transaction, errorPointer -> Any? in
+            let existingVideo: DocumentSnapshot
+            let existingUpload: DocumentSnapshot
+            do {
+                existingVideo = try transaction.getDocument(videoRef)
+                existingUpload = try transaction.getDocument(uploadRef)
+            } catch let fetchError as NSError {
+                errorPointer?.pointee = fetchError
+                return nil
+            }
+
+            if existingVideo.exists {
+                let data = existingVideo.data() ?? [:]
+                guard (data["creatorId"] as? String) == ownerId,
+                      (data["sourcePath"] as? String) == sourcePath else {
+                    errorPointer?.pointee = NSError(
+                        domain: "VideoUploadManager",
+                        code: 409,
+                        userInfo: [NSLocalizedDescriptionKey: "Video reservation belongs to another creator."]
+                    )
+                    return nil
+                }
+            } else {
+                transaction.setData(videoDoc, forDocument: videoRef)
+            }
+
+            if existingUpload.exists {
+                let data = existingUpload.data() ?? [:]
+                guard (data["videoId"] as? String) == videoId,
+                      (data["ownerUid"] as? String) == ownerId,
+                      (data["sourcePath"] as? String) == sourcePath else {
+                    errorPointer?.pointee = NSError(
+                        domain: "VideoUploadManager",
+                        code: 409,
+                        userInfo: [NSLocalizedDescriptionKey: "Upload reservation does not match."]
+                    )
+                    return nil
+                }
+            } else {
+                transaction.setData([
+                    "videoId": videoId,
+                    "ownerUid": ownerId,
+                    "sourcePath": sourcePath,
+                    "status": "uploaded",
+                    "createdAt": FieldValue.serverTimestamp(),
+                    "updatedAt": FieldValue.serverTimestamp()
+                ], forDocument: uploadRef)
+            }
+            return nil
+        }
+
+        uploadProgress = 1.0
+
+        // Playback URL stays empty until the trusted transcoder publishes a manifest.
+        return Video(
+            id: videoId,
+            title: metadata.title,
+            description: metadata.description,
+            thumbnailURL: thumbnailURLString,
+            videoURL: "",
+            duration: max(1, videoDuration),
+            viewCount: 0,
+            likeCount: 0,
+            commentCount: 0,
+            creator: creatorUser.id == ownerId
+                ? creatorUser
+                : User(
+                    id: ownerId,
+                    username: creatorUser.username,
+                    displayName: creatorUser.displayName,
+                    email: creatorUser.email,
+                    profileImageURL: creatorUser.profileImageURL,
+                    bannerImageURL: creatorUser.bannerImageURL,
+                    bio: creatorUser.bio,
+                    subscriberCount: creatorUser.subscriberCount,
+                    videoCount: creatorUser.videoCount,
+                    isVerified: creatorUser.isVerified,
+                    isCreator: creatorUser.isCreator,
+                    createdAt: creatorUser.createdAt,
+                    location: creatorUser.location,
+                    website: creatorUser.website,
+                    socialLinks: creatorUser.socialLinks,
+                    followerCount: creatorUser.followerCount,
+                    followingCount: creatorUser.followingCount,
+                    joinDate: creatorUser.joinDate,
+                    totalViews: creatorUser.totalViews,
+                    totalEarnings: creatorUser.totalEarnings,
+                    membershipTiers: creatorUser.membershipTiers,
+                    bannerVideoURL: creatorUser.bannerVideoURL,
+                    bannerVideoMuted: creatorUser.bannerVideoMuted,
+                    bannerVideoContentMode: creatorUser.bannerVideoContentMode
+                ),
+            category: metadata.category,
+            tags: metadata.tags,
+            isPublic: privacy == "public" && !isScheduled,
+            visibility: metadata.isUnlisted ? .unlisted : (metadata.isPublic ? .public : .private),
+            scheduledAt: metadata.scheduledDate,
+            language: metadata.language,
+            monetization: Video.MonetizationSettings(
+                isMonetized: metadata.monetizationEnabled,
+                adBreaks: Video.AdBreaks(preRoll: true, midRoll: true, postRoll: false),
+                adBreakTimestamps: [],
+                sponsorSegments: [],
+                donationEnabled: true,
+                totalRevenue: 0.0
+            ),
+            ageRestricted: metadata.ageRestricted,
+            madeForKids: metadata.madeForKids,
+            allowComments: metadata.allowComments,
+            processingStatus: "uploaded",
+            filmingLocation: metadata.filmingLocation.isEmpty ? nil : metadata.filmingLocation,
+            isPremiere: metadata.isPremiere
+        )
         #else
         throw UploadError.networkError("Firebase Storage is unavailable in this build")
         #endif
+    }
+
+    private static func isApprovedThumbnailURL(_ url: String) -> Bool {
+        let lower = url.lowercased()
+        if lower.contains("firebasestorage.googleapis.com") { return true }
+        if lower.contains("firebasestorage.app") { return true }
+        if lower.contains(".jpg") || lower.contains(".jpeg") || lower.contains(".png") || lower.contains(".webp") {
+            return true
+        }
+        return false
     }
     
     // MARK: - Cleanup

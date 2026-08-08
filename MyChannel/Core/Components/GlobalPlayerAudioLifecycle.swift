@@ -30,14 +30,12 @@ final class GlobalPlayerAudioLifecycle {
 
     func configureAudioSessionOnce() {
         guard !Self.didConfigureAudioSession else { return }
-        do {
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        // Route through the single playback-session owner. The previous inline
+        // config used `setActive(true, options: .notifyOthersOnDeactivation)`,
+        // an invalid combination that returned OSStatus -50.
+        if PlaybackAudioSession.shared.activate() {
             Self.didConfigureAudioSession = true
             print("✅ [GlobalPlayerAudioLifecycle] Audio session configured")
-        } catch {
-            print("⚠️ [GlobalPlayerAudioLifecycle] Failed to configure audio session: \(error)")
         }
     }
 

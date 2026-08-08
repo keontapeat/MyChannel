@@ -170,6 +170,18 @@ struct SettingsView: View {
                     iconColor: .primary
                 )
             }
+
+            if AppConfig.Features.enableKidsMode {
+                NavigationLink {
+                    KidsModeSettingsView()
+                } label: {
+                    settingsRow(
+                        icon: "figure.child",
+                        title: "Kids Mode",
+                        iconColor: .blue
+                    )
+                }
+            }
             
             NavigationLink {
                 NotificationSettingsView()
@@ -513,14 +525,16 @@ struct SettingsView: View {
                     try? await UserMediaStorageService.shared.deleteImage(from: bannerURL)
                 }
                 
+                await PushTokenRegistrationManager.unregisterStoredToken(for: userId)
+
                 // Delete user document
                 try await UserFirestoreService.shared.deleteUser(userId: userId)
-                
+
                 // Delete Firebase Auth account
                 try await AuthenticationManager.shared.deleteAccount()
-                
+
                 // Sign out and clear local data
-                try AuthenticationManager.shared.signOut()
+                try await AuthenticationManager.shared.signOut()
                 AppState.shared.currentUser = nil
                 
                 await MainActor.run {

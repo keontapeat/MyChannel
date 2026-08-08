@@ -7,6 +7,6 @@ extension FreeMovie {
     /// 🎬 EPIC COLLECTION: 160+ FREE FULL MOVIES Users Can Actually Watch!
     static var sampleMovies: [FreeMovie] {
         _smc01 + _smc02 + _smc03 + _smc04 +
-        _smc05 + _smc06 + _smc07 + _smc08
+        _smc05 + _smc06 + _smc07 + _smc08 + _smc09
     }
 }

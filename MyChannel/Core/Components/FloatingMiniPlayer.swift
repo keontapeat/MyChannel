@@ -94,7 +94,7 @@ struct FloatingMiniPlayer: View {
     }
     
     @ViewBuilder
-    private func miniPlayerVideoSection(video: Video, geometry: GeometryProxy) -> some View {
+    private func miniPlayerVideoSection(video: Video, geometry _: GeometryProxy) -> some View {
         let thumbnailView: some View = Group {
             if let u = URL(string: video.thumbnailURL) {
                 AppAsyncImage(url: u) { $0.resizable().aspectRatio(contentMode: .fill) } placeholder: { Rectangle().fill(Color.black) }
@@ -118,8 +118,8 @@ struct FloatingMiniPlayer: View {
             }
         }
         
-        let playerWidth = geometry.size.width - 40
-        let playerHeight = playerWidth * 9 / 16
+        let playerWidth = playerSize.width
+        let playerHeight = playerSize.height
         
         return ZStack {
             // Video Player

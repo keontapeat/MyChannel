@@ -591,7 +591,7 @@ struct HomeView: View {
         Task { @MainActor in
             print("📖 [HomeView] loadUserStories started for user: \(currentUser.username) (id: \(currentUser.id))")
             try? await StorySeenTracker.shared.fetchSeen(userId: currentUser.id)
-            try? await StorySeenTracker.shared.clearExpired()
+            try? await StorySeenTracker.shared.clearExpired(userId: currentUser.id)
             var collected: [AssetStory] = []
             let blockedUserIds = await loadBlockedUserIds(for: currentUser.id)
 

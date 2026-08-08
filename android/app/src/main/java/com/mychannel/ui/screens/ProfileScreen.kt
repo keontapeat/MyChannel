@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
@@ -39,8 +40,10 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,10 +55,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.widget.Toast
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.mychannel.domain.model.Video
+import com.mychannel.ui.components.ReportBlockOptionsSheet
+import com.mychannel.ui.components.ReportReasonSheet
 import com.mychannel.viewmodel.ProfileViewModel
 
 /**
@@ -72,8 +78,46 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(0) }
+    var showOptions by remember { mutableStateOf(false) }
+    var showReportReasons by remember { mutableStateOf(false) }
     val tabs = listOf("Videos", "About", "Community")
+
+    // Surface moderation feedback (report/block) as a toast, then clear it.
+    LaunchedEffect(uiState.moderationMessage) {
+        uiState.moderationMessage?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            viewModel.clearModerationMessage()
+        }
+    }
+
+    if (showOptions) {
+        ReportBlockOptionsSheet(
+            reportLabel = "Report user",
+            blockLabel = "Block user",
+            onDismiss = { showOptions = false },
+            onReport = {
+                showOptions = false
+                showReportReasons = true
+            },
+            onBlock = {
+                showOptions = false
+                viewModel.blockUser()
+            }
+        )
+    }
+
+    if (showReportReasons) {
+        ReportReasonSheet(
+            title = "Report user",
+            onDismiss = { showReportReasons = false },
+            onSelectReason = { reason ->
+                showReportReasons = false
+                viewModel.reportUser(reason)
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -86,6 +130,11 @@ fun ProfileScreen(
                         }
                         IconButton(onClick = { navController.navigate(SETTINGS_ROUTE) }) {
                             Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                        }
+                    } else if (!uiState.isLoading && uiState.error == null) {
+                        // Report/block a creator's channel (UGC safety).
+                        IconButton(onClick = { showOptions = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More options")
                         }
                     }
                 }
@@ -190,16 +239,36 @@ fun ProfileScreen(
                     }
 
                     2 -> {
-                        // Community tab
-                        item(key = "community_hint") {
-                            Box(
-                                Modifier.fillMaxWidth().padding(32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "Community posts",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                        // Community tab — load real Firestore posts for this channel
+                        val communityViewModel: com.mychannel.viewmodel.CommunityViewModel = hiltViewModel(key = "profile_community")
+                        val communityState by communityViewModel.uiState.collectAsStateWithLifecycle()
+                        val channelOwnerId = channelId ?: viewModel.currentUserId
+                        LaunchedEffect(channelOwnerId) {
+                            if (channelOwnerId.isNotEmpty()) {
+                                communityViewModel.loadPostsForChannel(channelOwnerId)
+                            }
+                        }
+                        if (communityState.isLoading) {
+                            item(key = "community_loading") {
+                                Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator()
+                                }
+                            }
+                        } else if (communityState.posts.isEmpty()) {
+                            item(key = "community_empty") {
+                                Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        "No community posts yet",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        } else {
+                            items(communityState.posts, key = { it.id }) { post ->
+                                CommunityPostCard(
+                                    post = post,
+                                    onLike = { communityViewModel.toggleLike(post.id) }
                                 )
                             }
                         }
@@ -376,3 +445,116 @@ const val SETTINGS_ROUTE = "settings"
 const val EDIT_PROFILE_ROUTE = "edit_profile"
 const val PROFILE_ROUTE = "profile"
 const val PROFILE_CHANNEL_ROUTE = "profile/{channelId}"
+
+// MARK: - Community Post Card
+@Composable
+private fun CommunityPostCard(
+    post: com.mychannel.viewmodel.CommunityPost,
+    onLike: () -> Unit
+) {
+    androidx.compose.material3.Card(
+        modifier = androidx.compose.ui.Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(post.creatorAvatar.ifEmpty { null })
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Avatar",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(36.dp).clip(CircleShape)
+                )
+                Column {
+                    Text(
+                        text = post.creatorName,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    if (post.createdAt > 0) {
+                        val ago = android.text.format.DateUtils.getRelativeTimeSpanString(
+                            post.createdAt,
+                            System.currentTimeMillis(),
+                            android.text.format.DateUtils.MINUTE_IN_MILLIS
+                        ).toString()
+                        Text(
+                            text = ago,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            if (post.text.isNotEmpty()) {
+                Text(
+                    text = post.text,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            if (post.imageUrl.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(post.imageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Post image",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(8.dp))
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { onLike() }
+                ) {
+                    Icon(
+                        imageVector = if (post.isLiked)
+                            Icons.Filled.VideoLibrary
+                        else
+                            Icons.Filled.VideoLibrary,
+                        contentDescription = "Like",
+                        tint = if (post.isLiked) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = formatLong(post.likeCount),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = "Comments",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = formatLong(post.commentCount),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}

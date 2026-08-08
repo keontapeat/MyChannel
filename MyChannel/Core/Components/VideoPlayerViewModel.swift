@@ -225,12 +225,6 @@ class VideoPlayerViewModel: ObservableObject {
         quartilesFired.removeAll()
     }
 
-    deinit {
-        if let timeObserver = timeObserver {
-            player?.removeTimeObserver(timeObserver)
-        }
-    }
-
     func togglePiP() {
         if let video = currentVideo {
             GlobalVideoPlayerManager.shared.registerLocalPlayer(video: video, player: player)

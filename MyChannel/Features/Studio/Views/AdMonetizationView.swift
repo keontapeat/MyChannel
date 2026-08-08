@@ -75,6 +75,10 @@ struct AdMonetizationView: View {
                         showingAdPreview = true
                     }
                     .foregroundColor(.blue)
+
+                    NavigationLink(destination: CreatorAdsDashboardStubView()) {
+                        Label("Full Ads Dashboard", systemImage: "chart.bar.doc.horizontal")
+                    }
                 }
             }
         }

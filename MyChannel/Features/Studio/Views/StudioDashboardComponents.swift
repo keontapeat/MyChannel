@@ -224,18 +224,225 @@ struct NewsRow: View {
     }
 }
 
-// MARK: - Placeholder Views
+// MARK: - Studio Notifications View
 struct StudioNotificationsView: View {
+    @StateObject private var service = NotificationsInboxService.shared
+    @State private var hasLoaded = false
+
     var body: some View {
-        Text("Notifications")
-            .navigationTitle("Notifications")
+        Group {
+            if service.notifications.isEmpty && !hasLoaded {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if service.notifications.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "bell.slash")
+                        .font(.system(size: 44))
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                    Text("No notifications yet")
+                        .font(.subheadline)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(service.notifications) { notif in
+                        HStack(spacing: 12) {
+                            Image(systemName: notifIconName(for: notif.type))
+                                .font(.system(size: 18))
+                                .foregroundColor(notifTintColor(for: notif.type))
+                                .frame(width: 36, height: 36)
+                                .background(notifTintColor(for: notif.type).opacity(0.12))
+                                .clipShape(Circle())
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(notif.title)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                Text(notif.body)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                    .lineLimit(2)
+                                Text(notifRelativeTime(for: notif.createdAt))
+                                    .font(.caption)
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                            }
+
+                            Spacer()
+                            if !notif.isRead {
+                                Circle()
+                                    .fill(AppTheme.Colors.primary)
+                                    .frame(width: 8, height: 8)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                        .swipeActions {
+                            Button("Mark Read") {
+                                Task { try? await service.markRead(notificationId: notif.id) }
+                                HapticManager.shared.impact(style: .light)
+                            }
+                            .tint(AppTheme.Colors.primary)
+                        }
+                    }
+                }
+                .listStyle(.plain)
+            }
+        }
+        .navigationTitle("Notifications")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Mark All Read") {
+                    Task { try? await service.markAllRead(userId: AppState.shared.currentUser?.id ?? "") }
+                    HapticManager.shared.impact(style: .light)
+                }
+                .font(.subheadline)
+                .disabled(service.notifications.allSatisfy(\.isRead))
+            }
+        }
+        .task {
+            if let uid = AppState.shared.currentUser?.id {
+                try? await service.fetchNotifications(userId: uid)
+            }
+            hasLoaded = true
+        }
+    }
+
+    private func notifIconName(for type: NotificationItem.NotificationType) -> String {
+        switch type {
+        case .newVideo:    return "play.rectangle.fill"
+        case .liveStart:   return "antenna.radiowaves.left.and.right"
+        case .comment:     return "bubble.left.fill"
+        case .like:        return "hand.thumbsup.fill"
+        case .subscriber:  return "person.badge.plus.fill"
+        case .mention:     return "at"
+        case .system:      return "gear"
+        case .milestone:   return "trophy.fill"
+        case .storyReply:  return "bubble.right.fill"
+        }
+    }
+
+    private func notifTintColor(for type: NotificationItem.NotificationType) -> Color {
+        switch type {
+        case .newVideo:    return .blue
+        case .liveStart:   return .red
+        case .comment:     return .purple
+        case .like:        return .green
+        case .subscriber:  return AppTheme.Colors.primary
+        case .mention:     return .orange
+        case .system:      return .gray
+        case .milestone:   return .yellow
+        case .storyReply:  return .teal
+        }
+    }
+
+    private func notifRelativeTime(for date: Date) -> String {
+        let fmt = RelativeDateTimeFormatter()
+        fmt.unitsStyle = .abbreviated
+        return fmt.localizedString(for: date, relativeTo: Date())
     }
 }
 
+// MARK: - Studio Comments View
 struct StudioCommentsView: View {
+    @StateObject private var commentsManager = CommentsManager()
+    @State private var filterOption = "All"
+
+    private let filters = ["All", "Recent", "Most Liked"]
+
     var body: some View {
-        Text("All Comments")
-            .navigationTitle("Comments")
+        VStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(filters, id: \.self) { f in
+                        Button {
+                            withAnimation { filterOption = f }
+                            HapticManager.shared.impact(style: .light)
+                        } label: {
+                            Text(f)
+                                .font(.caption.bold())
+                                .foregroundColor(filterOption == f ? .white : AppTheme.Colors.textPrimary)
+                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .background(Capsule().fill(filterOption == f ? AppTheme.Colors.primary : AppTheme.Colors.surface))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 10)
+            }
+
+            if commentsManager.isLoading {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if filteredComments.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.system(size: 44))
+                        .foregroundColor(AppTheme.Colors.textTertiary)
+                    Text("No comments yet")
+                        .font(.subheadline)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(filteredComments) { comment in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 8) {
+                                AsyncImage(url: URL(string: comment.author.profileImageURL ?? "")) { img in
+                                    img.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Circle().fill(AppTheme.Colors.surface)
+                                        .overlay(Image(systemName: "person.fill")
+                                            .foregroundColor(AppTheme.Colors.textTertiary))
+                                }
+                                .frame(width: 30, height: 30)
+                                .clipShape(Circle())
+
+                                Text(comment.author.displayName)
+                                    .font(.system(size: 13, weight: .semibold))
+
+                                Spacer()
+
+                                Text(comment.timeAgo)
+                                    .font(.caption)
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                            }
+
+                            Text(comment.text)
+                                .font(.system(size: 13))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                .lineLimit(3)
+
+                            HStack(spacing: 16) {
+                                Label("\(comment.likeCount)", systemImage: "hand.thumbsup")
+                                    .font(.caption)
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                                Label("\(comment.replyCount)", systemImage: "bubble.right")
+                                    .font(.caption)
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                .listStyle(.plain)
+            }
+        }
+        .navigationTitle("Comments")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            if let uid = AppState.shared.currentUser?.id {
+                try? await commentsManager.loadCommentsForCreator(creatorId: uid)
+            }
+        }
+    }
+
+    private var filteredComments: [VideoComment] {
+        switch filterOption {
+        case "Recent":    return commentsManager.comments.sorted { $0.createdAt > $1.createdAt }
+        case "Most Liked": return commentsManager.comments.sorted { $0.likeCount > $1.likeCount }
+        default:          return commentsManager.comments
+        }
     }
 }
 
@@ -246,9 +453,5 @@ struct StudioCommentsView: View {
             .environmentObject(AppState.shared)
     }
 }
-
-
-
-
 
 

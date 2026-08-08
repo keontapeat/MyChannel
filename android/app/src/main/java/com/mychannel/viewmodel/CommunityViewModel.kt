@@ -49,57 +49,151 @@ class CommunityViewModel @Inject constructor(
     private fun loadPosts() {
         viewModelScope.launch {
             runCatching {
-                // Try camelCase collection first (written by web), fall back to snake_case
+                val currentUserId = authRepository.currentUserId
                 val snap = firestore.collection("communityPosts")
                     .orderBy("createdAt", Query.Direction.DESCENDING)
                     .limit(50)
                     .get().await()
 
-                snap.documents.mapNotNull { doc ->
+                snap.documents.mapNotNull { document ->
                     runCatching {
-                        val d = doc.data ?: return@mapNotNull null
-                        val createdRaw = d["createdAt"]
+                        val data = document.data ?: return@mapNotNull null
+                        val createdRaw = data["createdAt"]
                         val createdMs = when (createdRaw) {
                             is com.google.firebase.Timestamp -> createdRaw.toDate().time
                             is Long -> createdRaw
                             else -> 0L
                         }
+                        val isLiked = currentUserId?.let { userId ->
+                            runCatching {
+                                document.reference.collection("likes").document(userId)
+                                    .get().await().exists()
+                            }.getOrDefault(false)
+                        } ?: false
+
                         CommunityPost(
-                            id = doc.id,
-                            creatorId = d["creatorId"] as? String ?: "",
-                            creatorName = d["creatorName"] as? String ?: "Creator",
-                            creatorAvatar = d["creatorAvatar"] as? String ?: "",
-                            text = d["text"] as? String ?: "",
-                            imageUrl = d["imageURL"] as? String ?: "",
-                            likeCount = (d["likeCount"] as? Long) ?: 0L,
-                            commentCount = (d["commentCount"] as? Long) ?: 0L,
-                            isLiked = false,
+                            id = document.id,
+                            creatorId = data["creatorId"] as? String ?: "",
+                            creatorName = data["creatorName"] as? String ?: "Creator",
+                            creatorAvatar = data["creatorAvatar"] as? String ?: "",
+                            text = data["text"] as? String ?: "",
+                            imageUrl = data["imageURL"] as? String ?: "",
+                            likeCount = (data["likeCount"] as? Number)?.toLong() ?: 0L,
+                            commentCount = (data["commentCount"] as? Number)?.toLong() ?: 0L,
+                            isLiked = isLiked,
                             createdAt = createdMs
                         )
                     }.getOrNull()
                 }
             }.onSuccess { posts ->
                 _uiState.update { it.copy(isLoading = false, posts = posts) }
-            }.onFailure { e ->
-                _uiState.update { it.copy(isLoading = false, error = e.message) }
+            }.onFailure { error ->
+                _uiState.update { it.copy(isLoading = false, error = error.message) }
             }
         }
     }
 
+    /** Load posts for a specific creator channel — used by ProfileScreen community tab. */
+    fun loadPostsForChannel(channelId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            runCatching {
+                val currentUserId = authRepository.currentUserId
+                val snap = firestore.collection("community_posts")
+                    .whereEqualTo("creatorId", channelId)
+                    .orderBy("createdAt", Query.Direction.DESCENDING)
+                    .limit(50)
+                    .get().await()
+
+                snap.documents.mapNotNull { document ->
+                    runCatching {
+                        val data = document.data ?: return@mapNotNull null
+                        val createdRaw = data["createdAt"]
+                        val createdMs = when (createdRaw) {
+                            is com.google.firebase.Timestamp -> createdRaw.toDate().time
+                            is Long -> createdRaw
+                            else -> 0L
+                        }
+                        val isLiked = currentUserId?.let { userId ->
+                            runCatching {
+                                document.reference.collection("likes").document(userId)
+                                    .get().await().exists()
+                            }.getOrDefault(false)
+                        } ?: false
+                        CommunityPost(
+                            id = document.id,
+                            creatorId = data["creatorId"] as? String ?: "",
+                            creatorName = data["creatorName"] as? String ?: "",
+                            creatorAvatar = data["creatorAvatar"] as? String ?: "",
+                            text = data["content"] as? String ?: data["text"] as? String ?: "",
+                            imageUrl = (data["imageURLs"] as? List<*>)?.firstOrNull() as? String
+                                ?: data["imageURL"] as? String ?: "",
+                            likeCount = (data["likeCount"] as? Number)?.toLong() ?: 0L,
+                            commentCount = (data["commentCount"] as? Number)?.toLong() ?: 0L,
+                            isLiked = isLiked,
+                            createdAt = createdMs
+                        )
+                    }.getOrNull()
+                }
+            }.onSuccess { posts ->
+                _uiState.update { it.copy(isLoading = false, posts = posts) }
+            }.onFailure { error ->
+                _uiState.update { it.copy(isLoading = false, error = error.message) }
+            }
+        }
+    }
+
+    /** Convenience toggle that looks up current liked state from local state. */
+    fun toggleLike(postId: String) {
+        val post = _uiState.value.posts.find { it.id == postId } ?: return
+        toggleLike(postId, post.isLiked)
+    }
+
     fun toggleLike(postId: String, currentlyLiked: Boolean) {
-        val uid = authRepository.currentUserId ?: return
-        val delta = if (currentlyLiked) -1L else 1L
+        val userId = authRepository.currentUserId ?: return
+        val nextLiked = !currentlyLiked
+        val delta = if (nextLiked) 1L else -1L
         _uiState.update { state ->
             state.copy(posts = state.posts.map { post ->
-                if (post.id == postId) post.copy(isLiked = !currentlyLiked, likeCount = post.likeCount + delta)
-                else post
+                if (post.id == postId) {
+                    post.copy(
+                        isLiked = nextLiked,
+                        likeCount = (post.likeCount + delta).coerceAtLeast(0L)
+                    )
+                } else {
+                    post
+                }
             })
         }
+
         viewModelScope.launch {
+            val likeRef = firestore.collection("communityPosts").document(postId)
+                .collection("likes").document(userId)
             runCatching {
-                firestore.collection("communityPosts").document(postId)
-                    .update("likeCount", com.google.firebase.firestore.FieldValue.increment(delta))
-                    .await()
+                if (nextLiked) {
+                    likeRef.set(mapOf(
+                        "userId" to userId,
+                        "likedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )).await()
+                } else {
+                    likeRef.delete().await()
+                }
+            }.onFailure { error ->
+                _uiState.update { state ->
+                    state.copy(
+                        posts = state.posts.map { post ->
+                            if (post.id == postId && post.isLiked == nextLiked) {
+                                post.copy(
+                                    isLiked = currentlyLiked,
+                                    likeCount = (post.likeCount - delta).coerceAtLeast(0L)
+                                )
+                            } else {
+                                post
+                            }
+                        },
+                        error = error.message
+                    )
+                }
             }
         }
     }

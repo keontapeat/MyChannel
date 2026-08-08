@@ -648,6 +648,7 @@ struct BackgroundDownloadsView: View {
                             get: { settingsService.appSettings.playback.backgroundPlay },
                             set: { value in
                                 settingsService.updateAppSettings { $0.playback.backgroundPlay = value }
+                                BackgroundPlayService.shared.isBackgroundPlayEnabled = value
                             }
                         )
                     )

@@ -17,7 +17,7 @@ final class LiveTVService {
         // Access MainActor-isolated properties properly
         let channels = await MainActor.run {
             let manager = LiveTVManager.shared
-            return manager.channels.isEmpty ? LiveTVChannel.sampleChannels : manager.channels
+            return manager.channels.isEmpty ? LiveTVChannel.appStoreSafeChannels : manager.channels
         }
         return channels
     }
@@ -34,7 +34,7 @@ final class LiveTVService {
     
     // 🔥🔥🔥 THERMONUCLEAR: Prewarm thumbnails for instant display 🔥🔥🔥
     func thermonuclearPrewarm(count: Int = 10) {
-        let channels = Array(LiveTVChannel.sampleChannels.prefix(count))
+        let channels = Array(LiveTVChannel.appStoreSafeChannels.prefix(count))
         ThermonuclearPrewarm.prewarmChannels(channels)
         
         // 🔥🔥🔥 ALSO prewarm YouTube thumbnails in parallel!
@@ -57,7 +57,7 @@ final class LiveTVService {
         }
         guard shouldPreload else { return }
         
-        let channels = Array(LiveTVChannel.sampleChannels.prefix(min(count, 3)))
+        let channels = Array(LiveTVChannel.appStoreSafeChannels.prefix(min(count, 3)))
         let logoURLs = channels.map { $0.logoURL }
         Task { @MainActor in
             ThermonuclearYouTubeThumbnailCache.shared.prewarmThumbnails(logoURLs)

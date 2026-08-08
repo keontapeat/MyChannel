@@ -143,8 +143,10 @@ struct ProfileQuickMenu: View {
         .background(Color(.systemBackground))
         .confirmationDialog("Sign Out", isPresented: $showingSignOutConfirm) {
             Button("Sign Out", role: .destructive) {
-                try? authManager.signOut()
-                isPresented = false
+                Task {
+                    try? await authManager.signOut()
+                    isPresented = false
+                }
             }
             Button("Cancel", role: .cancel) { }
         } message: {

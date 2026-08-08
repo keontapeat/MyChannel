@@ -4,10 +4,8 @@ import com.mychannel.domain.model.Notification
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Repository for the in-app notification center (REQ-14.2, REQ-14.3).
- *
- * Reads the current user's `notifications/{uid}/items` collection in real time
- * and supports read/unread tracking and deletion.
+ * Repository for the canonical flat in-app notification center (REQ-14.2, REQ-14.3).
+ * Notification ownership is enforced by each document's `userId` field.
  */
 interface NotificationRepository {
 
@@ -25,4 +23,7 @@ interface NotificationRepository {
 
     /** Registers/updates the device's FCM token on the user document (REQ-14.1). */
     suspend fun updateFcmToken(token: String): Result<Unit>
+
+    /** Removes the current device token before the authenticated session ends. */
+    suspend fun unregisterFcmToken(token: String): Result<Unit>
 }

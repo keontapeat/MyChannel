@@ -512,6 +512,7 @@ struct SignUpView: View {
     @State private var showPassword: Bool = false
     @State private var showConfirmPassword: Bool = false
     @State private var agreeToTerms: Bool = false
+    @State private var confirmsAge13Plus: Bool = false
     @State private var isLoading: Bool = false
     @State private var showingError: Bool = false
     @State private var errorMessage: String = ""
@@ -598,7 +599,12 @@ struct SignUpView: View {
                     )
                     
                     // Terms agreement
-                    Button(action: { agreeToTerms.toggle() }) {
+                    Button(action: {
+                        HapticManager.shared.impact(style: .light)
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            agreeToTerms.toggle()
+                        }
+                    }) {
                         HStack(alignment: .top, spacing: 12) {
                             Image(systemName: agreeToTerms ? "checkmark.square.fill" : "square")
                                 .font(.system(size: 20))
@@ -629,6 +635,30 @@ struct SignUpView: View {
                         }
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel("Agree to Terms of Service and Privacy Policy")
+
+                    // COPPA / Guideline 5.1.4 — under-13 gate
+                    Button(action: {
+                        HapticManager.shared.impact(style: .light)
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            confirmsAge13Plus.toggle()
+                        }
+                    }) {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: confirmsAge13Plus ? "checkmark.square.fill" : "square")
+                                .font(.system(size: 20))
+                                .foregroundColor(confirmsAge13Plus ? AppTheme.Colors.primary : AppTheme.Colors.textTertiary)
+
+                            Text("I confirm that I am at least 13 years old")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                .multilineTextAlignment(.leading)
+
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel("Confirm you are at least 13 years old")
                 }
                 .padding(.horizontal, 32)
                 
@@ -716,7 +746,8 @@ struct SignUpView: View {
         email.contains("@") &&
         password.count >= 8 &&
         password == confirmPassword &&
-        agreeToTerms
+        agreeToTerms &&
+        confirmsAge13Plus
     }
     
     private var usernameValidation: FieldValidation? {
@@ -781,6 +812,11 @@ struct SignUpView: View {
     }
     
     private func signUp() {
+        guard confirmsAge13Plus else {
+            errorMessage = "You must be at least 13 years old to create an account."
+            showingError = true
+            return
+        }
         isLoading = true
         
         Task {

@@ -136,6 +136,8 @@ struct CreatorDetail: Codable {
 // MARK: - Upload Models
 struct UploadSignedUrlRequest: Codable {
     let filename: String
+    let contentType: String
+    let sizeBytes: Int
 }
 
 struct UploadSignedUrlResponse: Codable {
@@ -281,8 +283,16 @@ class VideoAPIService: ObservableObject {
     }
     
     // MARK: - Video Upload
-    func getSignedUploadUrl(filename: String) async throws -> UploadSignedUrlResponse {
-        let request = UploadSignedUrlRequest(filename: filename)
+    func getSignedUploadUrl(
+        filename: String,
+        sizeBytes: Int,
+        contentType: String = "video/mp4"
+    ) async throws -> UploadSignedUrlResponse {
+        let request = UploadSignedUrlRequest(
+            filename: filename,
+            contentType: contentType,
+            sizeBytes: sizeBytes
+        )
         
         return try await apiClient.post(
             endpoint: "/v1/uploads/signed-url",
@@ -453,7 +463,10 @@ class VideoAPIService: ObservableObject {
         
         // 1. Get signed upload URL
         let filename = "video_\(UUID().uuidString).mp4"
-        let signedUrlResponse = try await getSignedUploadUrl(filename: filename)
+        let signedUrlResponse = try await getSignedUploadUrl(
+            filename: filename,
+            sizeBytes: videoData.count
+        )
         
         // 2. Upload video file
         try await uploadVideoFile(data: videoData, to: signedUrlResponse.url)

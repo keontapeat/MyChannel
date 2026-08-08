@@ -9,6 +9,7 @@
 
 import Foundation
 import Speech
+import AVFoundation
 
 // MARK: - Models
 
@@ -48,6 +49,55 @@ final class LiveCaptionsService: ObservableObject {
         guard AppConfig.Features.enableLiveCaptions else { return }
         isEnabled = true
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: targetLanguage))
+
+        guard let recognizer, recognizer.isAvailable else { return }
+
+        SFSpeechRecognizer.requestAuthorization { [weak self] status in
+            guard let self, status == .authorized else { return }
+            DispatchQueue.main.async {
+                self.startRecognitionLoop()
+            }
+        }
+    }
+
+    private func startRecognitionLoop() {
+        guard isEnabled, let recognizer else { return }
+        let audioSession = AVAudioSession.sharedInstance()
+        try? audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+        try? audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+
+        let audioEngine = AVAudioEngine()
+        let inputNode = audioEngine.inputNode
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
+            request.append(buffer)
+        }
+
+        audioEngine.prepare()
+        try? audioEngine.start()
+
+        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            guard let self else { return }
+            if let result {
+                let transcript = result.bestTranscription.formattedString
+                Task { @MainActor in
+                    let confidence = Double(result.bestTranscription.segments.last?.confidence ?? 1.0)
+                    self.addCaption(transcript, isFinal: result.isFinal, confidence: confidence)
+                }
+            }
+            if error != nil || result?.isFinal == true {
+                audioEngine.stop()
+                inputNode.removeTap(onBus: 0)
+                // Restart for continuous captioning
+                Task { @MainActor in
+                    if self.isEnabled { self.startRecognitionLoop() }
+                }
+            }
+        }
     }
 
     func stopCaptioning() {

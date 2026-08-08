@@ -17,6 +17,8 @@ struct FlicksFeedPager<FlickCard: View>: View {
     @Binding var searchText: String
     @Binding var flicksMuted: Bool
     @Binding var captionsEnabled: Bool
+    @Binding var selectedFeed: FlicksFeedMode
+    let creators: [FlickCreator]
     let showUI: Bool
     let reduceMotion: Bool
     let flicksCount: Int
@@ -74,6 +76,8 @@ struct FlicksFeedPager<FlickCard: View>: View {
                     searchText: $searchText,
                     flicksMuted: $flicksMuted,
                     captionsEnabled: $captionsEnabled,
+                    selectedFeed: $selectedFeed,
+                    creators: creators,
                     showUI: showUI
                 )
 

@@ -1,0 +1,21 @@
+{
+  "images" : [
+    {
+      "filename" : "SaveInta.com_748231383_18372848299225446_3597057819120645009_n.jpg",
+      "idiom" : "universal",
+      "scale" : "1x"
+    },
+    {
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "idiom" : "universal",
+      "scale" : "3x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

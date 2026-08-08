@@ -34,25 +34,26 @@ final class VideoFirestoreService: ObservableObject {
 
     func toggleLike(videoId: String, userId: String, add: Bool) async {
         #if canImport(FirebaseFirestore)
-        guard let db = db else { return }
-        let ref = db.collection("videos").document(videoId).collection("likes").document(userId)
+        guard let db = db, !userId.isEmpty else { return }
+        let likeRef = db.collection("videos").document(videoId).collection("likes").document(userId)
+        let eventRef = db.collection("videos").document(videoId).collection("events").document()
         do {
-            if add { try await ref.setData(["likedAt": FieldValue.serverTimestamp()]) }
-            else { try await ref.delete() }
-
-            // 🔥 RANKING FIX: Keep an aggregate likeCount on the video AND roll it
-            // up to the creator's users/{uid}.likeCount so engagement actually
-            // feeds TopRankMLService's engagement score in real time.
-            let delta: Int64 = add ? 1 : -1
-            let videoRef = db.collection("videos").document(videoId)
-            try await videoRef.setData(["likeCount": FieldValue.increment(delta)], merge: true)
-
-            if let creatorId = try await videoRef.getDocument().data()?["userId"] as? String, !creatorId.isEmpty {
-                try await db.collection("users").document(creatorId).setData([
-                    "likeCount": FieldValue.increment(delta)
-                ], merge: true)
+            let batch = db.batch()
+            if add {
+                batch.setData(["likedAt": FieldValue.serverTimestamp()], forDocument: likeRef)
+            } else {
+                batch.deleteDocument(likeRef)
             }
-        } catch { print("video like error: \(error)") }
+            batch.setData([
+                "userId": userId,
+                "type": add ? "like" : "unlike",
+                "sessionId": UUID().uuidString,
+                "createdAt": FieldValue.serverTimestamp()
+            ], forDocument: eventRef)
+            try await batch.commit()
+        } catch {
+            print("video like error: \(error)")
+        }
         #endif
     }
 
@@ -297,19 +298,30 @@ final class VideoFirestoreService: ObservableObject {
         #endif
     }
     
-    // 🔥 THERMONUCLEAR: Batch increment view counts
+    // 🔥 THERMONUCLEAR: Batch-submit immutable view facts. The backend owns
+    // aggregate counters and deduplicates each user/session semantically.
     func incrementMultipleViewCounts(_ videoIds: [String]) async throws {
         #if canImport(FirebaseFirestore)
         guard let db = db else { throw ServiceError.firebaseNotConfigured }
+        guard let userId = AuthenticationManager.shared.currentUser?.id, !userId.isEmpty else { return }
         let batch = db.batch()
-        
-        for videoId in videoIds.prefix(500) {
-            let ref = db.collection("videos").document(videoId)
-            batch.updateData(["viewCount": FieldValue.increment(Int64(1))], forDocument: ref)
+
+        for videoId in videoIds.prefix(250) {
+            let sessionId = UUID().uuidString
+            let eventRef = db.collection("videos")
+                .document(videoId)
+                .collection("events")
+                .document("view_\(sessionId)")
+            batch.setData([
+                "userId": userId,
+                "type": "view",
+                "sessionId": sessionId,
+                "createdAt": FieldValue.serverTimestamp()
+            ], forDocument: eventRef)
         }
-        
+
         try await batch.commit()
-        print("✅ [VideoFirestore] Batch incremented \(min(videoIds.count, 500)) view counts!")
+        print("✅ [VideoFirestore] Submitted \(min(videoIds.count, 250)) view events")
         #endif
     }
     
@@ -756,105 +768,25 @@ final class VideoFirestoreService: ObservableObject {
     // MARK: - Real-time View Count Updates
     func incrementViewCount(videoId: String) async {
         #if canImport(FirebaseFirestore)
-        guard let db = db else { return }
+        guard let db = db,
+              let userId = AuthenticationManager.shared.currentUser?.id,
+              !userId.isEmpty else { return }
+
+        let sessionId = UUID().uuidString
         do {
-            print("👁️ [VideoFirestoreService] Incrementing view count for video: \(videoId)")
-            let ref = db.collection("videos").document(videoId)
-            
-            // 🔥 FIX: Check if document exists first
-            let doc = try await ref.getDocument()
-            if !doc.exists {
-                print("⚠️ [VideoFirestoreService] Video document doesn't exist, creating with viewCount: 1")
-                try await ref.setData([
-                    "viewCount": 1,
+            try await db.collection("videos")
+                .document(videoId)
+                .collection("events")
+                .document("view_\(sessionId)")
+                .setData([
+                    "userId": userId,
+                    "type": "view",
+                    "sessionId": sessionId,
                     "createdAt": FieldValue.serverTimestamp()
-                ], merge: true)
-                print("✅ [VideoFirestoreService] Created video document with viewCount: 1")
-                return
-            }
-            
-            // Check if viewCount field exists
-            let data = doc.data()
-            if data?["viewCount"] == nil {
-                print("⚠️ [VideoFirestoreService] viewCount field missing, initializing to 1")
-                try await ref.setData([
-                    "viewCount": 1
-                ], merge: true)
-                print("✅ [VideoFirestoreService] Initialized viewCount to 1")
-            } else {
-                // Field exists, use increment
-                try await ref.updateData([
-                    "viewCount": FieldValue.increment(Int64(1))
                 ])
-                print("✅ [VideoFirestoreService] View count incremented successfully")
-            }
-            
-            // 🔥 FIX: Fetch updated count to verify
-            let updatedDoc = try await ref.getDocument()
-            if let updatedData = updatedDoc.data(),
-               let newCount = updatedData["viewCount"] as? Int {
-                print("📊 [VideoFirestoreService] Updated view count: \(videoId) → \(newCount) views")
-            } else if let updatedData = updatedDoc.data(),
-                      let newCount64 = updatedData["viewCount"] as? Int64 {
-                print("📊 [VideoFirestoreService] Updated view count: \(videoId) → \(Int(newCount64)) views")
-            }
-            
-            // Get the video's creator ID to update their total views
-            let videoDoc = try await ref.getDocument()
-            if let videoData = videoDoc.data(),
-               let creatorId = videoData["userId"] as? String {
-                print("👤 [VideoFirestoreService] Incrementing total views for creator: \(creatorId)")
-                let userRef = db.collection("users").document(creatorId)
-                try await userRef.updateData([
-                    "totalViews": FieldValue.increment(Int64(1))
-                ])
-                print("✅ [VideoFirestoreService] Creator total views incremented")
-                
-                // Update local user if it's the current user
-                if let currentUser = AppState.shared.currentUser, currentUser.id == creatorId {
-                    if let updatedUserData = try? await userRef.getDocument().data() {
-                        let updatedUser = User(
-                            id: currentUser.id,
-                            username: currentUser.username,
-                            displayName: currentUser.displayName,
-                            email: currentUser.email,
-                            profileImageURL: currentUser.profileImageURL,
-                            bannerImageURL: currentUser.bannerImageURL,
-                            bio: currentUser.bio,
-                            subscriberCount: currentUser.subscriberCount,
-                            videoCount: currentUser.videoCount,
-                            isVerified: currentUser.isVerified,
-                            isCreator: currentUser.isCreator,
-                            createdAt: currentUser.createdAt,
-                            location: currentUser.location,
-                            website: currentUser.website,
-                            socialLinks: currentUser.socialLinks,
-                            followerCount: currentUser.followerCount,
-                            followingCount: currentUser.followingCount,
-                            joinDate: currentUser.joinDate,
-                            totalViews: (updatedUserData["totalViews"] as? Int) ?? ((currentUser.totalViews ?? 0) + 1),
-                            totalEarnings: currentUser.totalEarnings,
-                            membershipTiers: currentUser.membershipTiers,
-                            bannerVideoURL: currentUser.bannerVideoURL,
-                            bannerVideoMuted: currentUser.bannerVideoMuted,
-                            bannerVideoContentMode: currentUser.bannerVideoContentMode
-                        )
-                        await MainActor.run {
-                            AppState.shared.currentUser = updatedUser
-                            AuthenticationManager.shared.currentUser = updatedUser
-                        }
-                        print("✅ [VideoFirestoreService] Local user totalViews updated to: \(updatedUser.totalViews ?? 0)")
-                    }
-                }
-            }
-            
-            // Notify profile and Creator Studio to refresh stats
-            await MainActor.run {
-                NotificationCenter.default.post(name: NSNotification.Name("RefreshProfile"), object: nil)
-                NotificationCenter.default.post(name: NSNotification.Name("RefreshCreatorStudio"), object: videoId)
-            }
+            print("✅ [VideoFirestoreService] Submitted server-authoritative view event")
         } catch {
-            print("⚠️ [VideoFirestoreService] Failed to increment view count: \(error)")
+            print("⚠️ [VideoFirestoreService] Failed to submit view event: \(error)")
         }
         #endif
     }

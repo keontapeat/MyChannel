@@ -293,7 +293,7 @@ struct SubscriptionsView: View {
             HStack(spacing: 8) {
                 // YouTube chip order: All, Today, Videos, Shorts, Live, Posts/Podcasts, Continue watching, Unwatched
                 let chipOrder: [SubscriptionsViewModel.FilterOption] = [
-                    .all, .today, .videos, .shorts, .live, .posts, .continueWatching, .unwatched
+                    .all, .today, .videos, .flicks, .live, .posts, .continueWatching, .unwatched
                 ]
                 ForEach(chipOrder, id: \.self) { option in
                     if option != .posts || viewModel.hasPosts {
@@ -348,8 +348,8 @@ struct SubscriptionsView: View {
                         liveVideoCards
                     }
                     
-                    // Shorts shelf (compact horizontal rail, shown for All + Shorts filter)
-                    if viewModel.filterOption == .all || viewModel.filterOption == .shorts,
+                    // Shorts shelf (compact horizontal rail, shown for All + Flicks filter)
+                    if viewModel.filterOption == .all || viewModel.filterOption == .flicks,
                        !viewModel.filteredShorts.isEmpty {
                         SubscriptionShortsShelf(shorts: Array(viewModel.filteredShorts.prefix(12))) { short in
                             videoToOpen = short
@@ -460,15 +460,15 @@ struct SubscriptionsView: View {
     
     private func liveFullWidthCard(_ live: Video) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Full-width 16:9 thumbnail with LIVE badge
+            // Full-width 16:9 thumbnail with LIVE badge.
+            // Container must use .fit — .fill inside ScrollView expands unboundedly.
             ZStack(alignment: .topLeading) {
                 CachedAsyncImage(url: URL(string: live.thumbnailURL)) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
+                    image.resizable().scaledToFill()
                 } placeholder: {
                     Rectangle().fill(AppTheme.Colors.surface)
                 }
-                .aspectRatio(16 / 9, contentMode: .fill)
-                .frame(maxWidth: .infinity)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
                 .clipped()
                 
                 // LIVE badge top-left
@@ -483,6 +483,9 @@ struct SubscriptionsView: View {
                 .background(Capsule().fill(Color.red))
                 .padding(8)
             }
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .clipped()
             
             // Info row
             HStack(alignment: .top, spacing: 10) {
@@ -774,7 +777,7 @@ struct SubscriptionsView: View {
         case .unwatched: return "All caught up"
         case .today: return "Nothing new today"
         case .live: return "No one's live"
-        case .shorts: return "No Shorts yet"
+        case .flicks: return "No Flicks yet"
         case .videos: return "No videos yet"
         default: return "Nothing here yet"
         }
@@ -786,7 +789,7 @@ struct SubscriptionsView: View {
         case .unwatched: return "You've watched everything from your subscriptions. Nice."
         case .today: return "Check back later for fresh uploads."
         case .live: return "When your channels go live, you'll see them here."
-        case .shorts: return "Shorts from your subscriptions will show up here."
+        case .flicks: return "Flicks from your subscriptions will show up here."
         case .videos: return "New videos from your subscriptions will appear here."
         default: return "Try a different filter or pull to refresh."
         }

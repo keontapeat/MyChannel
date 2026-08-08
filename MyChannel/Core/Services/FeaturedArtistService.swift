@@ -17,6 +17,12 @@ import MusicKit
 #if canImport(FirebaseFirestore)
 import FirebaseFirestore
 #endif
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
 
 // MARK: - Flint Artist Model
 
@@ -375,85 +381,147 @@ final class FeaturedArtistService: ObservableObject {
     
     // MARK: - Artist Management
     
-    /// Register a new featured artist (pending verification)
+    /// Register a new featured artist owned by the authenticated user.
     func registerArtist(_ artist: FeaturedArtist) async throws {
-        #if canImport(FirebaseFirestore)
-        var newArtist = artist
-        newArtist.memberSince = Date()
-        newArtist.isVerified = false
-        newArtist.verificationBadge = .rising
-        
-        try db.collection(collectionName).document(artist.id).setData(from: newArtist)
-        
-        // Add to local list
-        artists.append(newArtist)
+        #if canImport(FirebaseFirestore) && canImport(FirebaseAuth) && canImport(FirebaseCore)
+        guard FirebaseApp.app() != nil,
+              let userID = Auth.auth().currentUser?.uid else {
+            throw FeaturedArtistError.notAuthenticated
+        }
+
+        let newArtist = FeaturedArtist(
+            id: userID,
+            name: artist.name,
+            stageName: artist.stageName,
+            bio: artist.bio,
+            genres: artist.genres,
+            hometown: artist.hometown,
+            profileImageURL: artist.profileImageURL,
+            bannerImageURL: artist.bannerImageURL,
+            appleMusicArtistID: artist.appleMusicArtistID,
+            appleMusicURL: artist.appleMusicURL,
+            instagramHandle: artist.instagramHandle,
+            twitterHandle: artist.twitterHandle,
+            tiktokHandle: artist.tiktokHandle,
+            youtubeChannelID: artist.youtubeChannelID,
+            spotifyArtistID: artist.spotifyArtistID,
+            soundcloudURL: artist.soundcloudURL,
+            websiteURL: artist.websiteURL,
+            isVerified: false,
+            verifiedAt: nil,
+            verificationBadge: .rising,
+            memberSince: Date(),
+            lastActive: nil,
+            totalStreams: 0,
+            monthlyListeners: 0,
+            followerCount: 0,
+            totalTips: 0,
+            featuredTrackIDs: artist.featuredTrackIDs,
+            featuredPlaylistID: artist.featuredPlaylistID,
+            latestReleaseDate: artist.latestReleaseDate,
+            myChannelUserID: userID,
+            myChannelVideos: artist.myChannelVideos
+        )
+
+        try db.collection(collectionName).document(userID).setData(from: newArtist)
+
+        if let index = artists.firstIndex(where: { $0.id == userID }) {
+            artists[index] = newArtist
+        } else {
+            artists.append(newArtist)
+        }
+        artistCache[userID] = newArtist
         updateArtistCategories()
-        
-        print("🔥 [FeaturedArtists] Registered new artist: \(artist.displayName)")
+
+        print("🔥 [FeaturedArtists] Registered new artist: \(newArtist.displayName)")
         #else
         throw FeaturedArtistError.firestoreNotAvailable
         #endif
     }
-    
-    /// Update artist profile
+
+    /// Update only owner-editable profile fields and preserve server-controlled state.
     func updateArtist(_ artist: FeaturedArtist) async throws {
-        #if canImport(FirebaseFirestore)
-        try db.collection(collectionName).document(artist.id).setData(from: artist, merge: true)
-        
-        // Update local cache
-        if let index = artists.firstIndex(where: { $0.id == artist.id }) {
-            artists[index] = artist
+        #if canImport(FirebaseFirestore) && canImport(FirebaseAuth) && canImport(FirebaseCore)
+        guard FirebaseApp.app() != nil,
+              let userID = Auth.auth().currentUser?.uid else {
+            throw FeaturedArtistError.notAuthenticated
         }
-        artistCache[artist.id] = artist
+        guard artist.id == userID else { throw FeaturedArtistError.ownershipMismatch }
+
+        let reference = db.collection(collectionName).document(userID)
+        let snapshot = try await reference.getDocument()
+        guard snapshot.exists,
+              let ownerID = snapshot.data()?["mychannel_user_id"] as? String else {
+            throw FeaturedArtistError.artistNotFound
+        }
+        guard ownerID == userID else { throw FeaturedArtistError.ownershipMismatch }
+        guard var updatedArtist = try? snapshot.data(as: FeaturedArtist.self) else {
+            throw FeaturedArtistError.updateFailed
+        }
+
+        let updates: [String: Any] = [
+            "name": artist.name,
+            "stage_name": firestoreProfileValue(artist.stageName),
+            "bio": firestoreProfileValue(artist.bio),
+            "genres": artist.genres,
+            "hometown": artist.hometown,
+            "profile_image_url": firestoreProfileValue(artist.profileImageURL),
+            "banner_image_url": firestoreProfileValue(artist.bannerImageURL),
+            "apple_music_artist_id": firestoreProfileValue(artist.appleMusicArtistID),
+            "apple_music_url": firestoreProfileValue(artist.appleMusicURL),
+            "instagram_handle": firestoreProfileValue(artist.instagramHandle),
+            "twitter_handle": firestoreProfileValue(artist.twitterHandle),
+            "tiktok_handle": firestoreProfileValue(artist.tiktokHandle),
+            "youtube_channel_id": firestoreProfileValue(artist.youtubeChannelID),
+            "spotify_artist_id": firestoreProfileValue(artist.spotifyArtistID),
+            "soundcloud_url": firestoreProfileValue(artist.soundcloudURL),
+            "website_url": firestoreProfileValue(artist.websiteURL),
+            "featured_track_ids": artist.featuredTrackIDs,
+            "featured_playlist_id": firestoreProfileValue(artist.featuredPlaylistID),
+            "latest_release_date": firestoreProfileValue(artist.latestReleaseDate),
+            "mychannel_videos": artist.myChannelVideos
+        ]
+        try await reference.updateData(updates)
+
+        updatedArtist.name = artist.name
+        updatedArtist.stageName = artist.stageName
+        updatedArtist.bio = artist.bio
+        updatedArtist.genres = artist.genres
+        updatedArtist.hometown = artist.hometown
+        updatedArtist.profileImageURL = artist.profileImageURL
+        updatedArtist.bannerImageURL = artist.bannerImageURL
+        updatedArtist.appleMusicArtistID = artist.appleMusicArtistID
+        updatedArtist.appleMusicURL = artist.appleMusicURL
+        updatedArtist.instagramHandle = artist.instagramHandle
+        updatedArtist.twitterHandle = artist.twitterHandle
+        updatedArtist.tiktokHandle = artist.tiktokHandle
+        updatedArtist.youtubeChannelID = artist.youtubeChannelID
+        updatedArtist.spotifyArtistID = artist.spotifyArtistID
+        updatedArtist.soundcloudURL = artist.soundcloudURL
+        updatedArtist.websiteURL = artist.websiteURL
+        updatedArtist.featuredTrackIDs = artist.featuredTrackIDs
+        updatedArtist.featuredPlaylistID = artist.featuredPlaylistID
+        updatedArtist.latestReleaseDate = artist.latestReleaseDate
+        updatedArtist.myChannelVideos = artist.myChannelVideos
+
+        if let index = artists.firstIndex(where: { $0.id == userID }) {
+            artists[index] = updatedArtist
+        }
+        artistCache[userID] = updatedArtist
         updateArtistCategories()
-        
-        print("✅ [FeaturedArtists] Updated artist: \(artist.displayName)")
+
+        print("✅ [FeaturedArtists] Updated artist: \(updatedArtist.displayName)")
         #else
         throw FeaturedArtistError.firestoreNotAvailable
         #endif
     }
-    
-    /// Record a stream for an artist
-    func recordStream(artistID: String) async {
-        #if canImport(FirebaseFirestore)
-        do {
-            try await db.collection(collectionName).document(artistID).updateData([
-                "total_streams": FieldValue.increment(Int64(1)),
-                "last_active": FieldValue.serverTimestamp()
-            ])
-            
-            // Update local cache
-            if var artist = artistCache[artistID] {
-                artist.totalStreams += 1
-                artist.lastActive = Date()
-                artistCache[artistID] = artist
-                
-                if let index = artists.firstIndex(where: { $0.id == artistID }) {
-                    artists[index] = artist
-                }
-            }
-        } catch {
-            print("❌ [FeaturedArtists] Error recording stream: \(error)")
-        }
-        #endif
+
+    #if canImport(FirebaseFirestore)
+    private func firestoreProfileValue(_ value: Any?) -> Any {
+        value ?? FieldValue.delete()
     }
-    
-    /// Record a tip for an artist
-    func recordTip(artistID: String, amount: Double) async {
-        #if canImport(FirebaseFirestore)
-        do {
-            try await db.collection(collectionName).document(artistID).updateData([
-                "total_tips": FieldValue.increment(amount),
-                "last_active": FieldValue.serverTimestamp()
-            ])
-            
-            print("💰 [FeaturedArtists] Recorded tip of $\(amount) for artist \(artistID)")
-        } catch {
-            print("❌ [FeaturedArtists] Error recording tip: \(error)")
-        }
-        #endif
-    }
-    
+    #endif
+
     // MARK: - Track Integration
     
     /// Get tracks for a Flint artist from Apple Music using their artist ID
@@ -1397,6 +1465,8 @@ final class FeaturedArtistService: ObservableObject {
 
 enum FeaturedArtistError: Error, LocalizedError {
     case firestoreNotAvailable
+    case notAuthenticated
+    case ownershipMismatch
     case artistNotFound
     case updateFailed
     case registrationFailed
@@ -1405,6 +1475,10 @@ enum FeaturedArtistError: Error, LocalizedError {
         switch self {
         case .firestoreNotAvailable:
             return "Database connection not available."
+        case .notAuthenticated:
+            return "Sign in to manage your artist profile."
+        case .ownershipMismatch:
+            return "You can only manage the artist profile linked to your account."
         case .artistNotFound:
             return "Artist not found."
         case .updateFailed:

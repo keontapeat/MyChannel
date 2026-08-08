@@ -15,8 +15,8 @@ import javax.inject.Singleton
 /**
  * Remote data source for channel documents and subscription relationships.
  *
- * Subscriptions are modeled as `users/{uid}/subscriptions/{channelId}` docs,
- * with the channel's `subscriberCount` adjusted atomically via [FieldValue.increment].
+ * Subscriptions are modeled as `users/{uid}/subscriptions/{channelId}` docs.
+ * Trusted Cloud Functions own the creator aggregate and reverse edge.
  */
 @Singleton
 class FirestoreChannelDataSource @Inject constructor(
@@ -44,23 +44,15 @@ class FirestoreChannelDataSource @Inject constructor(
     }
 
     suspend fun subscribe(userId: String, channelId: String): Unit = withContext(Dispatchers.IO) {
-        firestore.runTransaction { txn ->
-            val channelRef = channels().document(channelId)
-            val subRef = firestore.collection(USERS).document(userId)
-                .collection(SUBSCRIPTIONS).document(channelId)
-            txn.set(subRef, mapOf("subscribedAt" to FieldValue.serverTimestamp()))
-            txn.update(channelRef, "subscriberCount", FieldValue.increment(1L))
-        }.await()
+        val subRef = firestore.collection(USERS).document(userId)
+            .collection(SUBSCRIPTIONS).document(channelId)
+        subRef.set(mapOf("subscribedAt" to FieldValue.serverTimestamp())).await()
     }
 
     suspend fun unsubscribe(userId: String, channelId: String): Unit = withContext(Dispatchers.IO) {
-        firestore.runTransaction { txn ->
-            val channelRef = channels().document(channelId)
-            val subRef = firestore.collection(USERS).document(userId)
-                .collection(SUBSCRIPTIONS).document(channelId)
-            txn.delete(subRef)
-            txn.update(channelRef, "subscriberCount", FieldValue.increment(-1L))
-        }.await()
+        val subRef = firestore.collection(USERS).document(userId)
+            .collection(SUBSCRIPTIONS).document(channelId)
+        subRef.delete().await()
     }
 
     suspend fun isSubscribed(userId: String, channelId: String): Boolean =

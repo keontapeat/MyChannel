@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -44,6 +45,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.mychannel.domain.model.Video
 import com.mychannel.ui.components.VideoCard
+import com.mychannel.ui.navigation.MUSIC_ROUTE
 import com.mychannel.viewmodel.LibraryViewModel
 
 /**
@@ -91,6 +93,13 @@ fun LibraryScreen(
                         label = "Playlists",
                         count = uiState.playlistCount,
                         onClick = { navController.navigate("playlists") }
+                    )
+                    HorizontalDivider()
+                    LibraryShortcutRow(
+                        icon = Icons.Filled.MusicNote,
+                        label = "Music Hub",
+                        count = 0,
+                        onClick = { navController.navigate(MUSIC_ROUTE) }
                     )
                     HorizontalDivider()
                     LibraryShortcutRow(

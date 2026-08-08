@@ -12,6 +12,7 @@ import { db } from '@/lib/firebase/config';
 const FlicksPage = () => {
   const [flicks, setFlicks] = useState<Flick[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [activeFeed, setActiveFeed] = useState<'Flicks' | 'Following'>('Flicks');
   const [isLoading, setIsLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -59,7 +60,7 @@ const FlicksPage = () => {
         setFlicks(Array.from({ length: 10 }, (_, i) => ({
           id: `seed-${i}`,
           videoURL: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-          thumbnailURL: `https://picsum.photos/seed/flick${i}/1080/1920`,
+          thumbnailURL: 'https://i.ytimg.com/vi/aqz-KE-bpKQ/maxresdefault.jpg',
           title: `Flick #${i + 1}`,
           description: 'Short video',
           duration: 30,
@@ -72,7 +73,7 @@ const FlicksPage = () => {
             id: `creator-${i}`,
             username: `creator${i}`,
             displayName: `Creator ${i + 1}`,
-            profileImageURL: `https://i.pravatar.cc/150?img=${i + 1}`,
+            profileImageURL: 'https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg',
             isVerified: false,
           },
           tags: [],
@@ -153,38 +154,60 @@ const FlicksPage = () => {
     );
   }
 
-  return (
-    <div
-      className="fixed inset-0 overflow-y-scroll snap-y snap-mandatory bg-black scrollbar-hide"
-      onScroll={handleScroll}
-      {...swipeHandlers}
-      ref={containerRef}
-    >
-      {flicks.map((flick, index) => (
-        <div key={flick.id} className="snap-start snap-always">
-          <FlickCard
-            flick={flick}
-            isActive={index === currentIndex}
-            isVisible={Math.abs(index - currentIndex) <= 1}
-          />
-        </div>
-      ))}
+  const topCreators = Array.from(
+    new Map(flicks.map((flick) => [flick.creator.id, flick.creator])).values()
+  ).slice(0, 3);
 
-      {/* Scroll Indicator */}
-      <div className="fixed right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-20">
-        {flicks.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => scrollToFlick(index)}
-            className={`w-2 h-2 rounded-full transition-all ${
-              index === currentIndex
-                ? 'bg-white h-4'
-                : 'bg-white/40 hover:bg-white/60'
-            }`}
-          />
+  return (
+    <>
+      <header className="pointer-events-none fixed inset-x-0 top-0 z-40 flex items-center justify-center px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+        <div className="pointer-events-auto flex items-center gap-4 rounded-full bg-black/15 px-3 py-2 backdrop-blur-sm">
+          {(['Flicks', 'Following'] as const).map((feed) => (
+            <button
+              key={feed}
+              type="button"
+              onClick={() => setActiveFeed(feed)}
+              aria-pressed={activeFeed === feed}
+              className={`relative py-1 text-[17px] font-semibold tracking-tight transition-colors ${
+                activeFeed === feed ? 'text-white' : 'text-white/60'
+              }`}
+            >
+              {feed}
+              {activeFeed === feed && (
+                <span className="absolute inset-x-2 -bottom-1 h-0.5 rounded-full bg-white" />
+              )}
+            </button>
+          ))}
+          <div className="flex -space-x-2" aria-label="Creators in your feed">
+            {topCreators.map((creator) => (
+              <img
+                key={creator.id}
+                src={creator.profileImageURL}
+                alt={creator.displayName}
+                className="h-7 w-7 rounded-full border-2 border-white/90 object-cover"
+              />
+            ))}
+          </div>
+        </div>
+      </header>
+
+      <div
+        className="fixed inset-0 overflow-y-scroll snap-y snap-mandatory bg-black scrollbar-hide"
+        onScroll={handleScroll}
+        {...swipeHandlers}
+        ref={containerRef}
+      >
+        {flicks.map((flick, index) => (
+          <div key={flick.id} className="h-dvh snap-start snap-always">
+            <FlickCard
+              flick={flick}
+              isActive={index === currentIndex}
+              isVisible={Math.abs(index - currentIndex) <= 1}
+            />
+          </div>
         ))}
       </div>
-    </div>
+    </>
   );
 };
 

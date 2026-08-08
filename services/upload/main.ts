@@ -1,8 +1,10 @@
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { Storage } from '@google-cloud/storage';
 import admin from 'firebase-admin';
 import jwt from 'jsonwebtoken';
+import { createHash, randomUUID } from 'node:crypto';
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -68,8 +70,49 @@ function buildPublicUrl(bucket: string, object: string): string {
 const app = express();
 const storage = new Storage();
 const INGEST_BUCKET = process.env.INGEST_BUCKET || 'mychannel-ingest';
-app.use(cors({ origin: '*', methods: ['POST','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'] }));
-app.use(express.json());
+const MAX_VIDEO_BYTES = Number(process.env.MAX_VIDEO_UPLOAD_BYTES || 2 * 1024 * 1024 * 1024);
+const ALLOWED_VIDEO_TYPES = new Set([
+  'video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v', 'video/mpeg',
+]);
+
+function uploadSessionId(objectName: string): string {
+  return createHash('sha256').update(objectName).digest('hex');
+}
+
+function validateOwnedObject(value: unknown, userId: string): string {
+  const objectName = String(value || '').trim();
+  if (!objectName.startsWith(`uploads/${userId}/`) || objectName.includes('..') || objectName.length > 1024) {
+    throw new Error('Forbidden object path');
+  }
+  return objectName;
+}
+
+function validateContentType(value: unknown): string {
+  const contentType = String(value || 'video/mp4').toLowerCase();
+  if (!ALLOWED_VIDEO_TYPES.has(contentType)) throw new Error('Unsupported video content type');
+  return contentType;
+}
+
+function validateSize(value: unknown): number {
+  const size = Number(value);
+  if (!Number.isInteger(size) || size <= 0 || size > MAX_VIDEO_BYTES) {
+    throw new Error(`Upload size must be between 1 and ${MAX_VIDEO_BYTES} bytes`);
+  }
+  return size;
+}
+
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'https://mychannel.live',
+  methods: ['POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+app.use(express.json({limit: '16kb'}));
+app.use('/v1/uploads', rateLimit({
+  windowMs: 60_000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 
 // Auth is enforced per-route via requireUser() (Firebase ID token or internal JWT).
 
@@ -78,31 +121,48 @@ app.post('/v1/uploads/signed-url', async (req, res) => {
     const user = await requireUser(req, res);
     if (!user) return;
 
-    const { filename } = req.body || {};
-    if (!filename) return res.status(400).json({ error: 'filename required' });
-
-    const objectName = `uploads/${user.userId}/${Date.now()}-${normalizeFilename(String(filename))}`;
-
+    const {filename, contentType: rawContentType, sizeBytes} = req.body || {};
+    if (!filename) return res.status(400).json({error: 'filename required'});
+    const contentType = validateContentType(rawContentType);
+    const expectedSize = validateSize(sizeBytes);
+    const objectName = `uploads/${user.userId}/${randomUUID()}-${normalizeFilename(String(filename))}`;
     const file = storage.bucket(INGEST_BUCKET).file(objectName);
     const [url] = await file.getSignedUrl({
       action: 'write',
       version: 'v4',
       expires: Date.now() + 15 * 60 * 1000,
-      // Do NOT bind contentType; some browsers override or omit the header (e.g., iOS Safari),
-      // which would cause SignatureDoesNotMatch if included in the signed headers
+      contentType,
     });
     const [getUrl] = await file.getSignedUrl({
       action: 'read',
       version: 'v4',
-      expires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+      expires: Date.now() + 60 * 60 * 1000,
     });
 
-    // Allow browser direct PUT upload
-    return res
-      .set({ 'Access-Control-Allow-Origin': '*' })
-      .json({ url, method: 'PUT', bucket: INGEST_BUCKET, object: objectName, getUrl });
-  } catch (e:any) {
-    return res.status(500).json({ error: e?.message || 'internal' });
+    await admin.firestore().collection('_uploadSessions').doc(uploadSessionId(objectName)).set({
+      ownerId: user.userId,
+      bucket: INGEST_BUCKET,
+      object: objectName,
+      contentType,
+      expectedSize,
+      status: 'pending',
+      expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 60 * 60 * 1000),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return res.json({
+      url,
+      method: 'PUT',
+      bucket: INGEST_BUCKET,
+      object: objectName,
+      getUrl,
+      contentType,
+      expectedSize,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Invalid upload request';
+    return res.status(message.includes('size') || message.includes('content type') ? 400 : 500)
+      .json({error: message});
   }
 });
 
@@ -112,43 +172,114 @@ app.post('/v1/uploads/get-url', async (req, res) => {
     const user = await requireUser(req, res);
     if (!user) return;
 
-    const { object, bucket } = req.body || {};
-    const bkt = String(bucket || INGEST_BUCKET);
-    const obj = String(object || '').trim();
-    if (!obj) return res.status(400).json({ error: 'object required' });
-    if (!obj.startsWith(`uploads/${user.userId}/`)) {
-      return res.status(403).json({ error: 'Forbidden' });
+    const {object, bucket} = req.body || {};
+    if (bucket && String(bucket) !== INGEST_BUCKET) {
+      return res.status(400).json({error: 'Unsupported bucket'});
     }
-    const file = storage.bucket(bkt).file(obj);
-    const [getUrl] = await file.getSignedUrl({ action: 'read', version: 'v4', expires: Date.now() + 24 * 60 * 60 * 1000 }); // 24 hours
-    return res.set({ 'Access-Control-Allow-Origin': '*' }).json({ url: getUrl, bucket: bkt, object: obj });
-  } catch (e:any) {
-    return res.status(500).json({ error: e?.message || 'internal' });
+    const obj = validateOwnedObject(object, user.userId);
+    const file = storage.bucket(INGEST_BUCKET).file(obj);
+    const [getUrl] = await file.getSignedUrl({
+      action: 'read',
+      version: 'v4',
+      expires: Date.now() + 60 * 60 * 1000,
+    });
+    return res.json({url: getUrl, bucket: INGEST_BUCKET, object: obj});
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Invalid request';
+    return res.status(message.includes('Forbidden') || message.includes('bucket') ? 400 : 500)
+      .json({error: message});
   }
 });
 
-// Finalize upload: set contentType metadata and return a fresh read URL
+// Finalize only after server-verifying the actual GCS object against the upload reservation.
 app.post('/v1/uploads/finalize', async (req, res) => {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
 
-    const { object, bucket, contentType } = req.body || {};
-    const bkt = String(bucket || INGEST_BUCKET);
-    const obj = String(object || '').trim();
-    if (!obj) return res.status(400).json({ error: 'object required' });
-    if (!obj.startsWith(`uploads/${user.userId}/`)) {
-      return res.status(403).json({ error: 'Forbidden' });
+    const {object, bucket, contentType: requestedContentType} = req.body || {};
+    if (bucket && String(bucket) !== INGEST_BUCKET) {
+      return res.status(400).json({error: 'Unsupported bucket'});
     }
-    const file = storage.bucket(bkt).file(obj);
-    if (contentType) {
-      try { await file.setMetadata({ contentType: String(contentType) }); } catch {}
+    const obj = validateOwnedObject(object, user.userId);
+    const sessionRef = admin.firestore().collection('_uploadSessions').doc(uploadSessionId(obj));
+    const session = await sessionRef.get();
+    if (!session.exists || session.get('ownerId') !== user.userId || session.get('object') !== obj) {
+      return res.status(403).json({error: 'Upload reservation not found'});
     }
-    // Return signed read URL; do not make public
-    const [getUrl] = await file.getSignedUrl({ action: 'read', version: 'v4', expires: Date.now() + 24 * 60 * 60 * 1000 }); // 24 hours
-    return res.set({ 'Access-Control-Allow-Origin': '*' }).json({ url: getUrl, publicUrl: buildPublicUrl(bkt, obj), bucket: bkt, object: obj, contentType: contentType || null });
-  } catch (e:any) {
-    return res.status(500).json({ error: e?.message || 'internal' });
+    if (session.get('status') === 'finalized') {
+      const file = storage.bucket(INGEST_BUCKET).file(obj);
+      const [url] = await file.getSignedUrl({action: 'read', version: 'v4', expires: Date.now() + 60 * 60 * 1000});
+      return res.json({
+        url,
+        publicUrl: buildPublicUrl(INGEST_BUCKET, obj),
+        bucket: INGEST_BUCKET,
+        object: obj,
+        contentType: session.get('contentType'),
+        sizeBytes: session.get('actualSize'),
+        checksum: session.get('checksum') || null,
+      });
+    }
+
+    const expectedContentType = validateContentType(session.get('contentType'));
+    if (requestedContentType && validateContentType(requestedContentType) !== expectedContentType) {
+      return res.status(400).json({error: 'Content type does not match upload reservation'});
+    }
+    const file = storage.bucket(INGEST_BUCKET).file(obj);
+    const [metadata] = await file.getMetadata();
+    const actualSize = Number(metadata.size);
+    if (!Number.isFinite(actualSize) || actualSize <= 0 || actualSize > MAX_VIDEO_BYTES ||
+        actualSize !== Number(session.get('expectedSize'))) {
+      await sessionRef.set({
+        status: 'rejected',
+        rejectionReason: 'size_mismatch',
+        actualSize: Number.isFinite(actualSize) ? actualSize : null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return res.status(422).json({error: 'Uploaded object size does not match reservation'});
+    }
+    if (metadata.contentType !== expectedContentType) {
+      await sessionRef.set({
+        status: 'rejected',
+        rejectionReason: 'content_type_mismatch',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return res.status(422).json({error: 'Uploaded object content type does not match reservation'});
+    }
+
+    await file.setMetadata({
+      contentType: expectedContentType,
+      cacheControl: 'private, max-age=0, no-store',
+      metadata: {
+        ownerId: user.userId,
+        uploadValidated: 'true',
+      },
+    });
+    await sessionRef.set({
+      status: 'finalized',
+      actualSize,
+      checksum: metadata.crc32c || metadata.md5Hash || null,
+      finalizedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+
+    const [getUrl] = await file.getSignedUrl({
+      action: 'read',
+      version: 'v4',
+      expires: Date.now() + 60 * 60 * 1000,
+    });
+    return res.json({
+      url: getUrl,
+      publicUrl: buildPublicUrl(INGEST_BUCKET, obj),
+      bucket: INGEST_BUCKET,
+      object: obj,
+      contentType: expectedContentType,
+      sizeBytes: actualSize,
+      checksum: metadata.crc32c || metadata.md5Hash || null,
+    });
+  } catch (error) {
+    console.error('Upload finalize error:', error instanceof Error ? error.message : error);
+    return res.status(500).json({error: 'Failed to finalize upload'});
   }
 });
 

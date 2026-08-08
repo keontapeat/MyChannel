@@ -97,9 +97,9 @@
 		DAC895E6AB3E67C7437B991E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97E5292577406B1EA3E981B9 /* ContentView.swift */; };
 		DBA0A1999C93C212FD0D848B /* X509 in Frameworks */ = {isa = PBXBuildFile; productRef = EBC819EC114223C357F4CEA8 /* X509 */; };
 		E64B595CC85E845F9108F677 /* StripePayments in Frameworks */ = {isa = PBXBuildFile; productRef = 26335CC42FFBE77B65A8B8A0 /* StripePayments */; };
-		F7A91C2E4B8D6031A5E9C274 /* StripeIdentity in Frameworks */ = {isa = PBXBuildFile; productRef = D4E8B1A93C7F5026E1A8D395 /* StripeIdentity */; };
 		EDB7D237266158C9FCDB36D4 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 8DBBAA62D52019C5A8683900 /* FirebaseAuth */; };
 		F69275CAB5AF4F5558CDBFA3 /* FirebaseDatabase in Frameworks */ = {isa = PBXBuildFile; productRef = F3D28F097E5B653D6546CF02 /* FirebaseDatabase */; };
+		F7A91C2E4B8D6031A5E9C274 /* StripeIdentity in Frameworks */ = {isa = PBXBuildFile; productRef = D4E8B1A93C7F5026E1A8D395 /* StripeIdentity */; };
 		F835C05BC455334578E5B742 /* GoogleInteractiveMediaAds in Frameworks */ = {isa = PBXBuildFile; productRef = 74BD607AFEDF03E98FD09927 /* GoogleInteractiveMediaAds */; };
 		F9A262E98CC30B04DE75B6B5 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 9393F72AAA025F18B89E276D /* FirebaseAuth */; };
 		FA672CD3A8124FDF35725C70 /* TrustKit in Frameworks */ = {isa = PBXBuildFile; productRef = 50D4A5CC9C57C7663B41670B /* TrustKit */; };
@@ -813,7 +813,7 @@
 				CODE_SIGN_ENTITLEMENTS = MyChannel/MyChannel.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 57;
 				DEAD_CODE_STRIPPING = NO;
 				DEVELOPMENT_TEAM = 8KPXZ859S7;
 				ENABLE_PREVIEWS = NO;
@@ -839,7 +839,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.0;
 				OTHER_LDFLAGS = "-ObjC";
 				OTHER_SWIFT_FLAGS = "$(inherited) -Xfrontend -warn-long-function-bodies=100 -Xfrontend -warn-long-expression-type-checking=100";
 				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannelApp;
@@ -860,7 +860,7 @@
 				CODE_SIGN_ENTITLEMENTS = MyChannel/MyChannel.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 57;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 8KPXZ859S7;
@@ -887,7 +887,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.0;
 				OTHER_LDFLAGS = "-ObjC";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTMDB_KEY_PRESENT";
 				PRODUCT_BUNDLE_IDENTIFIER = com.keontapeat.MyChannelApp;
@@ -1615,11 +1615,6 @@
 			package = 23A6E9F54EF0496A218CF886 /* XCRemoteSwiftPackageReference "stripe-ios" */;
 			productName = StripePayments;
 		};
-		D4E8B1A93C7F5026E1A8D395 /* StripeIdentity */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 23A6E9F54EF0496A218CF886 /* XCRemoteSwiftPackageReference "stripe-ios" */;
-			productName = StripeIdentity;
-		};
 		3C6AD2AE4F871E5BBD7B2784 /* FirebaseCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 0541DE602E470D3F001B3F9E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
@@ -1759,6 +1754,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 76E7C8F74E61AFA70AE80D72 /* XCRemoteSwiftPackageReference "purchases-ios" */;
 			productName = RevenueCat;
+		};
+		D4E8B1A93C7F5026E1A8D395 /* StripeIdentity */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 23A6E9F54EF0496A218CF886 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = StripeIdentity;
 		};
 		D5D0CD39996115F7A7D8A495 /* IOSSecuritySuite */ = {
 			isa = XCSwiftPackageProductDependency;

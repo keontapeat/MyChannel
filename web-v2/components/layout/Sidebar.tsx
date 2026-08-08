@@ -25,7 +25,7 @@ const YOU: Item[] = [
 ];
 const EXPLORE: Item[] = [
   { icon: ShoppingBag, label: 'Shopping', href: '/cart' },
-  { icon: Music2,      label: 'Music',    href: '/search?q=music' },
+  { icon: Music2,      label: 'Music',    href: '/music' },
   { icon: Radio,       label: 'Live',     href: '/live' },
 ];
 const MC: Item[] = [

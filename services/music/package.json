@@ -9,21 +9,23 @@
     "build": "tsc",
     "deploy:main": "gcloud functions deploy music --runtime nodejs20 --trigger-http --allow-unauthenticated",
     "deploy:distribution": "gcloud run deploy music-distribution --source . --set-env-vars DISTRIBUTION_PROVIDER=$DISTRIBUTION_PROVIDER,AGGREGATOR_API_BASE=$AGGREGATOR_API_BASE,AGGREGATOR_API_KEY=$AGGREGATOR_API_KEY,ISRC_REGISTRANT=$ISRC_REGISTRANT,GS1_COMPANY_PREFIX=$GS1_COMPANY_PREFIX,MYCHANNEL_DPID=$MYCHANNEL_DPID",
-    "deploy:transcode": "gcloud run deploy music-transcode --source . --dockerfile Dockerfile.transcode --memory 2Gi --cpu 2 --timeout 900",
+    "deploy:transcode": "gcloud run deploy music-transcode --source . --dockerfile Dockerfile.transcode --memory 2Gi --cpu 2 --timeout 900 --no-allow-unauthenticated",
     "deploy:contentid": "gcloud run deploy music-contentid --source . --set-env-vars FINGERPRINT_PROVIDER=$FINGERPRINT_PROVIDER,CONTENT_ID_MATCH_THRESHOLD=$CONTENT_ID_MATCH_THRESHOLD",
     "deploy:presave": "gcloud run deploy music-presave --source ."
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.0.0",
+    "@google-cloud/tasks": "6.2.3",
+    "crypto": "^1.0.1",
     "express": "^4.18.2",
     "firebase-admin": "^12.0.0",
-    "@google-cloud/storage": "^7.0.0",
-    "crypto": "^1.0.1"
+    "google-auth-library": "10.9.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.17",
     "@types/node": "^20.0.0",
-    "typescript": "^5.0.0",
     "ts-node": "^10.9.0",
-    "ts-node-dev": "^2.0.0"
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.0.0"
   }
 }

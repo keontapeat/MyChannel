@@ -23,7 +23,12 @@ extension MovieDetailView {
         Button(action: playAction) {
             let isDirect = MoviePlaybackResolver.directPlayableURL(for: movie) != nil
             let title: String = {
-                if isDirect { return resumeProgress > 0.05 ? "Resume" : "Play Now" }
+                if isDirect {
+                    if resumeProgress > 0.05 {
+                        return resumeSeconds > 0 ? "Resume from \(Self.formatTimecode(resumeSeconds))" : "Resume"
+                    }
+                    return "Play Now"
+                }
                 if movie.trailerURL != nil { return "Play Trailer" }
                 if MoviePlaybackResolver.externalWatchURL(for: movie) != nil {
                     return "Watch on \(movie.streamingSource.displayName)"
@@ -109,6 +114,19 @@ extension MovieDetailView {
         .accessibilityLabel("Share movie")
     }
 
+    // MARK: - Helpers
+    /// Formats seconds as `M:SS` (or `H:MM:SS` for feature-length resume points).
+    static func formatTimecode(_ seconds: Double) -> String {
+        let total = Int(seconds.rounded())
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%d:%02d", minutes, secs)
+    }
+
     // MARK: - Setup Methods
     func setupVideo() {
         if video == nil {
@@ -124,6 +142,7 @@ extension MovieDetailView {
             await MainActor.run {
                 if wp.completionPct > 0.05 && wp.completionPct < 0.95 {
                     resumeProgress = wp.completionPct
+                    resumeSeconds = wp.positionSec
                 }
             }
         }
@@ -160,7 +179,9 @@ extension MovieDetailView {
         guard duration > 0, position > 1 else { return }
 
         let progress = min(1.0, position / duration)
-        resumeProgress = (progress > 0.05 && progress < 0.95) ? progress : 0
+        let keepResume = progress > 0.05 && progress < 0.95
+        resumeProgress = keepResume ? progress : 0
+        resumeSeconds = keepResume ? position : 0
         appState.updateHistoryProgress(contentId: video.id, progress: progress, position: position)
 
         guard let userId = appState.currentUser?.id else { return }

@@ -12,7 +12,7 @@ struct PremiumLiveTVSection: View {
     
     private var channels: [LiveTVChannel] {
         // 🔥 Use LiveTVManager for dynamic channels (24/7 reliability)
-        let allChannels = liveTVManager.channels.isEmpty ? LiveTVChannel.sampleChannels : liveTVManager.channels
+        let allChannels = liveTVManager.channels.isEmpty ? LiveTVChannel.appStoreSafeChannels : liveTVManager.channels
         
         // Filter to only healthy channels if health check has run
         let healthyIds = healthAgent.healthyChannelIds
@@ -51,7 +51,7 @@ struct PremiumLiveTVSection: View {
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(AppTheme.Colors.textPrimary)
                         
-                        Text("\(liveTVManager.channels.isEmpty ? LiveTVChannel.sampleChannels.count : liveTVManager.channels.count)+ Free Channels")
+                        Text("\(liveTVManager.channels.isEmpty ? LiveTVChannel.appStoreSafeChannels.count : liveTVManager.channels.count)+ Free Channels")
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.Colors.textSecondary)
                     }
@@ -379,7 +379,7 @@ struct TrendingLiveBanner: View {
     @StateObject private var liveTVManager = LiveTVManager.shared
     
     private var trendingChannels: [LiveTVChannel] {
-        let source = liveTVManager.channels.isEmpty ? LiveTVChannel.sampleChannels : liveTVManager.channels
+        let source = liveTVManager.channels.isEmpty ? LiveTVChannel.appStoreSafeChannels : liveTVManager.channels
         return Array(source.prefix(3))
     }
     

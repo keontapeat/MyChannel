@@ -54,12 +54,18 @@ class GlobalVideoPlayerManager: ObservableObject {
     private let audioLifecycle = GlobalPlayerAudioLifecycle()
     
     private var playerManager: VideoPlayerManager?
+    @Published private(set) var authorizedPlaybackSession: VideoPlaybackSession?
+    private(set) var authorizedPlayableVideo: Video?
+    private var authorizationRenewalTask: Task<Void, Never>?
+    private var playbackAuthorizationTask: Task<Void, Never>?
     
-    // 🔥 FIX: Expose playerManager for VideoDetailView to use when expanding from mini player
+    // Expose the retained manager and authorized descriptor so detail views can
+    // expand an existing mini-player without reconstructing playback from metadata.
     var exposedPlayerManager: VideoPlayerManager? {
         playerManager
     }
     private var cancellables = Set<AnyCancellable>()
+    private var lifecycleCancellables = Set<AnyCancellable>()
     private(set) var isCleanedUp = false
     private var wasPlayingBeforeFlicks = false
     
@@ -89,10 +95,7 @@ class GlobalVideoPlayerManager: ObservableObject {
             )
         }
 
-        // 🔥🔥🔥 NUCLEAR INIT: Clear EVERY SINGLE piece of state
-        print("🔥🔥🔥 [GlobalPlayer] NUCLEAR INIT starting...")
-        
-        // Clear video state
+        // Start from an empty playback state.
         self.currentVideo = nil
         self.videoQueue = []
         self.queueIndex = 0
@@ -147,41 +150,20 @@ class GlobalVideoPlayerManager: ObservableObject {
         viewTracking.startHeartbeat()
         audioLifecycle.startObserving()
         pipCoordinator.startObserving()
-        
-        print("✅ [GlobalPlayer] NUCLEAR INIT complete - EVERY state cleared")
-        print("   currentVideo: \(currentVideo == nil ? "nil" : "NOT NIL")")
-        print("   isPlayerReady: \(isPlayerReady)")
-        print("   hasActivePlaybackSession: \(hasActivePlaybackSession)")
     }
     
     /// Canonical playback session UUID — correlates view analytics across player surfaces.
     var playbackSessionID: String? { viewTracking.playbackSessionID }
     
     deinit {
-        print("🗑️ GlobalVideoPlayerManager deinit called")
-        audioLifecycle.stopObserving()
         cleanupSync()
     }
-    
-    private nonisolated func cleanupSync() {
-        // This cleanup runs on whatever thread deinit is called from
-        print("🧹 Cleaning up GlobalVideoPlayerManager (sync)")
-        
-        // We can't access @MainActor properties from here safely
-        // So we'll schedule the main cleanup if needed
-        Task { @MainActor in
-            // This will run on main actor if the object is still alive
-            // but since we're in deinit, this may not execute
-            print("🧹 Final MainActor cleanup attempted")
-        }
-    }
+
+    private nonisolated func cleanupSync() {}
     
     private func cleanup() {
         guard !isCleanedUp else { return }
         isCleanedUp = true
-        
-        print("🧹 Cleaning up GlobalVideoPlayerManager")
-        
         pipCoordinator.stopAll()
         
         UIApplication.shared.endReceivingRemoteControlEvents()
@@ -191,8 +173,12 @@ class GlobalVideoPlayerManager: ObservableObject {
         
         // Clear all cancellables to break retain cycles
         cancellables.removeAll()
+        lifecycleCancellables.removeAll()
         
-        // Clean up player manager
+        // Clean up player manager and authorization tasks.
+        playbackAuthorizationTask?.cancel()
+        playbackAuthorizationTask = nil
+        clearAuthorization()
         playerManager = nil
         
         // Reset all published properties
@@ -213,42 +199,38 @@ class GlobalVideoPlayerManager: ObservableObject {
         setupObservers()
     }
 
-    // Ensure player exists for current video (used by mini player resilience)
+    // Ensure the retained authorized player exists for mini-player resilience.
+    // Raw metadata URLs are never eligible for retry.
     func ensurePlayerAttached() {
-        guard !isCleanedUp else { return }
-        
-        // 🔥 CRITICAL: Always ensure player manager exists
+        guard !isCleanedUp,
+              let session = authorizedPlaybackSession,
+              let playableVideo = authorizedPlayableVideo,
+              session.videoId == currentVideo?.id,
+              session.videoId == playableVideo.id,
+              session.expiresAt.map({ $0 > Date() }) ?? true else {
+            failClosedPlayback()
+            return
+        }
+
         if playerManager == nil {
             setupPlayerManager()
         }
-        
-        // 🔥 CRITICAL: Setup player if video exists but player isn't ready
-        if let video = currentVideo {
-            // Check if player needs setup
-            if playerManager?.player == nil {
-                print("🔄 [GlobalPlayer] Player not found - setting up for: \(video.title)")
-                playerManager?.setupPlayer(with: video)
-                playerManager?.requestAutoPlay()
-            } else if let player = playerManager?.player,
-                      let playerItem = player.currentItem,
-                      (player.status != .readyToPlay || playerItem.status != .readyToPlay) {
-                // Player exists but not ready - might need to reload
-                print("🔄 [GlobalPlayer] Player exists but not ready - status: \(player.status.rawValue), item status: \(playerItem.status.rawValue)")
-                
-                // If failed, try to reload
-                if playerItem.status == .failed {
-                    print("🔄 [GlobalPlayer] PlayerItem failed - reloading player")
-                    playerManager?.setupPlayer(with: video)
-                    playerManager?.requestAutoPlay()
-                }
-            }
+
+        if playerManager?.player == nil {
+            playerManager?.setupPlayer(with: playableVideo)
+            playerManager?.requestAutoPlay()
+        } else if let item = playerManager?.player?.currentItem,
+                  item.status == .failed {
+            playerManager?.setupPlayer(with: playableVideo)
+            playerManager?.requestAutoPlay()
         }
     }
     
     private func setupObservers() {
         guard let playerManager = playerManager, !isCleanedUp else { return }
         
-        // Clear existing cancellables
+        // Replace only subscriptions bound to the current player manager.
+        // Lifecycle observers (including queue auto-advance) must survive adoption.
         cancellables.removeAll()
         
         kvoObservers.attach(to: playerManager.player)
@@ -354,121 +336,148 @@ class GlobalVideoPlayerManager: ObservableObject {
                     self.playNextVideo()
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &lifecycleCancellables)
     }
 
-    // Stop current playback immediately (used when switching videos fast)
+    // Stop current playback immediately (used when switching videos fast).
     func stopImmediately() {
+        playbackAuthorizationTask?.cancel()
+        playbackAuthorizationTask = nil
+        clearAuthorization()
         pipCoordinator.stopAll()
         assetPreloader.cancel()
-        
+
         playerManager?.pause()
         playerManager?.player?.replaceCurrentItem(with: nil)
         isPlaying = false
         currentProgress = 0
         currentTime = 0
-        // Ensure fullscreen UI is hidden when stopping abruptly
+        duration = 0
         showingFullscreen = false
         currentVideo = nil
+        hasActivePlaybackSession = false
     }
-    
-    // MARK: - Register Local Player for PiP
-    /// Register a local player with the global manager so PiP button works.
-    /// This is a lightweight method that just sets the video and player reference
-    /// without fully adopting the player manager.
-    func registerLocalPlayer(video: Video, player: AVPlayer?) {
-        guard !isCleanedUp else { return }
-        
-        print("📝 [GlobalPlayer] Registering local player for PiP: \(video.title)")
-        
-        // Set the current video so PiP button knows about it
+
+    // MARK: - Authorized Player Handoff
+    func registerLocalPlayer(
+        video: Video,
+        playableVideo: Video,
+        session: VideoPlaybackSession,
+        manager: VideoPlayerManager
+    ) {
+        guard !isCleanedUp,
+              isValidAuthorization(session, playableVideo: playableVideo, metadataVideo: video) else {
+            failClosedPlayback()
+            return
+        }
+
+        playerManager = manager
+        setupObservers()
         currentVideo = video
         showingFullscreen = true
-        
-        // Setup PiP controller with the player
-        if let player = player {
+        retainAuthorization(session, playableVideo: playableVideo)
+
+        if session.capabilities.supportsPictureInPicture, let player = manager.player {
             pipCoordinator.setup(with: player)
-            print("✅ [GlobalPlayer] PiP controller setup for local player: \(video.title)")
-        } else {
-            print("⚠️ [GlobalPlayer] No player available for PiP setup")
+        }
+        Task { [weak self] in
+            await self?.viewTracking.start(for: video)
         }
     }
-    
-    // MARK: - Adopt External Player
-    /// Seamlessly adopt an existing VideoPlayerManager (and its AVPlayer)
-    /// so we can hand off playback to the global mini player without
-    /// interrupting playback or losing position.
-    func adoptExternalPlayerManager(_ externalManager: VideoPlayerManager,
-                                    video: Video,
-                                    showFullscreen: Bool) async {
+
+    /// Lightweight PiP handoff for callers that already have an active, authorized
+    /// player but don't hold a reference to the original `VideoPlaybackSession`.
+    /// This arms PiP without re-validating a session — use only from contexts where
+    /// playback is already authorized and running.
+    func registerLocalPlayer(video: Video, player: AVPlayer?) {
+        guard !isCleanedUp else { return }
+        currentVideo = video
+        if let player {
+            pipCoordinator.setup(with: player)
+        }
+    }
+
+    /// Seamlessly adopts an existing player. MyChannel-hosted playback must pass
+    /// the server session and playable manifest copy; sessionless players are not
+    /// eligible for retry, queue continuation, or native PiP.
+    func adoptExternalPlayerManager(
+        _ externalManager: VideoPlayerManager,
+        video: Video,
+        showFullscreen: Bool,
+        session: VideoPlaybackSession? = nil,
+        playableVideo: Video? = nil
+    ) async {
         guard !isCleanedUp else { return }
 
-        print("🔄 [GlobalPlayer] Adopting external player manager for: \(video.title)")
-        print("🔄 [GlobalPlayer] showFullscreen: \(showFullscreen)")
+        playerManager = externalManager
+        setupObservers()
+        currentVideo = video
+        showingFullscreen = showFullscreen
+        isPlaying = externalManager.player?.timeControlStatus == .playing || externalManager.isPlaying
 
-        // 🔥 APPLE BEST PRACTICE: Adopt player synchronously on MainActor
-        // Task { @MainActor in // 🔥 REMOVED: This Task caused a race condition
-            // Point our manager to the external one and wire observers
-            playerManager = externalManager
-            setupObservers()
-
-            currentVideo = video
-            
-            // 🔥 APPLE BEST PRACTICE: Sync state from actual player, not just manager
-            if let player = player {
-                // Get actual play state from AVPlayer.timeControlStatus
-                let actualIsPlaying = player.timeControlStatus == .playing
-                isPlaying = actualIsPlaying
-                print("🔄 [GlobalPlayer] Synced play state from player: \(actualIsPlaying)")
-                
-                // 🔥 NATIVE PIP: Setup PiP controller with the player
+        if let session, let playableVideo,
+           isValidAuthorization(session, playableVideo: playableVideo, metadataVideo: video) {
+            retainAuthorization(session, playableVideo: playableVideo)
+            if session.capabilities.supportsPictureInPicture, let player = externalManager.player {
                 pipCoordinator.setup(with: player)
-                print("✅ [GlobalPlayer] PiP controller setup for adopted player: \(video.title)")
-            } else {
-                // Fallback to manager state if player not ready
-                isPlaying = externalManager.isPlaying
-                print("⚠️ [GlobalPlayer] Player not ready yet during adoption")
             }
+        } else {
+            clearAuthorization()
+            hasActivePlaybackSession = false
+        }
 
-            // 🔥 VIEW TRACKING: Always track views, even for own videos
-            await viewTracking.start(for: video)
-
-            // 🔥 APPLE BEST PRACTICE: Set state synchronously to prevent race conditions
-            showingFullscreen = showFullscreen
-            
-            // 🔥 APPLE BEST PRACTICE: Ensure player state matches expected state
-            if let player = player {
-                let shouldBePlaying = isPlaying
-                let isActuallyPlaying = player.timeControlStatus == .playing
-                
-                if shouldBePlaying && !isActuallyPlaying {
-                    print("▶️ [GlobalPlayer] Resuming playback after adoption")
-                    player.play()
-                } else if !shouldBePlaying && isActuallyPlaying {
-                    print("⏸️ [GlobalPlayer] Pausing playback after adoption")
-                    player.pause()
-                }
-            }
-            
-            print("✅ [GlobalPlayer] Adopted player state: fullscreen=\(showingFullscreen), isPlaying=\(isPlaying)")
-        // } // 🔥 REMOVED
+        await viewTracking.start(for: video)
     }
 
     // MARK: - Video Management
+    /// Authorizes every MyChannel video before replacing the active player item.
+    /// Existing synchronous callers remain source-compatible while authorization
+    /// runs on the main-actor task.
     func playVideo(_ video: Video, showFullscreen: Bool = true, queue: [Video] = []) {
         guard !isCleanedUp else { return }
-        
-        // Stop any current playback immediately to avoid overlap when switching fast
-        stopImmediately()
-        
-        // Ensure we have a player manager
-        if playerManager == nil {
-            setupPlayerManager()
+        playbackAuthorizationTask?.cancel()
+        playbackAuthorizationTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let session = try await VideoPlaybackSessionService.shared.authorize(videoId: video.id)
+                guard !Task.isCancelled else { return }
+                var playableVideo = video
+                playableVideo.videoURL = session.manifestURL.absoluteString
+                self.playAuthorizedVideo(
+                    video,
+                    playableVideo: playableVideo,
+                    session: session,
+                    showFullscreen: showFullscreen,
+                    queue: queue
+                )
+            } catch is CancellationError {
+                return
+            } catch {
+                self.failClosedPlayback()
+            }
         }
-        
+    }
+
+    private func playAuthorizedVideo(
+        _ video: Video,
+        playableVideo: Video,
+        session: VideoPlaybackSession,
+        showFullscreen: Bool,
+        queue: [Video]
+    ) {
+        guard isValidAuthorization(session, playableVideo: playableVideo, metadataVideo: video) else {
+            failClosedPlayback()
+            return
+        }
+
+        clearAuthorization()
+        pipCoordinator.stopAll()
+        assetPreloader.cancel()
+        playerManager?.pause()
+        playerManager?.player?.replaceCurrentItem(with: nil)
+        if playerManager == nil { setupPlayerManager() }
+
         currentVideo = video
-        
-        // 🔥 YOUTUBE PARITY: Setup video queue
         if !queue.isEmpty {
             videoQueue = queue
             queueIndex = queue.firstIndex(where: { $0.id == video.id }) ?? 0
@@ -477,51 +486,24 @@ class GlobalVideoPlayerManager: ObservableObject {
             queueIndex = 0
         }
         syncPlaybackQueueFromPublished()
-        
-        // ⚡ Use pre-buffered asset if it matches this video's URL (instant start)
-        if let preloaded = assetPreloader.takePreloadedAsset(for: video.videoURL) {
-            let playerItem = AVPlayerItem(asset: preloaded)
-            playerItem.preferredForwardBufferDuration = 10.0
-            playerManager?.player?.replaceCurrentItem(with: playerItem)
-            playerManager?.requestAutoPlay()
-            print("⚡ [GlobalPlayer] Playing from pre-buffered asset — INSTANT: \(video.title)")
-        } else if let preloaded = assetPreloader.takePreloadedAsset(),
-                  let videoURL = URL(string: video.videoURL),
-                  preloaded.url == videoURL {
-            let playerItem = AVPlayerItem(asset: preloaded)
-            playerItem.preferredForwardBufferDuration = 10.0
-            playerManager?.player?.replaceCurrentItem(with: playerItem)
-            playerManager?.requestAutoPlay()
-            print("⚡ [GlobalPlayer] Playing from pre-buffered asset — INSTANT: \(video.title)")
-        } else {
-            playerManager?.setupPlayer(with: video)
-            playerManager?.requestAutoPlay()
-        }
 
-        // 🔥 YOUTUBE PARITY: Setup native PiP for this player
-        if let player = player {
+        playerManager?.setupPlayer(with: playableVideo)
+        playerManager?.applyFastStartTuning()
+        playerManager?.requestAutoPlay()
+        retainAuthorization(session, playableVideo: playableVideo)
+
+        if session.capabilities.supportsPictureInPicture, let player {
             pipCoordinator.setup(with: player)
-            print("✅ [GlobalPlayer] PiP controller setup for: \(video.title)")
-            
-            // 🔥 NATIVE PIP: Optionally auto-start PiP if not showing fullscreen
             if !showFullscreen {
                 pipCoordinator.scheduleAutoStartIfNotFullscreen()
             }
         }
-        
-        // Set fullscreen state
+
         showingFullscreen = showFullscreen
         hasActivePlaybackSession = true
-
-        // 🔥 THERMONUCLEAR: Pre-load next video for instant playback
-        preloadNextQueueItems()
-        
-        // 🔥 REAL-TIME VIEW TRACKING: Start tracking this view
         Task { [weak self] in
-            guard let self else { return }
-            await self.viewTracking.start(for: video)
+            await self?.viewTracking.start(for: video)
         }
-        
         HapticManager.shared.impact(style: .medium)
     }
     
@@ -539,54 +521,21 @@ class GlobalVideoPlayerManager: ObservableObject {
         preloadNextQueueItems()
     }
     
-    // 🔥 YOUTUBE PARITY: Navigate to next video in queue
+    // Navigate to the next queue item through fresh authorization.
     func playNextVideo() {
         viewTracking.flushUniversityWatchBeforeSwitch()
         if skipAdsOnQueueNavigation {
             playerManager?.cancelCurrentAdBreak()
         }
-
-        guard let nextVideo = playbackQueue.advance() else {
-            print("⚠️ [GlobalVideoPlayerManager] No next video in queue")
-            return
-        }
-        
-        queueIndex = playbackQueue.index
-        videoQueue = playbackQueue.videos
-        currentVideo = nextVideo
-        
-        if let preloaded = assetPreloader.takePreloadedAsset(for: nextVideo.videoURL) {
-            let playerItem = AVPlayerItem(asset: preloaded)
-            playerItem.preferredForwardBufferDuration = 10.0
-            playerManager?.player?.replaceCurrentItem(with: playerItem)
-            playerManager?.play()
-            print("⚡ [GlobalVideoPlayerManager] Playing next video from pre-loaded asset (INSTANT!)")
-        } else if let preloaded = assetPreloader.takePreloadedAsset() {
-            let playerItem = AVPlayerItem(asset: preloaded)
-            playerItem.preferredForwardBufferDuration = 10.0
-            playerManager?.player?.replaceCurrentItem(with: playerItem)
-            playerManager?.play()
-            print("⚡ [GlobalVideoPlayerManager] Playing next video from pre-loaded asset (INSTANT!)")
-        } else {
-            playerManager?.pause()
-            playerManager?.setupPlayer(with: nextVideo)
-            playerManager?.requestAutoPlay()
-            print("▶️ [GlobalVideoPlayerManager] Playing next video: \(nextVideo.title)")
-        }
-        
-        preloadNextQueueItems()
-        HapticManager.shared.impact(style: .medium)
+        guard let nextVideo = playbackQueue.upNext else { return }
+        playVideo(nextVideo, showFullscreen: showingFullscreen, queue: playbackQueue.videos)
     }
-    
-    // MARK: - Public pre-buffer API
 
-    /// Call this as soon as you know a video URL will be played soon (e.g. profile load).
-    /// **Canonical preload path for GlobalVideoPlayerManager** — routes exclusively through
-    /// `VideoAssetPreloader`. Do not call `PlayerPoolManager.preloadAsset` from here;
-    /// pool warming is owned by feature-specific players (Flicks, detail view).
+    // Legacy raw-URL preloading is intentionally disabled. Callers may keep
+    // invoking this while they migrate to video-ID authorization; no media is
+    // fetched until `playVideo` obtains a server session.
     func preloadVideo(url: String) {
-        guard !isCleanedUp else { return }
-        assetPreloader.preload(urlString: url)
+        _ = url
     }
 
     private func syncPlaybackQueueFromPublished() {
@@ -594,66 +543,124 @@ class GlobalVideoPlayerManager: ObservableObject {
         playbackQueue.index = queueIndex
     }
 
-    /// Pre-load the next two queue items only (batch-7 cap).
     private func preloadNextQueueItems() {
-        var urls: [String] = []
-        var idx = playbackQueue.index
-        while urls.count < VideoAssetPreloader.maxPreloadCount {
-            idx += 1
-            guard idx < playbackQueue.videos.count else { break }
-            urls.append(playbackQueue.videos[idx].videoURL)
-        }
-        if urls.isEmpty {
-            assetPreloader.cancel()
-        } else {
-            assetPreloader.preload(urlStrings: urls)
-        }
+        assetPreloader.cancel()
     }
 
     private func preloadNextVideo() {
         preloadNextQueueItems()
     }
-    
-    // 🔥 YOUTUBE PARITY: Navigate to previous video in queue
+
+    // Navigate to the previous queue item through fresh authorization.
     func playPreviousVideo() {
         viewTracking.flushUniversityWatchBeforeSwitch()
         if skipAdsOnQueueNavigation {
             playerManager?.cancelCurrentAdBreak()
         }
+        guard playbackQueue.hasPrevious else { return }
+        let previousIndex = playbackQueue.index - 1
+        guard playbackQueue.videos.indices.contains(previousIndex) else { return }
+        let previousVideo = playbackQueue.videos[previousIndex]
+        playVideo(previousVideo, showFullscreen: showingFullscreen, queue: playbackQueue.videos)
+    }
 
-        guard let previousVideo = playbackQueue.retreat() else {
-            print("⚠️ [GlobalVideoPlayerManager] No previous video in queue")
+    // MARK: - Authorization Lifetime
+    private func isValidAuthorization(
+        _ session: VideoPlaybackSession,
+        playableVideo: Video,
+        metadataVideo: Video
+    ) -> Bool {
+        guard session.videoId == metadataVideo.id,
+              playableVideo.id == metadataVideo.id,
+              playableVideo.videoURL == session.manifestURL.absoluteString,
+              SafePlaybackURL.manifest(playableVideo.videoURL) != nil else { return false }
+        return session.expiresAt.map { $0 > Date() } ?? true
+    }
+
+    private func retainAuthorization(
+        _ session: VideoPlaybackSession,
+        playableVideo: Video
+    ) {
+        authorizedPlaybackSession = session
+        authorizedPlayableVideo = playableVideo
+        hasActivePlaybackSession = true
+        scheduleAuthorizationRenewal(session)
+    }
+
+    private func scheduleAuthorizationRenewal(_ session: VideoPlaybackSession) {
+        authorizationRenewalTask?.cancel()
+        guard let expiresAt = session.expiresAt else { return }
+        let delay = max(1, expiresAt.timeIntervalSinceNow - 60)
+        authorizationRenewalTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                guard let self, !Task.isCancelled,
+                      self.currentVideo?.id == session.videoId else { return }
+                let renewed = try await VideoPlaybackSessionService.shared.authorize(
+                    videoId: session.videoId
+                )
+                guard !Task.isCancelled,
+                      let metadataVideo = self.currentVideo else { return }
+                var playableVideo = metadataVideo
+                playableVideo.videoURL = renewed.manifestURL.absoluteString
+                guard self.isValidAuthorization(
+                    renewed,
+                    playableVideo: playableVideo,
+                    metadataVideo: metadataVideo
+                ) else {
+                    self.failClosedPlayback()
+                    return
+                }
+
+                let previousURL = self.authorizedPlaybackSession?.manifestURL
+                let resumeTime = self.player?.currentTime().seconds ?? 0
+                let wasPlaying = self.player?.timeControlStatus == .playing
+                self.retainAuthorization(renewed, playableVideo: playableVideo)
+                if renewed.manifestURL != previousURL {
+                    self.playerManager?.setupPlayer(with: playableVideo)
+                    if resumeTime.isFinite, resumeTime > 0 {
+                        await self.playerManager?.player?.seek(
+                            to: CMTime(seconds: resumeTime, preferredTimescale: 600)
+                        )
+                    }
+                    if wasPlaying { self.playerManager?.requestAutoPlay() }
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                self?.failClosedPlayback()
+            }
+        }
+    }
+
+    private func clearAuthorization() {
+        authorizationRenewalTask?.cancel()
+        authorizationRenewalTask = nil
+        authorizedPlaybackSession = nil
+        authorizedPlayableVideo = nil
+    }
+
+    private func failClosedPlayback() {
+        clearAuthorization()
+        pipCoordinator.stopAll()
+        playerManager?.pause()
+        playerManager?.player?.replaceCurrentItem(with: nil)
+        currentVideo = nil
+        isPlaying = false
+        isPlayerReady = false
+        hasActivePlaybackSession = false
+    }
+
+    // Native PiP is a server-granted playback capability.
+    func startPiP() {
+        guard authorizedPlaybackSession?.capabilities.supportsPictureInPicture == true else {
             return
         }
-        
-        queueIndex = playbackQueue.index
-        videoQueue = playbackQueue.videos
-        currentVideo = previousVideo
-        
-        stopImmediately()
-        playerManager?.setupPlayer(with: previousVideo)
-        playerManager?.requestAutoPlay()
-        
-        HapticManager.shared.impact(style: .medium)
-        print("◀️ [GlobalVideoPlayerManager] Playing previous video: \(previousVideo.title)")
-    }
-    
-    // 🔥 NATIVE PIP: Start Picture-in-Picture
-    func startPiP() {
         pipCoordinator.startPiP()
     }
     
     func expandPlayer() {
-        guard let video = currentVideo, !isCleanedUp else {
-            print("⚠️ [GlobalPlayer] expandPlayer() early return - no video or cleaned up. currentVideo=\(String(describing: currentVideo?.title)), isCleanedUp=\(isCleanedUp)")
-            return
-        }
-        
-        print("🔄 [GlobalVideoPlayerManager] expandPlayer() called")
-        print("   video=\(video.title)")
-        print("   state BEFORE expand → showingFullscreen=\(showingFullscreen)")
-        print("   PiP active: \(pipCoordinator.isActive)")
-        
+        guard let video = currentVideo, !isCleanedUp else { return }
         pipCoordinator.prepareExpansion { [weak self] in
             await self?.completeExpansion(video: video)
         }
@@ -672,30 +679,24 @@ class GlobalVideoPlayerManager: ObservableObject {
             object: video
         )
         
-        // Ensure player continues playing
         if let player = player, player.rate == 0, isPlaying {
-            print("▶️ [GlobalPlayer] Resuming playback in fullscreen")
             player.play()
         }
-        
         HapticManager.shared.impact(style: .medium)
-        
-        print("✅ [GlobalPlayer] Expansion complete - showingFullscreen=\(showingFullscreen)")
-        print("✅ [GlobalPlayer] Fullscreen presentation triggered")
     }
     
     func closePlayer() {
         guard !isCleanedUp else { return }
-        
-        print("🔥 [GlobalPlayer] closePlayer() called")
-        
         pipCoordinator.stopAll()
         Task { [weak self] in
             await self?.viewTracking.end()
         }
         NowPlayingService.shared.clear()
+        playbackAuthorizationTask?.cancel()
+        playbackAuthorizationTask = nil
+        clearAuthorization()
         
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(UIAccessibility.isReduceMotionEnabled ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
             playerManager?.pause()
             playerManager?.player?.replaceCurrentItem(with: nil)  // 🔥 FIX: Clear player item
             currentVideo = nil
@@ -705,16 +706,10 @@ class GlobalVideoPlayerManager: ObservableObject {
             hasActivePlaybackSession = false
         }
         assetPreloader.cancel()
-        
-        print("✅ [GlobalPlayer] closePlayer() complete - currentVideo: \(currentVideo == nil ? "nil" : "NOT NIL")")
-        
         HapticManager.shared.impact(style: .light)
     }
-    
-    // 🔥🔥🔥 NUCLEAR RESET: Call this to completely reset player state
+
     func nuclearReset() {
-        print("🔥🔥🔥 [GlobalPlayer] NUCLEAR RESET called - obliterating ALL state")
-        
         // Stop any active tracking
         Task { [weak self] in
             await self?.viewTracking.end()
@@ -724,6 +719,9 @@ class GlobalVideoPlayerManager: ObservableObject {
         pipCoordinator.teardownObserver()
         NowPlayingService.shared.clear()
         pipCoordinator.stopAll()
+        playbackAuthorizationTask?.cancel()
+        playbackAuthorizationTask = nil
+        clearAuthorization()
         
         // Destroy player
         playerManager?.pause()
@@ -748,8 +746,6 @@ class GlobalVideoPlayerManager: ObservableObject {
         // Re-wire observers after obliterating player state
         setupPlayerManager()
         pipCoordinator.startObserving()
-        
-        print("✅ [GlobalPlayer] NUCLEAR RESET complete - ALL state obliterated")
     }
     
     // MARK: - Navigation Handling (Legacy - No longer used for native PiP)
@@ -850,58 +846,41 @@ class PreviewSafeGlobalVideoPlayerManager: ObservableObject {
     
     var player: AVPlayer? { nil }
     
-    init() {
-        // Safe initialization for previews
-        print("🎬 Preview-safe GlobalVideoPlayerManager initialized")
-    }
-    
+    init() {}
+
     func playVideo(_ video: Video, showFullscreen: Bool = true) {
-        print("🎬 Preview: playVideo called for \(video.title)")
+        _ = (video, showFullscreen)
     }
-    
-    func startPiP() {
-        print("🎬 Preview: startPiP called")
-    }
-    
-    func expandPlayer() {
-        print("🎬 Preview: expandPlayer called")
-    }
-    
-    func closePlayer() {
-        print("🎬 Preview: closePlayer called")
-    }
-    
+
+    func startPiP() {}
+
+    func expandPlayer() {}
+
+    func closePlayer() {}
+
     func handleNavigationChange(isVideoDetailVisible: Bool) {
-        print("🎬 Preview: handleNavigationChange called")
+        _ = isVideoDetailVisible
     }
-    
-    func togglePlayPause() {
-        print("🎬 Preview: togglePlayPause called")
-    }
-    
+
+    func togglePlayPause() {}
+
     func seek(to progress: Double) {
-        print("🎬 Preview: seek called")
+        _ = progress
     }
-    
-    func seekForward() {
-        print("🎬 Preview: seekForward called")
-    }
-    
-    func seekBackward() {
-        print("🎬 Preview: seekBackward called")
-    }
-    
+
+    func seekForward() {}
+
+    func seekBackward() {}
+
     func handleMiniplayerDrag(_ translation: CGSize) {
-        print("🎬 Preview: handleMiniplayerDrag called")
+        _ = translation
     }
-    
+
     func handleMiniplayerDragEnd(_ translation: CGSize) {
-        print("🎬 Preview: handleMiniplayerDragEnd called")
+        _ = translation
     }
-    
-    func performCleanup() {
-        print("🎬 Preview: performCleanup called")
-    }
+
+    func performCleanup() {}
 }
 
 #Preview {

@@ -15,6 +15,7 @@ struct LiveChatView: View {
     @State private var showingUserList = false
     @State private var showingChatSettings = false
     @State private var showingSuperChatSheet = false
+    @State private var showingSuperStickerSheet = false
     @State private var autoScroll = true
     @State private var selectedMessage: LiveChatMessage?
     
@@ -40,6 +41,11 @@ struct LiveChatView: View {
         }
         .sheet(isPresented: $showingUserList) { ChatUserListView(chatService: chatService) }
         .sheet(isPresented: $showingChatSettings) { ChatSettingsView(chatService: chatService, streamId: streamId) }
+        .sheet(isPresented: $showingSuperStickerSheet) {
+            if AppConfig.Features.enableTipping {
+                SuperStickerView(streamId: streamId, chatService: chatService)
+            }
+        }
         .sheet(isPresented: $showingSuperChatSheet) {
             // 🔥 FIX 3.1.1: Gate Super Chat behind feature flag
             if AppConfig.Features.enableTipping {
@@ -179,6 +185,14 @@ struct LiveChatView: View {
                         Image(systemName: "dollarsign.circle.fill")
                             .font(.title2)
                             .foregroundColor(.green)
+                    }
+                    .disabled(!chatService.isConnected)
+
+                    // Super Sticker Button
+                    Button(action: { showingSuperStickerSheet = true }) {
+                        Image(systemName: "face.smiling.inverse")
+                            .font(.title2)
+                            .foregroundColor(.yellow)
                     }
                     .disabled(!chatService.isConnected)
                 }

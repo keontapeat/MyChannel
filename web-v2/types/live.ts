@@ -26,7 +26,7 @@ export interface LiveStream {
   tags: string[];
   chatEnabled: boolean;
   donationsEnabled: boolean;
-  status: 'scheduled' | 'live' | 'ended';
+  status: 'scheduled' | 'connecting' | 'live' | 'degraded' | 'ended' | 'archived';
   scheduledFor?: Date;
 }
 

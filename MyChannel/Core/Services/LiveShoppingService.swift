@@ -29,6 +29,8 @@ final class LiveShoppingService: ObservableObject {
     #if canImport(FirebaseFirestore)
     private var db: Firestore { Firestore.firestore() }
     #endif
+    private var analyticsSessionIDs: [String: String] = [:]
+    private var sentAnalyticsEventIDs: Set<String> = []
 
     // MARK: - Live Shopping Shows
 
@@ -143,38 +145,59 @@ final class LiveShoppingService: ObservableObject {
 
     func trackProductView(productId: String) async {
         #if canImport(FirebaseFirestore)
-        let uid = AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id
+        guard let userId = AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id else {
+            return
+        }
+        let sessionId = analyticsSessionId(for: productId)
+        let eventId = "\(userId)_\(sessionId)_view"
+        guard sentAnalyticsEventIDs.insert(eventId).inserted else { return }
         do {
-            try await db.collection("shopping_products").document(productId)
-                .setData(["views": FieldValue.increment(Int64(1))], merge: true)
-            try await db.collection("shopping_events").document().setData([
-                "type": "product_view",
-                "productId": productId,
-                "uid": uid as Any,
-                "createdAt": FieldValue.serverTimestamp()
-            ])
+            try await db.collection("shopping_events")
+                .document(eventId)
+                .setData([
+                    "type": "product_view",
+                    "productId": productId,
+                    "userId": userId,
+                    "sessionId": sessionId,
+                    "createdAt": FieldValue.serverTimestamp()
+                ])
         } catch {
-            print("❌ [LiveShoppingService] trackProductView: \(error)")
+            sentAnalyticsEventIDs.remove(eventId)
+            print("❌ [LiveShoppingService] trackProductView failed")
         }
         #endif
     }
 
     func trackCheckoutTap(productId: String) async {
         #if canImport(FirebaseFirestore)
-        let uid = AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id
+        guard let userId = AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id else {
+            return
+        }
+        let sessionId = analyticsSessionId(for: productId)
+        let eventId = "\(userId)_\(sessionId)_checkout"
+        guard sentAnalyticsEventIDs.insert(eventId).inserted else { return }
         do {
-            try await db.collection("shopping_products").document(productId)
-                .setData(["checkoutTaps": FieldValue.increment(Int64(1))], merge: true)
-            try await db.collection("shopping_events").document().setData([
-                "type": "checkout_tap",
-                "productId": productId,
-                "uid": uid as Any,
-                "createdAt": FieldValue.serverTimestamp()
-            ])
+            try await db.collection("shopping_events")
+                .document(eventId)
+                .setData([
+                    "type": "checkout_tap",
+                    "productId": productId,
+                    "userId": userId,
+                    "sessionId": sessionId,
+                    "createdAt": FieldValue.serverTimestamp()
+                ])
         } catch {
-            print("❌ [LiveShoppingService] trackCheckoutTap: \(error)")
+            sentAnalyticsEventIDs.remove(eventId)
+            print("❌ [LiveShoppingService] trackCheckoutTap failed")
         }
         #endif
+    }
+
+    private func analyticsSessionId(for productId: String) -> String {
+        if let existing = analyticsSessionIDs[productId] { return existing }
+        let sessionId = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        analyticsSessionIDs[productId] = sessionId
+        return sessionId
     }
 
     // MARK: - Parsers

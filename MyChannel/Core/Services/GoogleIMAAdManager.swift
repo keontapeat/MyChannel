@@ -99,6 +99,9 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
     // MARK: - Private Properties
     private var adTimer: Timer?
     private var quartersFired: Set<Int> = []
+    /// Host video this ad is playing in front of. Used to attribute revenue to the
+    /// correct creator exactly once, from this (the ad-integration) layer.
+    private var hostVideo: Video?
     private var cancellables = Set<AnyCancellable>()
     private var playerTimeObserver: Any?
     private var playerItemObservation: NSKeyValueObservation?
@@ -123,6 +126,9 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
         completion: @escaping (VideoAd?) -> Void
     ) {
         print("🎯 [GoogleIMAAdManager] Requesting pre-roll for video: \(video.id ?? "unknown")")
+        
+        // Retain the host video so revenue is attributed to the right creator once.
+        hostVideo = video
         
         // Check monetization
         guard video.monetization?.isMonetized ?? true else {
@@ -575,6 +581,9 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
             await AdsService.trackAdEvent(videoId: ad.id, event: .skip)
         }
         
+        // 💰 Skipped impressions still earn a reduced amount — tracked once here.
+        trackRevenue(completed: false)
+        
         cleanup()
         adState = .skipped
         onAdSkipped?()
@@ -661,9 +670,10 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
         if let url = ad.completeURL { fireTrackingPixel(url) }
         Task { await AdsService.trackAdEvent(videoId: ad.id, event: .complete) }
         
-        // Track revenue
-        let revenue = calculateAdRevenue(ad: ad)
-        print("💰 [GoogleIMAAdManager] Ad revenue: $\(String(format: "%.2f", revenue))")
+        // 💰 Track revenue ONCE, here in the ad-integration layer, attributed to the
+        // real host video. (Previously VideoDetailView also wrote a separate random
+        // amount, which double-counted into creator payouts.)
+        trackRevenue(completed: true)
         
         cleanup()
         adState = .completed
@@ -672,16 +682,26 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
     
     // MARK: - Revenue Calculation
     
-    private func calculateAdRevenue(ad: VideoAd) -> Double {
-        // Real CPM-based revenue calculation
-        // CPM ranges: $2.50 - $15 for video ads
+    /// Persist ad revenue for the current host video exactly once.
+    /// NOTE (money): `calculateAdRevenue` is still an eCPM *estimate*. When the ad
+    /// network reports actual paid revenue, replace the estimate with the reported
+    /// value here — this is the single place ad revenue is written to payouts.
+    private func trackRevenue(completed: Bool) {
+        guard let ad = currentAd, let video = hostVideo else { return }
+        let revenue = calculateAdRevenue(ad: ad, completed: completed)
+        print("💰 [GoogleIMAAdManager] Ad revenue (\(completed ? "completed" : "skipped")): $\(String(format: "%.4f", revenue))")
+        Task { await AdsService.trackAdRevenue(for: video, adRevenue: revenue) }
+    }
+    
+    private func calculateAdRevenue(ad: VideoAd, completed: Bool) -> Double {
+        // eCPM-based revenue estimate. CPM ranges: $2.50 - $8 for video ads.
         let baseCPM = Double.random(in: 2.5...8.0)  // Average video CPM
         let impressionValue = baseCPM / 1000.0  // Value per impression
         
-        // Bonus for completed view (vs skipped)
-        let completionBonus = 1.5
+        // Completed views are worth more than skipped impressions.
+        let multiplier = completed ? 1.5 : 0.35
         
-        return impressionValue * completionBonus
+        return impressionValue * multiplier
     }
     
     // MARK: - Player Observers
@@ -730,6 +750,7 @@ final class GoogleIMAAdManager: NSObject, ObservableObject {
         adTimeRemaining = 0
         quartersFired = []
         isAdVideoReady = false  // 🔥 Reset ready state on cleanup
+        hostVideo = nil  // Clear revenue attribution target
         // Note: Don't reset hasTriedFallback here - it's managed per playAd() call
     }
     

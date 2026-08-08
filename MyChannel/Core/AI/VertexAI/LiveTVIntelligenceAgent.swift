@@ -56,7 +56,7 @@ final class LiveTVIntelligenceAgent: ObservableObject {
     /// recommendations ignored the catalog the rest of the app displays.
     private var catalog: [LiveTVChannel] {
         let managed = LiveTVManager.shared.channels
-        return managed.isEmpty ? LiveTVChannel.sampleChannels : managed
+        return managed.isEmpty ? LiveTVChannel.appStoreSafeChannels : managed
     }
 
     private init() {

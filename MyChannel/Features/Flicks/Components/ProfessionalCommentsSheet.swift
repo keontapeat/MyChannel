@@ -231,7 +231,6 @@ struct ProfessionalCommentsSheet: View {
         Task {
             do {
                 try await commentsService.post(videoId: video.id, userId: userId, text: textToPost)
-                try? await ShortsFirestoreService.shared.incrementCommentCount(flickId: video.id)
                 await MainActor.run {
                     newComment = ""
                     isPosting = false

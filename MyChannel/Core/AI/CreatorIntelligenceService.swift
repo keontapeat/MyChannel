@@ -190,7 +190,7 @@ final class CreatorIntelligenceService: ObservableObject {
 
     private func withTimeoutAndRetry<T>(
         operation: String,
-        _ work: () async throws -> T
+        _ work: @escaping () async throws -> T
     ) async throws -> T {
         try assertCircuitClosed()
 
@@ -344,5 +344,27 @@ final class CreatorIntelligenceService: ObservableObject {
             priority: "medium",
             predictedImpact: "Improved first-hour views"
         )
+    }
+
+    /// Identify underserved content gaps in a given niche using AI research signals.
+    func analyzeContentGaps(niche: String) async -> [String] {
+        guard !niche.isEmpty else { return [] }
+        let prompt = "List 5 underserved content gaps for a '\(niche)' creator channel. Be specific and actionable. Return as a numbered list."
+        if let response = try? await generate(prompt: prompt) {
+            let lines = response.text
+                .components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .prefix(8)
+            return Array(lines)
+        }
+        // Fallback suggestions when AI is unavailable
+        return [
+            "Beginner's guide series for '\(niche)' newcomers",
+            "Behind-the-scenes content that competitors don't show",
+            "Tool/gear comparisons at different budget tiers",
+            "Common mistakes and how to avoid them",
+            "Trending '\(niche)' news with your unique analysis",
+        ]
     }
 }

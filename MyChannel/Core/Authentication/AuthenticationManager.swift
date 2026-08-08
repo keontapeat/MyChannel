@@ -140,6 +140,7 @@ class AuthenticationManager: ObservableObject {
                                 self.isAuthenticated = false
                             }
                             print("🚫 [Auth] Banned account attempted login: \(fuser.uid)")
+                            await PushTokenRegistrationManager.unregisterStoredToken(for: fuser.uid)
                             try? Auth.auth().signOut()
                             return
                         }
@@ -152,6 +153,7 @@ class AuthenticationManager: ObservableObject {
                                 self.isAuthenticated = false
                             }
                             print("⏸️ [Auth] Suspended account attempted login: \(fuser.uid)")
+                            await PushTokenRegistrationManager.unregisterStoredToken(for: fuser.uid)
                             try? Auth.auth().signOut()
                             return
                         }
@@ -532,11 +534,14 @@ class AuthenticationManager: ObservableObject {
     }
     
     // MARK: - Sign Out
-    func signOut() throws {
+    func signOut() async throws {
         #if canImport(FirebaseAuth)
+        if let userId = Auth.auth().currentUser?.uid {
+            await PushTokenRegistrationManager.unregisterStoredToken(for: userId)
+        }
         try Auth.auth().signOut()
         #endif
-        
+
         withAnimation(.easeInOut(duration: 0.5)) {
             currentUser = nil
             isAuthenticated = false

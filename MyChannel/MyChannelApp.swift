@@ -19,6 +19,7 @@ import UserNotifications
 // before `FirebaseAppDelegate.application(_:didFinishLaunching…)`. Referencing this
 // lazy-evaluated `let` forces FirebaseApp.configure() to run on first touch.
 private let __bootstrapFirebase: Void = {
+    FirebaseAppCheckConfigurator.configureProviderFactoryIfAvailable()
     FirebaseManager.shared.configureIfPossible()
 }()
 
@@ -143,6 +144,10 @@ struct MyChannelApp: App {
                         switch scenePhase {
                         case .active:
                             LiveTVManager.shared.onAppBecameActive()
+                            // Stop background audio play — main player resumes
+                            if BackgroundPlayService.shared.currentlyPlayingInBackground != nil {
+                                BackgroundPlayService.shared.stopBackgroundPlay()
+                            }
                             // 🔒 ATT: Request tracking permission (Guideline 5.1.2(i))
                             // Must fire after app is active and first screen is visible.
                             if TrackingTransparencyService.shared.shouldPrompt {
@@ -152,6 +157,16 @@ struct MyChannelApp: App {
                             LiveTVManager.shared.onAppEnteredBackground()
                             // Schedule next background refresh
                             BackgroundFetchService.shared.scheduleAppRefresh()
+                            // Start audio-only background play if enabled & playing
+                            if AppConfig.Features.enableBackgroundPlay,
+                               let currentVideo = GlobalVideoPlayerManager.shared.currentVideo,
+                               GlobalVideoPlayerManager.shared.isPlaying {
+                                let currentTime = GlobalVideoPlayerManager.shared.currentTime
+                                let svc = BackgroundPlayService.shared
+                                if svc.isBackgroundPlayEnabled {
+                                    try? await svc.startBackgroundPlay(for: currentVideo, at: currentTime)
+                                }
+                            }
                         default:
                             break
                         }
@@ -211,18 +226,11 @@ struct MyChannelApp: App {
     }
     
     private func configureAudioSession() {
-        struct Once { static var didConfigure = false }
-        if Once.didConfigure { return }
-        do {
-            let session = AVAudioSession.sharedInstance()
-            // .playback with no options = exclusive audio, silences other apps.
-            // Required for App Store 2.5.4: background audio must be audible to reviewers.
-            try session.setCategory(.playback, mode: .moviePlayback, options: [])
-            try session.setActive(true)
-            Once.didConfigure = true
+        // Single source of truth for the playback audio session — see
+        // PlaybackAudioSession. Keeps background audio audible to App Store
+        // reviewers (2.5.4) without the triple-configuration churn/-50 errors.
+        if PlaybackAudioSession.shared.activate() {
             print("✅ [MyChannelApp] Audio session configured for background playback")
-        } catch {
-            print("⚠️ [MyChannelApp] Failed to configure audio session: \(error.localizedDescription)")
         }
     }
 }

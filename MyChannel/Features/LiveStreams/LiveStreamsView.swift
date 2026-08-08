@@ -59,7 +59,12 @@ extension FirestoreLiveStream: Hashable {
 }
 
 struct LiveStreamDetailCard: View {
+    @ObservedObject private var liveManager = LiveStreamManager.shared
     let stream: FirestoreLiveStream
+
+    private var viewerCount: Int {
+        liveManager.viewerCount(for: stream.id, fallback: stream.viewerCount)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -117,7 +122,7 @@ struct LiveStreamDetailCard: View {
                         HStack(spacing: 4) {
                             Image(systemName: "eye.fill")
                                 .font(.system(size: 10))
-                            Text("\(stream.viewerCount)")
+                            Text("\(viewerCount)")
                                 .font(.system(size: 11, weight: .semibold))
                         }
                         .foregroundColor(.white)
@@ -170,7 +175,7 @@ struct LiveStreamDetailCard: View {
                     }
 
                     HStack(spacing: 8) {
-                        Text("\(stream.viewerCount) watching")
+                        Text("\(viewerCount) watching")
                             .font(AppTheme.Typography.caption)
                             .foregroundColor(AppTheme.Colors.textTertiary)
                         Text("•")

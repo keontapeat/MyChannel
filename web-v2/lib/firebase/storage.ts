@@ -7,6 +7,7 @@ import {
   deleteObject,
   UploadTaskSnapshot,
   StorageReference,
+  type UploadMetadata,
 } from 'firebase/storage';
 import { storage } from './config';
 
@@ -17,69 +18,64 @@ export interface UploadProgress {
 }
 
 export class StorageService {
-  // Upload file with progress tracking
+  private static uploadToReference(
+    file: File,
+    path: string,
+    onProgress?: (progress: UploadProgress) => void,
+    metadata?: UploadMetadata
+  ): Promise<StorageReference> {
+    const storageRef = ref(storage, path);
+    const uploadTask = uploadBytesResumable(storageRef, file, metadata);
+
+    return new Promise((resolve, reject) => {
+      uploadTask.on(
+        'state_changed',
+        (snapshot: UploadTaskSnapshot) => {
+          const progress = snapshot.totalBytes > 0
+            ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+            : 0;
+          onProgress?.({
+            bytesTransferred: snapshot.bytesTransferred,
+            totalBytes: snapshot.totalBytes,
+            progress: Math.round(progress),
+          });
+        },
+        reject,
+        () => resolve(uploadTask.snapshot.ref)
+      );
+    });
+  }
+
+  // Upload a public asset and mint its Firebase download URL.
   static async uploadFile(
     file: File,
     path: string,
     onProgress?: (progress: UploadProgress) => void
   ): Promise<string> {
-    try {
-      const storageRef = ref(storage, path);
-      const uploadTask = uploadBytesResumable(storageRef, file);
-
-      return new Promise((resolve, reject) => {
-        uploadTask.on(
-          'state_changed',
-          (snapshot: UploadTaskSnapshot) => {
-            // Calculate progress
-            const progress =
-              (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-
-            if (onProgress) {
-              onProgress({
-                bytesTransferred: snapshot.bytesTransferred,
-                totalBytes: snapshot.totalBytes,
-                progress: Math.round(progress),
-              });
-            }
-
-            console.log(
-              `📤 Upload progress: ${Math.round(progress)}% (${snapshot.bytesTransferred}/${snapshot.totalBytes} bytes)`
-            );
-          },
-          (error) => {
-            console.error('🚨 Upload error:', error);
-            reject(error);
-          },
-          async () => {
-            // Upload complete - get download URL
-            try {
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              console.log('✅ File uploaded:', downloadURL);
-              resolve(downloadURL);
-            } catch (error) {
-              reject(error);
-            }
-          }
-        );
-      });
-    } catch (error) {
-      console.error('🚨 Upload file error:', error);
-      throw error;
-    }
+    const uploadedRef = await this.uploadToReference(file, path, onProgress, {
+      contentType: file.type,
+    });
+    return getDownloadURL(uploadedRef);
   }
 
-  // Upload video file
-  // Path MUST match storage.rules: videos/{userId}/{videoId}/{filename}
+  // Raw video sources are quarantined in the canonical private ingest path.
+  // The trusted transcode pipeline is the only component that publishes URLs.
   static async uploadVideo(
     file: File,
     userId: string,
     videoId: string,
     onProgress?: (progress: UploadProgress) => void
-  ): Promise<string> {
+  ): Promise<void> {
     if (!userId) throw new Error('uploadVideo requires an authenticated userId');
-    const path = `videos/${userId}/${videoId}/video.mp4`;
-    return this.uploadFile(file, path, onProgress);
+    const path = `temp_uploads/${userId}/${videoId}/source.mp4`;
+    await this.uploadToReference(file, path, onProgress, {
+      contentType: file.type,
+      customMetadata: {
+        ownerUid: userId,
+        videoId,
+        originalFilename: file.name.slice(0, 200),
+      },
+    });
   }
 
   // Upload thumbnail

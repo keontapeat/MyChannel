@@ -3,7 +3,6 @@ package com.mychannel.data.remote
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.SetOptions
 import com.mychannel.domain.model.Notification
 import com.mychannel.domain.model.NotificationType
 import kotlinx.coroutines.Dispatchers
@@ -16,8 +15,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Remote data source for the user's notification center
- * (`notifications/{uid}/items`, REQ-14.2).
+ * Remote data source for the canonical flat notification inbox
+ * (`notifications/{notificationId}` with an owner-bound `userId`).
  *
  * Real-time list uses [callbackFlow]; mutations run on [Dispatchers.IO].
  */
@@ -26,11 +25,14 @@ class FirestoreNotificationDataSource @Inject constructor(
     private val firestore: FirebaseFirestore
 ) {
 
-    private fun items(userId: String) =
-        firestore.collection(NOTIFICATIONS).document(userId).collection(ITEMS)
+    private fun notification(notificationId: String) =
+        firestore.collection(NOTIFICATIONS).document(notificationId)
+
+    private fun notificationQuery(userId: String) =
+        firestore.collection(NOTIFICATIONS).whereEqualTo("userId", userId)
 
     fun observeNotifications(userId: String): Flow<List<Notification>> = callbackFlow {
-        val registration = items(userId)
+        val registration = notificationQuery(userId)
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(100)
             .addSnapshotListener { snapshot, error ->
@@ -39,15 +41,21 @@ class FirestoreNotificationDataSource @Inject constructor(
                     return@addSnapshotListener
                 }
                 val notifications = snapshot?.documents?.map { doc ->
+                    val routingData = mutableMapOf<String, String>()
+                    doc.getString("deepLink")?.let { routingData["deepLink"] = it }
+                    doc.getString("videoId")?.let { routingData["videoId"] = it }
+                    doc.getString("storyId")?.let { routingData["storyId"] = it }
+                    @Suppress("UNCHECKED_CAST")
+                    routingData.putAll((doc.get("data") as? Map<String, String>) ?: emptyMap())
                     Notification(
                         id = doc.id,
                         type = NotificationType.fromRaw(doc.getString("type")),
                         title = doc.getString("title").orEmpty(),
-                        body = doc.getString("body").orEmpty(),
-                        imageUrl = doc.getString("imageUrl").orEmpty(),
-                        @Suppress("UNCHECKED_CAST")
-                        data = (doc.get("data") as? Map<String, String>) ?: emptyMap(),
-                        isRead = doc.getBoolean("isRead") ?: false,
+                        body = doc.getString("body") ?: doc.getString("message").orEmpty(),
+                        imageUrl = doc.getString("imageURL")
+                            ?: doc.getString("thumbnailURL").orEmpty(),
+                        data = routingData,
+                        isRead = doc.getBoolean("isRead") ?: doc.getBoolean("read") ?: false,
                         createdAt = doc.getTimestamp("createdAt")
                             ?: com.google.firebase.Timestamp(0, 0)
                     )
@@ -59,32 +67,56 @@ class FirestoreNotificationDataSource @Inject constructor(
 
     suspend fun markAsRead(userId: String, notificationId: String): Unit =
         withContext(Dispatchers.IO) {
-            items(userId).document(notificationId).update("isRead", true).await()
+            notification(notificationId).update(
+                mapOf("isRead" to true, "read" to true)
+            ).await()
         }
 
     suspend fun markAllAsRead(userId: String): Unit = withContext(Dispatchers.IO) {
-        val unread = items(userId).whereEqualTo("isRead", false).get().await()
+        val unread = notificationQuery(userId).whereEqualTo("isRead", false).get().await()
         val batch = firestore.batch()
-        unread.documents.forEach { batch.update(it.reference, "isRead", true) }
+        unread.documents.forEach {
+            batch.update(it.reference, mapOf("isRead" to true, "read" to true))
+        }
         batch.commit().await()
     }
 
     suspend fun deleteNotification(userId: String, notificationId: String): Unit =
         withContext(Dispatchers.IO) {
-            items(userId).document(notificationId).delete().await()
+            notification(notificationId).delete().await()
         }
 
-    /** Adds the device FCM token to the user document's `fcmTokens` array. */
+    /** Registers one active device token in the canonical per-token subcollection. */
     suspend fun updateFcmToken(userId: String, token: String): Unit =
         withContext(Dispatchers.IO) {
+            if (token.isBlank() || token.contains('/')) return@withContext
             firestore.collection(USERS).document(userId)
-                .set(mapOf("fcmTokens" to FieldValue.arrayUnion(token)), SetOptions.merge())
+                .collection(FCM_TOKENS).document(token)
+                .set(
+                    mapOf(
+                        "token" to token,
+                        "platform" to "android",
+                        "active" to true,
+                        "registeredAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                )
+                .await()
+        }
+
+    /** Detaches this device before sign-out so another account never receives its pushes. */
+    suspend fun deleteFcmToken(userId: String, token: String): Unit =
+        withContext(Dispatchers.IO) {
+            if (token.isBlank() || token.contains('/')) return@withContext
+            firestore.collection(USERS).document(userId)
+                .collection(FCM_TOKENS).document(token)
+                .delete()
                 .await()
         }
 
     private companion object {
         const val NOTIFICATIONS = "notifications"
-        const val ITEMS = "items"
         const val USERS = "users"
+        const val FCM_TOKENS = "fcmTokens"
     }
 }

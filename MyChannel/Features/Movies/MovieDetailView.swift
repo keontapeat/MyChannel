@@ -18,6 +18,8 @@ struct MovieDetailView: View {
     @State private var headerOpacity: Double = 0
     @State private var showFullOverview = false
     @State var resumeProgress: Double = 0
+    @State var resumeSeconds: Double = 0
+    @State private var relatedMovie: FreeMovie?
     
     private let headerHeight: CGFloat = 400
     private let posterWidth: CGFloat = 110
@@ -72,6 +74,10 @@ struct MovieDetailView: View {
                 }
                 .preferredColorScheme(.dark)
             }
+        }
+        .fullScreenCover(item: $relatedMovie) { picked in
+            MovieDetailView(movie: picked)
+                .environmentObject(appState)
         }
         .alert("Stream Unavailable", isPresented: $showUnavailableAlert) {
             Button("OK", role: .cancel) {}
@@ -177,6 +183,10 @@ struct MovieDetailView: View {
 
             if !movie.genre.isEmpty {
                 MovieDetailGenresSection(genres: movie.genre.map { $0.displayName })
+            }
+
+            MovieDetailRelatedSection(movie: movie) { picked in
+                relatedMovie = picked
             }
 
             Color.clear.frame(height: 40)

@@ -75,6 +75,7 @@ struct FlicksView: View {
     @State private var showPlaylistPicker = false
     @State private var showSearchBar = false
     @State private var searchText = ""
+    @State private var selectedFeed: FlicksFeedMode = .flicks
     @State private var selectedRemixFlick: NuclearFlick?
     @State private var selectedReportFlick: NuclearFlick?
     @State private var playlistTargetFlick: NuclearFlick?
@@ -89,12 +90,24 @@ struct FlicksView: View {
         } ?? []
     }
 
-    // Filtered flicks based on search
-    private var filteredFlicks: [NuclearFlick] {
-        if searchText.isEmpty {
-            return viewModel.flicks
+    private var topCreators: [FlickCreator] {
+        var seenCreatorIds = Set<String>()
+        let creators: [FlickCreator] = viewModel.flicks.compactMap { flick in
+            seenCreatorIds.insert(flick.creator.id).inserted ? flick.creator : nil
         }
-        return viewModel.flicks.filter { flick in
+        return Array(creators.prefix(4))
+    }
+
+    // Filter by selected feed and search while keeping a useful fallback for new users.
+    private var filteredFlicks: [NuclearFlick] {
+        let following: [NuclearFlick] = viewModel.flicks.filter {
+            viewModel.isFollowing(creatorId: $0.creator.id)
+        }
+        let selected: [NuclearFlick] = selectedFeed == .following && !following.isEmpty
+            ? following
+            : viewModel.flicks
+        guard !searchText.isEmpty else { return selected }
+        return selected.filter { flick in
             flick.title.localizedCaseInsensitiveContains(searchText) ||
             flick.creator.username.localizedCaseInsensitiveContains(searchText) ||
             flick.tags.contains { $0.localizedCaseInsensitiveContains(searchText) }
@@ -193,7 +206,7 @@ struct FlicksView: View {
             )
         }
         .sheet(item: $selectedRemixFlick) { flick in
-            RemixSheet(video: flick.toVideo())
+            ShortsRemixView(originalVideo: flick.toVideo())
         }
         .sheet(item: $selectedReportFlick) { flick in
             FlicksReportSheet(
@@ -264,6 +277,8 @@ struct FlicksView: View {
             searchText: $searchText,
             flicksMuted: $flicksMuted,
             captionsEnabled: $captionsEnabled,
+            selectedFeed: $selectedFeed,
+            creators: topCreators,
             showUI: showUI,
             reduceMotion: reduceMotion,
             flicksCount: viewModel.flicks.count,
@@ -479,7 +494,11 @@ struct FlicksView: View {
 
     private func submitReport(flick: NuclearFlick, reason: FlicksFeedbackService.ReportReason) {
         Task {
-            await FlicksFeedbackService.shared.report(flickId: flick.id, reason: reason)
+            await FlicksFeedbackService.shared.report(
+                flickId: flick.id,
+                creatorId: flick.creator.id,
+                reason: reason
+            )
         }
         selectedReportFlick = nil
         HapticManager.shared.notification(type: .success)

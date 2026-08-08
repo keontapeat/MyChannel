@@ -69,8 +69,8 @@ enum RankCategory: String, Codable, CaseIterable {
 // the already-ordered lists and display `user.rank`. Do NOT re-define pin lists
 // in the views; that previously caused the shelf and its "See All" to disagree.
 enum RankPins {
-    static let artists = ["Ysr Gramz", "Juscallmeep", "Mac Quall"]
-    static let filmmakers = ["Tee Cee", "Merch Hd", "Pros KT"]
+    static let artists = ["Ysr Gramz", "Krispylife Kidd", "Mia Getem"]
+    static let filmmakers = ["Big Hornet Productions", "Tee Cee", "Merch Hd", "Pros KT"]
     static let channels = ["Ktrip", "Baby Juu", "Mbk Cari"]
 }
 
@@ -146,7 +146,7 @@ final class TopRankMLService: ObservableObject {
     }
 
     static var fallbackTopFilmmakers: [TopRankedUser] {
-        ["Tee Cee", "Merch Hd", "Pros KT"].enumerated().compactMap { index, name in
+        ["Big Hornet Productions", "Tee Cee", "Merch Hd", "Pros KT"].enumerated().compactMap { index, name in
             OwnerProfile.instagramFriends.first { $0.name == name }.map {
                 fallbackRankedUser($0, category: .filmmaker, rank: index + 1)
             }
@@ -570,6 +570,18 @@ final class TopRankMLService: ObservableObject {
         // 3. Top MyChannels
         let artistIds = Set(artists.map(\.id))
         filmmakers.removeAll { artistIds.contains($0.id) }
+
+        // Guarantee the pinned Top Indie Filmmakers always appear, even if the
+        // cross-category dedup above (artist priority) removed them.
+        let filmmakerIdsForPins = Set(filmmakers.map(\.id))
+        for (pinIdx, pinName) in RankPins.filmmakers.enumerated() {
+            let pinId = "ig_\(pinName.lowercased().replacingOccurrences(of: " ", with: "_"))"
+            if !filmmakerIdsForPins.contains(pinId) {
+                if let friend = OwnerProfile.instagramFriends.first(where: { $0.name == pinName }) {
+                    filmmakers.insert(TopRankMLService.fallbackRankedUser(friend, category: .filmmaker, rank: pinIdx + 1), at: 0)
+                }
+            }
+        }
 
         let filmmakerIds = Set(filmmakers.map(\.id))
         channels.removeAll { artistIds.contains($0.id) || filmmakerIds.contains($0.id) }

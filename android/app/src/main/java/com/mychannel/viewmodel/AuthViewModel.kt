@@ -232,11 +232,41 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun signOut() {
-        authRepository.signOut()
-        googleAuthClient.signOutLegacy()
-        _uiState.update {
-            it.copy(status = AuthStatus.Unauthenticated, errorMessage = null, infoMessage = null)
+    fun signOut(onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            authRepository.signOut()
+            googleAuthClient.signOutLegacy()
+            _uiState.update {
+                it.copy(status = AuthStatus.Unauthenticated, errorMessage = null, infoMessage = null)
+            }
+            onComplete()
+        }
+    }
+
+    /**
+     * Permanently deletes the current account and all associated data (required
+     * by the App Store and Google Play). On success the local session is
+     * cleared and [onComplete] runs so the caller can route back to the start.
+     */
+    fun deleteAccount(onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            startProcessing()
+            authRepository.deleteAccount()
+                .onSuccess {
+                    googleAuthClient.signOutLegacy()
+                    _uiState.update {
+                        it.copy(
+                            isProcessing = false,
+                            status = AuthStatus.Unauthenticated,
+                            errorMessage = null,
+                            infoMessage = "Your account has been deleted."
+                        )
+                    }
+                    onComplete()
+                }
+                .onFailure { error ->
+                    setError(error.toAuthMessage("Couldn't delete your account. Please try again."))
+                }
         }
     }
 

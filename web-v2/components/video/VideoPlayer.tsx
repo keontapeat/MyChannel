@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import type Player from 'video.js/dist/types/player';
+import { safeMediaUrl } from '@/lib/video-detail-security';
 import type { SubtitleTrack } from '@/types';
 
 export interface PlayerChapter {
@@ -28,7 +29,8 @@ interface VideoPlayerProps {
   subtitles?: SubtitleTrack[];
   enableShortcuts?: boolean;
   startTime?: number;   // seconds to start at (e.g. ?t= deep link)
-  resumeKey?: string;   // localStorage key suffix for resume-position
+  resumeKey?: string;   // stable identity for per-video resume state
+  fullBleed?: boolean;
   onTimeUpdate?: (currentTime: number) => void;
   onEnded?: () => void;
   onPlay?: () => void;
@@ -73,6 +75,7 @@ const VideoPlayer = ({
   enableShortcuts = false,
   startTime,
   resumeKey,
+  fullBleed = false,
   onTimeUpdate,
   onEnded,
   onPlay,
@@ -83,15 +86,25 @@ const VideoPlayer = ({
   const chapterBlobRef = useRef<string>(''); // track blob URL for cleanup
   const lastTimePulseRef = useRef<number>(-1); // throttle for mychannel:player-time
   const didInitialSeekRef = useRef<boolean>(false);
+  const retryCountRef = useRef(0);
+  const activeSourceRef = useRef(safeMediaUrl(src) ?? '');
+  const latestPropsRef = useRef({ startTime, resumeKey, onTimeUpdate, onEnded, onPlay, onPause });
+  useEffect(() => {
+    latestPropsRef.current = { startTime, resumeKey, onTimeUpdate, onEnded, onPlay, onPause };
+  }, [startTime, resumeKey, onTimeUpdate, onEnded, onPlay, onPause]);
   const lastTapRef = useRef<{ t: number; x: number }>({ t: 0, x: 0 });
   const [isReady, setIsReady] = useState(false);
+  const [hasActiveSource, setHasActiveSource] = useState(() => Boolean(safeMediaUrl(src)));
+  const [playerError, setPlayerError] = useState<string | null>(
+    () => safeMediaUrl(src) ? null : 'This video source is unavailable.',
+  );
   const [seekRipple, setSeekRipple] = useState<null | 'fwd' | 'back'>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [stats, setStats] = useState<Record<string, string>>({});
 
   // Initialize player once
   useEffect(() => {
-    if (playerRef.current || !videoRef.current) return;
+    if (playerRef.current || !videoRef.current || !activeSourceRef.current) return;
 
     const videoElement = document.createElement('video-js');
     videoElement.classList.add('vjs-big-play-centered');
@@ -100,13 +113,14 @@ const VideoPlayer = ({
     const player = (playerRef.current = videojs(videoElement, {
       autoplay,
       controls,
-      responsive: true,
-      fluid: true,
-      preload: 'auto',
+      responsive: !fullBleed,
+      fluid: !fullBleed,
+      fill: fullBleed,
+      preload: autoplay ? 'auto' : 'metadata',
       poster,
       sources: [{
-        src,
-        type: src.includes('.m3u8') ? 'application/x-mpegURL' : 'video/mp4',
+        src: activeSourceRef.current,
+        type: activeSourceRef.current.includes('.m3u8') ? 'application/x-mpegURL' : 'video/mp4',
       }],
       controlBar: {
         children: [
@@ -125,7 +139,6 @@ const VideoPlayer = ({
           'descriptionsButton',
           'subsCapsButton',
           'audioTrackButton',
-          'qualitySelector',
           'fullscreenToggle',
           'pictureInPictureToggle',
         ],
@@ -154,16 +167,19 @@ const VideoPlayer = ({
       try { localStorage.setItem('player:rate', String(player.playbackRate() ?? 1)); } catch { /* ignore */ }
     });
     player.on('loadedmetadata', () => {
+      retryCountRef.current = 0;
+      setPlayerError(null);
       // Apply initial seek once: explicit ?t= start wins, else saved resume position.
       if (didInitialSeekRef.current) return;
       didInitialSeekRef.current = true;
       const dur = player.duration() || 0;
       let target = 0;
-      if (typeof startTime === 'number' && startTime > 0) {
-        target = startTime;
-      } else if (resumeKey) {
+      const { startTime: latestStartTime, resumeKey: latestResumeKey } = latestPropsRef.current;
+      if (typeof latestStartTime === 'number' && latestStartTime > 0) {
+        target = latestStartTime;
+      } else if (latestResumeKey) {
         try {
-          const saved = parseFloat(localStorage.getItem(`player:resume:${resumeKey}`) || '0');
+          const saved = parseFloat(localStorage.getItem(`player:resume:${latestResumeKey}`) || '0');
           // Only resume if meaningfully into the video and not near the end
           if (saved > 5 && (dur === 0 || saved < dur - 15)) target = saved;
         } catch { /* ignore */ }
@@ -172,7 +188,7 @@ const VideoPlayer = ({
     });
     player.on('timeupdate', () => {
       const t = player.currentTime() || 0;
-      onTimeUpdate?.(t);
+      latestPropsRef.current.onTimeUpdate?.(t);
       // Throttled global time pulse (once per ~0.5s) for sibling panels
       // (transcript highlight) without prop-drilling or re-rendering the page.
       const nowSec = Math.floor(t * 2);
@@ -180,19 +196,41 @@ const VideoPlayer = ({
         lastTimePulseRef.current = nowSec;
         window.dispatchEvent(new CustomEvent('mychannel:player-time', { detail: { time: t } }));
         // Persist resume position (skip the final stretch so finished videos restart)
-        if (resumeKey) {
+        const latestResumeKey = latestPropsRef.current.resumeKey;
+        if (latestResumeKey) {
           const dur = player.duration() || 0;
           try {
-            if (dur === 0 || t < dur - 15) localStorage.setItem(`player:resume:${resumeKey}`, String(t));
-            else localStorage.removeItem(`player:resume:${resumeKey}`);
+            if (dur === 0 || t < dur - 15) localStorage.setItem(`player:resume:${latestResumeKey}`, String(t));
+            else localStorage.removeItem(`player:resume:${latestResumeKey}`);
           } catch { /* ignore */ }
         }
       }
     });
-    player.on('ended', () => onEnded?.());
-    player.on('play', () => onPlay?.());
-    player.on('pause', () => onPause?.());
-    player.on('error', (error: any) => console.error('🚨 Video player error:', error));
+    player.on('ended', () => latestPropsRef.current.onEnded?.());
+    player.on('play', () => latestPropsRef.current.onPlay?.());
+    player.on('pause', () => latestPropsRef.current.onPause?.());
+    player.on('error', () => {
+      const activeSource = activeSourceRef.current;
+      if (activeSource && retryCountRef.current < 2) {
+        retryCountRef.current += 1;
+        const resumeAt = player.currentTime() || 0;
+        window.setTimeout(() => {
+          if (player.isDisposed() || activeSourceRef.current !== activeSource) return;
+          player.src({
+            src: activeSource,
+            type: activeSource.includes('.m3u8') ? 'application/x-mpegURL' : 'video/mp4',
+          });
+          player.one('loadedmetadata', () => {
+            if (resumeAt > 0) player.currentTime(resumeAt);
+            const playResult = player.play();
+            if (playResult) void playResult.catch(() => undefined);
+          });
+          player.load();
+        }, retryCountRef.current * 750);
+        return;
+      }
+      setPlayerError('Playback failed. Check your connection and try again.');
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cross-component seeking: clickable timestamps in the description (and any
@@ -211,15 +249,33 @@ const VideoPlayer = ({
     return () => window.removeEventListener('mychannel:player-seek', handleSeek as EventListener);
   }, []);
 
-  // Update source when it changes
+  // Validate and reset all per-source state before changing media.
   useEffect(() => {
-    if (playerRef.current && isReady) {
-      playerRef.current.src({
-        src,
-        type: src.includes('.m3u8') ? 'application/x-mpegURL' : 'video/mp4',
-      });
+    const player = playerRef.current;
+    if (!player || !isReady) return;
+
+    const validatedSource = safeMediaUrl(src);
+    didInitialSeekRef.current = false;
+    retryCountRef.current = 0;
+    lastTimePulseRef.current = -1;
+    queueMicrotask(() => {
+      setHasActiveSource(Boolean(validatedSource));
+      setPlayerError(validatedSource ? null : 'This video source is unavailable.');
+    });
+    if (!validatedSource) {
+      activeSourceRef.current = '';
+      player.pause();
+      return;
     }
-  }, [src, isReady]);
+    if (activeSourceRef.current === validatedSource && player.currentSrc()) return;
+
+    activeSourceRef.current = validatedSource;
+    player.src({
+      src: validatedSource,
+      type: validatedSource.includes('.m3u8') ? 'application/x-mpegURL' : 'video/mp4',
+    });
+    player.load();
+  }, [src, resumeKey, isReady]);
 
   // Inject / update the WebVTT chapters track whenever chapters change
   useEffect(() => {
@@ -275,11 +331,12 @@ const VideoPlayer = ({
     }
 
     subtitles.forEach((track, idx) => {
-      if (!track.url) return;
+      const validatedTrackUrl = safeMediaUrl(track.url);
+      if (!validatedTrackUrl) return;
       player.addRemoteTextTrack(
         {
           kind: track.isAutoGenerated ? 'captions' : 'subtitles',
-          src: track.url,
+          src: validatedTrackUrl,
           srclang: track.languageCode || `lang${idx}`,
           label: track.languageName || track.languageCode || `Track ${idx + 1}`,
         },
@@ -426,8 +483,44 @@ const VideoPlayer = ({
   }, []);
 
   return (
-    <div data-vjs-player className="relative" onTouchEnd={handleTouchEnd}>
-      <div ref={videoRef} className="rounded-lg overflow-hidden" />
+    <div
+      data-vjs-player
+      className={fullBleed
+        ? 'absolute inset-0 h-full w-full overflow-hidden [&_.video-js]:h-full [&_.video-js]:w-full [&_.vjs-poster]:bg-cover [&_.vjs-tech]:object-cover'
+        : 'relative'}
+      onTouchEnd={handleTouchEnd}
+    >
+      <div ref={videoRef} className={fullBleed ? 'h-full w-full' : 'overflow-hidden rounded-lg'} />
+      {playerError && (
+        <div
+          role="alert"
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/85 px-6 text-center text-white"
+        >
+          <p className="text-sm font-medium">{playerError}</p>
+          {hasActiveSource && (
+            <button
+              type="button"
+              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              onClick={() => {
+                const player = playerRef.current;
+                const activeSource = activeSourceRef.current;
+                if (!player || !activeSource) return;
+                retryCountRef.current = 0;
+                setPlayerError(null);
+                player.src({
+                  src: activeSource,
+                  type: activeSource.includes('.m3u8') ? 'application/x-mpegURL' : 'video/mp4',
+                });
+                player.load();
+                const playResult = player.play();
+                if (playResult) void playResult.catch(() => undefined);
+              }}
+            >
+              Retry playback
+            </button>
+          )}
+        </div>
+      )}
       {/* Stats for nerds */}
       {statsOpen && (
         <div className="absolute top-2 left-2 bg-black/80 text-white/90 text-[11px] font-mono rounded-lg p-3 space-y-0.5 pointer-events-none max-w-[240px]">

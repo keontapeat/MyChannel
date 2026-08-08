@@ -1,21 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import {
   ThumbsUp, ThumbsDown, Share2, Flag, BookmarkPlus, Check, Link2, Heart, Download, Loader2,
 } from 'lucide-react';
 import {
   doc,
-  updateDoc,
-  increment,
-  setDoc,
-  deleteDoc,
   getDoc,
   serverTimestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase/config';
+import { appendVideoEngagement, recordVideoEngagement } from '@/lib/firebase/video-engagement';
 import { formatViewCount } from '@/lib/utils/format';
 import SaveToPlaylistModal from './SaveToPlaylistModal';
+import ContentReportDialog from '@/components/moderation/ContentReportDialog';
 import type { Video } from '@/types';
 
 interface VideoEngagementProps {
@@ -30,6 +30,7 @@ const VideoEngagement = ({ video, onSuperThanks }: VideoEngagementProps) => {
   const [isSaved, setIsSaved] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showReportDialog, setShowReportDialog] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
   // Download is allowed only when the creator enabled it and the file is a
@@ -61,30 +62,37 @@ const VideoEngagement = ({ video, onSuperThanks }: VideoEngagementProps) => {
     }
   };
 
-  // Load initial like/save state from Firestore when user is signed in
+  // Subscribe to auth resolution before loading private reaction/save state.
   useEffect(() => {
-    const uid = auth?.currentUser?.uid;
-    if (!uid || !video.id) return;
-
     let cancelled = false;
 
-    const load = async () => {
-      try {
-        const [likeSnap, saveSnap] = await Promise.all([
-          getDoc(doc(db, 'users', uid, 'videoLikes', video.id)),
-          getDoc(doc(db, 'users', uid, 'watchLater', video.id)),
-        ]);
-        if (cancelled) return;
-        if (likeSnap.exists()) setIsLiked(likeSnap.data()?.value === 'like');
-        if (likeSnap.exists()) setIsDisliked(likeSnap.data()?.value === 'dislike');
-        setIsSaved(saveSnap.exists());
-      } catch {
-        // non-fatal — UI stays at defaults
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user || !video.id) {
+        if (!cancelled) {
+          setIsLiked(false);
+          setIsDisliked(false);
+          setIsSaved(false);
+        }
+        return;
       }
-    };
 
-    load();
-    return () => { cancelled = true; };
+      void Promise.all([
+        getDoc(doc(db, 'users', user.uid, 'videoLikes', video.id)),
+        getDoc(doc(db, 'users', user.uid, 'watchLater', video.id)),
+      ]).then(([likeSnap, saveSnap]) => {
+        if (cancelled) return;
+        setIsLiked(likeSnap.exists() && likeSnap.data()?.value === 'like');
+        setIsDisliked(likeSnap.exists() && likeSnap.data()?.value === 'dislike');
+        setIsSaved(saveSnap.exists());
+      }).catch(() => {
+        // Non-fatal — the public video remains usable.
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [video.id]);
 
   const handleLike = async () => {
@@ -92,34 +100,27 @@ const VideoEngagement = ({ video, onSuperThanks }: VideoEngagementProps) => {
     const nextLiked = !isLiked;
     const wasDisliked = isDisliked;
 
-    // Optimistic update
+    // A dislike→like switch adds one public like, not two.
     setIsLiked(nextLiked);
     if (wasDisliked) setIsDisliked(false);
-    setLikeCount((n) =>
-      n + (nextLiked ? 1 : -1) + (wasDisliked ? 1 : 0)
-    );
+    setLikeCount((count) => Math.max(0, count + (nextLiked ? 1 : -1)));
 
     try {
-      if (uid) {
-        const ref = doc(db, 'users', uid, 'videoLikes', video.id);
-        if (nextLiked) {
-          await setDoc(ref, { value: 'like', videoId: video.id, createdAt: serverTimestamp() });
-        } else {
-          await deleteDoc(ref);
-        }
+      if (!uid) throw new Error('Authentication required');
+      const ref = doc(db, 'users', uid, 'videoLikes', video.id);
+      const batch = writeBatch(db);
+      if (nextLiked) {
+        batch.set(ref, { value: 'like', videoId: video.id, createdAt: serverTimestamp() });
+      } else {
+        batch.delete(ref);
       }
-      const videoRef = doc(db, 'videos', video.id);
-      await updateDoc(videoRef, {
-        likeCount: increment(nextLiked ? 1 : -1),
-        ...(wasDisliked && { dislikeCount: increment(-1) }),
-      });
+      // The server transition ledger automatically replaces a prior dislike.
+      appendVideoEngagement(batch, video.id, nextLiked ? 'like' : 'unlike');
+      await batch.commit();
     } catch {
-      // rollback optimistic
       setIsLiked(!nextLiked);
       if (wasDisliked) setIsDisliked(true);
-      setLikeCount((n) =>
-        n + (nextLiked ? -1 : 1) + (wasDisliked ? -1 : 0)
-      );
+      setLikeCount((count) => Math.max(0, count + (nextLiked ? -1 : 1)));
     }
   };
 
@@ -135,19 +136,17 @@ const VideoEngagement = ({ video, onSuperThanks }: VideoEngagementProps) => {
     }
 
     try {
-      if (uid) {
-        const ref = doc(db, 'users', uid, 'videoLikes', video.id);
-        if (nextDisliked) {
-          await setDoc(ref, { value: 'dislike', videoId: video.id, createdAt: serverTimestamp() });
-        } else {
-          await deleteDoc(ref);
-        }
+      if (!uid) throw new Error('Authentication required');
+      const ref = doc(db, 'users', uid, 'videoLikes', video.id);
+      const batch = writeBatch(db);
+      if (nextDisliked) {
+        batch.set(ref, { value: 'dislike', videoId: video.id, createdAt: serverTimestamp() });
+      } else {
+        batch.delete(ref);
       }
-      const videoRef = doc(db, 'videos', video.id);
-      await updateDoc(videoRef, {
-        dislikeCount: increment(nextDisliked ? 1 : -1),
-        ...(wasLiked && { likeCount: increment(-1) }),
-      });
+      // The server transition ledger automatically replaces a prior like.
+      appendVideoEngagement(batch, video.id, nextDisliked ? 'dislike' : 'undislike');
+      await batch.commit();
     } catch {
       setIsDisliked(!nextDisliked);
       if (wasLiked) { setIsLiked(true); setLikeCount((n) => n + 1); }
@@ -176,8 +175,11 @@ const VideoEngagement = ({ video, onSuperThanks }: VideoEngagementProps) => {
         setCopyFeedback(true);
         setTimeout(() => setCopyFeedback(false), 2000);
       }
+      if (auth.currentUser) {
+        await recordVideoEngagement(video.id, 'share').catch(() => {});
+      }
     } catch {
-      // user cancelled share — silent
+      // User cancellation is not a completed share and must not be counted.
     }
   };
 
@@ -286,6 +288,8 @@ const VideoEngagement = ({ video, onSuperThanks }: VideoEngagementProps) => {
 
       {/* Report */}
       <button
+        type="button"
+        onClick={() => setShowReportDialog(true)}
         className="flex items-center gap-2 px-4 py-2 bg-[rgb(var(--color-surface))] rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition-colors text-[rgb(var(--color-text-primary))]"
         aria-label="Report video"
       >
@@ -296,6 +300,15 @@ const VideoEngagement = ({ video, onSuperThanks }: VideoEngagementProps) => {
 
     {showSaveModal && (
       <SaveToPlaylistModal video={video} onClose={handleSaveModalClose} />
+    )}
+    {showReportDialog && (
+      <ContentReportDialog
+        contentType="video"
+        contentId={video.id}
+        contentCreatorId={video.creatorId}
+        title="video"
+        onClose={() => setShowReportDialog(false)}
+      />
     )}
     </>
   );

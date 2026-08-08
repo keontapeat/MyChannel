@@ -84,15 +84,42 @@ struct AppConfig {
         static let cloudRunBaseURL = "https://mychannel-ai-124515086975.us-central1.run.app"
         static let gatewayBaseURL = "https://mychannel-gw-1l792fzz.uc.gateway.dev"
         static let adsBaseURL: String = gatewayBaseURL
+        // Authenticated content service. Release builds must configure this Info.plist
+        // value; playback fails closed when the endpoint is absent or not HTTPS.
+        static let contentAPIBaseURL: URL? = {
+            guard let rawValue = Bundle.main.object(
+                forInfoDictionaryKey: "CONTENT_API_BASE_URL"
+            ) as? String else { return nil }
+            let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let url = URL(string: value),
+                  url.scheme?.lowercased() == "https",
+                  url.host?.isEmpty == false,
+                  url.user == nil,
+                  url.password == nil else { return nil }
+            return url
+        }()
         static let mlAgentsURL: String? = "https://ml-agents-fkri6ifojq-uc.a.run.app"
         static let version = "v1"
         static let timeout: TimeInterval = 30.0
 
         // MARK: - Music platform service endpoints
+        // Release builds must provide MUSIC_API_BASE_URL. Fail closed rather
+        // than sending authenticated Music requests to an unverified origin.
+        static let musicAPIBaseURL: URL? = {
+            guard let configured = Bundle.main.object(
+                forInfoDictionaryKey: "MUSIC_API_BASE_URL"
+            ) as? String else { return nil }
+            let value = configured.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty,
+                  let url = URL(string: value),
+                  url.scheme?.lowercased() == "https",
+                  url.host?.isEmpty == false else { return nil }
+            return url
+        }()
         // Single combined Cloud Function for Stripe Connect payouts (music-payouts).
         // Routes by trailing path segment: /requestPayout, /getAvailableBalance,
         // /createConnectOnboardingLink, /claimOwedEarnings, /payoutArtist, /stripeWebhook
-        static let musicPayoutsBaseURL = "https://us-central1-mychannel-ca26d.cloudfunctions.net/musicPayouts"
+        static let musicPayoutsBaseURL = "https://us-east1-mychannel-ca26d.cloudfunctions.net/musicPayouts"
         // Cloud Run services for distribution, transcode, content ID, presave.
         // Replace with your deployed service URLs.
         static let musicDistributionBaseURL = "https://music-distribution-fkri6ifojq-uc.a.run.app"
@@ -201,16 +228,27 @@ struct AppConfig {
         static let enablePushNotifications = true
         static let enableDeepLinks = true
         static let enableOfflineDownload = true
-        // 🔥 FIX 2.1(b): Hide subscription purchase UI until IAPs are submitted & approved
-        // Flip to `true` once App Store Connect IAPs are approved by App Review.
-        static let enableSubscriptions = true
+        // 🔥 FIX 2.1(b) / ASC blocker: Hide subscription purchase UI until Plus IAPs
+        // are Ready for Sale AND App Store Connect accepts the Review screenshot.
+        // ASC is currently failing all IAP screenshot uploads ("error uploading your
+        // screenshot") while products sit in Developer Rejected — keep OFF so Review
+        // never hits a broken buy flow. Flip to `true` after Monthly+Annual clear review.
+        static let enableSubscriptions = false
         // 🔥 FIX 3.1.1: Creator payouts (B2B disbursements from platform → creator)
         // are NOT subject to Apple Guideline 3.1.1 — that rule covers charging
         // viewers for digital goods, not paying out creators.
         // Earnings dashboard, payout settings, and withdrawal are now ENABLED.
-        // NOTE: enableTipping stays false — viewer→creator payments require IAP.
-        static let enableTipping = true
-        static let enableCreatorMonetization = true
+        // 🔒 LAUNCH GATE: Viewer→creator tips / Super Thanks stay OFF until every
+        // `com.mychannel.superthanks.*` / tip product is Ready for Sale in ASC.
+        // Free-grant fallbacks were removed from Release (Guideline 3.1.1).
+        static let enableTipping = false
+        // 🔒 LAUNCH GATE (real-money): OFF for initial App Store / Play submission.
+        // Gates the VS Match wager creator, Stripe VS wallet, and real-money
+        // surfaces. Skill wagering needs Apple 5.3 licensing + geo clearance.
+        // Keep OFF until legal/licensing lands, then flip to `true`.
+        static let enableCreatorMonetization = false
+        /// Audio-only background continuation while app is backgrounded (Guideline 2.5.4).
+        static let enableBackgroundPlay = true
         // Disable mock data in TestFlight/app store; allow in debug
         static let enableMockData: Bool = {
             #if DEBUG
@@ -221,8 +259,8 @@ struct AppConfig {
         }()
         static let enableNetworkLogging = isDebug // Enable network logging in debug mode
 
-        static let enableFlicksPeek = false
-        // Ads
+        static let enableFlicksPeek = true
+        // Ads — keep ON but Privacy Manifest must declare tracking when ATT/AdMob run
         static let enableAds = true
 
         // 🔒 Direct Vertex AI Agent Builder `detectIntent` calls from the iOS client.
@@ -251,10 +289,10 @@ struct AppConfig {
         static let enableAppClipAndWidgets = false         // Phase 55
 
         // Wave 12 — Monetization Depth (56–60) — gated by enableCreatorMonetization
-        static let enableShoppableVideo = false            // Phase 56
+        static let enableShoppableVideo = true             // Phase 56
         static let enableCreatorFund = false               // Phase 57
         static let enableAdYieldV2 = false                 // Phase 58
-        static let enableTieredSubscriptions = false       // Phase 59
+        static let enableTieredSubscriptions = true        // Phase 59
         static let enableVirtualGifts = false              // Phase 60 (IAP-only)
 
         // Wave 13 — Global Scale (61–65)
@@ -272,7 +310,7 @@ struct AppConfig {
         static let enablePublicCreatorAPI = false          // Phase 70
 
         // Wave 15 — Trust & Safety (71–75)
-        static let enableKidsMode = false                  // Phase 71
+        static let enableKidsMode = true                   // Phase 71
         static let enableDSACompliance = false             // Phase 72
         static let enableC2PAProvenance = false            // Phase 73
         static let enableCopyrightMatchV2 = false          // Phase 74
@@ -280,17 +318,17 @@ struct AppConfig {
 
         // Wave 16 — AI-Native UX (76–80)
         static let enableAmbientAgent = false              // Phase 76
-        static let enableConversationalSearch = false      // Phase 77
+        static let enableConversationalSearch = true      // Phase 77
         static let enableAIHost = false                    // Phase 78
-        static let enableSmartClipping = false             // Phase 79
+        static let enableSmartClipping = true             // Phase 79
         static let enableGenerativeThumbnails = false      // Phase 80
 
         // Wave 17 — Verticals (81–85)
         static let enableEsportsHub = false                // Phase 81
         static let enableSportsLiveCards = false           // Phase 82
         static let enableGameClipSDK = false               // Phase 83
-        static let enableWatchParties = false              // Phase 84
-        static let enableInteractiveLive = false           // Phase 85
+        static let enableWatchParties = true               // Phase 84
+        static let enableInteractiveLive = true            // Phase 85
 
         // Wave 18 — Platforms II (86–90) — platform targets, not flags. Kept for parity.
         static let enableVisionProV2 = false               // Phase 90 visionOS
@@ -342,7 +380,7 @@ struct AppConfig {
         static let enableCommunitySpaces = false           // Phase 121
         static let enableCollaborativePlaylistsV2 = false  // Phase 122
         static let enableFanClubs = false                  // Phase 123
-        static let enableSocialClipsDuets = false          // Phase 124
+        static let enableSocialClipsDuets = true          // Phase 124
         static let enableGroupWatchPartiesV2 = false       // Phase 125
 
         // Wave 26 — Creator Autonomy & Tools (126–130)
@@ -369,18 +407,18 @@ struct AppConfig {
         // MARK: - Phase 141–160 Flags (Deep Roadmap V — VideoDetailView)
 
         // Wave 29 — Player UX Refinement (141–145)
-        static let enablePinchToZoom = false               // Phase 141
-        static let enableAmbientMode = false               // Phase 142
-        static let enableVolumeNormalization = false        // Phase 143
-        static let enableSmartScrubPreviews = false         // Phase 144
-        static let enablePlaybackSpeedCurves = false        // Phase 145
+        static let enablePinchToZoom = true                // Phase 141
+        static let enableAmbientMode = true               // Phase 142
+        static let enableVolumeNormalization = true        // Phase 143
+        static let enableSmartScrubPreviews = true         // Phase 144
+        static let enablePlaybackSpeedCurves = true        // Phase 145
 
         // Wave 30 — Engagement & Social Layer (146–150)
-        static let enableTimestampedComments = false        // Phase 146
-        static let enableLiveReactionsTimeline = false      // Phase 147
+        static let enableTimestampedComments = true        // Phase 146
+        static let enableLiveReactionsTimeline = true      // Phase 147
         static let enableCollaborativeAnnotations = false   // Phase 148
         static let enableWatchTogetherSync = false          // Phase 149
-        static let enableVideoPollsQuizzes = false          // Phase 150
+        static let enableVideoPollsQuizzes = true           // Phase 150
 
         // Wave 31 — Intelligence & Context (151–155)
         static let enableAIVideoSummary = false             // Phase 151
@@ -414,9 +452,9 @@ struct AppConfig {
 
         // Wave 35 — Live & Real-Time Experiences (171–175)
         static let enableUltraLowLatencyLiveV2 = false     // Phase 171
-        static let enableLiveCommerce = false               // Phase 172
-        static let enableMultiHostLive = false              // Phase 173
-        static let enableLiveCaptions = false               // Phase 174
+        static let enableLiveCommerce = true                // Phase 172
+        static let enableMultiHostLive = true               // Phase 173
+        static let enableLiveCaptions = true               // Phase 174
         static let enableLiveAnalyticsDashboard = false    // Phase 175
 
         // Wave 36 — Platform Scale & Intelligence (176–180)
@@ -429,10 +467,10 @@ struct AppConfig {
         // MARK: - Phase 181–200 Flags (Deep Roadmap VII)
 
         // Wave 37 — Community Trust & Safety v2 (181–185)
-        static let enableCommunityNotes = false             // Phase 181
+        static let enableCommunityNotes = true             // Phase 181
         static let enableReputationKarma = false            // Phase 182
-        static let enableAppealDispute = false              // Phase 183
-        static let enableParentalControls = false           // Phase 184
+        static let enableAppealDispute = true               // Phase 183
+        static let enableParentalControls = true            // Phase 184
         static let enableAntiHarassment = false             // Phase 185
 
         // Wave 38 — Advanced Security & Privacy (186–190)
@@ -696,7 +734,7 @@ struct AppConfig {
 
         // Wave 74: Creator Revenue Products (366–370)
         static let enableSubscriptionRetention = false           // Phase 366
-        static let enableMembershipPerks = false                 // Phase 367
+        static let enableMembershipPerks = true           // Phase 367
         static let enableSponsorshipMatchmaking = false          // Phase 368
         static let enableAffiliateCommerceOptimization = false   // Phase 369
         static let enableRevenueScenarioPlanner = false          // Phase 370
@@ -747,7 +785,7 @@ struct AppConfig {
         
         // 🔥 YOUTUBE PARITY: Core infrastructure features
         static let enableElasticsearch = true                    // Full-text search index
-        static let enableHLSManifests = false                    // HLS adaptive streaming
+        static let enableHLSManifests = true                     // HLS adaptive streaming
         static let enableDASHManifests = false                   // MPEG-DASH streaming
         static let enableAV1Encoding = false                    // AV1 codec (expensive, enable per-region)
         static let enableVP9Encoding = false                    // VP9 codec

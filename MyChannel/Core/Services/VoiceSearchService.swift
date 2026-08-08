@@ -60,7 +60,9 @@ class VoiceSearchService: NSObject, ObservableObject {
         // Configure audio session
         let audioSession = AVAudioSession.sharedInstance()
         try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        // `.notifyOthersOnDeactivation` is only valid when deactivating; passing
+        // it to setActive(true) is a no-op that can return OSStatus -50.
+        try audioSession.setActive(true)
         
         // Create recognition request
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
@@ -114,6 +116,10 @@ class VoiceSearchService: NSObject, ObservableObject {
         recognitionTask = nil
         
         isListening = false
+
+        // Recording used the `.record` category; hand the session back to the
+        // playback owner so background audio / PiP work after voice search.
+        PlaybackAudioSession.shared.reactivate()
     }
     
     deinit {

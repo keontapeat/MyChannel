@@ -19,6 +19,8 @@ export interface Video {
   category: VideoCategory;
   tags: string[];
   isPublic: boolean;
+  visibility?: 'public' | 'unlisted' | 'private' | 'scheduled';
+  processingStatus?: 'uploaded' | 'queued' | 'processing' | 'ready' | 'transcode_failed';
   ageRestricted: boolean;
   madeForKids: boolean;
   commentsEnabled: boolean;

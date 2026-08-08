@@ -8,6 +8,13 @@ struct YouTubePlayerView: UIViewRepresentable {
     var startTime: Int = 0
     var muted: Bool = false
     var showControls: Bool = true
+    /// Fired when YouTube's IFrame player reports it cannot play the video
+    /// (e.g. embedding disabled, removed, or region/age restricted). The `Int`
+    /// is the raw IFrame API error code: 2 (bad param), 5 (HTML5 error),
+    /// 100 (not found/private), 101 & 150 (embedding disabled by owner).
+    /// Callers use this to show a graceful fallback instead of YouTube's own
+    /// "This video is unavailable. Error code: 152-4" error screen.
+    var onError: ((Int) -> Void)? = nil
     /// 🔒 PERMANENT THUMBNAIL FIX: WKWebView manages its own CALayer tree outside
     /// SwiftUI's normal render pipeline, so a parent `.clipShape(RoundedRectangle)`
     /// does NOT reliably mask its corners (it can visibly bulge square during
@@ -23,6 +30,7 @@ struct YouTubePlayerView: UIViewRepresentable {
         config.allowsPictureInPictureMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         let controller = WKUserContentController()
+        controller.add(context.coordinator, name: "ytHandler")
         config.userContentController = controller
 
         let webView = WKWebView(frame: .zero, configuration: config)
@@ -54,6 +62,12 @@ struct YouTubePlayerView: UIViewRepresentable {
         webView.scrollView.clipsToBounds = true
     }
 
+    static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        // Break the WKUserContentController -> Coordinator strong reference so
+        // the coordinator (and its notification observer) can deallocate cleanly.
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "ytHandler")
+    }
+
     func updateUIView(_ webView: WKWebView, context: Context) {
         context.coordinator.parent = self
         applyCornerRadius(to: webView)
@@ -79,7 +93,7 @@ struct YouTubePlayerView: UIViewRepresentable {
         webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: YouTubePlayerView
         weak var webView: WKWebView?
         var loadedVideoID: String?
@@ -106,6 +120,20 @@ struct YouTubePlayerView: UIViewRepresentable {
         private func pausePlayback() {
             let js = "try { if (window.player && player.pauseVideo) { player.pauseVideo(); player.mute(); } } catch(e) {}"
             webView?.evaluateJavaScript(js, completionHandler: nil)
+        }
+
+        // MARK: WKScriptMessageHandler
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            guard message.name == "ytHandler",
+                  let body = message.body as? [String: Any],
+                  let event = body["event"] as? String else { return }
+            if event == "error" {
+                // e.data arrives as a JS number -> NSNumber; default to -1 if absent.
+                let code = (body["code"] as? NSNumber)?.intValue ?? -1
+                let handler = parent.onError
+                DispatchQueue.main.async { handler?(code) }
+            }
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -179,13 +207,22 @@ struct YouTubePlayerView: UIViewRepresentable {
                       'start': \(start)
                     },
                     events: {
-                      'onReady': onPlayerReady
+                      'onReady': onPlayerReady,
+                      'onError': onPlayerError
                     }
                   });
                 }
                 function onPlayerReady(event) {
                   \(initialMuteJS)
                   \(initialPlayJS)
+                }
+                function onPlayerError(event) {
+                  try {
+                    window.webkit.messageHandlers.ytHandler.postMessage({
+                      event: 'error',
+                      code: event.data
+                    });
+                  } catch (e) {}
                 }
               </script>
             </body>

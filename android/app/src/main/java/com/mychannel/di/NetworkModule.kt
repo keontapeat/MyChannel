@@ -1,6 +1,8 @@
 package com.mychannel.di
 
+import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.auth.FirebaseAuth
+import com.google.android.gms.tasks.Tasks
 import com.mychannel.BuildConfig
 import dagger.Module
 import dagger.Provides
@@ -20,6 +22,7 @@ import javax.inject.Singleton
  *
  * Security features:
  * - Auth interceptor attaches Firebase ID tokens to every request
+ * - App Check interceptor attests requests to custom MyChannel services
  * - Certificate pinning for api.mychannel.live (REQ-19.3)
  * - Logging only in debug builds (REQ-19.1)
  */
@@ -31,30 +34,38 @@ object NetworkModule {
     private const val TIMEOUT_SECONDS = 30L
 
     /**
-     * Auth interceptor that attaches the current Firebase user's ID token
-     * as a Bearer token on every outgoing request.
+     * Attaches Firebase Auth and App Check tokens. OkHttp invokes application
+     * interceptors off the main thread, so bounded task waits are safe here.
      */
     @Provides
     @Singleton
     fun provideAuthInterceptor(auth: FirebaseAuth): Interceptor = Interceptor { chain ->
-        val original = chain.request()
-        val user = auth.currentUser
-        val request = if (user != null) {
-            // Synchronously get the token (OkHttp runs on a background thread)
-            val token = runCatching {
-                com.google.android.gms.tasks.Tasks.await(user.getIdToken(false))?.token
+        val requestBuilder = chain.request().newBuilder()
+        auth.currentUser?.let { user ->
+            val authToken = runCatching {
+                Tasks.await(
+                    user.getIdToken(false),
+                    5,
+                    TimeUnit.SECONDS
+                ).token
             }.getOrNull()
-            if (token != null) {
-                original.newBuilder()
-                    .header("Authorization", "Bearer $token")
-                    .build()
-            } else {
-                original
+            if (!authToken.isNullOrBlank()) {
+                requestBuilder.header("Authorization", "Bearer $authToken")
             }
-        } else {
-            original
         }
-        chain.proceed(request)
+
+        val appCheckToken = runCatching {
+            Tasks.await(
+                FirebaseAppCheck.getInstance().getAppCheckToken(false),
+                5,
+                TimeUnit.SECONDS
+            ).token
+        }.getOrNull()
+        if (!appCheckToken.isNullOrBlank()) {
+            requestBuilder.header("X-Firebase-AppCheck", appCheckToken)
+        }
+
+        chain.proceed(requestBuilder.build())
     }
 
     /**
@@ -84,6 +95,8 @@ object NetworkModule {
 
         if (BuildConfig.DEBUG) {
             val logging = HttpLoggingInterceptor().apply {
+                redactHeader("Authorization")
+                redactHeader("X-Firebase-AppCheck")
                 level = HttpLoggingInterceptor.Level.BODY
             }
             builder.addInterceptor(logging)
@@ -99,4 +112,9 @@ object NetworkModule {
         .client(okHttpClient)
         .addConverterFactory(GsonConverterFactory.create())
         .build()
+
+    @Provides
+    @Singleton
+    fun provideRecommendationApi(retrofit: Retrofit): com.mychannel.data.remote.RecommendationApi =
+        retrofit.create(com.mychannel.data.remote.RecommendationApi::class.java)
 }

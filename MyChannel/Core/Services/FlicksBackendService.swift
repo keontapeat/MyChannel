@@ -29,6 +29,7 @@ class FlicksBackendService: ObservableObject {
     private let cache = NSCache<NSString, NSArray>()
     private let uploadQueue = OperationQueue()
     private var cancellables = Set<AnyCancellable>()
+    private var engagementSessionIDs: [String: String] = [:]
     
     // ML Services Integration
     private let contentModerationURL = "https://content-moderation-fkri6ifojq-uc.a.run.app"
@@ -531,16 +532,34 @@ class FlicksBackendService: ObservableObject {
     // MARK: - Analytics & Tracking
     
     func trackFlickView(flickId: String, watchTime: TimeInterval) async {
-        // Update view count in Firestore
         #if canImport(FirebaseFirestore)
-        let db = Firestore.firestore()
-        let flickRef = db.collection("flicks").document(flickId)
-        
-        try? await flickRef.updateData([
-            "viewCount": FieldValue.increment(Int64(1)),
-            "totalWatchTime": FieldValue.increment(Int64(watchTime)),
-            "lastViewed": FieldValue.serverTimestamp()
-        ])
+        if let userId = AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id {
+            let sessionId = engagementSessionIDs[flickId] ?? UUID().uuidString
+                .replacingOccurrences(of: "-", with: "")
+            engagementSessionIDs[flickId] = sessionId
+            let events = Firestore.firestore().collection("flicks").document(flickId)
+                .collection("events")
+
+            // The deterministic view event makes repeated callbacks for one
+            // playback session idempotent. Trusted Functions enforce cooldowns.
+            try? await events.document("\(sessionId)_view").setData([
+                "userId": userId,
+                "type": "view",
+                "sessionId": sessionId,
+                "createdAt": FieldValue.serverTimestamp()
+            ])
+
+            let boundedWatchTime = min(max(watchTime, 0), 86_400)
+            if boundedWatchTime > 1 {
+                try? await events.document().setData([
+                    "userId": userId,
+                    "type": "watch_time",
+                    "sessionId": sessionId,
+                    "watchTime": boundedWatchTime,
+                    "createdAt": FieldValue.serverTimestamp()
+                ])
+            }
+        }
         #endif
         
         // Track in analytics
@@ -557,26 +576,29 @@ class FlicksBackendService: ObservableObject {
     
     func trackFlickEngagement(flickId: String, action: String, value: Any? = nil) async {
         #if canImport(FirebaseFirestore)
-        let db = Firestore.firestore()
-        let flickRef = db.collection("flicks").document(flickId)
-        
-        var updateData: [String: Any] = [:]
-        
-        switch action {
-        case "like":
-            updateData["likeCount"] = FieldValue.increment(Int64(1))
-        case "unlike":
-            updateData["likeCount"] = FieldValue.increment(Int64(-1))
-        case "comment":
-            updateData["commentCount"] = FieldValue.increment(Int64(1))
-        case "share":
-            updateData["shareCount"] = FieldValue.increment(Int64(1))
-        default:
-            break
-        }
-        
-        if !updateData.isEmpty {
-            try? await flickRef.updateData(updateData)
+        if let userId = AuthenticationManager.shared.currentUser?.id ?? AppState.shared.currentUser?.id {
+            let db = Firestore.firestore()
+            let marker = db.collection("users").document(userId)
+                .collection("flickLikes").document(flickId)
+            if action == "like" {
+                try? await marker.setData([
+                    "flickId": flickId,
+                    "createdAt": FieldValue.serverTimestamp()
+                ])
+            } else if action == "unlike" {
+                try? await marker.delete()
+            } else if action == "share" {
+                let sessionId = engagementSessionIDs[flickId] ?? UUID().uuidString
+                    .replacingOccurrences(of: "-", with: "")
+                engagementSessionIDs[flickId] = sessionId
+                try? await db.collection("flicks").document(flickId)
+                    .collection("events").document().setData([
+                        "userId": userId,
+                        "type": "share",
+                        "sessionId": sessionId,
+                        "createdAt": FieldValue.serverTimestamp()
+                    ])
+            }
         }
         #endif
         

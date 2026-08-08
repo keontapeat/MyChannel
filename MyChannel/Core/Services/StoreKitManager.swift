@@ -16,7 +16,19 @@ final class StoreKitManager: ObservableObject {
     private let productIdentifiers: Set<String> = [
         "com.mychannel.tip.tier1",
         "com.mychannel.tip.tier2",
-        "com.mychannel.superchat"
+        // Super Chat tiers (must match App Store Connect)
+        "com.mychannel.superchat.2",
+        "com.mychannel.superchat.5",
+        "com.mychannel.superchat.10",
+        "com.mychannel.superchat.20",
+        "com.mychannel.superchat.50",
+        "com.mychannel.superchat.100",
+        // Super Stickers
+        "com.mychannel.supersticker.wave",
+        "com.mychannel.supersticker.fire",
+        "com.mychannel.supersticker.heart",
+        "com.mychannel.supersticker.trophy",
+        "com.mychannel.supersticker.confetti"
     ]
     
     private init() {

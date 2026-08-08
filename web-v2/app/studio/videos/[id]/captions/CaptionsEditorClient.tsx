@@ -56,7 +56,8 @@ function parseSRT(srt: string): string {
   return vtt;
 }
 
-export default function CaptionsEditorClient({ videoId }: { videoId: string }) {
+export default function CaptionsEditorClient({ videoId: initialVideoId }: { videoId: string }) {
+  const [videoId, setVideoId] = useState(initialVideoId === '_fallback' ? '' : initialVideoId);
   const [tracks, setTracks] = useState<CaptionTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [videoTitle, setVideoTitle] = useState('');
@@ -70,7 +71,15 @@ export default function CaptionsEditorClient({ videoId }: { videoId: string }) {
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
-    if (!videoId || videoId === '_fallback') { setLoading(false); return; }
+    if (initialVideoId !== '_fallback') return;
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const videosIndex = segments.indexOf('videos');
+    const pathId = videosIndex >= 0 ? segments[videosIndex + 1] : '';
+    if (pathId && pathId !== '_fallback') setVideoId(decodeURIComponent(pathId));
+  }, [initialVideoId]);
+
+  useEffect(() => {
+    if (!videoId) return;
 
     const load = async () => {
       try {

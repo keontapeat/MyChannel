@@ -51,7 +51,12 @@ struct LiveNowSection: View {
 
 // MARK: - Live Now Card
 struct LiveNowCard: View {
+    @ObservedObject private var liveManager = LiveStreamManager.shared
     let stream: FirestoreLiveStream
+
+    private var viewerCount: Int {
+        liveManager.viewerCount(for: stream.id, fallback: stream.viewerCount)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -159,10 +164,10 @@ struct LiveNowCard: View {
     }
 
     private var formattedViewerCount: String {
-        if stream.viewerCount >= 1000 {
-            return String(format: "%.1fK", Double(stream.viewerCount) / 1000.0)
+        if viewerCount >= 1000 {
+            return String(format: "%.1fK", Double(viewerCount) / 1000.0)
         }
-        return "\(stream.viewerCount)"
+        return "\(viewerCount)"
     }
 
     private var gradientColor: Color {
